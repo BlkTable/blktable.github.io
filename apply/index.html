@@ -149,11 +149,6 @@
             <input type="file" id="photo" accept="image/*">
             <div class="hint">A clear photo of your face — up to 10 MB.</div>
           </div>
-          <div class="field">
-            <label for="message">Anything else? <span class="ar">/ ملاحظات</span></label>
-            <textarea id="message" placeholder="A short note about yourself (optional)"></textarea>
-          </div>
-
           <button type="submit" class="submit" id="submit-btn">Submit application</button>
           <div class="form-msg" id="form-msg"></div>
         </form>
@@ -247,7 +242,6 @@
           city: val("city") || null,
           preferred_branch: val("branch") || null,
           availability: val("availability") || null,
-          message: val("message") || null,
           photo_path: photoPath
         });
       })
