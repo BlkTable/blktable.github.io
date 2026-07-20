@@ -118,6 +118,10 @@
             <input type="text" id="full_name" autocomplete="name" required>
           </div>
           <div class="field">
+            <label for="dob">Date of birth <span class="ar">/ تاريخ الميلاد</span> <span class="req">*</span></label>
+            <input type="date" id="dob" required>
+          </div>
+          <div class="field">
             <label for="phone_local">Phone number <span class="ar">/ رقم التلفون</span> <span class="req">*</span></label>
             <div class="phone-row">
               <div class="cc-picker" id="cc-picker">
@@ -289,6 +293,7 @@
 
     // Required fields (marked * on the form)
     var required = [
+      ["dob", "your date of birth"],
       ["how_found", "how you found out about the opportunity"],
       ["living_area", "your living area"],
       ["gender", "your gender"],
@@ -322,6 +327,7 @@
         return db.from("job_applications").insert({
           full_name: fullName,
           phone: phone,
+          date_of_birth: val("dob") || null,
           how_found: val("how_found") || null,
           living_area: val("living_area") || null,
           gender: val("gender") || null,
