@@ -91,6 +91,33 @@
   }
   .linkbtn:hover { color: var(--text); border-color: var(--silver); }
   .content { flex: 1; padding: 34px 22px 48px; max-width: 900px; width: 100%; margin: 0 auto; }
+
+  /* ---------- Workspace: Tables sidebar + main pane ---------- */
+  .workspace { display: flex; flex: 1; min-height: 0; }
+  .sidebar { width: 232px; flex: 0 0 auto; border-right: 1px solid var(--line); background: #0e1013;
+    padding: 22px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .side-bottom { margin-top: auto; }
+  .side-label { font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 0 10px; margin-bottom: 6px; }
+  .side-list { display: flex; flex-direction: column; gap: 4px; }
+  .side-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 10px 12px; border-radius: 10px; background: none; border: none; color: var(--text);
+    font-size: 0.9rem; cursor: pointer; font-family: inherit; }
+  .side-item:hover { background: rgba(255,255,255,0.05); }
+  .side-item.active { background: rgba(214,218,222,0.12); color: var(--silver); font-weight: 600; }
+  .side-item .ico { width: 8px; height: 8px; border-radius: 2px; background: currentColor; opacity: 0.7; flex: 0 0 auto; }
+  .main { flex: 1; min-width: 0; padding: 30px 26px 48px; max-width: 920px; }
+  .view.hidden { display: none; }
+  @media (max-width: 720px) {
+    .workspace { flex-direction: column; }
+    .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--line);
+      flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
+    .side-group { display: flex; align-items: center; gap: 8px; }
+    .side-bottom { margin-top: 0; margin-left: auto; }
+    .side-label { display: none; }
+    .side-list { flex-direction: row; flex-wrap: wrap; }
+    .side-item { padding: 8px 12px; border: 1px solid var(--field-border); border-radius: 999px; }
+    .main { padding: 22px 16px 40px; max-width: none; }
+  }
   .section-title { font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
   .empty {
     background:
@@ -196,42 +223,64 @@
       </div>
     </div>
 
-    <div class="content">
-      <div class="ja-head">
-        <div>
-          <div class="section-title">Table</div>
-          <h2 class="ja-title">Job Applications</h2>
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="side-group">
+          <div class="side-label">Tables</div>
+          <nav class="side-list" id="side-tables">
+            <button class="side-item active" data-view="job_applications"><span class="ico"></span>Job Applications</button>
+          </nav>
         </div>
-        <div class="ja-count" id="ja-count">—</div>
-      </div>
-
-      <div class="toolbar">
-        <input type="search" id="ja-search" placeholder="Search name, phone, area…">
-        <select id="ja-filter">
-          <option value="">All statuses</option>
-          <option value="new">New</option>
-          <option value="reviewing">Reviewing</option>
-          <option value="interview">Interview</option>
-          <option value="hired">Hired</option>
-          <option value="rejected">Rejected</option>
-        </select>
-        <button class="linkbtn" id="ja-refresh">Refresh</button>
-      </div>
-
-      <div id="ja-list" class="ja-list"></div>
-      <div id="ja-empty" class="empty" style="display:none;">
-        <h2>No applications yet</h2>
-        <p>Submissions from the public form will show up here.</p>
-      </div>
-
-      <div class="card" style="margin-top: 34px;">
-        <h3>Change your password</h3>
-        <div class="field-group">
-          <input type="password" id="new-pw" placeholder="New password (min 8 characters)" autocomplete="new-password">
-          <button class="primary" id="pw-btn">Update password</button>
-          <div class="msg" id="pw-msg"></div>
+        <div class="side-group side-bottom">
+          <div class="side-label">Account</div>
+          <nav class="side-list">
+            <button class="side-item" data-view="account"><span class="ico"></span>Change password</button>
+          </nav>
         </div>
-      </div>
+      </aside>
+
+      <main class="main">
+        <section class="view" id="view-job_applications">
+          <div class="ja-head">
+            <div>
+              <div class="section-title">Table</div>
+              <h2 class="ja-title">Job Applications</h2>
+            </div>
+            <div class="ja-count" id="ja-count">—</div>
+          </div>
+
+          <div class="toolbar">
+            <input type="search" id="ja-search" placeholder="Search name, phone, area…">
+            <select id="ja-filter">
+              <option value="">All statuses</option>
+              <option value="new">New</option>
+              <option value="reviewing">Reviewing</option>
+              <option value="interview">Interview</option>
+              <option value="hired">Hired</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <button class="linkbtn" id="ja-refresh">Refresh</button>
+          </div>
+
+          <div id="ja-list" class="ja-list"></div>
+          <div id="ja-empty" class="empty" style="display:none;">
+            <h2>No applications yet</h2>
+            <p>Submissions from the public form will show up here.</p>
+          </div>
+        </section>
+
+        <section class="view hidden" id="view-account">
+          <div class="section-title">Account</div>
+          <h2 class="ja-title" style="margin-bottom: 18px;">Change password</h2>
+          <div class="card" style="margin-top: 0; max-width: 380px;">
+            <div class="field-group">
+              <input type="password" id="new-pw" placeholder="New password (min 8 characters)" autocomplete="new-password">
+              <button class="primary" id="pw-btn">Update password</button>
+              <div class="msg" id="pw-msg"></div>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
 
     <!-- Application detail -->
@@ -497,6 +546,22 @@
   document.getElementById("ja-search").addEventListener("input", renderList);
   document.getElementById("ja-filter").addEventListener("change", renderList);
   document.getElementById("ja-refresh").addEventListener("click", loadApps);
+
+  // ---- Sidebar: switch which table/view is open in the main pane ----
+  function showView(id) {
+    var views = document.querySelectorAll(".view");
+    for (var i = 0; i < views.length; i++) views[i].classList.add("hidden");
+    var v = document.getElementById("view-" + id);
+    if (v) v.classList.remove("hidden");
+    var items = document.querySelectorAll(".side-item");
+    for (var j = 0; j < items.length; j++) {
+      items[j].classList.toggle("active", items[j].getAttribute("data-view") === id);
+    }
+  }
+  var sideItems = document.querySelectorAll(".side-item");
+  for (var si = 0; si < sideItems.length; si++) {
+    sideItems[si].addEventListener("click", function () { showView(this.getAttribute("data-view")); });
+  }
 
   // ---- On load: restore session if present ----
   db.auth.getSession().then(function (res) {
