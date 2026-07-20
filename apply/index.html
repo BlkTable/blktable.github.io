@@ -56,6 +56,9 @@
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .phone-row { display: flex; gap: 10px; }
+  .phone-row .cc { flex: 0 0 auto; width: auto; min-width: 116px; padding-right: 34px; font-size: 1rem; }
+  .phone-row input { flex: 1; }
   .file-row { display: flex; align-items: center; gap: 12px; }
   .file-btn {
     padding: 11px 16px; border-radius: 11px; border: 1px solid var(--field-border);
@@ -101,9 +104,16 @@
             <input type="text" id="full_name" autocomplete="name" required>
           </div>
           <div class="field">
-            <label for="phone">Phone number <span class="ar">/ رقم الهاتف</span> <span class="req">*</span></label>
-            <input type="tel" id="phone" placeholder="+962 7X XXX XXXX" autocomplete="tel" required>
-            <div class="hint">Please include your country code (e.g. +962). We may contact you on WhatsApp.</div>
+            <label for="phone_local">Phone number <span class="ar">/ رقم الهاتف</span> <span class="req">*</span></label>
+            <div class="phone-row">
+              <select id="cc" class="cc">
+                <option value="962" data-len="9" data-ph="7X XXX XXXX" selected>🇯🇴 +962</option>
+                <option value="961" data-len="7,8" data-ph="XX XXX XXX">🇱🇧 +961</option>
+                <option value="963" data-len="9" data-ph="9XX XXX XXX">🇸🇾 +963</option>
+              </select>
+              <input type="tel" id="phone_local" inputmode="numeric" autocomplete="tel-national" required>
+            </div>
+            <div class="hint">We may contact you on WhatsApp.</div>
           </div>
           <div class="field">
             <label for="email">Email <span class="ar">/ البريد الإلكتروني</span></label>
@@ -131,13 +141,13 @@
             </select>
           </div>
           <div class="field">
-            <label>CV / résumé <span class="ar">/ السيرة الذاتية</span></label>
+            <label>A photo of yourself <span class="ar">/ صورة شخصية</span></label>
             <div class="file-row">
-              <button type="button" class="file-btn" id="file-btn">Choose file</button>
-              <span class="file-name" id="file-name">No file chosen</span>
+              <button type="button" class="file-btn" id="file-btn">Choose photo</button>
+              <span class="file-name" id="file-name">No photo chosen</span>
             </div>
-            <input type="file" id="cv" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
-            <div class="hint">PDF, Word, or image — up to 10 MB.</div>
+            <input type="file" id="photo" accept="image/*">
+            <div class="hint">A clear photo of your face — up to 10 MB.</div>
           </div>
           <div class="field">
             <label for="message">Anything else? <span class="ar">/ ملاحظات</span></label>
@@ -164,13 +174,31 @@
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   var MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-  var fileInput = document.getElementById("cv");
+  var fileInput = document.getElementById("photo");
   var fileName = document.getElementById("file-name");
 
   document.getElementById("file-btn").addEventListener("click", function () { fileInput.click(); });
   fileInput.addEventListener("change", function () {
-    fileName.textContent = fileInput.files.length ? fileInput.files[0].name : "No file chosen";
+    fileName.textContent = fileInput.files.length ? fileInput.files[0].name : "No photo chosen";
   });
+
+  // ---- Phone: country code + digit-limited local number ----
+  var ccSel = document.getElementById("cc");
+  var phoneLocal = document.getElementById("phone_local");
+  function ccOption() { return ccSel.options[ccSel.selectedIndex]; }
+  function allowedLengths() {
+    return ccOption().getAttribute("data-len").split(",").map(function (n) { return parseInt(n, 10); });
+  }
+  function applyCc() {
+    var lens = allowedLengths();
+    phoneLocal.placeholder = ccOption().getAttribute("data-ph");
+    phoneLocal.maxLength = Math.max.apply(null, lens) + 1; // +1 tolerates a leading 0
+  }
+  ccSel.addEventListener("change", applyCc);
+  phoneLocal.addEventListener("input", function () {
+    phoneLocal.value = phoneLocal.value.replace(/\D/g, "");
+  });
+  applyCc();
 
   function val(id) { return document.getElementById(id).value.trim(); }
   function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80); }
@@ -182,9 +210,16 @@
     msg.textContent = "";
 
     var fullName = val("full_name");
-    var phone = val("phone");
     if (!fullName) { msg.textContent = "Please enter your full name."; return; }
-    if (!phone) { msg.textContent = "Please enter your phone number."; return; }
+
+    // Assemble + validate phone: strip non-digits and any leading zero, then check length.
+    var local = phoneLocal.value.replace(/\D/g, "").replace(/^0+/, "");
+    var lens = allowedLengths();
+    if (lens.indexOf(local.length) === -1) {
+      msg.textContent = "Please enter a valid phone number for the selected country.";
+      return;
+    }
+    var phone = "+" + ccOption().value + local;
 
     var file = fileInput.files[0] || null;
     if (file && file.size > MAX_BYTES) { msg.textContent = "That file is larger than 10 MB. Please choose a smaller one."; return; }
@@ -192,18 +227,18 @@
     btn.disabled = true;
     btn.textContent = "Submitting…";
 
-    function uploadCv() {
+    function uploadPhoto() {
       if (!file) return Promise.resolve(null);
       var path = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())) + "_" + sanitize(file.name);
-      return db.storage.from("cvs").upload(path, file, { upsert: false })
+      return db.storage.from("photos").upload(path, file, { upsert: false })
         .then(function (res) {
           if (res.error) throw res.error;
           return res.data.path;
         });
     }
 
-    uploadCv()
-      .then(function (cvPath) {
+    uploadPhoto()
+      .then(function (photoPath) {
         return db.from("job_applications").insert({
           full_name: fullName,
           phone: phone,
@@ -213,7 +248,7 @@
           preferred_branch: val("branch") || null,
           availability: val("availability") || null,
           message: val("message") || null,
-          cv_path: cvPath
+          photo_path: photoPath
         });
       })
       .then(function (res) {
