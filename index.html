@@ -180,6 +180,15 @@
   .ja-card .body { padding: 12px; text-align: center; }
   .ja-card .body .name { font-weight: 600; font-size: 0.95rem; }
   .ja-card .body .meta { color: var(--muted); font-size: 0.78rem; margin: 3px 0 8px; }
+  .card-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .card-actions button { flex: 1; padding: 8px 0; border-radius: 9px; border: none; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+  .btn-approve { background: #2fbf6b; color: #062916; }
+  .btn-approve:hover { filter: brightness(1.07); }
+  .btn-reject { background: #ff5a5a; color: #3a0808; }
+  .btn-reject:hover { filter: brightness(1.07); }
+  #sched-dt { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; color-scheme: dark; font-family: inherit; }
+  #sched-dt:focus { border-color: var(--silver); }
 
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.62); backdrop-filter: blur(3px);
     display: none; align-items: flex-start; justify-content: center; padding: 24px 16px; z-index: 50; overflow-y: auto; }
@@ -308,6 +317,21 @@
       <div class="modal">
         <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
         <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Approve → schedule interview -->
+    <div class="modal-overlay" id="sched-modal">
+      <div class="modal" style="max-width: 400px;">
+        <button class="modal-close" id="sched-close" aria-label="Close">✕</button>
+        <div class="m-name" id="sched-name">—</div>
+        <div class="m-sub">Schedule the interview, then send the WhatsApp invite.</div>
+        <label style="display:block; font-size:0.8rem; color:var(--muted); margin-bottom:7px;">Interview date &amp; time</label>
+        <input type="datetime-local" id="sched-dt">
+        <div class="m-actions" style="margin-top:16px;">
+          <button class="btn-wa" id="sched-send">Approve &amp; send WhatsApp</button>
+        </div>
+        <div class="m-msg" id="sched-msg"></div>
       </div>
     </div>
   </div>
@@ -495,8 +519,14 @@
           '<div class="photo">' + esc(initial) + "</div>" +
           '<div class="body"><div class="name">' + esc(a.full_name) + "</div>" +
           '<div class="meta">' + (age == null ? esc(a.living_area || "—") : (age + " yrs · " + esc(a.living_area || "—"))) + "</div>" +
-          badgeHtml(a) + "</div>";
+          badgeHtml(a) +
+          '<div class="card-actions">' +
+            '<button class="btn-approve">Approve</button>' +
+            '<button class="btn-reject">Reject</button>' +
+          "</div></div>";
         card.addEventListener("click", function () { openDetail(a); });
+        card.querySelector(".btn-approve").addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
+        card.querySelector(".btn-reject").addEventListener("click", function (e) { e.stopPropagation(); rejectApp(a); });
         grid.appendChild(card);
         setThumb(card.querySelector(".photo"), a);
       });
@@ -606,6 +636,58 @@
   function closeModal() { document.getElementById("modal").classList.remove("open"); currentApp = null; }
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("modal").addEventListener("click", function (e) { if (e.target === this) closeModal(); });
+
+  // ---- Approve (schedule interview + WhatsApp invite) & Reject (delete) ----
+  var schedApp = null;
+  function interviewMessage(name, whenText) {
+    // NOTE: placeholder wording — to be finalized with the user.
+    return "Hello " + (name || "") + "! 👋\n\n" +
+      "Thank you for applying to BLK. We'd like to invite you for an interview on " + whenText + ".\n\n" +
+      "Please reply to confirm. See you soon!";
+  }
+  function openSchedule(a) {
+    schedApp = a;
+    document.getElementById("sched-name").textContent = a.full_name;
+    document.getElementById("sched-dt").value = "";
+    document.getElementById("sched-msg").textContent = "";
+    document.getElementById("sched-modal").classList.add("open");
+  }
+  function closeSched() { document.getElementById("sched-modal").classList.remove("open"); schedApp = null; }
+  document.getElementById("sched-close").addEventListener("click", closeSched);
+  document.getElementById("sched-modal").addEventListener("click", function (e) { if (e.target === this) closeSched(); });
+  document.getElementById("sched-send").addEventListener("click", function () {
+    if (!schedApp) return;
+    var dt = document.getElementById("sched-dt").value;
+    var smsg = document.getElementById("sched-msg");
+    if (!dt) { smsg.textContent = "Please choose the interview date & time."; return; }
+    var when = new Date(dt);
+    var iso = when.toISOString();
+    var appRef = schedApp;
+    var waNumber = (appRef.phone || "").replace(/[^\d]/g, "");
+    smsg.textContent = "Saving…";
+    db.from("job_applications").update({ status: "interview", interview_at: iso }).eq("id", appRef.id).then(function (res) {
+      if (res.error) { smsg.textContent = "Could not save. Please try again."; return; }
+      appRef.status = "interview"; appRef.interview_at = iso;
+      renderApps();
+      if (waNumber) {
+        var whenText = when.toLocaleString([], { weekday: "long", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+        window.open("https://wa.me/" + waNumber + "?text=" + encodeURIComponent(interviewMessage(appRef.full_name, whenText)), "_blank");
+      }
+      closeSched();
+    });
+  });
+  function rejectApp(a) {
+    if (!window.confirm("Reject and permanently delete " + (a.full_name || "this applicant") + "'s application? This cannot be undone.")) return;
+    var removeRow = function () {
+      db.from("job_applications").delete().eq("id", a.id).then(function (res) {
+        if (res.error) { alert("Could not delete the application."); return; }
+        allApps = allApps.filter(function (x) { return x.id !== a.id; });
+        renderApps();
+      });
+    };
+    if (a.photo_path) db.storage.from("photos").remove([a.photo_path]).then(removeRow, removeRow);
+    else removeRow();
+  }
   document.getElementById("ja-search").addEventListener("input", renderApps);
   document.getElementById("ja-filter").addEventListener("change", renderApps);
   document.getElementById("ja-refresh").addEventListener("click", loadApps);
