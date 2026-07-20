@@ -469,7 +469,8 @@
     if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age--;
     return (age >= 0 && age < 130) ? age : null;
   }
-  function ageText(dob) { var a = calcAge(dob); return a == null ? "—" : (a + " yrs"); }
+  function ageFlag(age) { return (age != null && (age > 25 || age < 18)) ? " 🚩" : ""; }
+  function ageText(dob) { var a = calcAge(dob); return a == null ? "—" : (a + " yrs" + ageFlag(a)); }
 
   function filterApps() {
     var q = (document.getElementById("ja-search").value || "").toLowerCase().trim();
@@ -519,7 +520,7 @@
         card.innerHTML =
           '<div class="photo">' + esc(initial) + "</div>" +
           '<div class="body"><div class="name">' + esc(a.full_name) + "</div>" +
-          '<div class="meta">' + (age == null ? esc(a.living_area || "—") : (age + " yrs · " + esc(a.living_area || "—"))) + "</div>" +
+          '<div class="meta">' + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—"))) + "</div>" +
           badgeHtml(a) +
           '<div class="card-actions">' +
             '<button class="btn-approve">Approve</button>' +
@@ -541,7 +542,7 @@
         row.innerHTML =
           '<div class="ja-thumb">' + esc(initial) + "</div>" +
           '<div class="info"><div class="name">' + esc(a.full_name) + "</div>" +
-          '<div class="sub">' + (age == null ? "" : (age + " yrs · ")) + esc(a.living_area || "—") + " · " + esc(a.work_type || "—") + "</div></div>" +
+          '<div class="sub">' + (age == null ? "" : (age + " yrs" + ageFlag(age) + " · ")) + esc(a.living_area || "—") + " · " + esc(a.work_type || "—") + "</div></div>" +
           badgeHtml(a);
         row.addEventListener("click", function () { openDetail(a); });
         listEl.appendChild(row);
