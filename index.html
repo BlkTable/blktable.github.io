@@ -108,6 +108,62 @@
   .card h3 { margin: 0 0 14px; font-size: 0.95rem; }
   .card .field-group { max-width: 340px; }
   .hidden { display: none !important; }
+
+  /* ---------- Job Applications review ---------- */
+  .ja-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 16px; }
+  .ja-title { margin: 2px 0 0; font-size: 1.3rem; font-weight: 800; }
+  .ja-count { color: var(--muted); font-size: 0.82rem; }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar input[type="search"] { flex: 1; min-width: 150px; height: 44px; padding: 0 14px; border-radius: 11px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; color-scheme: dark; }
+  .toolbar input[type="search"]:focus { border-color: var(--silver); }
+  .toolbar select { width: auto; min-width: 150px; height: 44px; padding: 0 34px 0 14px; border-radius: 11px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none;
+    appearance: none; -webkit-appearance: none; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .toolbar .linkbtn { height: 44px; }
+  .ja-list { display: flex; flex-direction: column; gap: 10px; }
+  .ja-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 14px; cursor: pointer; transition: border-color 0.15s ease; }
+  .ja-row:hover { border-color: var(--silver); }
+  .ja-thumb { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: 0 0 auto;
+    background: #20242b; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 1.1rem; }
+  .ja-row .info { flex: 1; min-width: 0; }
+  .ja-row .name { font-weight: 600; font-size: 0.95rem; }
+  .ja-row .sub { color: var(--muted); font-size: 0.8rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge-status { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 4px 10px; border-radius: 999px; white-space: nowrap; flex: 0 0 auto; }
+  .stars { display: inline-flex; gap: 3px; }
+  .stars .star { color: #3a3f47; cursor: pointer; font-size: 1.3rem; line-height: 1; }
+  .stars .star.on { color: var(--silver); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.62); backdrop-filter: blur(3px);
+    display: none; align-items: flex-start; justify-content: center; padding: 24px 16px; z-index: 50; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal { position: relative; width: 100%; max-width: 520px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 30px 70px rgba(0,0,0,0.55); }
+  .modal-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 1.15rem; cursor: pointer; }
+  .modal-close:hover { color: var(--text); }
+  .m-photo { width: 96px; height: 96px; border-radius: 14px; object-fit: cover; background: #20242b; margin-bottom: 14px; }
+  .m-name { font-size: 1.25rem; font-weight: 800; margin: 0; }
+  .m-sub { color: var(--muted); font-size: 0.8rem; margin: 2px 0 16px; }
+  .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 4px; }
+  .m-field .k { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .m-field .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
+  .m-field.full { grid-column: 1 / -1; }
+  .m-section { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+  .m-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .m-row label { font-size: 0.8rem; color: var(--muted); width: 62px; flex: 0 0 auto; }
+  .m-row select, .m-row textarea { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 0.92rem; outline: none; font-family: inherit; color-scheme: dark; }
+  .m-row select:focus, .m-row textarea:focus { border-color: var(--silver); }
+  .m-actions { display: flex; gap: 10px; margin-top: 4px; }
+  .btn-wa { flex: 1; padding: 12px; border-radius: 11px; border: none; background: #25d366; color: #0a2e17; font-weight: 700; cursor: pointer; font-size: 0.95rem; }
+  .btn-wa:hover { filter: brightness(1.06); }
+  .btn-save { padding: 12px 18px; border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); cursor: pointer; font-weight: 600; }
+  .btn-save:hover { border-color: var(--silver); }
+  .m-msg { font-size: 0.8rem; color: var(--muted); margin-top: 10px; text-align: center; min-height: 1em; }
 </style>
 </head>
 <body>
@@ -141,19 +197,48 @@
     </div>
 
     <div class="content">
-      <div class="section-title">Tables</div>
-      <div class="empty">
-        <h2>No tables yet</h2>
-        <p>Your first table — <strong>Job Applications</strong> — will appear here once we build it.</p>
+      <div class="ja-head">
+        <div>
+          <div class="section-title">Table</div>
+          <h2 class="ja-title">Job Applications</h2>
+        </div>
+        <div class="ja-count" id="ja-count">—</div>
       </div>
 
-      <div class="card">
+      <div class="toolbar">
+        <input type="search" id="ja-search" placeholder="Search name, phone, area…">
+        <select id="ja-filter">
+          <option value="">All statuses</option>
+          <option value="new">New</option>
+          <option value="reviewing">Reviewing</option>
+          <option value="interview">Interview</option>
+          <option value="hired">Hired</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <button class="linkbtn" id="ja-refresh">Refresh</button>
+      </div>
+
+      <div id="ja-list" class="ja-list"></div>
+      <div id="ja-empty" class="empty" style="display:none;">
+        <h2>No applications yet</h2>
+        <p>Submissions from the public form will show up here.</p>
+      </div>
+
+      <div class="card" style="margin-top: 34px;">
         <h3>Change your password</h3>
         <div class="field-group">
           <input type="password" id="new-pw" placeholder="New password (min 8 characters)" autocomplete="new-password">
           <button class="primary" id="pw-btn">Update password</button>
           <div class="msg" id="pw-msg"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Application detail -->
+    <div class="modal-overlay" id="modal">
+      <div class="modal">
+        <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
+        <div id="modal-body"></div>
       </div>
     </div>
   </div>
@@ -172,6 +257,7 @@
     app.style.display = "flex";
     document.getElementById("who-email").textContent = session.user.email;
     loadRole(session.user.id);
+    loadApps();
   }
   function showLogin() {
     app.style.display = "none";
@@ -227,6 +313,190 @@
       document.getElementById("new-pw").value = "";
     });
   });
+
+  // ---- Job Applications review ----
+  var STATUSES = [
+    { v: "new", label: "New", color: "#9aa7b4" },
+    { v: "reviewing", label: "Reviewing", color: "#e0a63a" },
+    { v: "interview", label: "Interview", color: "#6ea8fe" },
+    { v: "hired", label: "Hired", color: "#58c98a" },
+    { v: "rejected", label: "Rejected", color: "#ff6b6b" }
+  ];
+  function statusMeta(v) {
+    for (var i = 0; i < STATUSES.length; i++) if (STATUSES[i].v === v) return STATUSES[i];
+    return STATUSES[0];
+  }
+
+  var allApps = [];
+  var signedCache = {};
+  var currentApp = null;
+  var tempRating = 0;
+
+  function getPhotoUrl(path) {
+    if (!path) return Promise.resolve(null);
+    if (signedCache[path]) return signedCache[path];
+    signedCache[path] = db.storage.from("photos").createSignedUrl(path, 3600)
+      .then(function (r) { return (r.data && r.data.signedUrl) || null; })
+      .catch(function () { return null; });
+    return signedCache[path];
+  }
+  function esc(s) {
+    return (s == null ? "" : String(s)).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function fmtDate(iso) {
+    var d = new Date(iso);
+    return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function loadApps() {
+    var listEl = document.getElementById("ja-list");
+    listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
+    db.from("job_applications").select("*").order("created_at", { ascending: false }).then(function (res) {
+      if (res.error) {
+        listEl.innerHTML = '<div style="color:#ff6b6b;padding:24px;text-align:center;">Could not load applications.</div>';
+        return;
+      }
+      allApps = res.data || [];
+      renderList();
+    });
+  }
+
+  function renderList() {
+    var q = (document.getElementById("ja-search").value || "").toLowerCase().trim();
+    var f = document.getElementById("ja-filter").value;
+    var listEl = document.getElementById("ja-list");
+    var emptyEl = document.getElementById("ja-empty");
+
+    var rows = allApps.filter(function (a) {
+      if (f && a.status !== f) return false;
+      if (q) {
+        var hay = ((a.full_name || "") + " " + (a.phone || "") + " " + (a.living_area || "")).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+
+    document.getElementById("ja-count").textContent =
+      allApps.length + " total" + (rows.length !== allApps.length ? (" · " + rows.length + " shown") : "");
+
+    if (!allApps.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
+    emptyEl.style.display = "none";
+    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">No matches.</div>'; return; }
+
+    listEl.innerHTML = "";
+    rows.forEach(function (a) {
+      var sm = statusMeta(a.status);
+      var initial = (a.full_name || "?").trim().charAt(0).toUpperCase();
+      var row = document.createElement("div");
+      row.className = "ja-row";
+      row.innerHTML =
+        '<div class="ja-thumb">' + esc(initial) + "</div>" +
+        '<div class="info"><div class="name">' + esc(a.full_name) + "</div>" +
+        '<div class="sub">' + esc(a.living_area || "—") + " · " + esc(a.work_type || "—") + " · " + fmtDate(a.created_at) + "</div></div>" +
+        '<span class="badge-status" style="color:' + sm.color + ";background:" + sm.color + "22;border:1px solid " + sm.color + '55;">' + sm.label + "</span>";
+      row.addEventListener("click", function () { openDetail(a); });
+      listEl.appendChild(row);
+      if (a.photo_path) {
+        var thumb = row.querySelector(".ja-thumb");
+        getPhotoUrl(a.photo_path).then(function (url) {
+          if (url) { thumb.style.background = "url(" + url + ") center/cover"; thumb.textContent = ""; }
+        });
+      }
+    });
+  }
+
+  function fieldHtml(k, v) {
+    return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>";
+  }
+  function renderStars(n) {
+    var el = document.getElementById("m-stars");
+    el.innerHTML = "";
+    for (var i = 1; i <= 5; i++) {
+      var sp = document.createElement("span");
+      sp.className = "star" + (i <= n ? " on" : "");
+      sp.setAttribute("data-s", i);
+      sp.textContent = "★";
+      el.appendChild(sp);
+    }
+  }
+  function setMsg(t) { var m = document.getElementById("m-msg"); if (m) m.textContent = t; }
+
+  function openDetail(a) {
+    currentApp = a;
+    tempRating = a.rating || 0;
+    var waNumber = (a.phone || "").replace(/[^\d]/g, "");
+    var statusOpts = STATUSES.map(function (s) {
+      return '<option value="' + s.v + '"' + (a.status === s.v ? " selected" : "") + ">" + s.label + "</option>";
+    }).join("");
+
+    document.getElementById("modal-body").innerHTML =
+      '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
+      '<div class="m-name">' + esc(a.full_name) + "</div>" +
+      '<div class="m-sub">Applied ' + fmtDate(a.created_at) + "</div>" +
+      '<div class="m-grid">' +
+        fieldHtml("Phone", a.phone) +
+        fieldHtml("Date of birth", a.date_of_birth) +
+        fieldHtml("How found", a.how_found) +
+        fieldHtml("Living area", a.living_area) +
+        fieldHtml("Gender", a.gender) +
+        fieldHtml("Full / Part", a.work_type) +
+        fieldHtml("Currently working", a.currently_working) +
+        fieldHtml("Education", a.education_level) +
+        fieldHtml("Favorite drink", a.favorite_drink) +
+        '<div class="m-field full"><div class="k">Why join</div><div class="v">' + esc(a.why_join || "—") + "</div></div>" +
+      "</div>" +
+      '<div class="m-section">' +
+        '<div class="m-row"><label>Status</label><select id="m-status">' + statusOpts + "</select></div>" +
+        '<div class="m-row"><label>Rating</label><span class="stars" id="m-stars"></span></div>' +
+        '<div class="m-row" style="align-items:flex-start;"><label>Notes</label><textarea id="m-notes" placeholder="Internal notes…">' + esc(a.notes || "") + "</textarea></div>" +
+        '<div class="m-actions"><button class="btn-wa" id="m-wa">Message on WhatsApp</button><button class="btn-save" id="m-save">Save</button></div>' +
+        '<div class="m-msg" id="m-msg"></div>' +
+      "</div>";
+
+    document.getElementById("modal").classList.add("open");
+
+    if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) {
+      if (url) { var im = document.getElementById("m-photo"); im.src = url; im.style.display = "block"; }
+    });
+
+    renderStars(tempRating);
+    document.getElementById("m-stars").addEventListener("click", function (e) {
+      var s = e.target.getAttribute("data-s");
+      if (!s) return;
+      tempRating = parseInt(s, 10);
+      renderStars(tempRating);
+    });
+    document.getElementById("m-status").addEventListener("change", function () { savePatch({ status: this.value }); });
+    document.getElementById("m-save").addEventListener("click", function () {
+      savePatch({ rating: tempRating || null, notes: document.getElementById("m-notes").value.trim() || null });
+    });
+    document.getElementById("m-wa").addEventListener("click", function () {
+      if (!waNumber) { setMsg("No phone number on file."); return; }
+      // Message text is a placeholder for now — we'll finalize the approval message next.
+      var text = encodeURIComponent("Hello " + (a.full_name || "") + ",");
+      window.open("https://wa.me/" + waNumber + "?text=" + text, "_blank");
+    });
+  }
+
+  function savePatch(patch) {
+    if (!currentApp) return;
+    setMsg("Saving…");
+    db.from("job_applications").update(patch).eq("id", currentApp.id).then(function (res) {
+      if (res.error) { setMsg("Save failed. Please try again."); return; }
+      for (var k in patch) currentApp[k] = patch[k];
+      setMsg("Saved.");
+      renderList();
+    });
+  }
+
+  function closeModal() { document.getElementById("modal").classList.remove("open"); currentApp = null; }
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  document.getElementById("modal").addEventListener("click", function (e) { if (e.target === this) closeModal(); });
+  document.getElementById("ja-search").addEventListener("input", renderList);
+  document.getElementById("ja-filter").addEventListener("change", renderList);
+  document.getElementById("ja-refresh").addEventListener("click", loadApps);
 
   // ---- On load: restore session if present ----
   db.auth.getSession().then(function (res) {
