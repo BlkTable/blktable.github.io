@@ -56,9 +56,23 @@
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
-  .phone-row { display: flex; gap: 10px; }
-  .phone-row .cc { flex: 0 0 auto; width: auto; min-width: 116px; padding-right: 34px; font-size: 1rem; }
+  .phone-row { display: flex; gap: 10px; align-items: stretch; }
   .phone-row input { flex: 1; }
+  .cc-picker { position: relative; flex: 0 0 auto; }
+  .cc-btn { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 12px;
+    border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg);
+    color: var(--text); font-size: 1rem; cursor: pointer; font-family: inherit; }
+  .cc-btn:hover { border-color: var(--silver); }
+  .cc-flag, .cc-menu li img { width: 22px; height: 15px; object-fit: cover; border-radius: 2px;
+    display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
+  .cc-caret { color: var(--muted); font-size: 0.7rem; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; margin: 0; padding: 6px;
+    list-style: none; min-width: 190px; background: #1a1d22; border: 1px solid var(--field-border);
+    border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+  .cc-menu.open { display: block; }
+  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
+  .cc-menu li:hover { background: rgba(255,255,255,0.06); }
+  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
   .file-row { display: flex; align-items: center; gap: 12px; }
   .file-btn {
     padding: 11px 16px; border-radius: 11px; border: 1px solid var(--field-border);
@@ -104,13 +118,16 @@
             <input type="text" id="full_name" autocomplete="name" required>
           </div>
           <div class="field">
-            <label for="phone_local">Phone number <span class="ar">/ رقم الهاتف</span> <span class="req">*</span></label>
+            <label for="phone_local">Phone number <span class="ar">/ رقم التلفون</span> <span class="req">*</span></label>
             <div class="phone-row">
-              <select id="cc" class="cc">
-                <option value="962" data-len="9" data-ph="7X XXX XXXX" selected>🇯🇴 +962</option>
-                <option value="961" data-len="7,8" data-ph="XX XXX XXX">🇱🇧 +961</option>
-                <option value="963" data-len="9" data-ph="9XX XXX XXX">🇸🇾 +963</option>
-              </select>
+              <div class="cc-picker" id="cc-picker">
+                <button type="button" class="cc-btn" id="cc-btn" aria-haspopup="listbox" aria-expanded="false">
+                  <img class="cc-flag" id="cc-flag" alt="">
+                  <span id="cc-dial">+962</span>
+                  <span class="cc-caret">▾</span>
+                </button>
+                <ul class="cc-menu" id="cc-menu" role="listbox"></ul>
+              </div>
               <input type="tel" id="phone_local" inputmode="numeric" autocomplete="tel-national" required>
             </div>
             <div class="hint">We may contact you on WhatsApp.</div>
@@ -208,23 +225,47 @@
     fileName.textContent = fileInput.files.length ? fileInput.files[0].name : "No photo chosen";
   });
 
-  // ---- Phone: country code + digit-limited local number ----
-  var ccSel = document.getElementById("cc");
+  // ---- Phone: custom country picker (real flag images) + digit-limited local number ----
+  var COUNTRIES = [
+    { cc: "962", len: [9],    ph: "7X XXX XXXX", flag: "jo", name: "Jordan" },
+    { cc: "961", len: [7, 8], ph: "XX XXX XXX",  flag: "lb", name: "Lebanon" },
+    { cc: "963", len: [9],    ph: "9XX XXX XXX", flag: "sy", name: "Syria" }
+  ];
+  var FLAG_BASE = "https://flagcdn.com/";
+  function flagUrl(code) { return FLAG_BASE + code + ".svg"; }
+
+  var selCountry = COUNTRIES[0];
+  var ccBtn = document.getElementById("cc-btn");
+  var ccMenu = document.getElementById("cc-menu");
+  var ccFlag = document.getElementById("cc-flag");
+  var ccDial = document.getElementById("cc-dial");
+  var ccPicker = document.getElementById("cc-picker");
   var phoneLocal = document.getElementById("phone_local");
-  function ccOption() { return ccSel.options[ccSel.selectedIndex]; }
-  function allowedLengths() {
-    return ccOption().getAttribute("data-len").split(",").map(function (n) { return parseInt(n, 10); });
+
+  function selectCountry(i) {
+    selCountry = COUNTRIES[i];
+    ccFlag.src = flagUrl(selCountry.flag);
+    ccDial.textContent = "+" + selCountry.cc;
+    phoneLocal.placeholder = selCountry.ph;
+    phoneLocal.maxLength = Math.max.apply(null, selCountry.len) + 1; // +1 tolerates a leading 0
   }
-  function applyCc() {
-    var lens = allowedLengths();
-    phoneLocal.placeholder = ccOption().getAttribute("data-ph");
-    phoneLocal.maxLength = Math.max.apply(null, lens) + 1; // +1 tolerates a leading 0
-  }
-  ccSel.addEventListener("change", applyCc);
-  phoneLocal.addEventListener("input", function () {
-    phoneLocal.value = phoneLocal.value.replace(/\D/g, "");
+  function closeMenu() { ccMenu.classList.remove("open"); ccBtn.setAttribute("aria-expanded", "false"); }
+
+  COUNTRIES.forEach(function (c, i) {
+    var li = document.createElement("li");
+    li.setAttribute("role", "option");
+    li.innerHTML = '<img src="' + flagUrl(c.flag) + '" alt=""> <span>' + c.name + '</span> <b>+' + c.cc + '</b>';
+    li.addEventListener("click", function () { selectCountry(i); closeMenu(); });
+    ccMenu.appendChild(li);
   });
-  applyCc();
+  ccBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (ccMenu.classList.contains("open")) { closeMenu(); }
+    else { ccMenu.classList.add("open"); ccBtn.setAttribute("aria-expanded", "true"); }
+  });
+  document.addEventListener("click", function (e) { if (!ccPicker.contains(e.target)) closeMenu(); });
+  phoneLocal.addEventListener("input", function () { phoneLocal.value = phoneLocal.value.replace(/\D/g, ""); });
+  selectCountry(0);
 
   function val(id) { return document.getElementById(id).value.trim(); }
   function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80); }
@@ -240,12 +281,11 @@
 
     // Assemble + validate phone: strip non-digits and any leading zero, then check length.
     var local = phoneLocal.value.replace(/\D/g, "").replace(/^0+/, "");
-    var lens = allowedLengths();
-    if (lens.indexOf(local.length) === -1) {
+    if (selCountry.len.indexOf(local.length) === -1) {
       msg.textContent = "Please enter a valid phone number for the selected country.";
       return;
     }
-    var phone = "+" + ccOption().value + local;
+    var phone = "+" + selCountry.cc + local;
 
     // Required fields (marked * on the form)
     var required = [
