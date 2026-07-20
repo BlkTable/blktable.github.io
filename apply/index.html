@@ -50,8 +50,11 @@
     width: 100%; padding: 12px 14px; border-radius: 11px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none;
     font-family: inherit; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    color-scheme: dark;
   }
   input:focus, select:focus, textarea:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
+  input[type="date"] { cursor: pointer; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
   textarea { resize: vertical; min-height: 88px; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
@@ -270,6 +273,12 @@
   document.addEventListener("click", function (e) { if (!ccPicker.contains(e.target)) closeMenu(); });
   phoneLocal.addEventListener("input", function () { phoneLocal.value = phoneLocal.value.replace(/\D/g, ""); });
   selectCountry(0);
+
+  // Date of birth: open the calendar picker on click anywhere in the field
+  var dobInput = document.getElementById("dob");
+  if (dobInput) dobInput.addEventListener("click", function () {
+    if (this.showPicker) { try { this.showPicker(); } catch (e) {} }
+  });
 
   function val(id) { return document.getElementById(id).value.trim(); }
   function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80); }
