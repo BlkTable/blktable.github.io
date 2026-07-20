@@ -466,7 +466,6 @@
   var allApps = [];
   var signedCache = {};
   var currentApp = null;
-  var tempRating = 0;
 
   function getPhotoUrl(path) {
     if (!path) return Promise.resolve(null);
@@ -588,27 +587,8 @@
   function fieldHtml(k, v) {
     return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>";
   }
-  function renderStars(n) {
-    var el = document.getElementById("m-stars");
-    el.innerHTML = "";
-    for (var i = 1; i <= 5; i++) {
-      var sp = document.createElement("span");
-      sp.className = "star" + (i <= n ? " on" : "");
-      sp.setAttribute("data-s", i);
-      sp.textContent = "★";
-      el.appendChild(sp);
-    }
-  }
-  function setMsg(t) { var m = document.getElementById("m-msg"); if (m) m.textContent = t; }
-
   function openDetail(a) {
     currentApp = a;
-    tempRating = a.rating || 0;
-    var waNumber = (a.phone || "").replace(/[^\d]/g, "");
-    var statusOpts = STATUSES.map(function (s) {
-      return '<option value="' + s.v + '"' + (a.status === s.v ? " selected" : "") + ">" + s.label + "</option>";
-    }).join("");
-
     document.getElementById("modal-body").innerHTML =
       '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
       '<div class="m-name">' + esc(a.full_name) + "</div>" +
@@ -624,48 +604,12 @@
         fieldHtml("Education", a.education_level) +
         fieldHtml("Favorite drink", a.favorite_drink) +
         '<div class="m-field full"><div class="k">Why join</div><div class="v">' + esc(a.why_join || "—") + "</div></div>" +
-      "</div>" +
-      '<div class="m-section">' +
-        '<div class="m-row"><label>Status</label><select id="m-status">' + statusOpts + "</select></div>" +
-        '<div class="m-row"><label>Rating</label><span class="stars" id="m-stars"></span></div>' +
-        '<div class="m-row" style="align-items:flex-start;"><label>Notes</label><textarea id="m-notes" placeholder="Internal notes…">' + esc(a.notes || "") + "</textarea></div>" +
-        '<div class="m-actions"><button class="btn-wa" id="m-wa">Message on WhatsApp</button><button class="btn-save" id="m-save">Save</button></div>' +
-        '<div class="m-msg" id="m-msg"></div>' +
       "</div>";
 
     document.getElementById("modal").classList.add("open");
 
     if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) {
       if (url) { var im = document.getElementById("m-photo"); im.src = url; im.style.display = "block"; }
-    });
-
-    renderStars(tempRating);
-    document.getElementById("m-stars").addEventListener("click", function (e) {
-      var s = e.target.getAttribute("data-s");
-      if (!s) return;
-      tempRating = parseInt(s, 10);
-      renderStars(tempRating);
-    });
-    document.getElementById("m-status").addEventListener("change", function () { savePatch({ status: this.value }); });
-    document.getElementById("m-save").addEventListener("click", function () {
-      savePatch({ rating: tempRating || null, notes: document.getElementById("m-notes").value.trim() || null });
-    });
-    document.getElementById("m-wa").addEventListener("click", function () {
-      if (!waNumber) { setMsg("No phone number on file."); return; }
-      // Message text is a placeholder for now — we'll finalize the approval message next.
-      var text = encodeURIComponent("Hello " + (a.full_name || "") + ",");
-      window.open("https://wa.me/" + waNumber + "?text=" + text, "_blank");
-    });
-  }
-
-  function savePatch(patch) {
-    if (!currentApp) return;
-    setMsg("Saving…");
-    db.from("job_applications").update(patch).eq("id", currentApp.id).then(function (res) {
-      if (res.error) { setMsg("Save failed. Please try again."); return; }
-      for (var k in patch) currentApp[k] = patch[k];
-      setMsg("Saved.");
-      renderApps();
     });
   }
 
