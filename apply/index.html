@@ -90,6 +90,11 @@
   }
   .file-btn:hover { border-color: var(--silver); }
   .file-name { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-check { display: none; width: 22px; height: 22px; border-radius: 50%; background: #25d366; color: #0a2e17;
+    font-weight: 800; font-size: 0.78rem; align-items: center; justify-content: center; flex: 0 0 auto; }
+  input.invalid, select.invalid, textarea.invalid {
+    border-color: #ff6b6b !important; box-shadow: 0 0 0 3px rgba(255,107,107,0.16) !important;
+  }
   input[type="file"] { display: none; }
   .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
   .submit {
@@ -206,6 +211,7 @@
             <label>Photo of yourself <span class="ar">/ صورة الك</span></label>
             <div class="file-row">
               <button type="button" class="file-btn" id="file-btn">Choose photo</button>
+              <span class="file-check" id="file-check" aria-hidden="true">✓</span>
               <span class="file-name" id="file-name">No photo chosen</span>
             </div>
             <input type="file" id="photo" accept="image/*">
@@ -236,7 +242,10 @@
 
   document.getElementById("file-btn").addEventListener("click", function () { fileInput.click(); });
   fileInput.addEventListener("change", function () {
-    fileName.textContent = fileInput.files.length ? fileInput.files[0].name : "No photo chosen";
+    var has = fileInput.files.length > 0;
+    fileName.textContent = has ? fileInput.files[0].name : "No photo chosen";
+    document.getElementById("file-check").style.display = has ? "flex" : "none";
+    document.getElementById("file-btn").textContent = has ? "Change photo" : "Choose photo";
   });
 
   // ---- Phone: custom country picker (real flag images) + digit-limited local number ----
@@ -289,6 +298,12 @@
 
   function val(id) { return document.getElementById(id).value.trim(); }
   function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80); }
+  function markInvalid(id, bad) { var el = document.getElementById(id); if (el) el.classList.toggle("invalid", !!bad); }
+
+  // Clear the red outline as soon as the user edits a field
+  var formEl = document.getElementById("form");
+  formEl.addEventListener("input", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
+  formEl.addEventListener("change", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
 
   document.getElementById("form").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -296,31 +311,36 @@
     var btn = document.getElementById("submit-btn");
     msg.textContent = "";
 
-    var fullName = val("full_name");
-    if (!fullName) { msg.textContent = "Please enter your full name."; return; }
+    // Validate: outline every empty required field in red and block submit.
+    var REQUIRED = ["full_name", "dob", "how_found", "living_area", "gender",
+                    "work_type", "currently_working", "education_level", "favorite_drink"];
+    REQUIRED.forEach(function (id) { markInvalid(id, false); });
+    markInvalid("phone_local", false);
 
-    // Assemble + validate phone: strip non-digits and any leading zero, then check length.
+    var missing = [];
+    REQUIRED.forEach(function (id) { if (!val(id)) { markInvalid(id, true); missing.push(id); } });
+
+    // Phone: strip non-digits + any leading zero, then length-check for the selected country.
     var local = phoneLocal.value.replace(/\D/g, "").replace(/^0+/, "");
-    if (selCountry.len.indexOf(local.length) === -1) {
-      msg.textContent = "Please enter a valid phone number for the selected country.";
+    var phoneValid = selCountry.len.indexOf(local.length) !== -1;
+    if (!phoneValid) { markInvalid("phone_local", true); missing.push("phone_local"); }
+
+    if (missing.length) {
+      if (missing.length === 1 && missing[0] === "phone_local" && phoneLocal.value) {
+        msg.textContent = "Please enter a valid phone number for the selected country.";
+      } else {
+        msg.textContent = "Please fill in the highlighted fields.";
+      }
+      var firstEl = document.getElementById(missing[0]);
+      if (firstEl) {
+        if (firstEl.scrollIntoView) firstEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (firstEl.focus) firstEl.focus({ preventScroll: true });
+      }
       return;
     }
-    var phone = "+" + selCountry.cc + local;
 
-    // Required fields (marked * on the form)
-    var required = [
-      ["dob", "your date of birth"],
-      ["how_found", "how you found out about the opportunity"],
-      ["living_area", "your living area"],
-      ["gender", "your gender"],
-      ["work_type", "full-time or part-time"],
-      ["currently_working", "whether you're currently working"],
-      ["education_level", "your education level"],
-      ["favorite_drink", "your favorite drink"]
-    ];
-    for (var r = 0; r < required.length; r++) {
-      if (!val(required[r][0])) { msg.textContent = "Please fill in " + required[r][1] + "."; return; }
-    }
+    var fullName = val("full_name");
+    var phone = "+" + selCountry.cc + local;
 
     var file = fileInput.files[0] || null;
     if (file && file.size > MAX_BYTES) { msg.textContent = "That file is larger than 10 MB. Please choose a smaller one."; return; }
