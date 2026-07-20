@@ -53,7 +53,7 @@
     color-scheme: dark;
   }
   input:focus, select:focus, textarea:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
-  input[type="date"] { cursor: pointer; }
+  input[type="date"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
   textarea { resize: vertical; min-height: 88px; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
