@@ -186,9 +186,10 @@
   .btn-approve:hover { filter: brightness(1.07); }
   .btn-reject { background: #ff5a5a; color: #3a0808; }
   .btn-reject:hover { filter: brightness(1.07); }
-  #sched-dt { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--field-border);
+  #sched-dt, #sched-loc { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; color-scheme: dark; font-family: inherit; }
-  #sched-dt:focus { border-color: var(--silver); }
+  #sched-dt:focus, #sched-loc:focus { border-color: var(--silver); }
+  .sched-label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 7px; }
 
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.62); backdrop-filter: blur(3px);
     display: none; align-items: flex-start; justify-content: center; padding: 24px 16px; z-index: 50; overflow-y: auto; }
@@ -326,8 +327,10 @@
         <button class="modal-close" id="sched-close" aria-label="Close">✕</button>
         <div class="m-name" id="sched-name">—</div>
         <div class="m-sub">Schedule the interview, then send the WhatsApp invite.</div>
-        <label style="display:block; font-size:0.8rem; color:var(--muted); margin-bottom:7px;">Interview date &amp; time</label>
+        <label class="sched-label">Interview date &amp; time</label>
         <input type="datetime-local" id="sched-dt">
+        <label class="sched-label" style="margin-top: 14px;">Location / link</label>
+        <input type="text" id="sched-loc" placeholder="Address, or an online meeting link">
         <div class="m-actions" style="margin-top:16px;">
           <button class="btn-wa" id="sched-send">Approve &amp; send WhatsApp</button>
         </div>
@@ -639,16 +642,23 @@
 
   // ---- Approve (schedule interview + WhatsApp invite) & Reject (delete) ----
   var schedApp = null;
-  function interviewMessage(name, whenText) {
-    // NOTE: placeholder wording — to be finalized with the user.
-    return "Hello " + (name || "") + "! 👋\n\n" +
-      "Thank you for applying to BLK. We'd like to invite you for an interview on " + whenText + ".\n\n" +
-      "Please reply to confirm. See you soon!";
+  function interviewMessage(name, dateText, timeText, location) {
+    return "هلا " + (name || "") + " 👋\n\n" +
+      "شكراً على تقديمك لوظيفة عندنا في قهوة BLK.\n\n" +
+      "حبينا نعزمك على مقابلة، وهذي التفاصيل:\n\n" +
+      "📅 التاريخ: " + dateText + "\n" +
+      "🕐 الوقت: " + timeText + "\n" +
+      "📍 المكان: " + (location || "[العنوان / أو رابط لو أونلاين]") + "\n\n" +
+      "لا تنسى ترد علينا تأكد حضورك، وإذا في تعارض بالوقت قولنا نرتب لك وقت ثاني 🙌\n\n" +
+      "بانتظارك ونتمنى نشوفك!\n\n" +
+      "مع تحياتنا،\n" +
+      "فريق التوظيف – قهوة BLK";
   }
   function openSchedule(a) {
     schedApp = a;
     document.getElementById("sched-name").textContent = a.full_name;
     document.getElementById("sched-dt").value = "";
+    document.getElementById("sched-loc").value = "";
     document.getElementById("sched-msg").textContent = "";
     document.getElementById("sched-modal").classList.add("open");
   }
@@ -662,16 +672,26 @@
     if (!dt) { smsg.textContent = "Please choose the interview date & time."; return; }
     var when = new Date(dt);
     var iso = when.toISOString();
+    var loc = document.getElementById("sched-loc").value.trim();
     var appRef = schedApp;
     var waNumber = (appRef.phone || "").replace(/[^\d]/g, "");
+
+    var dateText, timeText;
+    try {
+      dateText = when.toLocaleDateString("ar-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      timeText = when.toLocaleTimeString("ar-u-nu-latn", { hour: "numeric", minute: "2-digit" });
+    } catch (e) {
+      dateText = when.toLocaleDateString();
+      timeText = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
     smsg.textContent = "Saving…";
     db.from("job_applications").update({ status: "interview", interview_at: iso }).eq("id", appRef.id).then(function (res) {
       if (res.error) { smsg.textContent = "Could not save. Please try again."; return; }
       appRef.status = "interview"; appRef.interview_at = iso;
       renderApps();
       if (waNumber) {
-        var whenText = when.toLocaleString([], { weekday: "long", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-        window.open("https://wa.me/" + waNumber + "?text=" + encodeURIComponent(interviewMessage(appRef.full_name, whenText)), "_blank");
+        window.open("https://wa.me/" + waNumber + "?text=" + encodeURIComponent(interviewMessage(appRef.full_name, dateText, timeText, loc)), "_blank");
       }
       closeSched();
     });
