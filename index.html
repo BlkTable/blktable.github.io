@@ -329,8 +329,6 @@
         <div class="m-sub">Schedule the interview, then send the WhatsApp invite.</div>
         <label class="sched-label">Interview date &amp; time</label>
         <input type="datetime-local" id="sched-dt">
-        <label class="sched-label" style="margin-top: 14px;">Location / link</label>
-        <input type="text" id="sched-loc" placeholder="Address, or an online meeting link">
         <div class="m-actions" style="margin-top:16px;">
           <button class="btn-wa" id="sched-send">Approve &amp; send WhatsApp</button>
         </div>
@@ -642,13 +640,14 @@
 
   // ---- Approve (schedule interview + WhatsApp invite) & Reject (delete) ----
   var schedApp = null;
-  function interviewMessage(name, dateText, timeText, location) {
+  var BLK_LOCATION = "https://maps.app.goo.gl/9ELvkFsNGtPF4qdE9";
+  function interviewMessage(name, dateText, timeText) {
     return "هلا " + (name || "") + " 👋\n\n" +
       "شكراً على تقديمك لوظيفة عندنا في قهوة BLK.\n\n" +
       "حبينا نعزمك على مقابلة، وهذي التفاصيل:\n\n" +
       "📅 التاريخ: " + dateText + "\n" +
       "🕐 الوقت: " + timeText + "\n" +
-      "📍 المكان: " + (location || "[العنوان / أو رابط لو أونلاين]") + "\n\n" +
+      "📍 المكان: " + BLK_LOCATION + "\n\n" +
       "لا تنسى ترد علينا تأكد حضورك، وإذا في تعارض بالوقت قولنا نرتب لك وقت ثاني 🙌\n\n" +
       "بانتظارك ونتمنى نشوفك!\n\n" +
       "مع تحياتنا،\n" +
@@ -658,7 +657,6 @@
     schedApp = a;
     document.getElementById("sched-name").textContent = a.full_name;
     document.getElementById("sched-dt").value = "";
-    document.getElementById("sched-loc").value = "";
     document.getElementById("sched-msg").textContent = "";
     document.getElementById("sched-modal").classList.add("open");
   }
@@ -672,7 +670,6 @@
     if (!dt) { smsg.textContent = "Please choose the interview date & time."; return; }
     var when = new Date(dt);
     var iso = when.toISOString();
-    var loc = document.getElementById("sched-loc").value.trim();
     var appRef = schedApp;
     var waNumber = (appRef.phone || "").replace(/[^\d]/g, "");
 
@@ -691,7 +688,7 @@
       appRef.status = "interview"; appRef.interview_at = iso;
       renderApps();
       if (waNumber) {
-        window.open("https://wa.me/" + waNumber + "?text=" + encodeURIComponent(interviewMessage(appRef.full_name, dateText, timeText, loc)), "_blank");
+        window.open("https://wa.me/" + waNumber + "?text=" + encodeURIComponent(interviewMessage(appRef.full_name, dateText, timeText)), "_blank");
       }
       closeSched();
     });
