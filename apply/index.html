@@ -95,6 +95,7 @@
   input.invalid, select.invalid, textarea.invalid {
     border-color: #ff6b6b !important; box-shadow: 0 0 0 3px rgba(255,107,107,0.16) !important;
   }
+  .file-row.invalid .file-btn { border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,0.16); }
   input[type="file"] { display: none; }
   .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
   .submit {
@@ -208,8 +209,8 @@
             <textarea id="why_join" placeholder="Optional"></textarea>
           </div>
           <div class="field">
-            <label>Photo of yourself <span class="ar">/ صورة الك</span></label>
-            <div class="file-row">
+            <label>Photo of yourself <span class="ar">/ صورة الك</span> <span class="req">*</span></label>
+            <div class="file-row" id="file-row">
               <button type="button" class="file-btn" id="file-btn">Choose photo</button>
               <span class="file-check" id="file-check" aria-hidden="true">✓</span>
               <span class="file-name" id="file-name">No photo chosen</span>
@@ -246,6 +247,7 @@
     fileName.textContent = has ? fileInput.files[0].name : "No photo chosen";
     document.getElementById("file-check").style.display = has ? "flex" : "none";
     document.getElementById("file-btn").textContent = has ? "Change photo" : "Choose photo";
+    if (has) document.getElementById("file-row").classList.remove("invalid");
   });
 
   // ---- Phone: custom country picker (real flag images) + digit-limited local number ----
@@ -325,16 +327,25 @@
     var phoneValid = selCountry.len.indexOf(local.length) !== -1;
     if (!phoneValid) { markInvalid("phone_local", true); missing.push("phone_local"); }
 
+    // Photo is required
+    var fileRow = document.getElementById("file-row");
+    var noPhoto = fileInput.files.length === 0;
+    fileRow.classList.toggle("invalid", noPhoto);
+    if (noPhoto) missing.push("photo");
+
     if (missing.length) {
       if (missing.length === 1 && missing[0] === "phone_local" && phoneLocal.value) {
         msg.textContent = "Please enter a valid phone number for the selected country.";
+      } else if (missing.length === 1 && missing[0] === "photo") {
+        msg.textContent = "Please add a photo of yourself.";
       } else {
         msg.textContent = "Please fill in the highlighted fields.";
       }
-      var firstEl = document.getElementById(missing[0]);
+      var firstId = missing[0];
+      var firstEl = firstId === "photo" ? fileRow : document.getElementById(firstId);
       if (firstEl) {
         if (firstEl.scrollIntoView) firstEl.scrollIntoView({ behavior: "smooth", block: "center" });
-        if (firstEl.focus) firstEl.focus({ preventScroll: true });
+        if (firstId !== "photo" && firstEl.focus) firstEl.focus({ preventScroll: true });
       }
       return;
     }
