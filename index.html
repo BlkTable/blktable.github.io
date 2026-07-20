@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>BLKTable</title>
+<style>
+  :root {
+    --bg: #0b0b0c;
+    --card: #17140f;
+    --text: #f5f1ea;
+    --muted: #a89f8f;
+    --gold: #c9a24a;
+    --line: rgba(255,255,255,0.06);
+    --field-bg: #100e0a;
+    --field-border: #33301f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--gold); }
+
+  /* ---------- Login ---------- */
+  .login-wrap {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+    background: radial-gradient(circle at 50% 0%, #1a1712 0%, #0b0b0c 60%);
+  }
+  .login { width: 100%; max-width: 380px; }
+  .brand {
+    text-align: center; font-size: 1.4rem; font-weight: 800; letter-spacing: 0.14em;
+    color: var(--gold); margin: 0 0 4px;
+  }
+  .brand-sub { text-align: center; color: var(--muted); font-size: 0.8rem; margin: 0 0 26px; }
+  .field-group { display: flex; flex-direction: column; gap: 12px; }
+  label.lbl { font-size: 0.78rem; color: var(--muted); margin-bottom: -6px; }
+  input {
+    padding: 13px 15px; border-radius: 12px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; width: 100%;
+  }
+  input:focus { border-color: var(--gold); }
+  button.primary {
+    padding: 13px 16px; border-radius: 12px; border: none;
+    background: var(--gold); color: #1a1712; font-weight: 700; font-size: 1rem; cursor: pointer;
+  }
+  button.primary:active { transform: scale(0.99); }
+  button.primary:disabled { opacity: 0.6; cursor: default; }
+  .msg { font-size: 0.85rem; text-align: center; min-height: 1.2em; margin-top: 4px; }
+  .msg.err { color: #ff6b6b; }
+  .msg.ok { color: #7ed08a; }
+
+  /* ---------- App shell ---------- */
+  .app { display: none; min-height: 100vh; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px; border-bottom: 1px solid var(--line);
+    background: #100e0a;
+  }
+  .topbar .logo { font-weight: 800; letter-spacing: 0.12em; color: var(--gold); }
+  .topbar .right { display: flex; align-items: center; gap: 14px; }
+  .who { text-align: right; line-height: 1.2; }
+  .who .email { font-size: 0.85rem; }
+  .badge {
+    display: inline-block; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 8px; border-radius: 999px;
+    background: rgba(201,162,74,0.15); color: var(--gold); border: 1px solid rgba(201,162,74,0.4);
+  }
+  .linkbtn {
+    background: none; border: none; color: var(--muted); font-size: 0.82rem;
+    cursor: pointer; text-decoration: underline; padding: 0;
+  }
+  .content { flex: 1; padding: 30px 22px; max-width: 900px; width: 100%; margin: 0 auto; }
+  .section-title { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  .empty {
+    background: var(--card); border: 1px dashed var(--field-border); border-radius: 16px;
+    padding: 40px 24px; text-align: center; color: var(--muted);
+  }
+  .empty h2 { color: var(--text); font-size: 1.05rem; margin: 0 0 8px; }
+  .empty p { margin: 0; font-size: 0.9rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 22px; margin-top: 26px;
+  }
+  .card h3 { margin: 0 0 14px; font-size: 0.95rem; }
+  .card .field-group { max-width: 340px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div class="login-wrap" id="login-wrap">
+    <div class="login">
+      <div class="brand">BLKTABLE</div>
+      <div class="brand-sub">Sign in to continue</div>
+      <div class="field-group">
+        <input type="email" id="email" placeholder="Email" autocomplete="username">
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+        <button class="primary" id="login-btn">Sign in</button>
+        <div class="msg err" id="login-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div class="app" id="app">
+    <div class="topbar">
+      <div class="logo">BLKTABLE</div>
+      <div class="right">
+        <div class="who">
+          <div class="email" id="who-email">—</div>
+          <span class="badge" id="who-role">—</span>
+        </div>
+        <button class="linkbtn" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="section-title">Tables</div>
+      <div class="empty">
+        <h2>No tables yet</h2>
+        <p>Your first table — <strong>Job Applications</strong> — will appear here once we build it.</p>
+      </div>
+
+      <div class="card">
+        <h3>Change your password</h3>
+        <div class="field-group">
+          <input type="password" id="new-pw" placeholder="New password (min 8 characters)" autocomplete="new-password">
+          <button class="primary" id="pw-btn">Update password</button>
+          <div class="msg" id="pw-msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_8emQ7ArqAiFZw7b7x0MLMQ_JWEuIis-";
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  var loginWrap = document.getElementById("login-wrap");
+  var app = document.getElementById("app");
+
+  function showApp(session) {
+    loginWrap.style.display = "none";
+    app.style.display = "flex";
+    document.getElementById("who-email").textContent = session.user.email;
+    loadRole(session.user.id);
+  }
+  function showLogin() {
+    app.style.display = "none";
+    loginWrap.style.display = "flex";
+  }
+
+  function loadRole(userId) {
+    db.from("profiles").select("role, full_name").eq("id", userId).single()
+      .then(function (res) {
+        var role = (res.data && res.data.role) || "reviewer";
+        document.getElementById("who-role").textContent = role;
+      });
+  }
+
+  // ---- Login ----
+  var loginBtn = document.getElementById("login-btn");
+  var loginMsg = document.getElementById("login-msg");
+  function doLogin() {
+    var email = document.getElementById("email").value.trim();
+    var password = document.getElementById("password").value;
+    if (!email || !password) { loginMsg.textContent = "Enter your email and password."; return; }
+    loginBtn.disabled = true; loginMsg.textContent = "";
+    db.auth.signInWithPassword({ email: email, password: password })
+      .then(function (res) {
+        loginBtn.disabled = false;
+        if (res.error) { loginMsg.textContent = "Incorrect email or password."; return; }
+        showApp(res.data.session);
+      })
+      .catch(function () { loginBtn.disabled = false; loginMsg.textContent = "Something went wrong. Try again."; });
+  }
+  loginBtn.addEventListener("click", doLogin);
+  document.getElementById("password").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") doLogin();
+  });
+
+  // ---- Logout ----
+  document.getElementById("logout-btn").addEventListener("click", function () {
+    db.auth.signOut().then(showLogin);
+  });
+
+  // ---- Change password ----
+  var pwBtn = document.getElementById("pw-btn");
+  var pwMsg = document.getElementById("pw-msg");
+  pwBtn.addEventListener("click", function () {
+    var newPw = document.getElementById("new-pw").value;
+    pwMsg.className = "msg";
+    if (!newPw || newPw.length < 8) { pwMsg.className = "msg err"; pwMsg.textContent = "Password must be at least 8 characters."; return; }
+    pwBtn.disabled = true; pwMsg.textContent = "";
+    db.auth.updateUser({ password: newPw }).then(function (res) {
+      pwBtn.disabled = false;
+      if (res.error) { pwMsg.className = "msg err"; pwMsg.textContent = res.error.message; return; }
+      pwMsg.className = "msg ok"; pwMsg.textContent = "Password updated.";
+      document.getElementById("new-pw").value = "";
+    });
+  });
+
+  // ---- On load: restore session if present ----
+  db.auth.getSession().then(function (res) {
+    if (res.data && res.data.session) showApp(res.data.session);
+    else showLogin();
+  });
+</script>
+</body>
+</html>
