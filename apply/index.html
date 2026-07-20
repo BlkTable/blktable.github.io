@@ -53,7 +53,14 @@
     color-scheme: dark;
   }
   input:focus, select:focus, textarea:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
-  input[type="date"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
+  /* Uniform height for all single-line fields so the date input can't render taller/longer than the rest */
+  input, select { height: 48px; }
+  input[type="date"] {
+    cursor: pointer; -webkit-appearance: none; appearance: none;
+    min-width: 0; max-width: 100%; height: 48px;
+  }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  input[type="date"]::-webkit-datetime-edit { padding: 0; }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
   textarea { resize: vertical; min-height: 88px; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
