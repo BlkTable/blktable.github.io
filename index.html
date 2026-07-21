@@ -208,6 +208,18 @@
   .btn-approve:hover { filter: brightness(1.07); }
   .btn-reject { background: #ff5a5a; color: #3a0808; }
   .btn-reject:hover { filter: brightness(1.07); }
+  .btn-send { background: #25d366; color: #0a2e17; }
+  .btn-send:hover { filter: brightness(1.07); }
+  .btn-del { background: #ff5a5a; color: #3a0808; }
+  .btn-del:hover { filter: brightness(1.07); }
+  .card-actions .btn-restore { background: var(--field-bg); color: var(--text); border: 1px solid var(--field-border); }
+  .card-actions .btn-restore:hover { border-color: var(--silver); }
+  .tabs { margin-bottom: 16px; }
+  .tab-count { font-size: 0.72rem; opacity: 0.7; margin-left: 3px; }
+  .ja-bulk { margin-bottom: 14px; }
+  .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
+  .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
+  .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
   #sched-dt, #sched-loc { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; color-scheme: dark; font-family: inherit; }
   #sched-dt:focus, #sched-loc:focus { border-color: var(--silver); }
@@ -297,16 +309,14 @@
             <div class="ja-count" id="ja-count">—</div>
           </div>
 
+          <div class="seg tabs" id="ja-tabs">
+            <button type="button" data-s="new" class="active">New <span class="tab-count" id="cnt-new"></span></button>
+            <button type="button" data-s="approved">Approved <span class="tab-count" id="cnt-approved"></span></button>
+            <button type="button" data-s="rejected">Rejected <span class="tab-count" id="cnt-rejected"></span></button>
+          </div>
+
           <div class="toolbar">
             <input type="search" id="ja-search" placeholder="Search name, phone, area…">
-            <select id="ja-filter">
-              <option value="">All statuses</option>
-              <option value="new">New</option>
-              <option value="reviewing">Reviewing</option>
-              <option value="interview">Interview</option>
-              <option value="hired">Hired</option>
-              <option value="rejected">Rejected</option>
-            </select>
             <div class="filter-wrap" id="filter-wrap">
               <button class="filter-btn" id="filter-btn" aria-label="Filters" title="Filters">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
@@ -332,6 +342,10 @@
               </div>
             </div>
             <button class="linkbtn" id="ja-refresh">Refresh</button>
+          </div>
+
+          <div id="ja-bulk" class="ja-bulk" style="display:none;">
+            <button class="btn-wa" id="send-all">Send WhatsApp to all unsent</button>
           </div>
 
           <div id="ja-list" class="ja-list"></div>
@@ -372,7 +386,7 @@
         <label class="sched-label">Interview date &amp; time</label>
         <input type="datetime-local" id="sched-dt">
         <div class="m-actions" style="margin-top:16px;">
-          <button class="btn-wa" id="sched-send">Approve &amp; send WhatsApp</button>
+          <button class="btn-wa" id="sched-send">Approve &amp; schedule</button>
         </div>
         <div class="m-msg" id="sched-msg"></div>
       </div>
@@ -451,17 +465,7 @@
   });
 
   // ---- Job Applications review ----
-  var STATUSES = [
-    { v: "new", label: "New", color: "#9aa7b4" },
-    { v: "reviewing", label: "Reviewing", color: "#e0a63a" },
-    { v: "interview", label: "Interview", color: "#6ea8fe" },
-    { v: "hired", label: "Hired", color: "#58c98a" },
-    { v: "rejected", label: "Rejected", color: "#ff6b6b" }
-  ];
-  function statusMeta(v) {
-    for (var i = 0; i < STATUSES.length; i++) if (STATUSES[i].v === v) return STATUSES[i];
-    return STATUSES[0];
-  }
+  var section = "new"; // active tab: new | approved | rejected
 
   var allApps = [];
   var signedCache = {};
@@ -517,9 +521,8 @@
 
   function filterApps() {
     var q = (document.getElementById("ja-search").value || "").toLowerCase().trim();
-    var f = document.getElementById("ja-filter").value;
     return allApps.filter(function (a) {
-      if (f && a.status !== f) return false;
+      if ((a.status || "new") !== section) return false;
       if (q) {
         var hay = ((a.full_name || "") + " " + (a.phone || "") + " " + (a.living_area || "")).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
@@ -534,9 +537,17 @@
       return true;
     });
   }
-  function badgeHtml(a) {
-    var sm = statusMeta(a.status);
-    return '<span class="badge-status" style="color:' + sm.color + ";background:" + sm.color + "22;border:1px solid " + sm.color + '55;">' + sm.label + "</span>";
+  function sectionCounts() {
+    var c = { new: 0, approved: 0, rejected: 0 };
+    allApps.forEach(function (a) { var s = (a.status || "new"); if (c[s] != null) c[s]++; });
+    return c;
+  }
+  function fmtInterview(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    try { return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+    catch (e) { return d.toLocaleString(); }
   }
   function setThumb(el, a) {
     if (!a.photo_path) return;
@@ -548,15 +559,32 @@
   function renderApps() {
     var listEl = document.getElementById("ja-list");
     var emptyEl = document.getElementById("ja-empty");
+
+    var counts = sectionCounts();
+    document.getElementById("cnt-new").textContent = counts.new ? "(" + counts.new + ")" : "";
+    document.getElementById("cnt-approved").textContent = counts.approved ? "(" + counts.approved + ")" : "";
+    document.getElementById("cnt-rejected").textContent = counts.rejected ? "(" + counts.rejected + ")" : "";
+
     var rows = filterApps();
+    document.getElementById("ja-count").textContent = rows.length + (rows.length === 1 ? " applicant" : " applicants");
 
-    document.getElementById("ja-count").textContent =
-      allApps.length + " total" + (rows.length !== allApps.length ? (" · " + rows.length + " shown") : "");
+    // "Send to all" bar: only in Approved, and only if someone still needs messaging
+    var unsent = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent; }).length;
+    var bulk = document.getElementById("ja-bulk");
+    if (section === "approved" && unsent > 0) {
+      bulk.style.display = "block";
+      document.getElementById("send-all").textContent = "Send WhatsApp to all unsent (" + unsent + ")";
+    } else {
+      bulk.style.display = "none";
+    }
 
-    if (!allApps.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
+    if (!rows.length) {
+      listEl.innerHTML = "";
+      emptyEl.style.display = "block";
+      emptyEl.innerHTML = "<h2>Nothing here</h2><p>No applicants in “" + section + "”.</p>";
+      return;
+    }
     emptyEl.style.display = "none";
-    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">No matches.</div>'; return; }
-
     listEl.innerHTML = "";
 
     var grid = document.createElement("div");
@@ -564,20 +592,39 @@
     rows.forEach(function (a) {
       var initial = (a.full_name || "?").trim().charAt(0).toUpperCase();
       var age = calcAge(a.date_of_birth);
+
+      var footer;
+      if (section === "new") {
+        footer = '<div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-reject">Reject</button></div>';
+      } else if (section === "approved") {
+        footer =
+          (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") +
+          (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "") +
+          '<div class="card-actions"><button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button></div>';
+      } else {
+        footer = '<div class="card-actions"><button class="btn-restore">Restore</button><button class="btn-del">Delete</button></div>';
+      }
+
       var card = document.createElement("div");
       card.className = "ja-card";
       card.innerHTML =
         '<div class="photo">' + esc(initial) + "</div>" +
         '<div class="body"><div class="name">' + esc(a.full_name) + "</div>" +
         '<div class="meta">' + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—"))) + "</div>" +
-        badgeHtml(a) +
-        '<div class="card-actions">' +
-          '<button class="btn-approve">Approve</button>' +
-          '<button class="btn-reject">Reject</button>' +
-        "</div></div>";
+        footer + "</div>";
       card.addEventListener("click", function () { openDetail(a); });
-      card.querySelector(".btn-approve").addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
-      card.querySelector(".btn-reject").addEventListener("click", function (e) { e.stopPropagation(); rejectApp(a); });
+
+      var approveBtn = card.querySelector(".btn-approve");
+      if (approveBtn) approveBtn.addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
+      var rejectBtn = card.querySelector(".btn-reject");
+      if (rejectBtn) rejectBtn.addEventListener("click", function (e) { e.stopPropagation(); reject(a); });
+      var sendBtn = card.querySelector(".btn-send");
+      if (sendBtn) sendBtn.addEventListener("click", function (e) { e.stopPropagation(); sendWhatsApp(a); });
+      var restoreBtn = card.querySelector(".btn-restore");
+      if (restoreBtn) restoreBtn.addEventListener("click", function (e) { e.stopPropagation(); setStatus(a, "new"); });
+      var delBtn = card.querySelector(".btn-del");
+      if (delBtn) delBtn.addEventListener("click", function (e) { e.stopPropagation(); deletePermanent(a); });
+
       grid.appendChild(card);
       setThumb(card.querySelector(".photo"), a);
     });
@@ -647,36 +694,71 @@
     var dt = document.getElementById("sched-dt").value;
     var smsg = document.getElementById("sched-msg");
     if (!dt) { smsg.textContent = "Please choose the interview date & time."; return; }
-    var when = new Date(dt);
-    var iso = when.toISOString();
+    var iso = new Date(dt).toISOString();
     var appRef = schedApp;
-    var waNumber = (appRef.phone || "").replace(/[^\d]/g, "");
-
-    var dateText, timeText;
-    try {
-      dateText = when.toLocaleDateString("ar-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-      timeText = when.toLocaleTimeString("ar-u-nu-latn", { hour: "numeric", minute: "2-digit" });
-    } catch (e) {
-      dateText = when.toLocaleDateString();
-      timeText = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    }
-
     smsg.textContent = "Saving…";
-    db.from("job_applications").update({ status: "interview", interview_at: iso }).eq("id", appRef.id).then(function (res) {
+    db.from("job_applications").update({ status: "approved", interview_at: iso, message_sent: false }).eq("id", appRef.id).then(function (res) {
       if (res.error) { smsg.textContent = "Could not save. Please try again."; return; }
-      appRef.status = "interview"; appRef.interview_at = iso;
-      renderApps();
-      if (waNumber) {
-        window.open("https://wa.me/" + waNumber + "?text=" + encodeURIComponent(interviewMessage(appRef.full_name, dateText, timeText)), "_blank");
-      }
+      appRef.status = "approved"; appRef.interview_at = iso; appRef.message_sent = false;
       closeSched();
+      renderApps();
     });
   });
-  function rejectApp(a) {
-    if (!window.confirm("Reject and permanently delete " + (a.full_name || "this applicant") + "'s application? This cannot be undone.")) return;
+  function setStatus(a, status) {
+    db.from("job_applications").update({ status: status }).eq("id", a.id).then(function (res) {
+      if (res.error) { alert("Could not update. Please try again."); return; }
+      a.status = status;
+      renderApps();
+    });
+  }
+  function reject(a) { setStatus(a, "rejected"); }
+
+  function waUrlFor(a) {
+    var num = (a.phone || "").replace(/[^\d]/g, "");
+    if (!num) return null;
+    var dateText = "", timeText = "";
+    if (a.interview_at) {
+      var when = new Date(a.interview_at);
+      if (!isNaN(when.getTime())) {
+        try {
+          dateText = when.toLocaleDateString("ar-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+          timeText = when.toLocaleTimeString("ar-u-nu-latn", { hour: "numeric", minute: "2-digit" });
+        } catch (e) {
+          dateText = when.toLocaleDateString();
+          timeText = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
+      }
+    }
+    return "https://wa.me/" + num + "?text=" + encodeURIComponent(interviewMessage(a.full_name, dateText, timeText));
+  }
+  function markSent(ids) {
+    db.from("job_applications").update({ message_sent: true }).in("id", ids).then(function () { renderApps(); });
+  }
+  function sendWhatsApp(a) {
+    var url = waUrlFor(a);
+    if (!url) { alert("No phone number on file for this applicant."); return; }
+    var w = window.open(url, "_blank");
+    if (w) { a.message_sent = true; markSent([a.id]); }
+    else { alert("Your browser blocked the pop-up. Please allow pop-ups for this site."); }
+  }
+  function sendAll() {
+    var pend = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent; });
+    if (!pend.length) { alert("Everyone in Approved has already been messaged."); return; }
+    var openedIds = [];
+    pend.forEach(function (a) {
+      var url = waUrlFor(a);
+      if (!url) return;
+      var w = window.open(url, "_blank");
+      if (w) { a.message_sent = true; openedIds.push(a.id); }
+    });
+    if (!openedIds.length) { alert("Your browser blocked the pop-ups. Please allow pop-ups for this site, or use each card's Send button."); return; }
+    markSent(openedIds);
+  }
+  function deletePermanent(a) {
+    if (!window.confirm("Permanently delete " + (a.full_name || "this applicant") + "? This removes their record and photo and cannot be undone.")) return;
     var removeRow = function () {
       db.from("job_applications").delete().eq("id", a.id).then(function (res) {
-        if (res.error) { alert("Could not delete the application."); return; }
+        if (res.error) { alert("Could not delete."); return; }
         allApps = allApps.filter(function (x) { return x.id !== a.id; });
         renderApps();
       });
@@ -684,9 +766,18 @@
     if (a.photo_path) db.storage.from("photos").remove([a.photo_path]).then(removeRow, removeRow);
     else removeRow();
   }
+
   document.getElementById("ja-search").addEventListener("input", renderApps);
-  document.getElementById("ja-filter").addEventListener("change", renderApps);
   document.getElementById("ja-refresh").addEventListener("click", loadApps);
+  document.getElementById("send-all").addEventListener("click", sendAll);
+  document.getElementById("ja-tabs").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button") : null;
+    if (!b) return;
+    section = b.getAttribute("data-s");
+    var btns = this.querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
+    renderApps();
+  });
 
   // ---- Filter panel: gender + age range ----
   var filterBtn = document.getElementById("filter-btn");
