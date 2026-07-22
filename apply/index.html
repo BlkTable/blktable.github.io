@@ -163,6 +163,16 @@
             </select>
           </div>
           <div class="field">
+            <label for="city">City <span class="ar">/ المدينة</span> <span class="req">*</span></label>
+            <select id="city" required>
+              <option value="">Select… / اختر</option>
+              <option value="Amman">Amman / عمّان</option>
+              <option value="Zarqa">Zarqa / الزرقاء</option>
+              <option value="Aqaba">Aqaba / العقبة</option>
+              <option value="Irbid">Irbid / إربد</option>
+            </select>
+          </div>
+          <div class="field">
             <label for="living_area">Living area <span class="ar">/ منطقة السكن</span> <span class="req">*</span></label>
             <input type="text" id="living_area" required>
           </div>
@@ -315,7 +325,7 @@
     msg.textContent = "";
 
     // Validate: outline every empty required field in red and block submit.
-    var REQUIRED = ["full_name", "dob", "how_found", "living_area", "gender",
+    var REQUIRED = ["full_name", "dob", "how_found", "city", "living_area", "gender",
                     "work_type", "currently_working", "education_level", "favorite_drink"];
     REQUIRED.forEach(function (id) { markInvalid(id, false); });
     markInvalid("phone_local", false);
@@ -377,6 +387,7 @@
           phone: phone,
           date_of_birth: val("dob") || null,
           how_found: val("how_found") || null,
+          city: val("city") || null,
           living_area: val("living_area") || null,
           gender: val("gender") || null,
           work_type: val("work_type") || null,

@@ -187,6 +187,12 @@
   #fp-country { display: flex; width: 100%; height: 40px; }
   #fp-country button { flex: 1; padding: 0; font-size: 0.78rem; }
   .mini-flag { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; display: inline-block; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); }
+  .fp-select { width: 100%; height: 40px; padding: 0 34px 0 12px; border-radius: 9px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; appearance: none; -webkit-appearance: none;
+    cursor: pointer; color-scheme: dark; font-family: inherit;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .fp-select:focus { border-color: var(--silver); }
   .fp-age { display: flex; align-items: center; gap: 8px; }
   .fp-age input { width: 100%; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; color-scheme: dark; font-family: inherit; }
@@ -342,6 +348,16 @@
                     <button type="button" data-g="Female">Female</button>
                     <button type="button" data-g="Male">Male</button>
                   </div>
+                </div>
+                <div class="fp-group">
+                  <div class="fp-label">City</div>
+                  <select id="fp-city" class="fp-select">
+                    <option value="">All</option>
+                    <option value="Amman">Amman</option>
+                    <option value="Zarqa">Zarqa</option>
+                    <option value="Aqaba">Aqaba</option>
+                    <option value="Irbid">Irbid</option>
+                  </select>
                 </div>
                 <div class="fp-group">
                   <div class="fp-label">Age range</div>
@@ -519,6 +535,7 @@
   var fAgeMin = null;
   var fAgeMax = null;
   var fCountry = "";
+  var fCity = "";
 
   var COUNTRIES = [
     { dial: "962", name: "Jordan", flag: "jo" },
@@ -556,6 +573,7 @@
       }
       if (fGender && a.gender !== fGender) return false;
       if (fCountry) { var pc = phoneCountry(a.phone); if (!pc || pc.dial !== fCountry) return false; }
+      if (fCity && a.city !== fCity) return false;
       if (fAgeMin != null || fAgeMax != null) {
         var age = calcAge(a.date_of_birth);
         if (age == null) return false;
@@ -672,6 +690,7 @@
         fieldHtml("Phone", a.phone) +
         fieldHtml("Age", ageText(a.date_of_birth) + (a.date_of_birth ? " · " + a.date_of_birth : "")) +
         fieldHtml("How found", a.how_found) +
+        fieldHtml("City", a.city) +
         fieldHtml("Living area", a.living_area) +
         fieldHtml("Gender", a.gender) +
         fieldHtml("Full / Part", a.work_type) +
@@ -812,7 +831,7 @@
   var filterPanel = document.getElementById("filter-panel");
   var filterWrap = document.getElementById("filter-wrap");
   function updateFilterActive() {
-    filterBtn.classList.toggle("active", !!(fCountry || fGender || fAgeMin != null || fAgeMax != null));
+    filterBtn.classList.toggle("active", !!(fCountry || fCity || fGender || fAgeMin != null || fAgeMax != null));
   }
   filterBtn.addEventListener("click", function (e) { e.stopPropagation(); filterPanel.classList.toggle("open"); });
   document.addEventListener("click", function (e) { if (!filterWrap.contains(e.target)) filterPanel.classList.remove("open"); });
@@ -834,12 +853,14 @@
     updateFilterActive(); renderApps();
   });
   function readAge(id) { var v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? null : v; }
+  document.getElementById("fp-city").addEventListener("change", function () { fCity = this.value; updateFilterActive(); renderApps(); });
   document.getElementById("fp-age-min").addEventListener("input", function () { fAgeMin = readAge("fp-age-min"); updateFilterActive(); renderApps(); });
   document.getElementById("fp-age-max").addEventListener("input", function () { fAgeMax = readAge("fp-age-max"); updateFilterActive(); renderApps(); });
   document.getElementById("fp-clear").addEventListener("click", function () {
-    fGender = ""; fAgeMin = null; fAgeMax = null; fCountry = "";
+    fGender = ""; fAgeMin = null; fAgeMax = null; fCountry = ""; fCity = "";
     document.getElementById("fp-age-min").value = "";
     document.getElementById("fp-age-max").value = "";
+    document.getElementById("fp-city").value = "";
     var gb = document.getElementById("fp-gender").querySelectorAll("button");
     for (var i = 0; i < gb.length; i++) gb[i].classList.toggle("active", gb[i].getAttribute("data-g") === "");
     var cb = document.getElementById("fp-country").querySelectorAll("button");
