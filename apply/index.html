@@ -162,9 +162,9 @@
               <option value="Other">Other / اخرى</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field" id="city-field">
             <label for="city">City <span class="ar">/ المدينة</span> <span class="req">*</span></label>
-            <select id="city" required>
+            <select id="city">
               <option value="">Select… / اختر</option>
               <option value="Amman">Amman / عمّان</option>
               <option value="Zarqa">Zarqa / الزرقاء</option>
@@ -284,6 +284,13 @@
     ccDial.textContent = "+" + selCountry.cc;
     phoneLocal.placeholder = selCountry.ph;
     phoneLocal.maxLength = Math.max.apply(null, selCountry.len) + 1; // +1 tolerates a leading 0
+    // City list is Jordan-only — show it only for Jordanian numbers
+    var cityField = document.getElementById("city-field");
+    if (cityField) {
+      var isJordan = selCountry.cc === "962";
+      cityField.style.display = isJordan ? "" : "none";
+      if (!isJordan) { document.getElementById("city").value = ""; document.getElementById("city").classList.remove("invalid"); }
+    }
   }
   function closeMenu() { ccMenu.classList.remove("open"); ccBtn.setAttribute("aria-expanded", "false"); }
 
@@ -325,13 +332,17 @@
     msg.textContent = "";
 
     // Validate: outline every empty required field in red and block submit.
-    var REQUIRED = ["full_name", "dob", "how_found", "city", "living_area", "gender",
+    var REQUIRED = ["full_name", "dob", "how_found", "living_area", "gender",
                     "work_type", "currently_working", "education_level", "favorite_drink"];
     REQUIRED.forEach(function (id) { markInvalid(id, false); });
     markInvalid("phone_local", false);
+    markInvalid("city", false);
 
     var missing = [];
     REQUIRED.forEach(function (id) { if (!val(id)) { markInvalid(id, true); missing.push(id); } });
+
+    // City is required only for Jordanian numbers (the list is Jordan-only)
+    if (selCountry.cc === "962" && !val("city")) { markInvalid("city", true); missing.push("city"); }
 
     // Phone: strip non-digits + any leading zero, then length-check for the selected country.
     var local = phoneLocal.value.replace(/\D/g, "").replace(/^0+/, "");
@@ -387,7 +398,7 @@
           phone: phone,
           date_of_birth: val("dob") || null,
           how_found: val("how_found") || null,
-          city: val("city") || null,
+          city: (selCountry.cc === "962" ? val("city") : "") || null,
           living_area: val("living_area") || null,
           gender: val("gender") || null,
           work_type: val("work_type") || null,
