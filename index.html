@@ -184,6 +184,9 @@
   .fp-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
   #fp-gender { display: flex; width: 100%; height: 40px; }
   #fp-gender button { flex: 1; padding: 0; }
+  #fp-country { display: flex; width: 100%; height: 40px; }
+  #fp-country button { flex: 1; padding: 0; font-size: 0.78rem; }
+  .mini-flag { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; display: inline-block; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); }
   .fp-age { display: flex; align-items: center; gap: 8px; }
   .fp-age input { width: 100%; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; color-scheme: dark; font-family: inherit; }
@@ -322,6 +325,16 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
               </button>
               <div class="filter-panel" id="filter-panel">
+                <div class="fp-group">
+                  <div class="fp-label">Country</div>
+                  <div class="seg" id="fp-country">
+                    <button type="button" data-c="" class="active">All</button>
+                    <button type="button" data-c="962">JO</button>
+                    <button type="button" data-c="961">LB</button>
+                    <button type="button" data-c="963">SY</button>
+                    <button type="button" data-c="964">IQ</button>
+                  </div>
+                </div>
                 <div class="fp-group">
                   <div class="fp-label">Gender</div>
                   <div class="seg" id="fp-gender">
@@ -505,6 +518,20 @@
   var fGender = "";
   var fAgeMin = null;
   var fAgeMax = null;
+  var fCountry = "";
+
+  var COUNTRIES = [
+    { dial: "962", name: "Jordan", flag: "jo" },
+    { dial: "961", name: "Lebanon", flag: "lb" },
+    { dial: "963", name: "Syria", flag: "sy" },
+    { dial: "964", name: "Iraq", flag: "iq" }
+  ];
+  function phoneCountry(phone) {
+    if (!phone) return null;
+    var p = String(phone).replace(/[^\d+]/g, "");
+    for (var i = 0; i < COUNTRIES.length; i++) { if (p.indexOf("+" + COUNTRIES[i].dial) === 0) return COUNTRIES[i]; }
+    return null;
+  }
 
   function calcAge(dob) {
     if (!dob) return null;
@@ -528,6 +555,7 @@
         if (hay.indexOf(q) === -1) return false;
       }
       if (fGender && a.gender !== fGender) return false;
+      if (fCountry) { var pc = phoneCountry(a.phone); if (!pc || pc.dial !== fCountry) return false; }
       if (fAgeMin != null || fAgeMax != null) {
         var age = calcAge(a.date_of_birth);
         if (age == null) return false;
@@ -610,7 +638,7 @@
       card.innerHTML =
         '<div class="photo">' + esc(initial) + "</div>" +
         '<div class="body"><div class="name">' + esc(a.full_name) + "</div>" +
-        '<div class="meta">' + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—"))) + "</div>" +
+        '<div class="meta">' + (function () { var c = phoneCountry(a.phone); return c ? ('<img class="mini-flag" src="https://flagcdn.com/' + esc(c.flag) + '.svg" alt=""> ' + esc(c.name) + ' · ') : ""; })() + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—"))) + "</div>" +
         footer + "</div>";
       card.addEventListener("click", function () { openDetail(a); });
 
@@ -784,7 +812,7 @@
   var filterPanel = document.getElementById("filter-panel");
   var filterWrap = document.getElementById("filter-wrap");
   function updateFilterActive() {
-    filterBtn.classList.toggle("active", !!(fGender || fAgeMin != null || fAgeMax != null));
+    filterBtn.classList.toggle("active", !!(fCountry || fGender || fAgeMin != null || fAgeMax != null));
   }
   filterBtn.addEventListener("click", function (e) { e.stopPropagation(); filterPanel.classList.toggle("open"); });
   document.addEventListener("click", function (e) { if (!filterWrap.contains(e.target)) filterPanel.classList.remove("open"); });
@@ -797,15 +825,25 @@
     for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
     updateFilterActive(); renderApps();
   });
+  document.getElementById("fp-country").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button") : null;
+    if (!b) return;
+    fCountry = b.getAttribute("data-c");
+    var btns = this.querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
+    updateFilterActive(); renderApps();
+  });
   function readAge(id) { var v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? null : v; }
   document.getElementById("fp-age-min").addEventListener("input", function () { fAgeMin = readAge("fp-age-min"); updateFilterActive(); renderApps(); });
   document.getElementById("fp-age-max").addEventListener("input", function () { fAgeMax = readAge("fp-age-max"); updateFilterActive(); renderApps(); });
   document.getElementById("fp-clear").addEventListener("click", function () {
-    fGender = ""; fAgeMin = null; fAgeMax = null;
+    fGender = ""; fAgeMin = null; fAgeMax = null; fCountry = "";
     document.getElementById("fp-age-min").value = "";
     document.getElementById("fp-age-max").value = "";
     var gb = document.getElementById("fp-gender").querySelectorAll("button");
     for (var i = 0; i < gb.length; i++) gb[i].classList.toggle("active", gb[i].getAttribute("data-g") === "");
+    var cb = document.getElementById("fp-country").querySelectorAll("button");
+    for (var j = 0; j < cb.length; j++) cb[j].classList.toggle("active", cb[j].getAttribute("data-c") === "");
     updateFilterActive(); renderApps();
   });
 

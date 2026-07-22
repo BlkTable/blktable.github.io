@@ -252,9 +252,10 @@
 
   // ---- Phone: custom country picker (real flag images) + digit-limited local number ----
   var COUNTRIES = [
-    { cc: "962", len: [9],    ph: "7X XXX XXXX", flag: "jo", name: "Jordan" },
-    { cc: "961", len: [7, 8], ph: "XX XXX XXX",  flag: "lb", name: "Lebanon" },
-    { cc: "963", len: [9],    ph: "9XX XXX XXX", flag: "sy", name: "Syria" }
+    { cc: "962", len: [9],    ph: "7X XXX XXXX",  flag: "jo", name: "Jordan" },
+    { cc: "961", len: [7, 8], ph: "XX XXX XXX",   flag: "lb", name: "Lebanon" },
+    { cc: "963", len: [9],    ph: "9XX XXX XXX",  flag: "sy", name: "Syria" },
+    { cc: "964", len: [10],   ph: "7XX XXX XXXX", flag: "iq", name: "Iraq" }
   ];
   var FLAG_BASE = "https://flagcdn.com/";
   function flagUrl(code) { return FLAG_BASE + code + ".svg"; }
