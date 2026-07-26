@@ -919,7 +919,7 @@
         '<div class="ja-thumb">' + esc((c.full_name || "?").trim().charAt(0).toUpperCase()) + "</div>" +
         '<div class="info"><div class="name">' + esc(c.full_name) + "</div>" +
         '<div class="sub">' + (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") +
-          " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—") + "</div></div>";
+          " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—") + "</div></div>";
       listEl.appendChild(row);
       setThumb(row.querySelector(".ja-thumb"), c);
     });

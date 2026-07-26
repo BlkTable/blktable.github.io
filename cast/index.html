@@ -110,6 +110,10 @@
             <div class="hint">We may contact you on WhatsApp.</div>
           </div>
           <div class="field">
+            <label for="branch">Branch <span class="ar">/ الفرع</span> <span class="req">*</span></label>
+            <input type="text" id="branch" required>
+          </div>
+          <div class="field">
             <label for="university">University student? <span class="ar">/ مسجل جامعة؟</span> <span class="req">*</span></label>
             <select id="university" required>
               <option value="">Select… / اختر</option>
@@ -219,7 +223,7 @@
     var btn = document.getElementById("submit-btn");
     msg.textContent = "";
 
-    var REQUIRED = ["full_name", "dob", "university", "acted"];
+    var REQUIRED = ["full_name", "dob", "branch", "university", "acted"];
     REQUIRED.forEach(function (id) { markInvalid(id, false); });
     markInvalid("phone_local", false);
     var missing = [];
@@ -257,6 +261,7 @@
           full_name: val("full_name"),
           date_of_birth: val("dob") || null,
           phone: phone,
+          branch: val("branch") || null,
           university_student: val("university") || null,
           ever_acted: val("acted") || null,
           photo_path: photoPath
