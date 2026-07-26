@@ -107,6 +107,23 @@
   .side-item .ico { width: 8px; height: 8px; border-radius: 2px; background: currentColor; opacity: 0.7; flex: 0 0 auto; }
   .main { flex: 1; min-width: 0; padding: 30px 26px 48px; max-width: 920px; }
   .view.hidden { display: none; }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .nav-toggle { background: none; border: 1px solid var(--field-border); color: var(--text); border-radius: 9px;
+    width: 38px; height: 38px; cursor: pointer; font-size: 1.05rem; line-height: 1; display: flex; align-items: center; justify-content: center; }
+  .nav-toggle:hover { border-color: var(--silver); }
+  /* auto-hiding sidebar: collapses to a thin rail, expands on hover */
+  .workspace.collapsed { position: relative; }
+  .workspace.collapsed .sidebar {
+    position: absolute; left: 0; top: 0; bottom: 0; z-index: 40;
+    width: 6px; min-width: 6px; padding: 0; overflow: hidden;
+    background: var(--field-border); border-right: none; transition: width 0.15s ease;
+  }
+  .workspace.collapsed .sidebar:hover {
+    width: 232px; min-width: 232px; padding: 22px 14px; overflow: auto;
+    background: #0e1013; border-right: 1px solid var(--line); box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+  }
+  .workspace.collapsed .main { margin-left: 6px; }
+  @media (max-width: 720px) { .workspace.collapsed .sidebar { position: static; width: auto; min-width: 0; padding: 12px 14px; overflow: visible; background: #0e1013; } .workspace.collapsed .main { margin-left: 0; } }
   @media (max-width: 720px) {
     .workspace { flex-direction: column; }
     .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--line);
@@ -311,7 +328,10 @@
   <!-- APP -->
   <div class="app" id="app">
     <div class="topbar">
-      <img class="logo-img" src="assets/blk-logo.svg" alt="BLK">
+      <div class="topbar-left">
+        <button class="nav-toggle" id="nav-toggle" aria-label="Hide / show menu" title="Hide / show menu">☰</button>
+        <img class="logo-img" src="assets/blk-logo.svg" alt="BLK">
+      </div>
       <div class="right">
         <div class="who">
           <div class="email" id="who-email">—</div>
@@ -1390,6 +1410,18 @@
     if (!sideItems[si].getAttribute("data-view")) continue; // custom tables + New-table have their own handlers
     sideItems[si].addEventListener("click", function () { showView(this.getAttribute("data-view")); });
   }
+
+  // ---- Auto-hiding sidebar toggle ----
+  var workspaceEl = document.querySelector(".workspace");
+  var navCollapsed = false;
+  try { navCollapsed = localStorage.getItem("blk_nav_collapsed") === "1"; } catch (e) {}
+  function applyNav() { workspaceEl.classList.toggle("collapsed", navCollapsed); }
+  applyNav();
+  document.getElementById("nav-toggle").addEventListener("click", function () {
+    navCollapsed = !navCollapsed;
+    try { localStorage.setItem("blk_nav_collapsed", navCollapsed ? "1" : "0"); } catch (e) {}
+    applyNav();
+  });
 
   // ---- On load: restore session if present ----
   db.auth.getSession().then(function (res) {
