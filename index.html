@@ -229,6 +229,10 @@
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
   .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
+  .ja-row .row-actions { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; margin-left: auto; }
+  .ja-row .card-actions { margin: 0; }
+  .ja-row .card-actions button { flex: 0 0 auto; padding: 8px 12px; font-size: 0.78rem; }
+  @media (max-width: 560px) { .ja-row { flex-wrap: wrap; } .ja-row .row-actions { width: 100%; } .ja-row .card-actions { width: 100%; } .ja-row .card-actions button { flex: 1; } }
   #sched-dt, #sched-loc { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; color-scheme: dark; font-family: inherit; }
   #sched-dt:focus, #sched-loc:focus { border-color: var(--silver); }
@@ -385,6 +389,7 @@
                 <button type="button" class="fp-clear" id="fp-clear">Clear filters</button>
               </div>
             </div>
+            <div class="seg viewtoggle" id="ja-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             <button class="linkbtn" id="ja-refresh">Refresh</button>
           </div>
 
@@ -409,6 +414,7 @@
           </div>
           <div class="toolbar">
             <input type="search" id="casting-search" placeholder="Search name…">
+            <div class="seg viewtoggle" id="casting-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             <button class="linkbtn" id="casting-refresh">Refresh</button>
           </div>
           <div id="casting-list" class="ja-list"></div>
@@ -425,6 +431,7 @@
           </div>
           <div class="toolbar">
             <input type="search" id="custom-search" placeholder="Search…">
+            <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             <button class="linkbtn" id="custom-copy">Copy form link</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
           </div>
@@ -566,6 +573,7 @@
 
   // ---- Job Applications review ----
   var section = "new"; // active tab: new | approved | rejected
+  var jaView = "cards", castingView = "cards", customView = "cards"; // per-table Cards/List
 
   var allApps = [];
   var signedCache = {};
@@ -702,50 +710,47 @@
       return;
     }
     emptyEl.style.display = "none";
+    emptyEl.style.display = "none";
     listEl.innerHTML = "";
+    var cards = jaView === "cards";
+    var container = listEl;
+    if (cards) { container = document.createElement("div"); container.className = "ja-cards"; listEl.appendChild(container); }
 
-    var grid = document.createElement("div");
-    grid.className = "ja-cards";
     rows.forEach(function (a) {
       var initial = (a.full_name || "?").trim().charAt(0).toUpperCase();
       var age = calcAge(a.date_of_birth);
+      var c = phoneCountry(a.phone);
+      var chip = c ? ('<img class="mini-flag" src="https://flagcdn.com/' + esc(c.flag) + '.svg" alt=""> ' + esc(c.name) + ' · ') : "";
+      var metaHtml = chip + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—")));
 
-      var footer;
+      var actionsHtml, extraHtml = "";
       if (section === "new") {
-        footer = '<div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-reject">Reject</button></div>';
+        actionsHtml = '<div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-reject">Reject</button></div>';
       } else if (section === "approved") {
-        footer =
-          (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") +
-          (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "") +
-          '<div class="card-actions"><button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button></div>';
+        extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "");
+        actionsHtml = '<div class="card-actions"><button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button></div>';
       } else {
-        footer = '<div class="card-actions"><button class="btn-restore">Restore</button><button class="btn-del">Delete</button></div>';
+        actionsHtml = '<div class="card-actions"><button class="btn-restore">Restore</button><button class="btn-del">Delete</button></div>';
       }
 
-      var card = document.createElement("div");
-      card.className = "ja-card";
-      card.innerHTML =
-        '<div class="photo">' + esc(initial) + "</div>" +
-        '<div class="body"><div class="name">' + esc(a.full_name) + "</div>" +
-        '<div class="meta">' + (function () { var c = phoneCountry(a.phone); return c ? ('<img class="mini-flag" src="https://flagcdn.com/' + esc(c.flag) + '.svg" alt=""> ' + esc(c.name) + ' · ') : ""; })() + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—"))) + "</div>" +
-        footer + "</div>";
-      card.addEventListener("click", function () { openDetail(a); });
-
-      var approveBtn = card.querySelector(".btn-approve");
-      if (approveBtn) approveBtn.addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
-      var rejectBtn = card.querySelector(".btn-reject");
-      if (rejectBtn) rejectBtn.addEventListener("click", function (e) { e.stopPropagation(); reject(a); });
-      var sendBtn = card.querySelector(".btn-send");
-      if (sendBtn) sendBtn.addEventListener("click", function (e) { e.stopPropagation(); sendWhatsApp(a); });
-      var restoreBtn = card.querySelector(".btn-restore");
-      if (restoreBtn) restoreBtn.addEventListener("click", function (e) { e.stopPropagation(); setStatus(a, "new"); });
-      var delBtn = card.querySelector(".btn-del");
-      if (delBtn) delBtn.addEventListener("click", function (e) { e.stopPropagation(); deletePermanent(a); });
-
-      grid.appendChild(card);
-      setThumb(card.querySelector(".photo"), a);
+      var el = document.createElement("div");
+      if (cards) {
+        el.className = "ja-card";
+        el.innerHTML = '<div class="photo">' + esc(initial) + '</div><div class="body"><div class="name">' + esc(a.full_name) + '</div><div class="meta">' + metaHtml + "</div>" + extraHtml + actionsHtml + "</div>";
+      } else {
+        var rowExtra = section === "approved" ? ((a.interview_at ? " · 📅 " + esc(fmtInterview(a.interview_at)) : "") + (a.message_sent ? " · ✓ sent" : "")) : "";
+        el.className = "ja-row";
+        el.innerHTML = '<div class="ja-thumb">' + esc(initial) + '</div><div class="info"><div class="name">' + esc(a.full_name) + '</div><div class="sub">' + metaHtml + rowExtra + '</div></div><div class="row-actions">' + actionsHtml + "</div>";
+      }
+      el.addEventListener("click", function () { openDetail(a); });
+      var b1 = el.querySelector(".btn-approve"); if (b1) b1.addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
+      var b2 = el.querySelector(".btn-reject"); if (b2) b2.addEventListener("click", function (e) { e.stopPropagation(); reject(a); });
+      var b3 = el.querySelector(".btn-send"); if (b3) b3.addEventListener("click", function (e) { e.stopPropagation(); sendWhatsApp(a); });
+      var b4 = el.querySelector(".btn-restore"); if (b4) b4.addEventListener("click", function (e) { e.stopPropagation(); setStatus(a, "new"); });
+      var b5 = el.querySelector(".btn-del"); if (b5) b5.addEventListener("click", function (e) { e.stopPropagation(); deletePermanent(a); });
+      container.appendChild(el);
+      setThumb(el.querySelector(".photo, .ja-thumb"), a);
     });
-    listEl.appendChild(grid);
   }
 
   function fieldHtml(k, v) {
@@ -962,17 +967,18 @@
     emptyEl.style.display = "none";
     if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">No matches.</div>'; return; }
     listEl.innerHTML = "";
+    var ccards = castingView === "cards";
+    var ccont = listEl;
+    if (ccards) { ccont = document.createElement("div"); ccont.className = "ja-cards"; listEl.appendChild(ccont); }
     rows.forEach(function (c) {
       var age = calcAge(c.date_of_birth);
-      var row = document.createElement("div");
-      row.className = "ja-row";
-      row.innerHTML =
-        '<div class="ja-thumb">' + esc((c.full_name || "?").trim().charAt(0).toUpperCase()) + "</div>" +
-        '<div class="info"><div class="name">' + esc(c.full_name) + "</div>" +
-        '<div class="sub">' + (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") +
-          " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—") + "</div></div>";
-      listEl.appendChild(row);
-      setThumb(row.querySelector(".ja-thumb"), c);
+      var initial = esc((c.full_name || "?").trim().charAt(0).toUpperCase());
+      var sub = (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") + " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—");
+      var el = document.createElement("div");
+      if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + '</div><div class="meta">' + sub + "</div></div>"; }
+      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + '</div><div class="sub">' + sub + "</div></div>"; }
+      ccont.appendChild(el);
+      setThumb(el.querySelector(".photo, .ja-thumb"), c);
     });
   }
   document.getElementById("casting-search").addEventListener("input", renderCasting);
@@ -1036,17 +1042,21 @@
     emptyEl.style.display = "none";
     if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">No matches.</div>'; return; }
     listEl.innerHTML = "";
+    var kcards = customView === "cards";
+    var kcont = listEl;
+    if (kcards) { kcont = document.createElement("div"); kcont.className = "ja-cards"; listEl.appendChild(kcont); }
     rows.forEach(function (s) {
       var d = s.data || {};
       var title = summary.length ? (d[summary[0].id] || "—") : "—";
       var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(d[f.id] || "—"); });
       parts.push(fmtDate(s.created_at));
-      var row = document.createElement("div"); row.className = "ja-row";
-      row.innerHTML = '<div class="ja-thumb">' + esc(String(title).trim().charAt(0).toUpperCase() || "?") + "</div>" +
-        '<div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div>";
-      row.addEventListener("click", function () { openCustomDetail(s, fields); });
-      listEl.appendChild(row);
-      if (photoField && d[photoField.id]) setThumb(row.querySelector(".ja-thumb"), { photo_path: d[photoField.id] });
+      var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
+      var el = document.createElement("div");
+      if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div></div>"; }
+      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div>"; }
+      el.addEventListener("click", function () { openCustomDetail(s, fields); });
+      kcont.appendChild(el);
+      if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
   }
   function openCustomDetail(s, fields) {
@@ -1127,6 +1137,22 @@
       setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
     }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
   });
+
+  // ---- Cards / List toggles ----
+  function wireToggle(id, set) {
+    var seg = document.getElementById(id);
+    if (!seg) return;
+    seg.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("button") : null;
+      if (!b) return;
+      var btns = seg.querySelectorAll("button");
+      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
+      set(b.getAttribute("data-v"));
+    });
+  }
+  wireToggle("ja-viewtoggle", function (v) { jaView = v; renderApps(); });
+  wireToggle("casting-viewtoggle", function (v) { castingView = v; renderCasting(); });
+  wireToggle("custom-viewtoggle", function (v) { customView = v; renderCustom(); });
 
   // ---- Sidebar: switch which table/view is open in the main pane ----
   function showView(id) {
