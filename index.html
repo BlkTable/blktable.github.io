@@ -845,6 +845,8 @@
         fieldHtml("Education", a.education_level) +
         fieldHtml("Favorite drink", a.favorite_drink) +
         '<div class="m-field full"><div class="k">Why join</div><div class="v">' + esc(a.why_join || "—") + "</div></div>" +
+        fieldHtml("Submitted IP", a.submitted_ip) +
+        '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>" +
       "</div>";
 
     document.getElementById("modal").classList.add("open");
@@ -1059,7 +1061,8 @@
     var age = calcAge(c.date_of_birth);
     function fld(k, v) { return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>"; }
     var grid = fld("Phone", c.phone) + fld("Age", age == null ? "—" : (age + " yrs")) + fld("Date of birth", c.date_of_birth) +
-      fld("Branch", c.branch) + fld("University student?", c.university_student) + fld("Ever acted?", c.ever_acted);
+      fld("Branch", c.branch) + fld("University student?", c.university_student) + fld("Ever acted?", c.ever_acted) +
+      fld("Submitted IP", c.submitted_ip) + '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
     var html = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       '<div class="m-name">' + esc(c.full_name) + '</div><div class="m-sub">Submitted ' + fmtDate(c.created_at) + '</div><div class="m-grid">' + grid + "</div>";
     document.getElementById("modal-body").innerHTML = html;
@@ -1154,6 +1157,8 @@
       if (f.type === "photo") { if (d[f.id]) photoPath = d[f.id]; return; }
       grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(d[f.id] || "—") + "</div></div>";
     });
+    grid += '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(s.submitted_ip || "—") + '</div></div>';
+    grid += '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(s.device || "—") + "</div></div>";
     var html = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + "</div>";
     document.getElementById("modal-body").innerHTML = html;
