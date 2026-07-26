@@ -329,7 +329,7 @@
         <div class="side-group side-bottom">
           <div class="side-label">Account</div>
           <nav class="side-list">
-            <button class="side-item" id="users-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New user</button>
+            <button class="side-item" id="users-btn" data-view="users" style="display:none; color:var(--silver);"><span class="ico"></span>Users</button>
             <button class="side-item" data-view="account"><span class="ico"></span>Change password</button>
           </nav>
         </div>
@@ -447,6 +447,15 @@
           <div id="custom-empty" class="empty" style="display:none;"><h2>No submissions yet</h2><p>Submissions from the form link will show up here.</p></div>
         </section>
 
+        <section class="view hidden" id="view-users">
+          <div class="ja-head">
+            <div><div class="section-title">Admin</div><h2 class="ja-title">Users</h2></div>
+            <button class="linkbtn" id="users-new">＋ New user</button>
+          </div>
+          <div id="users-list" class="ja-list"></div>
+          <div id="users-empty" class="empty" style="display:none;"><h2>No users yet</h2></div>
+        </section>
+
         <section class="view hidden" id="view-account">
           <div class="section-title">Account</div>
           <h2 class="ja-title" style="margin-bottom: 18px;">Change password</h2>
@@ -507,7 +516,7 @@
     <div class="modal-overlay" id="users-modal">
       <div class="modal" style="max-width: 460px;">
         <button class="modal-close" id="users-close" aria-label="Close">✕</button>
-        <div class="m-name">New user</div>
+        <div class="m-name" id="u-title">New user</div>
         <div class="m-sub">Create a login and choose which tables they can view.</div>
         <input id="u-email" placeholder="Email" autocomplete="off" class="u-inp">
         <input id="u-pass" type="text" placeholder="Temporary password (min 8 chars)" autocomplete="off" class="u-inp">
@@ -534,9 +543,11 @@
   var app = document.getElementById("app");
 
   var isAdmin = false;
+  var myUserId = null;
   function showApp(session) {
     loginWrap.style.display = "none";
     app.style.display = "flex";
+    myUserId = session.user.id;
     document.getElementById("who-email").textContent = session.user.email;
     loadRole(session.user.id);
     loadApps();
@@ -1206,8 +1217,17 @@
     }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
   });
 
-  // ---- Admin: create users + assign table access ----
+  // ---- Admin: users management (list, create, edit, delete, reassign) ----
   var usersModal = document.getElementById("users-modal");
+  var editingUser = null;
+  function invokeErr(res) { return (res && res.data && res.data.error) || (res && res.error && (res.error.message || res.error)) || null; }
+  function errText(err) { return (err && err.message) ? err.message : (typeof err === "string" ? err : ""); }
+  function keyName(k) {
+    if (k === "job_applications") return "Job Applications";
+    if (k === "casting") return "BLK Casting";
+    var t = customTables.filter(function (x) { return x.id === k; })[0];
+    return t ? t.name : k;
+  }
   function renderUserTables() {
     var host = document.getElementById("u-tables"); host.innerHTML = "";
     var all = [{ key: "job_applications", name: "Job Applications" }, { key: "casting", name: "BLK Casting" }]
@@ -1218,16 +1238,55 @@
       host.appendChild(lab);
     });
   }
-  function openUsers() {
-    document.getElementById("u-email").value = "";
+  function loadUsers() {
+    var listEl = document.getElementById("users-list"), emptyEl = document.getElementById("users-empty");
+    listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
+    Promise.all([
+      db.from("profiles").select("id,email,role,created_at").order("created_at", { ascending: true }),
+      db.from("table_access").select("user_id,table_key")
+    ]).then(function (r) {
+      var profs = (r[0] && r[0].data) || [], acc = (r[1] && r[1].data) || [];
+      var byUser = {}; acc.forEach(function (a) { (byUser[a.user_id] = byUser[a.user_id] || []).push(a.table_key); });
+      if (!profs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
+      emptyEl.style.display = "none"; listEl.innerHTML = "";
+      profs.forEach(function (p) {
+        var keys = byUser[p.id] || [];
+        var tnames = p.role === "admin" ? "All tables" : (keys.map(keyName).join(", ") || "no tables");
+        var me = p.id === myUserId;
+        var row = document.createElement("div"); row.className = "ja-row";
+        row.innerHTML =
+          '<div class="ja-thumb">' + esc((p.email || "?").charAt(0).toUpperCase()) + "</div>" +
+          '<div class="info"><div class="name">' + esc(p.email || "—") + (me ? ' <span style="color:var(--muted);font-size:0.72rem;">(you)</span>' : "") + "</div>" +
+          '<div class="sub">' + esc(p.role) + " · " + esc(tnames) + "</div></div>" +
+          '<div class="row-actions"><div class="card-actions"><button class="btn-view u-edit">Edit</button>' + (me ? "" : '<button class="btn-del u-del">Delete</button>') + "</div></div>";
+        row.querySelector(".u-edit").addEventListener("click", function () { openUserModal(p, keys); });
+        var dl = row.querySelector(".u-del"); if (dl) dl.addEventListener("click", function () { deleteUser(p); });
+        listEl.appendChild(row);
+      });
+    });
+  }
+  function openUserModal(user, keys) {
+    editingUser = user || null;
+    document.getElementById("u-title").textContent = user ? "Edit user" : "New user";
+    document.getElementById("u-email").value = user ? (user.email || "") : "";
     document.getElementById("u-pass").value = "";
-    document.getElementById("u-role").value = "reviewer";
+    document.getElementById("u-pass").placeholder = user ? "New password (leave blank to keep)" : "Temporary password (min 8 chars)";
+    document.getElementById("u-role").value = user ? user.role : "reviewer";
+    document.getElementById("u-create").textContent = user ? "Save changes" : "Create account";
     document.getElementById("u-msg").textContent = "";
-    document.getElementById("u-tables-wrap").style.display = "block";
+    document.getElementById("u-tables-wrap").style.display = document.getElementById("u-role").value === "admin" ? "none" : "block";
     renderUserTables();
+    if (user && keys) keys.forEach(function (k) { var cb = document.querySelector('#u-tables input[value="' + k + '"]'); if (cb) cb.checked = true; });
     usersModal.classList.add("open");
   }
-  document.getElementById("users-btn").addEventListener("click", openUsers);
+  function deleteUser(p) {
+    if (!window.confirm("Delete " + (p.email || "this user") + "? They lose access immediately. This cannot be undone.")) return;
+    db.functions.invoke("admin-users", { body: { action: "delete", id: p.id } }).then(function (res) {
+      var e = invokeErr(res); if (e) throw new Error(e);
+      loadUsers();
+    }).catch(function (err) { window.alert("Could not delete. " + errText(err)); });
+  }
+  document.getElementById("users-new").addEventListener("click", function () { openUserModal(null); });
   document.getElementById("users-close").addEventListener("click", function () { usersModal.classList.remove("open"); });
   usersModal.addEventListener("click", function (e) { if (e.target === this) usersModal.classList.remove("open"); });
   document.getElementById("u-role").addEventListener("change", function () { document.getElementById("u-tables-wrap").style.display = this.value === "admin" ? "none" : "block"; });
@@ -1237,30 +1296,40 @@
     var pass = document.getElementById("u-pass").value;
     var role = document.getElementById("u-role").value;
     if (!email) { msg.textContent = "Enter an email."; return; }
-    if (!pass || pass.length < 8) { msg.textContent = "Password must be at least 8 characters."; return; }
     var keys = [];
     if (role !== "admin") {
       [].slice.call(document.querySelectorAll("#u-tables input:checked")).forEach(function (c) { keys.push(c.value); });
       if (!keys.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
     }
-    msg.textContent = "Creating…";
-    db.functions.invoke("admin-users", { body: { email: email, password: pass, role: role } }).then(function (res) {
-      if (res.error) throw res.error;
-      if (res.data && res.data.error) throw new Error(res.data.error);
-      var newId = res.data && res.data.id;
-      if (!newId) throw new Error("no id returned");
-      if (role !== "admin" && keys.length) {
-        return db.from("table_access").insert(keys.map(function (k) { return { user_id: newId, table_key: k }; }));
-      }
-      return { error: null };
-    }).then(function (r) {
-      if (r && r.error) throw r.error;
-      usersModal.classList.remove("open");
-      window.alert("Account created for " + email + ".\nShare the temporary password with them — they can change it after logging in.");
-    }).catch(function (err) {
-      msg.textContent = "Could not create the account. " + ((err && (err.message || err.error)) || "");
-      if (window.console) console.error(err);
-    });
+
+    if (!editingUser) {
+      if (!pass || pass.length < 8) { msg.textContent = "Password must be at least 8 characters."; return; }
+      msg.textContent = "Creating…";
+      db.functions.invoke("admin-users", { body: { email: email, password: pass, role: role } }).then(function (res) {
+        var e = invokeErr(res); if (e) throw new Error(e);
+        var newId = res.data && res.data.id; if (!newId) throw new Error("no id returned");
+        if (role !== "admin" && keys.length) return db.from("table_access").insert(keys.map(function (k) { return { user_id: newId, table_key: k }; }));
+        return { error: null };
+      }).then(function (r) {
+        if (r && r.error) throw r.error;
+        usersModal.classList.remove("open"); loadUsers();
+        window.alert("Account created for " + email + ".\nShare the temporary password — they can change it after logging in.");
+      }).catch(function (err) { msg.textContent = "Could not create. " + errText(err); if (window.console) console.error(err); });
+    } else {
+      if (pass && pass.length < 8) { msg.textContent = "Password must be at least 8 characters."; return; }
+      if (editingUser.id === myUserId && role !== "admin") { msg.textContent = "You can't remove your own admin access."; return; }
+      var id = editingUser.id;
+      msg.textContent = "Saving…";
+      var patch = {};
+      if (email !== editingUser.email) patch.email = email;
+      if (pass) patch.password = pass;
+      var chain = Promise.resolve();
+      if (Object.keys(patch).length) chain = chain.then(function () { return db.functions.invoke("admin-users", { body: Object.assign({ action: "update", id: id }, patch) }).then(function (res) { var e = invokeErr(res); if (e) throw new Error(e); }); });
+      chain = chain.then(function () { return db.from("profiles").update({ role: role }).eq("id", id).then(function (r) { if (r.error) throw r.error; }); });
+      chain = chain.then(function () { return db.from("table_access").delete().eq("user_id", id).then(function (r) { if (r.error) throw r.error; }); });
+      if (role !== "admin" && keys.length) chain = chain.then(function () { return db.from("table_access").insert(keys.map(function (k) { return { user_id: id, table_key: k }; })).then(function (r) { if (r.error) throw r.error; }); });
+      chain.then(function () { usersModal.classList.remove("open"); loadUsers(); window.alert("Saved."); }).catch(function (err) { msg.textContent = "Could not save. " + errText(err); if (window.console) console.error(err); });
+    }
   });
 
   // ---- Cards / List toggles ----
@@ -1290,6 +1359,7 @@
       items[j].classList.toggle("active", items[j].getAttribute("data-view") === id);
     }
     if (id === "casting" && !castingLoaded) loadCasting();
+    if (id === "users") loadUsers();
   }
   var sideItems = document.querySelectorAll(".side-item");
   for (var si = 0; si < sideItems.length; si++) {
