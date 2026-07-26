@@ -213,6 +213,8 @@
   .ja-card .body .meta { color: var(--muted); font-size: 0.78rem; margin: 3px 0 8px; }
   .card-actions { display: flex; gap: 8px; margin-top: 10px; }
   .card-actions button { flex: 1; padding: 8px 0; border-radius: 9px; border: none; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+  .card-actions .btn-view { background: var(--field-bg); color: var(--text); border: 1px solid var(--field-border); }
+  .card-actions .btn-view:hover { border-color: var(--silver); }
   .btn-approve { background: #2fbf6b; color: #062916; }
   .btn-approve:hover { filter: brightness(1.07); }
   .btn-reject { background: #ff5a5a; color: #3a0808; }
@@ -772,13 +774,14 @@
       var chip = c ? ('<img class="mini-flag" src="https://flagcdn.com/' + esc(c.flag) + '.svg" alt=""> ' + esc(c.name) + ' · ') : "";
       var metaHtml = chip + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—")));
 
-      var actionsHtml = "", extraHtml = "";
+      var adminBtns = "", extraHtml = "";
       if (section === "approved") extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "");
       if (isAdmin) {
-        if (section === "new") actionsHtml = '<div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-reject">Reject</button></div>';
-        else if (section === "approved") actionsHtml = '<div class="card-actions"><button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button></div>';
-        else actionsHtml = '<div class="card-actions"><button class="btn-restore">Restore</button><button class="btn-del">Delete</button></div>';
+        if (section === "new") adminBtns = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
+        else if (section === "approved") adminBtns = '<button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button>';
+        else adminBtns = '<button class="btn-restore">Restore</button><button class="btn-del">Delete</button>';
       }
+      var actionsHtml = '<div class="card-actions"><button class="btn-view">View</button>' + adminBtns + "</div>";
 
       var el = document.createElement("div");
       if (cards) {
@@ -790,6 +793,7 @@
         el.innerHTML = '<div class="ja-thumb">' + esc(initial) + '</div><div class="info"><div class="name">' + esc(a.full_name) + '</div><div class="sub">' + metaHtml + rowExtra + '</div></div><div class="row-actions">' + actionsHtml + "</div>";
       }
       el.addEventListener("click", function () { openDetail(a); });
+      var bv = el.querySelector(".btn-view"); if (bv) bv.addEventListener("click", function (e) { e.stopPropagation(); openDetail(a); });
       var b1 = el.querySelector(".btn-approve"); if (b1) b1.addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
       var b2 = el.querySelector(".btn-reject"); if (b2) b2.addEventListener("click", function (e) { e.stopPropagation(); reject(a); });
       var b3 = el.querySelector(".btn-send"); if (b3) b3.addEventListener("click", function (e) { e.stopPropagation(); sendWhatsApp(a); });
@@ -1021,12 +1025,26 @@
       var age = calcAge(c.date_of_birth);
       var initial = esc((c.full_name || "?").trim().charAt(0).toUpperCase());
       var sub = (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") + " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—");
+      var viewBtn = '<div class="card-actions"><button class="btn-view">View</button></div>';
       var el = document.createElement("div");
-      if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + '</div><div class="meta">' + sub + "</div></div>"; }
-      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + '</div><div class="sub">' + sub + "</div></div>"; }
+      if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + '</div><div class="meta">' + sub + "</div>" + viewBtn + "</div>"; }
+      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + '</div><div class="sub">' + sub + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
+      el.addEventListener("click", function () { openCastingDetail(c); });
+      var cbv = el.querySelector(".btn-view"); if (cbv) cbv.addEventListener("click", function (e) { e.stopPropagation(); openCastingDetail(c); });
       ccont.appendChild(el);
       setThumb(el.querySelector(".photo, .ja-thumb"), c);
     });
+  }
+  function openCastingDetail(c) {
+    var age = calcAge(c.date_of_birth);
+    function fld(k, v) { return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>"; }
+    var grid = fld("Phone", c.phone) + fld("Age", age == null ? "—" : (age + " yrs")) + fld("Date of birth", c.date_of_birth) +
+      fld("Branch", c.branch) + fld("University student?", c.university_student) + fld("Ever acted?", c.ever_acted);
+    var html = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+      '<div class="m-name">' + esc(c.full_name) + '</div><div class="m-sub">Submitted ' + fmtDate(c.created_at) + '</div><div class="m-grid">' + grid + "</div>";
+    document.getElementById("modal-body").innerHTML = html;
+    document.getElementById("modal").classList.add("open");
+    if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
   }
   document.getElementById("casting-search").addEventListener("input", renderCasting);
   document.getElementById("casting-refresh").addEventListener("click", loadCasting);
@@ -1099,10 +1117,12 @@
       var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(d[f.id] || "—"); });
       parts.push(fmtDate(s.created_at));
       var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
+      var viewBtn = '<div class="card-actions"><button class="btn-view">View</button></div>';
       var el = document.createElement("div");
-      if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div></div>"; }
-      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div>"; }
+      if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div>" + viewBtn + "</div>"; }
+      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
+      var kbv = el.querySelector(".btn-view"); if (kbv) kbv.addEventListener("click", function (e) { e.stopPropagation(); openCustomDetail(s, fields); });
       kcont.appendChild(el);
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
