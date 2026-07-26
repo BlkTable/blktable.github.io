@@ -276,6 +276,11 @@
   .bld-field .req-lbl { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
   .bld-field .opts { flex: 1; min-width: 120px; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; }
   .bld-field .rm { margin-left: auto; background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+  .u-inp { width: 100%; height: 44px; padding: 0 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; }
+  .u-inp:focus { border-color: var(--silver); }
+  .u-tables { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .u-chk { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 0.9rem; cursor: pointer; }
+  .u-chk input { width: auto; height: auto; }
 </style>
 </head>
 <body>
@@ -322,6 +327,7 @@
         <div class="side-group side-bottom">
           <div class="side-label">Account</div>
           <nav class="side-list">
+            <button class="side-item" id="users-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New user</button>
             <button class="side-item" data-view="account"><span class="ico"></span>Change password</button>
           </nav>
         </div>
@@ -494,6 +500,26 @@
         <div class="m-msg" id="bld-msg"></div>
       </div>
     </div>
+
+    <!-- Admin: create user -->
+    <div class="modal-overlay" id="users-modal">
+      <div class="modal" style="max-width: 460px;">
+        <button class="modal-close" id="users-close" aria-label="Close">✕</button>
+        <div class="m-name">New user</div>
+        <div class="m-sub">Create a login and choose which tables they can view.</div>
+        <input id="u-email" placeholder="Email" autocomplete="off" class="u-inp">
+        <input id="u-pass" type="text" placeholder="Temporary password (min 8 chars)" autocomplete="off" class="u-inp">
+        <div class="m-row" style="margin-top:4px;"><label>Role</label>
+          <select id="u-role"><option value="reviewer">Reviewer (view only)</option><option value="admin">Admin (full access)</option></select>
+        </div>
+        <div id="u-tables-wrap">
+          <div class="fp-label" style="margin: 8px 0 6px;">Tables this user can view</div>
+          <div id="u-tables" class="u-tables"></div>
+        </div>
+        <div class="m-actions" style="margin-top: 16px;"><button class="btn-wa" id="u-create">Create account</button></div>
+        <div class="m-msg" id="u-msg"></div>
+      </div>
+    </div>
   </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -526,7 +552,30 @@
         document.getElementById("who-role").textContent = role;
         isAdmin = role === "admin";
         document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
+        document.getElementById("users-btn").style.display = isAdmin ? "flex" : "none";
+        applyBuiltinAccess();
       });
+  }
+  function applyBuiltinAccess() {
+    var jaBtn = document.querySelector('.side-item[data-view="job_applications"]');
+    var castBtn = document.querySelector('.side-item[data-view="casting"]');
+    if (isAdmin) { jaBtn.style.display = "flex"; castBtn.style.display = "flex"; return; }
+    jaBtn.style.display = "none"; castBtn.style.display = "none";
+    db.from("table_access").select("table_key").then(function (res) {
+      var keys = {}; (res.data || []).forEach(function (r) { keys[r.table_key] = true; });
+      if (keys["job_applications"]) jaBtn.style.display = "flex";
+      if (keys["casting"]) castBtn.style.display = "flex";
+      ensureDefaultView();
+    });
+  }
+  function ensureDefaultView() {
+    if (isAdmin) return;
+    var items = [].slice.call(document.querySelectorAll("#side-tables .side-item")).filter(function (b) {
+      return (b.getAttribute("data-view") === "job_applications" || b.getAttribute("data-view") === "casting" || b.getAttribute("data-custom")) && b.offsetParent !== null;
+    });
+    var anyActive = items.some(function (b) { return b.classList.contains("active"); });
+    if (items.length && !anyActive) items[0].click();
+    else if (!items.length) { var v = document.querySelectorAll(".view"); for (var i = 0; i < v.length; i++) v[i].classList.add("hidden"); }
   }
 
   // ---- Login ----
@@ -696,7 +745,7 @@
     // "Send to all" bar: only in Approved, and only if someone still needs messaging
     var unsent = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent; }).length;
     var bulk = document.getElementById("ja-bulk");
-    if (section === "approved" && unsent > 0) {
+    if (isAdmin && section === "approved" && unsent > 0) {
       bulk.style.display = "block";
       document.getElementById("send-all").textContent = "Send WhatsApp to all unsent (" + unsent + ")";
     } else {
@@ -723,14 +772,12 @@
       var chip = c ? ('<img class="mini-flag" src="https://flagcdn.com/' + esc(c.flag) + '.svg" alt=""> ' + esc(c.name) + ' · ') : "";
       var metaHtml = chip + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—")));
 
-      var actionsHtml, extraHtml = "";
-      if (section === "new") {
-        actionsHtml = '<div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-reject">Reject</button></div>';
-      } else if (section === "approved") {
-        extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "");
-        actionsHtml = '<div class="card-actions"><button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button></div>';
-      } else {
-        actionsHtml = '<div class="card-actions"><button class="btn-restore">Restore</button><button class="btn-del">Delete</button></div>';
+      var actionsHtml = "", extraHtml = "";
+      if (section === "approved") extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "");
+      if (isAdmin) {
+        if (section === "new") actionsHtml = '<div class="card-actions"><button class="btn-approve">Approve</button><button class="btn-reject">Reject</button></div>';
+        else if (section === "approved") actionsHtml = '<div class="card-actions"><button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button></div>';
+        else actionsHtml = '<div class="card-actions"><button class="btn-restore">Restore</button><button class="btn-del">Delete</button></div>';
       }
 
       var el = document.createElement("div");
@@ -1008,6 +1055,7 @@
         b.addEventListener("click", function () { openCustomTable(t); });
         slot.appendChild(b);
       });
+      ensureDefaultView();
     });
   }
   function setActiveSide(el) {
@@ -1136,6 +1184,63 @@
       closeBuilder(); loadCustomTables();
       setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
     }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
+  });
+
+  // ---- Admin: create users + assign table access ----
+  var usersModal = document.getElementById("users-modal");
+  function renderUserTables() {
+    var host = document.getElementById("u-tables"); host.innerHTML = "";
+    var all = [{ key: "job_applications", name: "Job Applications" }, { key: "casting", name: "BLK Casting" }]
+      .concat(customTables.map(function (t) { return { key: t.id, name: t.name }; }));
+    all.forEach(function (t) {
+      var lab = document.createElement("label"); lab.className = "u-chk";
+      lab.innerHTML = '<input type="checkbox" value="' + esc(t.key) + '"> ' + esc(t.name);
+      host.appendChild(lab);
+    });
+  }
+  function openUsers() {
+    document.getElementById("u-email").value = "";
+    document.getElementById("u-pass").value = "";
+    document.getElementById("u-role").value = "reviewer";
+    document.getElementById("u-msg").textContent = "";
+    document.getElementById("u-tables-wrap").style.display = "block";
+    renderUserTables();
+    usersModal.classList.add("open");
+  }
+  document.getElementById("users-btn").addEventListener("click", openUsers);
+  document.getElementById("users-close").addEventListener("click", function () { usersModal.classList.remove("open"); });
+  usersModal.addEventListener("click", function (e) { if (e.target === this) usersModal.classList.remove("open"); });
+  document.getElementById("u-role").addEventListener("change", function () { document.getElementById("u-tables-wrap").style.display = this.value === "admin" ? "none" : "block"; });
+  document.getElementById("u-create").addEventListener("click", function () {
+    var msg = document.getElementById("u-msg");
+    var email = document.getElementById("u-email").value.trim();
+    var pass = document.getElementById("u-pass").value;
+    var role = document.getElementById("u-role").value;
+    if (!email) { msg.textContent = "Enter an email."; return; }
+    if (!pass || pass.length < 8) { msg.textContent = "Password must be at least 8 characters."; return; }
+    var keys = [];
+    if (role !== "admin") {
+      [].slice.call(document.querySelectorAll("#u-tables input:checked")).forEach(function (c) { keys.push(c.value); });
+      if (!keys.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
+    }
+    msg.textContent = "Creating…";
+    db.functions.invoke("admin-users", { body: { email: email, password: pass, role: role } }).then(function (res) {
+      if (res.error) throw res.error;
+      if (res.data && res.data.error) throw new Error(res.data.error);
+      var newId = res.data && res.data.id;
+      if (!newId) throw new Error("no id returned");
+      if (role !== "admin" && keys.length) {
+        return db.from("table_access").insert(keys.map(function (k) { return { user_id: newId, table_key: k }; }));
+      }
+      return { error: null };
+    }).then(function (r) {
+      if (r && r.error) throw r.error;
+      usersModal.classList.remove("open");
+      window.alert("Account created for " + email + ".\nShare the temporary password with them — they can change it after logging in.");
+    }).catch(function (err) {
+      msg.textContent = "Could not create the account. " + ((err && (err.message || err.error)) || "");
+      if (window.console) console.error(err);
+    });
   });
 
   // ---- Cards / List toggles ----
