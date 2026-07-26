@@ -228,6 +228,12 @@
   .tabs { margin-bottom: 16px; }
   .tab-count { font-size: 0.72rem; opacity: 0.7; margin-left: 3px; }
   .ja-bulk { margin-bottom: 14px; }
+  .link-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.85rem; }
+  .link-bar .lbl { color: var(--muted); }
+  .link-bar a { color: var(--silver); word-break: break-all; text-decoration: none; }
+  .link-bar a:hover { text-decoration: underline; }
+  .link-bar .copy { margin-left: auto; }
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
   .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
@@ -345,6 +351,8 @@
             <div class="ja-count" id="ja-count">—</div>
           </div>
 
+          <div class="link-bar"><span class="lbl">Public form:</span><a href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a><button class="linkbtn copy" data-link="https://blktable.blk.jo/apply/">Copy</button></div>
+
           <div class="seg tabs" id="ja-tabs">
             <button type="button" data-s="new" class="active">New <span class="tab-count" id="cnt-new"></span></button>
             <button type="button" data-s="approved">Approved <span class="tab-count" id="cnt-approved"></span></button>
@@ -420,6 +428,7 @@
             </div>
             <div class="ja-count" id="casting-count">—</div>
           </div>
+          <div class="link-bar"><span class="lbl">Public form:</span><a href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a><button class="linkbtn copy" data-link="https://blktable.blk.jo/cast/">Copy</button></div>
           <div class="toolbar">
             <input type="search" id="casting-search" placeholder="Search name…">
             <div class="seg viewtoggle" id="casting-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
@@ -437,10 +446,10 @@
             <div><div class="section-title">Table</div><h2 class="ja-title" id="custom-title">—</h2></div>
             <div class="ja-count" id="custom-count">—</div>
           </div>
+          <div class="link-bar"><span class="lbl">Public form:</span><a id="custom-link-a" target="_blank" rel="noopener">—</a><button class="linkbtn copy" id="custom-copy">Copy</button></div>
           <div class="toolbar">
             <input type="search" id="custom-search" placeholder="Search…">
             <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
-            <button class="linkbtn" id="custom-copy">Copy form link</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
           </div>
           <div id="custom-list" class="ja-list"></div>
@@ -1098,6 +1107,7 @@
     document.getElementById("view-custom").classList.remove("hidden");
     setActiveSide(document.querySelector('.side-item[data-custom="' + t.id + '"]'));
     document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span style="color:var(--muted);font-weight:600;font-size:0.9rem;">· ' + esc(t.name_ar) + "</span>" : "");
+    var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     currentCustom = { table: t, fields: [], subs: [] };
@@ -1159,6 +1169,15 @@
     else window.prompt("Copy link:", link);
   });
   function flashCopy() { var b = document.getElementById("custom-copy"); var t = b.textContent; b.textContent = "Copied!"; setTimeout(function () { b.textContent = t; }, 1500); }
+  // fixed-link copy buttons (Job Applications, BLK Casting)
+  [].slice.call(document.querySelectorAll(".link-bar .copy[data-link]")).forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var link = btn.getAttribute("data-link");
+      var done = function () { var t = btn.textContent; btn.textContent = "Copied!"; setTimeout(function () { btn.textContent = t; }, 1500); };
+      if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, function () { window.prompt("Copy link:", link); });
+      else window.prompt("Copy link:", link);
+    });
+  });
 
   var builder = document.getElementById("builder-modal");
   function addBuilderField() {
