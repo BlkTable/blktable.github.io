@@ -765,11 +765,23 @@
     try { return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
     catch (e) { return d.toLocaleString(); }
   }
-  function setThumb(el, a) {
-    if (!a.photo_path) return;
-    getPhotoUrl(a.photo_path).then(function (url) {
-      if (url) { el.style.background = "url(" + url + ") center/cover"; el.textContent = ""; }
+  function paintThumb(el, path) {
+    getPhotoUrl(path).then(function (url) { if (url) { el.style.background = "url(" + url + ") center/cover"; el.textContent = ""; } });
+  }
+  var thumbObserver = ("IntersectionObserver" in window) ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) {
+      if (!en.isIntersecting) return;
+      thumbObserver.unobserve(en.target);
+      var p = en.target.getAttribute("data-photo");
+      if (p) paintThumb(en.target, p);
     });
+  }, { rootMargin: "300px" }) : null;
+  // Lazy thumbnail: only fetch/load the photo once the card scrolls near the viewport
+  function setThumb(el, a) {
+    if (!el || !a || !a.photo_path) return;
+    el.setAttribute("data-photo", a.photo_path);
+    if (thumbObserver) thumbObserver.observe(el);
+    else paintThumb(el, a.photo_path);
   }
 
   function renderApps() {
@@ -983,7 +995,8 @@
     else removeRow();
   }
 
-  document.getElementById("ja-search").addEventListener("input", renderApps);
+  function debounce(fn, ms) { var t; return function () { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  document.getElementById("ja-search").addEventListener("input", debounce(renderApps, 180));
   document.getElementById("ja-refresh").addEventListener("click", loadApps);
   document.getElementById("send-all").addEventListener("click", sendAll);
   document.getElementById("ja-tabs").addEventListener("click", function (e) {
@@ -1089,7 +1102,7 @@
     document.getElementById("modal").classList.add("open");
     if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
   }
-  document.getElementById("casting-search").addEventListener("input", renderCasting);
+  document.getElementById("casting-search").addEventListener("input", debounce(renderCasting, 180));
   document.getElementById("casting-refresh").addEventListener("click", loadCasting);
 
   // ---- Custom tables: admin builder + dynamic views ----
@@ -1185,7 +1198,7 @@
     document.getElementById("modal").classList.add("open");
     if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
   }
-  document.getElementById("custom-search").addEventListener("input", renderCustom);
+  document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
   document.getElementById("custom-copy").addEventListener("click", function () {
     if (!currentCustom) return;
