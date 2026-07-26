@@ -152,7 +152,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
   var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
-  var SUPABASE_KEY = "sb_publishable_8emQ7ArqAiFZw7b7x0MLMQ_JWEuIis-";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   var MAX_BYTES = 10 * 1024 * 1024;
 
@@ -270,9 +270,7 @@
       })
       .catch(function (err) {
         btn.disabled = false; btn.textContent = "Submit";
-        var d;
-        try { d = (err && (err.message || err.error || err.statusCode || err.name)) || JSON.stringify(err); } catch (e) { d = String(err); }
-        msg.textContent = "Error: " + d;
+        msg.textContent = "Sorry, something went wrong. Please try again.";
         if (window.console) console.error(err);
       });
   });
