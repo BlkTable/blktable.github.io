@@ -37,6 +37,33 @@
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   input.invalid, select.invalid { border-color: #ff6b6b !important; box-shadow: 0 0 0 3px rgba(255,107,107,0.16) !important; }
+  .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
+
+  /* phone */
+  .phone-row { display: flex; gap: 10px; align-items: stretch; }
+  .phone-row input { flex: 1; }
+  .cc-picker { position: relative; flex: 0 0 auto; }
+  .cc-btn { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 12px; border-radius: 11px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1rem; cursor: pointer; font-family: inherit; }
+  .cc-btn:hover { border-color: var(--silver); }
+  .cc-flag, .cc-menu li img { width: 22px; height: 15px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
+  .cc-caret { color: var(--muted); font-size: 0.7rem; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; margin: 0; padding: 6px; list-style: none; min-width: 190px;
+    background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+  .cc-menu.open { display: block; }
+  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
+  .cc-menu li:hover { background: rgba(255,255,255,0.06); }
+  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+
+  /* photo */
+  .file-row { display: flex; align-items: center; gap: 12px; }
+  .file-btn { padding: 11px 16px; border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; white-space: nowrap; }
+  .file-btn:hover { border-color: var(--silver); }
+  .file-name { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-check { display: none; width: 22px; height: 22px; border-radius: 50%; background: #25d366; color: #0a2e17; font-weight: 800; font-size: 0.78rem; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .file-row.invalid .file-btn { border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,0.16); }
+  input[type="file"] { display: none; }
+
   .submit { width: 100%; margin-top: 22px; padding: 14px 16px; border-radius: 12px; border: none;
     background: linear-gradient(180deg, var(--silver-hi) 0%, var(--silver-lo) 100%); color: #14161a; font-weight: 700; font-size: 1rem; cursor: pointer;
     transition: filter 0.15s ease, transform 0.05s ease; }
@@ -68,6 +95,21 @@
             <input type="date" id="dob" required>
           </div>
           <div class="field">
+            <label for="phone_local">Phone number <span class="ar">/ رقم التلفون</span> <span class="req">*</span></label>
+            <div class="phone-row">
+              <div class="cc-picker" id="cc-picker">
+                <button type="button" class="cc-btn" id="cc-btn" aria-haspopup="listbox" aria-expanded="false">
+                  <img class="cc-flag" id="cc-flag" alt="">
+                  <span id="cc-dial">+962</span>
+                  <span class="cc-caret">▾</span>
+                </button>
+                <ul class="cc-menu" id="cc-menu" role="listbox"></ul>
+              </div>
+              <input type="tel" id="phone_local" inputmode="numeric" autocomplete="tel-national" required>
+            </div>
+            <div class="hint">We may contact you on WhatsApp.</div>
+          </div>
+          <div class="field">
             <label for="university">University student? <span class="ar">/ مسجل جامعة؟</span> <span class="req">*</span></label>
             <select id="university" required>
               <option value="">Select… / اختر</option>
@@ -82,6 +124,16 @@
               <option value="Yes">Yes / نعم</option>
               <option value="No">No / لا</option>
             </select>
+          </div>
+          <div class="field">
+            <label>Photo of yourself <span class="ar">/ صورة الك</span> <span class="req">*</span></label>
+            <div class="file-row" id="file-row">
+              <button type="button" class="file-btn" id="file-btn">Choose photo</button>
+              <span class="file-check" id="file-check" aria-hidden="true">✓</span>
+              <span class="file-name" id="file-name">No photo chosen</span>
+            </div>
+            <input type="file" id="photo" accept="image/*">
+            <div class="hint">A clear photo of your face — up to 10 MB.</div>
           </div>
 
           <button type="submit" class="submit" id="submit-btn">Submit</button>
@@ -102,16 +154,64 @@
   var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
   var SUPABASE_KEY = "sb_publishable_8emQ7ArqAiFZw7b7x0MLMQ_JWEuIis-";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  var MAX_BYTES = 10 * 1024 * 1024;
 
   function val(id) { return document.getElementById(id).value.trim(); }
+  function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80); }
   function markInvalid(id, bad) { var el = document.getElementById(id); if (el) el.classList.toggle("invalid", !!bad); }
 
   var formEl = document.getElementById("form");
   formEl.addEventListener("input", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
   formEl.addEventListener("change", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
 
+  // Date of birth calendar
   var dobInput = document.getElementById("dob");
   dobInput.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
+
+  // Phone: custom country picker + digit-limited local number
+  var COUNTRIES = [
+    { cc: "962", len: [9],    ph: "7X XXX XXXX",  flag: "jo", name: "Jordan" },
+    { cc: "961", len: [7, 8], ph: "XX XXX XXX",   flag: "lb", name: "Lebanon" },
+    { cc: "963", len: [9],    ph: "9XX XXX XXX",  flag: "sy", name: "Syria" },
+    { cc: "964", len: [10],   ph: "7XX XXX XXXX", flag: "iq", name: "Iraq" }
+  ];
+  var FLAG_BASE = "https://flagcdn.com/";
+  function flagUrl(code) { return FLAG_BASE + code + ".svg"; }
+  var selCountry = COUNTRIES[0];
+  var ccBtn = document.getElementById("cc-btn"), ccMenu = document.getElementById("cc-menu"),
+      ccFlag = document.getElementById("cc-flag"), ccDial = document.getElementById("cc-dial"),
+      ccPicker = document.getElementById("cc-picker"), phoneLocal = document.getElementById("phone_local");
+  function selectCountry(i) {
+    selCountry = COUNTRIES[i];
+    ccFlag.src = flagUrl(selCountry.flag);
+    ccDial.textContent = "+" + selCountry.cc;
+    phoneLocal.placeholder = selCountry.ph;
+    phoneLocal.maxLength = Math.max.apply(null, selCountry.len) + 1;
+  }
+  function closeMenu() { ccMenu.classList.remove("open"); ccBtn.setAttribute("aria-expanded", "false"); }
+  COUNTRIES.forEach(function (c, i) {
+    var li = document.createElement("li");
+    li.setAttribute("role", "option");
+    li.innerHTML = '<img src="' + flagUrl(c.flag) + '" alt=""> <span>' + c.name + '</span> <b>+' + c.cc + '</b>';
+    li.addEventListener("click", function () { selectCountry(i); closeMenu(); });
+    ccMenu.appendChild(li);
+  });
+  ccBtn.addEventListener("click", function (e) { e.stopPropagation(); if (ccMenu.classList.contains("open")) closeMenu(); else { ccMenu.classList.add("open"); ccBtn.setAttribute("aria-expanded", "true"); } });
+  document.addEventListener("click", function (e) { if (!ccPicker.contains(e.target)) closeMenu(); });
+  phoneLocal.addEventListener("input", function () { phoneLocal.value = phoneLocal.value.replace(/\D/g, ""); });
+  selectCountry(0);
+
+  // Photo
+  var fileInput = document.getElementById("photo");
+  var fileName = document.getElementById("file-name");
+  document.getElementById("file-btn").addEventListener("click", function () { fileInput.click(); });
+  fileInput.addEventListener("change", function () {
+    var has = fileInput.files.length > 0;
+    fileName.textContent = has ? fileInput.files[0].name : "No photo chosen";
+    document.getElementById("file-check").style.display = has ? "flex" : "none";
+    document.getElementById("file-btn").textContent = has ? "Change photo" : "Choose photo";
+    if (has) document.getElementById("file-row").classList.remove("invalid");
+  });
 
   formEl.addEventListener("submit", function (e) {
     e.preventDefault();
@@ -121,31 +221,58 @@
 
     var REQUIRED = ["full_name", "dob", "university", "acted"];
     REQUIRED.forEach(function (id) { markInvalid(id, false); });
+    markInvalid("phone_local", false);
     var missing = [];
     REQUIRED.forEach(function (id) { if (!val(id)) { markInvalid(id, true); missing.push(id); } });
+
+    var local = phoneLocal.value.replace(/\D/g, "").replace(/^0+/, "");
+    var phoneValid = selCountry.len.indexOf(local.length) !== -1;
+    if (!phoneValid) { markInvalid("phone_local", true); missing.push("phone_local"); }
+
+    var fileRow = document.getElementById("file-row");
+    var noPhoto = fileInput.files.length === 0;
+    fileRow.classList.toggle("invalid", noPhoto);
+    if (noPhoto) missing.push("photo");
+
     if (missing.length) {
-      msg.textContent = "Please fill in the highlighted fields.";
-      var f = document.getElementById(missing[0]);
-      if (f) { if (f.scrollIntoView) f.scrollIntoView({ behavior: "smooth", block: "center" }); if (f.focus) f.focus({ preventScroll: true }); }
+      if (missing.length === 1 && missing[0] === "phone_local" && phoneLocal.value) msg.textContent = "Please enter a valid phone number for the selected country.";
+      else if (missing.length === 1 && missing[0] === "photo") msg.textContent = "Please add a photo of yourself.";
+      else msg.textContent = "Please fill in the highlighted fields.";
+      var firstId = missing[0];
+      var firstEl = firstId === "photo" ? fileRow : document.getElementById(firstId);
+      if (firstEl) { if (firstEl.scrollIntoView) firstEl.scrollIntoView({ behavior: "smooth", block: "center" }); if (firstId !== "photo" && firstEl.focus) firstEl.focus({ preventScroll: true }); }
       return;
     }
 
+    var phone = "+" + selCountry.cc + local;
+    var file = fileInput.files[0];
+    if (file.size > MAX_BYTES) { msg.textContent = "That photo is larger than 10 MB. Please choose a smaller one."; return; }
+
     btn.disabled = true; btn.textContent = "Submitting…";
-    db.from("casting_applications").insert({
-      full_name: val("full_name"),
-      date_of_birth: val("dob") || null,
-      university_student: val("university") || null,
-      ever_acted: val("acted") || null
-    }).then(function (res) {
-      if (res && res.error) throw res.error;
-      document.getElementById("card").style.display = "none";
-      document.getElementById("success").style.display = "block";
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }).catch(function (err) {
-      btn.disabled = false; btn.textContent = "Submit";
-      msg.textContent = "Sorry, something went wrong. Please try again.";
-      if (window.console) console.error(err);
-    });
+    var path = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())) + "_" + sanitize(file.name);
+    db.storage.from("photos").upload(path, file, { upsert: false })
+      .then(function (res) { if (res.error) throw res.error; return res.data.path; })
+      .then(function (photoPath) {
+        return db.from("casting_applications").insert({
+          full_name: val("full_name"),
+          date_of_birth: val("dob") || null,
+          phone: phone,
+          university_student: val("university") || null,
+          ever_acted: val("acted") || null,
+          photo_path: photoPath
+        });
+      })
+      .then(function (res) {
+        if (res && res.error) throw res.error;
+        document.getElementById("card").style.display = "none";
+        document.getElementById("success").style.display = "block";
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      })
+      .catch(function (err) {
+        btn.disabled = false; btn.textContent = "Submit";
+        msg.textContent = "Sorry, something went wrong. Please try again.";
+        if (window.console) console.error(err);
+      });
   });
 </script>
 </body>

@@ -918,9 +918,10 @@
       row.innerHTML =
         '<div class="ja-thumb">' + esc((c.full_name || "?").trim().charAt(0).toUpperCase()) + "</div>" +
         '<div class="info"><div class="name">' + esc(c.full_name) + "</div>" +
-        '<div class="sub">' + (age == null ? "" : (age + " yrs · ")) +
-          "University: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—") + " · " + fmtDate(c.created_at) + "</div></div>";
+        '<div class="sub">' + (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") +
+          " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—") + "</div></div>";
       listEl.appendChild(row);
+      setThumb(row.querySelector(".ja-thumb"), c);
     });
   }
   document.getElementById("casting-search").addEventListener("input", renderCasting);
