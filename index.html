@@ -298,6 +298,7 @@
           <div class="side-label">Tables</div>
           <nav class="side-list" id="side-tables">
             <button class="side-item active" data-view="job_applications"><span class="ico"></span>Job Applications</button>
+            <button class="side-item" data-view="casting"><span class="ico"></span>BLK Casting</button>
           </nav>
         </div>
         <div class="side-group side-bottom">
@@ -381,6 +382,25 @@
           <div id="ja-empty" class="empty" style="display:none;">
             <h2>No applications yet</h2>
             <p>Submissions from the public form will show up here.</p>
+          </div>
+        </section>
+
+        <section class="view hidden" id="view-casting">
+          <div class="ja-head">
+            <div>
+              <div class="section-title">Table</div>
+              <h2 class="ja-title">BLK Casting</h2>
+            </div>
+            <div class="ja-count" id="casting-count">—</div>
+          </div>
+          <div class="toolbar">
+            <input type="search" id="casting-search" placeholder="Search name…">
+            <button class="linkbtn" id="casting-refresh">Refresh</button>
+          </div>
+          <div id="casting-list" class="ja-list"></div>
+          <div id="casting-empty" class="empty" style="display:none;">
+            <h2>No entries yet</h2>
+            <p>Submissions from the casting form will show up here.</p>
           </div>
         </section>
 
@@ -868,6 +888,44 @@
     updateFilterActive(); renderApps();
   });
 
+  // ---- BLK Casting table ----
+  var castingRows = [];
+  var castingLoaded = false;
+  function loadCasting() {
+    var listEl = document.getElementById("casting-list");
+    listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
+    db.from("casting_applications").select("*").order("created_at", { ascending: false }).then(function (res) {
+      if (res.error) { listEl.innerHTML = '<div style="color:#ff6b6b;padding:24px;text-align:center;">Could not load.</div>'; return; }
+      castingRows = res.data || [];
+      castingLoaded = true;
+      renderCasting();
+    });
+  }
+  function renderCasting() {
+    var q = (document.getElementById("casting-search").value || "").toLowerCase().trim();
+    var listEl = document.getElementById("casting-list");
+    var emptyEl = document.getElementById("casting-empty");
+    var rows = castingRows.filter(function (c) { return !q || (c.full_name || "").toLowerCase().indexOf(q) !== -1; });
+    document.getElementById("casting-count").textContent = castingRows.length + (castingRows.length === 1 ? " entry" : " entries");
+    if (!castingRows.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
+    emptyEl.style.display = "none";
+    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">No matches.</div>'; return; }
+    listEl.innerHTML = "";
+    rows.forEach(function (c) {
+      var age = calcAge(c.date_of_birth);
+      var row = document.createElement("div");
+      row.className = "ja-row";
+      row.innerHTML =
+        '<div class="ja-thumb">' + esc((c.full_name || "?").trim().charAt(0).toUpperCase()) + "</div>" +
+        '<div class="info"><div class="name">' + esc(c.full_name) + "</div>" +
+        '<div class="sub">' + (age == null ? "" : (age + " yrs · ")) +
+          "University: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—") + " · " + fmtDate(c.created_at) + "</div></div>";
+      listEl.appendChild(row);
+    });
+  }
+  document.getElementById("casting-search").addEventListener("input", renderCasting);
+  document.getElementById("casting-refresh").addEventListener("click", loadCasting);
+
   // ---- Sidebar: switch which table/view is open in the main pane ----
   function showView(id) {
     var views = document.querySelectorAll(".view");
@@ -878,6 +936,7 @@
     for (var j = 0; j < items.length; j++) {
       items[j].classList.toggle("active", items[j].getAttribute("data-view") === id);
     }
+    if (id === "casting" && !castingLoaded) loadCasting();
   }
   var sideItems = document.querySelectorAll(".side-item");
   for (var si = 0; si < sideItems.length; si++) {
