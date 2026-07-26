@@ -260,6 +260,18 @@
   .btn-save { padding: 12px 18px; border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); cursor: pointer; font-weight: 600; }
   .btn-save:hover { border-color: var(--silver); }
   .m-msg { font-size: 0.8rem; color: var(--muted); margin-top: 10px; text-align: center; min-height: 1em; }
+  .bld-two { display: flex; gap: 10px; margin-bottom: 14px; }
+  .bld-two input { flex: 1; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; }
+  .bld-two input:focus { border-color: var(--silver); }
+  .bld-field { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.02); }
+  .bld-field .r1 { display: flex; gap: 8px; margin-bottom: 8px; }
+  .bld-field .r1 input { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); outline: none; font-size: 0.9rem; }
+  .bld-field .r2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bld-field select { height: 40px; padding: 0 28px 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; appearance: none; -webkit-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .bld-field .req-lbl { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
+  .bld-field .opts { flex: 1; min-width: 120px; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; }
+  .bld-field .rm { margin-left: auto; background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -299,6 +311,8 @@
           <nav class="side-list" id="side-tables">
             <button class="side-item active" data-view="job_applications"><span class="ico"></span>Job Applications</button>
             <button class="side-item" data-view="casting"><span class="ico"></span>BLK Casting</button>
+            <span id="custom-tables-slot"></span>
+            <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
           </nav>
         </div>
         <div class="side-group side-bottom">
@@ -404,6 +418,20 @@
           </div>
         </section>
 
+        <section class="view hidden" id="view-custom">
+          <div class="ja-head">
+            <div><div class="section-title">Table</div><h2 class="ja-title" id="custom-title">—</h2></div>
+            <div class="ja-count" id="custom-count">—</div>
+          </div>
+          <div class="toolbar">
+            <input type="search" id="custom-search" placeholder="Search…">
+            <button class="linkbtn" id="custom-copy">Copy form link</button>
+            <button class="linkbtn" id="custom-refresh">Refresh</button>
+          </div>
+          <div id="custom-list" class="ja-list"></div>
+          <div id="custom-empty" class="empty" style="display:none;"><h2>No submissions yet</h2><p>Submissions from the form link will show up here.</p></div>
+        </section>
+
         <section class="view hidden" id="view-account">
           <div class="section-title">Account</div>
           <h2 class="ja-title" style="margin-bottom: 18px;">Change password</h2>
@@ -440,6 +468,25 @@
         <div class="m-msg" id="sched-msg"></div>
       </div>
     </div>
+
+    <!-- Admin: table builder -->
+    <div class="modal-overlay" id="builder-modal">
+      <div class="modal" style="max-width: 660px;">
+        <button class="modal-close" id="builder-close" aria-label="Close">✕</button>
+        <div class="m-name">New table</div>
+        <div class="m-sub">Create a form — it gets its own public link.</div>
+        <div class="bld-two">
+          <input id="bld-name" placeholder="Table name (English)">
+          <input id="bld-name-ar" placeholder="اسم الجدول (عربي)" dir="rtl">
+        </div>
+        <div class="bld-fields" id="bld-fields"></div>
+        <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add field</button>
+        <div class="m-actions" style="margin-top: 16px;">
+          <button class="btn-wa" id="bld-save">Create table</button>
+        </div>
+        <div class="m-msg" id="bld-msg"></div>
+      </div>
+    </div>
   </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -451,12 +498,14 @@
   var loginWrap = document.getElementById("login-wrap");
   var app = document.getElementById("app");
 
+  var isAdmin = false;
   function showApp(session) {
     loginWrap.style.display = "none";
     app.style.display = "flex";
     document.getElementById("who-email").textContent = session.user.email;
     loadRole(session.user.id);
     loadApps();
+    loadCustomTables();
   }
   function showLogin() {
     app.style.display = "none";
@@ -468,6 +517,8 @@
       .then(function (res) {
         var role = (res.data && res.data.role) || "reviewer";
         document.getElementById("who-role").textContent = role;
+        isAdmin = role === "admin";
+        document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
       });
   }
 
@@ -927,6 +978,156 @@
   document.getElementById("casting-search").addEventListener("input", renderCasting);
   document.getElementById("casting-refresh").addEventListener("click", loadCasting);
 
+  // ---- Custom tables: admin builder + dynamic views ----
+  var FIELD_TYPES = [
+    { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
+    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "yesno", label: "Yes / No" },
+    { v: "dropdown", label: "Dropdown" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "email", label: "Email" }
+  ];
+  var customTables = [];
+  var currentCustom = null;
+  function slugify(s) { var x = (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""); return x || "t"; }
+  function publicFormLink(slug) { return "https://blktable.blk.jo/f/?t=" + encodeURIComponent(slug); }
+
+  function loadCustomTables() {
+    db.from("app_tables").select("*").order("created_at", { ascending: true }).then(function (res) {
+      if (res.error) return;
+      customTables = res.data || [];
+      var slot = document.getElementById("custom-tables-slot");
+      slot.innerHTML = "";
+      customTables.forEach(function (t) {
+        var b = document.createElement("button");
+        b.className = "side-item"; b.setAttribute("data-custom", t.id);
+        b.innerHTML = '<span class="ico"></span>' + esc(t.name);
+        b.addEventListener("click", function () { openCustomTable(t); });
+        slot.appendChild(b);
+      });
+    });
+  }
+  function setActiveSide(el) {
+    var items = document.querySelectorAll(".side-item");
+    for (var i = 0; i < items.length; i++) items[i].classList.remove("active");
+    if (el) el.classList.add("active");
+  }
+  function openCustomTable(t) {
+    var views = document.querySelectorAll(".view");
+    for (var i = 0; i < views.length; i++) views[i].classList.add("hidden");
+    document.getElementById("view-custom").classList.remove("hidden");
+    setActiveSide(document.querySelector('.side-item[data-custom="' + t.id + '"]'));
+    document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span style="color:var(--muted);font-weight:600;font-size:0.9rem;">· ' + esc(t.name_ar) + "</span>" : "");
+    document.getElementById("custom-count").textContent = "—";
+    document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
+    currentCustom = { table: t, fields: [], subs: [] };
+    db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
+      currentCustom.fields = fRes.data || [];
+      return db.from("app_submissions").select("*").eq("table_id", t.id).order("created_at", { ascending: false });
+    }).then(function (sRes) { currentCustom.subs = (sRes && sRes.data) || []; renderCustom(); });
+  }
+  function renderCustom() {
+    if (!currentCustom) return;
+    var q = (document.getElementById("custom-search").value || "").toLowerCase().trim();
+    var fields = currentCustom.fields, subs = currentCustom.subs;
+    var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty");
+    document.getElementById("custom-count").textContent = subs.length + (subs.length === 1 ? " entry" : " entries");
+    var summary = fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
+    var photoField = fields.filter(function (f) { return f.type === "photo"; })[0];
+    var rows = subs.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
+    if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
+    emptyEl.style.display = "none";
+    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">No matches.</div>'; return; }
+    listEl.innerHTML = "";
+    rows.forEach(function (s) {
+      var d = s.data || {};
+      var title = summary.length ? (d[summary[0].id] || "—") : "—";
+      var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(d[f.id] || "—"); });
+      parts.push(fmtDate(s.created_at));
+      var row = document.createElement("div"); row.className = "ja-row";
+      row.innerHTML = '<div class="ja-thumb">' + esc(String(title).trim().charAt(0).toUpperCase() || "?") + "</div>" +
+        '<div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div>";
+      row.addEventListener("click", function () { openCustomDetail(s, fields); });
+      listEl.appendChild(row);
+      if (photoField && d[photoField.id]) setThumb(row.querySelector(".ja-thumb"), { photo_path: d[photoField.id] });
+    });
+  }
+  function openCustomDetail(s, fields) {
+    var d = s.data || {}, photoPath = null, grid = "";
+    fields.forEach(function (f) {
+      if (f.type === "photo") { if (d[f.id]) photoPath = d[f.id]; return; }
+      grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(d[f.id] || "—") + "</div></div>";
+    });
+    var html = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+      '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + "</div>";
+    document.getElementById("modal-body").innerHTML = html;
+    document.getElementById("modal").classList.add("open");
+    if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+  }
+  document.getElementById("custom-search").addEventListener("input", renderCustom);
+  document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
+  document.getElementById("custom-copy").addEventListener("click", function () {
+    if (!currentCustom) return;
+    var link = publicFormLink(currentCustom.table.slug);
+    if (navigator.clipboard) navigator.clipboard.writeText(link).then(flashCopy, function () { window.prompt("Copy link:", link); });
+    else window.prompt("Copy link:", link);
+  });
+  function flashCopy() { var b = document.getElementById("custom-copy"); var t = b.textContent; b.textContent = "Copied!"; setTimeout(function () { b.textContent = t; }, 1500); }
+
+  var builder = document.getElementById("builder-modal");
+  function addBuilderField() {
+    var row = document.createElement("div"); row.className = "bld-field";
+    var typeOpts = FIELD_TYPES.map(function (t) { return '<option value="' + t.v + '">' + t.label + "</option>"; }).join("");
+    row.innerHTML =
+      '<div class="r1"><input class="lab" placeholder="Question (English)"><input class="lab-ar" placeholder="السؤال (عربي)" dir="rtl"></div>' +
+      '<div class="r2"><select class="ftype">' + typeOpts + '</select>' +
+      '<input class="opts" placeholder="Options: en|ar, en|ar" style="display:none;">' +
+      '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
+      '<button type="button" class="rm">Remove</button></div>';
+    document.getElementById("bld-fields").appendChild(row);
+    row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = this.value === "dropdown" ? "" : "none"; });
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); });
+  }
+  function openBuilder() {
+    document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
+    document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
+    addBuilderField(); builder.classList.add("open");
+  }
+  function closeBuilder() { builder.classList.remove("open"); }
+  document.getElementById("new-table-btn").addEventListener("click", openBuilder);
+  document.getElementById("builder-close").addEventListener("click", closeBuilder);
+  builder.addEventListener("click", function (e) { if (e.target === this) closeBuilder(); });
+  document.getElementById("bld-add-field").addEventListener("click", addBuilderField);
+  document.getElementById("bld-save").addEventListener("click", function () {
+    var msg = document.getElementById("bld-msg");
+    var name = document.getElementById("bld-name").value.trim();
+    var nameAr = document.getElementById("bld-name-ar").value.trim();
+    if (!name) { msg.textContent = "Please enter a table name."; return; }
+    var rows = [].slice.call(document.querySelectorAll("#bld-fields .bld-field"));
+    var fields = [];
+    for (var i = 0; i < rows.length; i++) {
+      var lab = rows[i].querySelector(".lab").value.trim();
+      if (!lab) { msg.textContent = "Every field needs an English label."; return; }
+      var type = rows[i].querySelector(".ftype").value;
+      var options = null;
+      if (type === "dropdown") {
+        var raw = rows[i].querySelector(".opts").value.trim();
+        if (!raw) { msg.textContent = "Dropdown fields need options."; return; }
+        options = raw.split(",").map(function (p) { var kv = p.split("|"); return { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() }; }).filter(function (o) { return o.en; });
+      }
+      fields.push({ position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, options: options });
+    }
+    if (!fields.length) { msg.textContent = "Add at least one field."; return; }
+    var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
+    msg.textContent = "Creating…";
+    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null }).select().single().then(function (tRes) {
+      if (tRes.error) throw tRes.error;
+      var tid = tRes.data.id;
+      var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options }; });
+      return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return tRes.data; });
+    }).then(function (t) {
+      closeBuilder(); loadCustomTables();
+      setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
+    }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
+  });
+
   // ---- Sidebar: switch which table/view is open in the main pane ----
   function showView(id) {
     var views = document.querySelectorAll(".view");
@@ -941,6 +1142,7 @@
   }
   var sideItems = document.querySelectorAll(".side-item");
   for (var si = 0; si < sideItems.length; si++) {
+    if (!sideItems[si].getAttribute("data-view")) continue; // custom tables + New-table have their own handlers
     sideItems[si].addEventListener("click", function () { showView(this.getAttribute("data-view")); });
   }
 

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLK Form</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<style>
+  :root {
+    --bg: #0a0b0d; --bg-top: #16181c; --card: #131519; --text: #f2f3f5; --muted: #8b9198;
+    --silver: #d6dade; --silver-hi: #eef0f2; --silver-lo: #b4b9c0;
+    --line: rgba(255,255,255,0.08); --field-bg: #0e1013; --field-border: #2a2e34;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  ::placeholder { color: #5f656d; }
+  .wrap { min-height: 100vh; padding: 32px 20px 60px; background: radial-gradient(1200px 600px at 50% -10%, var(--bg-top) 0%, var(--bg) 55%); }
+  .sheet { width: 100%; max-width: 480px; margin: 0 auto; }
+  .brand-logo { display: block; width: 210px; max-width: 70%; height: auto; margin: 8px auto 20px; }
+  .head { text-align: center; margin-bottom: 26px; }
+  .head h1 { font-size: 1.3rem; margin: 0 0 6px; font-weight: 800; letter-spacing: 0.02em; }
+  .head p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .card { background: linear-gradient(180deg, #16181d 0%, var(--card) 100%); border: 1px solid var(--line);
+    border-radius: 18px; padding: 24px 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04); }
+  .field { margin-bottom: 16px; }
+  label { display: block; font-size: 0.82rem; color: var(--text); margin-bottom: 7px; font-weight: 600; }
+  label .req { color: var(--silver); }
+  label .ar { color: var(--muted); font-weight: 400; }
+  input, select, textarea { width: 100%; padding: 12px 14px; border-radius: 11px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease; color-scheme: dark; }
+  input:not([type=file]), select { height: 48px; }
+  input:focus, select:focus, textarea:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
+  textarea { resize: vertical; min-height: 88px; }
+  input[type="date"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
+  select { appearance: none; -webkit-appearance: none; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  input.invalid, select.invalid, textarea.invalid { border-color: #ff6b6b !important; box-shadow: 0 0 0 3px rgba(255,107,107,0.16) !important; }
+  .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
+  .phone-row { display: flex; gap: 10px; align-items: stretch; }
+  .phone-row input { flex: 1; }
+  .cc-picker { position: relative; flex: 0 0 auto; }
+  .cc-btn { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 12px; border-radius: 11px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1rem; cursor: pointer; font-family: inherit; }
+  .cc-btn:hover { border-color: var(--silver); }
+  .cc-flag, .cc-menu li img { width: 22px; height: 15px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
+  .cc-caret { color: var(--muted); font-size: 0.7rem; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; margin: 0; padding: 6px; list-style: none; min-width: 190px;
+    background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+  .cc-menu.open { display: block; }
+  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
+  .cc-menu li:hover { background: rgba(255,255,255,0.06); }
+  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+  .file-row { display: flex; align-items: center; gap: 12px; }
+  .file-btn { padding: 11px 16px; border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; white-space: nowrap; }
+  .file-btn:hover { border-color: var(--silver); }
+  .file-name { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-check { display: none; width: 22px; height: 22px; border-radius: 50%; background: #25d366; color: #0a2e17; font-weight: 800; font-size: 0.78rem; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .file-row.invalid .file-btn { border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,0.16); }
+  .submit { width: 100%; margin-top: 22px; padding: 14px 16px; border-radius: 12px; border: none;
+    background: linear-gradient(180deg, var(--silver-hi) 0%, var(--silver-lo) 100%); color: #14161a; font-weight: 700; font-size: 1rem; cursor: pointer;
+    transition: filter 0.15s ease, transform 0.05s ease; }
+  .submit:hover { filter: brightness(1.05); } .submit:active { transform: translateY(1px); } .submit:disabled { opacity: 0.55; cursor: default; filter: none; }
+  .form-msg { text-align: center; min-height: 1.2em; margin-top: 12px; font-size: 0.88rem; color: #ff6b6b; }
+  .success, .notfound { display: none; text-align: center; padding: 20px 10px; }
+  .success .check { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 18px; border: 2px solid var(--silver);
+    display: flex; align-items: center; justify-content: center; font-size: 30px; color: var(--silver); }
+  .success h2, .notfound h2 { margin: 0 0 8px; font-size: 1.2rem; } .success p, .notfound p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+  .loading { text-align: center; color: var(--muted); padding: 40px 0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="sheet">
+      <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
+      <div class="head" id="head" style="display:none;"><h1 id="form-title">—</h1></div>
+      <div class="loading" id="loading">Loading…</div>
+      <div class="card" id="card" style="display:none;">
+        <form id="form" novalidate>
+          <div id="fields"></div>
+          <button type="submit" class="submit" id="submit-btn">Submit</button>
+          <div class="form-msg" id="form-msg"></div>
+        </form>
+      </div>
+      <div class="card success" id="success"><div class="check">✓</div><h2>Received</h2><p>Thank you! Your submission has been recorded.</p></div>
+      <div class="card notfound" id="notfound"><h2>Form not found</h2><p>This form link is invalid or no longer active.</p></div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  var MAX_BYTES = 10 * 1024 * 1024;
+
+  var COUNTRIES = [
+    { cc: "962", len: [9],    ph: "7X XXX XXXX",  flag: "jo", name: "Jordan" },
+    { cc: "961", len: [7, 8], ph: "XX XXX XXX",   flag: "lb", name: "Lebanon" },
+    { cc: "963", len: [9],    ph: "9XX XXX XXX",  flag: "sy", name: "Syria" },
+    { cc: "964", len: [10],   ph: "7XX XXX XXXX", flag: "iq", name: "Iraq" }
+  ];
+  function flagUrl(c) { return "https://flagcdn.com/" + c + ".svg"; }
+  function esc(s) { return (s == null ? "" : String(s)).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
+
+  var slug = getParam("t");
+  var controls = []; // {field, validate(), value(), isPhoto, file()}
+
+  function labelHtml(f) {
+    var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
+    var req = f.required ? ' <span class="req">*</span>' : "";
+    return esc(f.label) + ar + req;
+  }
+
+  function buildField(f) {
+    var wrap = document.createElement("div");
+    wrap.className = "field";
+    var lab = document.createElement("label");
+    lab.innerHTML = labelHtml(f);
+    wrap.appendChild(lab);
+    var id = "fld-" + f.id;
+
+    if (f.type === "long_text") {
+      var ta = document.createElement("textarea"); ta.id = id; wrap.appendChild(ta);
+      controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; } });
+    } else if (f.type === "number" || f.type === "short_text" || f.type === "email" || f.type === "date") {
+      var inp = document.createElement("input");
+      inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (f.type === "date" ? "date" : "text"));
+      inp.id = id; wrap.appendChild(inp);
+      if (f.type === "date") inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
+      controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; } });
+    } else if (f.type === "yesno" || f.type === "dropdown") {
+      var sel = document.createElement("select"); sel.id = id;
+      var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Select… / اختر"; sel.appendChild(opt0);
+      var opts = f.type === "yesno" ? [{ en: "Yes", ar: "نعم" }, { en: "No", ar: "لا" }] : (f.options || []);
+      opts.forEach(function (o) {
+        var v = typeof o === "string" ? o : o.en;
+        var arv = typeof o === "string" ? "" : (o.ar || "");
+        var op = document.createElement("option"); op.value = v; op.textContent = v + (arv ? " / " + arv : ""); sel.appendChild(op);
+      });
+      wrap.appendChild(sel);
+      controls.push({ f: f, el: sel, validate: function () { return !f.required || sel.value !== ""; }, value: function () { return sel.value || null; } });
+    } else if (f.type === "phone") {
+      var row = document.createElement("div"); row.className = "phone-row";
+      row.innerHTML = '<div class="cc-picker"><button type="button" class="cc-btn"><img class="cc-flag" alt=""><span class="cc-dial">+962</span><span class="cc-caret">▾</span></button><ul class="cc-menu" role="listbox"></ul></div><input type="tel" inputmode="numeric" id="' + id + '">';
+      wrap.appendChild(row);
+      var hint = document.createElement("div"); hint.className = "hint"; hint.textContent = "We may contact you on WhatsApp."; wrap.appendChild(hint);
+      var btn = row.querySelector(".cc-btn"), menu = row.querySelector(".cc-menu"), flag = row.querySelector(".cc-flag"),
+          dial = row.querySelector(".cc-dial"), picker = row.querySelector(".cc-picker"), local = row.querySelector("input");
+      var sc = COUNTRIES[0];
+      function apply(i) { sc = COUNTRIES[i]; flag.src = flagUrl(sc.flag); dial.textContent = "+" + sc.cc; local.placeholder = sc.ph; local.maxLength = Math.max.apply(null, sc.len) + 1; }
+      COUNTRIES.forEach(function (c, i) { var li = document.createElement("li"); li.innerHTML = '<img src="' + flagUrl(c.flag) + '" alt=""> <span>' + c.name + '</span> <b>+' + c.cc + '</b>'; li.addEventListener("click", function () { apply(i); menu.classList.remove("open"); }); menu.appendChild(li); });
+      btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
+      document.addEventListener("click", function (e) { if (!picker.contains(e.target)) menu.classList.remove("open"); });
+      local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
+      apply(0);
+      controls.push({ f: f, el: local, validate: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return (!f.required && d === "") || sc.len.indexOf(d.length) !== -1; }, value: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + sc.cc + d : null; } });
+    } else if (f.type === "photo") {
+      var frow = document.createElement("div"); frow.className = "file-row"; frow.id = "row-" + f.id;
+      frow.innerHTML = '<button type="button" class="file-btn">Choose photo</button><span class="file-check">✓</span><span class="file-name">No photo chosen</span>';
+      var fin = document.createElement("input"); fin.type = "file"; fin.accept = "image/*"; fin.style.display = "none"; fin.id = id;
+      wrap.appendChild(frow); wrap.appendChild(fin);
+      var fbtn = frow.querySelector(".file-btn"), fchk = frow.querySelector(".file-check"), fnm = frow.querySelector(".file-name");
+      fbtn.addEventListener("click", function () { fin.click(); });
+      fin.addEventListener("change", function () { var has = fin.files.length > 0; fnm.textContent = has ? fin.files[0].name : "No photo chosen"; fchk.style.display = has ? "flex" : "none"; fbtn.textContent = has ? "Change photo" : "Choose photo"; if (has) frow.classList.remove("invalid"); });
+      controls.push({ f: f, el: frow, isPhoto: true, file: function () { return fin.files[0] || null; }, validate: function () { return !f.required || fin.files.length > 0; } });
+    } else {
+      var inp2 = document.createElement("input"); inp2.type = "text"; inp2.id = id; wrap.appendChild(inp2);
+      controls.push({ f: f, el: inp2, validate: function () { return !f.required || inp2.value.trim() !== ""; }, value: function () { return inp2.value.trim() || null; } });
+    }
+    return wrap;
+  }
+
+  function markCtl(ctl, bad) { if (ctl.isPhoto) ctl.el.classList.toggle("invalid", bad); else ctl.el.classList.toggle("invalid", bad); }
+
+  function init(table, fields) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("form-title").innerHTML = esc(table.name) + (table.name_ar ? ' <span style="color:var(--muted);font-weight:600;">· ' + esc(table.name_ar) + "</span>" : "");
+    document.getElementById("head").style.display = "block";
+    document.getElementById("card").style.display = "block";
+    var host = document.getElementById("fields");
+    fields.forEach(function (f) { host.appendChild(buildField(f)); });
+
+    var formEl = document.getElementById("form");
+    formEl.addEventListener("input", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
+    formEl.addEventListener("change", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
+
+    formEl.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = document.getElementById("form-msg"); var btn = document.getElementById("submit-btn"); msg.textContent = "";
+      var firstBad = null;
+      controls.forEach(function (c) { var ok = c.validate(); markCtl(c, !ok); if (!ok && !firstBad) firstBad = c; });
+      if (firstBad) { msg.textContent = "Please fill in the highlighted fields."; if (firstBad.el.scrollIntoView) firstBad.el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+
+      btn.disabled = true; btn.textContent = "Submitting…";
+      var photoCtls = controls.filter(function (c) { return c.isPhoto && c.file(); });
+      var uploads = photoCtls.map(function (c) {
+        var file = c.file();
+        if (file.size > MAX_BYTES) return Promise.reject({ tooBig: true });
+        var path = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())) + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
+        return db.storage.from("photos").upload(path, file, { upsert: false }).then(function (r) { if (r.error) throw r.error; return { id: c.f.id, path: r.data.path }; });
+      });
+
+      Promise.all(uploads).then(function (results) {
+        var data = {};
+        controls.forEach(function (c) { if (!c.isPhoto) data[c.f.id] = c.value(); });
+        results.forEach(function (r) { data[r.id] = r.path; });
+        return db.from("app_submissions").insert({ table_id: table.id, data: data });
+      }).then(function (res) {
+        if (res && res.error) throw res.error;
+        document.getElementById("card").style.display = "none";
+        document.getElementById("head").style.display = "none";
+        document.getElementById("success").style.display = "block";
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }).catch(function (err) {
+        btn.disabled = false; btn.textContent = "Submit";
+        msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one." : "Sorry, something went wrong. Please try again.";
+        if (window.console) console.error(err);
+      });
+    });
+  }
+
+  function notFound() { document.getElementById("loading").style.display = "none"; document.getElementById("notfound").style.display = "block"; }
+
+  if (!slug) { notFound(); }
+  else {
+    db.from("app_tables").select("*").eq("slug", slug).eq("is_active", true).single().then(function (tRes) {
+      if (tRes.error || !tRes.data) { notFound(); return; }
+      var table = tRes.data;
+      db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (fRes) {
+        if (fRes.error) { notFound(); return; }
+        init(table, fRes.data || []);
+      });
+    });
+  }
+</script>
+</body>
+</html>
