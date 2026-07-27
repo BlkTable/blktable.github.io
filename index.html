@@ -527,6 +527,7 @@
             <input type="search" id="custom-search" placeholder="Search…">
             <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
+            <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
           </div>
           <div id="custom-list" class="ja-list"></div>
           <div id="custom-empty" class="empty" style="display:none;"><h2>No submissions yet</h2><p>Submissions from the form link will show up here.</p></div>
@@ -600,8 +601,8 @@
     <div class="modal-overlay" id="builder-modal">
       <div class="modal" style="max-width: 660px;">
         <button class="modal-close" id="builder-close" aria-label="Close">✕</button>
-        <div class="m-name">New table</div>
-        <div class="m-sub">Create a form — it gets its own public link.</div>
+        <div class="m-name" id="bld-title">New table</div>
+        <div class="m-sub" id="bld-sub">Create a form — it gets its own public link.</div>
         <div class="bld-two">
           <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
           <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
@@ -1224,6 +1225,7 @@
     document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span style="color:var(--muted);font-weight:600;font-size:0.9rem;">· ' + esc(t.name_ar) + "</span>" : "");
     var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
     drawQR(document.getElementById("custom-qr"), clink);
+    document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     currentCustom = { table: t, fields: [], subs: [] };
@@ -1280,6 +1282,7 @@
   }
   document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
+  document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
   // ---- QR codes for public form links (with centered BLK logo) ----
   var qrLogo = new Image(); var qrLogoReady = false;
   qrLogo.onload = function () {
@@ -1426,6 +1429,9 @@
 
   var builder = document.getElementById("builder-modal");
   var BLD_DRAFT_KEY = "blk_table_draft";
+  var builderMode = "create";   // "create" | "edit"
+  var editingTableId = null;
+  var editingFieldIds = [];      // field ids that existed when the editor opened
   function bldGrow(el) { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
   function wireBldGrow(el) {
     if (!el) return;
@@ -1450,6 +1456,7 @@
       '<button type="button" class="rm">Remove</button></div>';
     document.getElementById("bld-fields").appendChild(row);
     if (data) {
+      if (data.id) row.setAttribute("data-field-id", data.id);
       row.querySelector(".lab").value = data.label || "";
       row.querySelector(".lab-ar").value = data.labelAr || "";
       var sel = row.querySelector(".ftype"); if (data.type) sel.value = data.type;
@@ -1484,6 +1491,7 @@
     return (d.fields || []).some(function (f) { return (f.label || "").trim() || (f.labelAr || "").trim() || (f.opts || "").trim(); });
   }
   function saveDraft() {
+    if (builderMode !== "create") return; // drafts are only for brand-new tables
     var d = serializeBuilder();
     try { if (draftHasContent(d)) localStorage.setItem(BLD_DRAFT_KEY, JSON.stringify(d)); else localStorage.removeItem(BLD_DRAFT_KEY); } catch (e) {}
     var note = document.getElementById("bld-draft-note"); if (note) note.textContent = draftHasContent(d) ? "Draft auto-saved" : "";
@@ -1495,7 +1503,18 @@
     document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     addBuilderField();
   }
+  function setBuilderChrome(mode) {
+    builderMode = mode;
+    var isCreate = mode === "create";
+    document.getElementById("bld-title").textContent = isCreate ? "New table" : "Edit table";
+    document.getElementById("bld-sub").textContent = isCreate ? "Create a form — it gets its own public link." : "Add, edit, or remove questions. Changes apply to new submissions.";
+    document.getElementById("bld-save").textContent = isCreate ? "Create table" : "Save changes";
+    document.getElementById("bld-discard").style.display = isCreate ? "" : "none";
+    var note = document.getElementById("bld-draft-note"); if (note) note.style.display = isCreate ? "" : "none";
+  }
   function openBuilder() {
+    editingTableId = null; editingFieldIds = [];
+    setBuilderChrome("create");
     document.getElementById("bld-msg").textContent = "";
     var d = loadDraft();
     if (draftHasContent(d)) {
@@ -1509,6 +1528,30 @@
     }
     builder.classList.add("open");
     requestAnimationFrame(growAllBld);
+  }
+  function optsToString(options) {
+    if (!options || !options.length) return "";
+    return options.map(function (o) { var en = (typeof o === "string" ? o : o.en) || ""; var ar = (typeof o === "string" ? "" : o.ar) || ""; return en + (ar ? "|" + ar : ""); }).join(", ");
+  }
+  function openBuilderEdit(table) {
+    if (!table) return;
+    editingTableId = table.id; editingFieldIds = [];
+    setBuilderChrome("edit");
+    document.getElementById("bld-msg").textContent = "Loading…";
+    document.getElementById("bld-name").value = table.name || "";
+    document.getElementById("bld-name-ar").value = table.name_ar || "";
+    document.getElementById("bld-fields").innerHTML = "";
+    builder.classList.add("open");
+    db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
+      document.getElementById("bld-msg").textContent = "";
+      var fields = (res && res.data) || [];
+      if (!fields.length) { addBuilderField(); }
+      else fields.forEach(function (f) {
+        editingFieldIds.push(f.id);
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required });
+      });
+      requestAnimationFrame(growAllBld);
+    });
   }
   function closeBuilder() { builder.classList.remove("open"); }
   document.getElementById("new-table-btn").addEventListener("click", openBuilder);
@@ -1535,9 +1578,10 @@
         if (!raw) { msg.textContent = "Dropdown fields need options."; return; }
         options = raw.split(",").map(function (p) { var kv = p.split("|"); return { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() }; }).filter(function (o) { return o.en; });
       }
-      fields.push({ position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, options: options });
+      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, options: options });
     }
     if (!fields.length) { msg.textContent = "Add at least one field."; return; }
+    if (builderMode === "edit") { saveTableEdit(name, nameAr, fields, msg); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
     msg.textContent = "Creating…";
     db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null }).select().single().then(function (tRes) {
@@ -1550,6 +1594,30 @@
       setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
     }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
   });
+  function saveTableEdit(name, nameAr, fields, msg) {
+    var tid = editingTableId;
+    if (!tid) { msg.textContent = "Something went wrong — please reopen the editor."; return; }
+    msg.textContent = "Saving…";
+    var keptIds = fields.filter(function (f) { return f.id; }).map(function (f) { return f.id; });
+    var toDelete = editingFieldIds.filter(function (id) { return keptIds.indexOf(id) === -1; });
+    var toInsert = [];
+    var ops = [db.from("app_tables").update({ name: name, name_ar: nameAr || null }).eq("id", tid)];
+    fields.forEach(function (f) {
+      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options });
+    });
+    if (toInsert.length) ops.push(db.from("app_fields").insert(toInsert));
+    if (toDelete.length) ops.push(db.from("app_fields").delete().in("id", toDelete));
+    Promise.all(ops).then(function (results) {
+      var bad = results.filter(function (r) { return r && r.error; })[0];
+      if (bad) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(bad.error); return; }
+      var ct = customTables.filter(function (x) { return x.id === tid; })[0]; if (ct) { ct.name = name; ct.name_ar = nameAr || null; }
+      if (currentCustom && currentCustom.table.id === tid) { currentCustom.table.name = name; currentCustom.table.name_ar = nameAr || null; }
+      closeBuilder();
+      loadCustomTables();
+      if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table);
+    }).catch(function (err) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(err); });
+  }
 
   // ---- Admin: users management (list, create, edit, delete, reassign) ----
   var usersModal = document.getElementById("users-modal");
