@@ -1289,7 +1289,7 @@
       if (lk) drawQR(el, lk);
     });
   };
-  qrLogo.src = "assets/blk-logo.svg";
+  qrLogo.src = "assets/blk-qr-logo.png";
   function roundRectPath(ctx, x, y, w, h, r) {
     ctx.beginPath(); ctx.moveTo(x + r, y);
     ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
@@ -1310,13 +1310,14 @@
       imgEl.src = plain;
       if (qrLogoReady) {
         try {
-          var bs = Math.round(size * 0.24), bx = Math.round((size - bs) / 2), by = Math.round((size - bs) / 2), gap = Math.round(size * 0.015), rad = Math.round(bs * 0.18);
-          ctx.fillStyle = "#ffffff"; roundRectPath(ctx, bx - gap, by - gap, bs + 2 * gap, bs + 2 * gap, rad); ctx.fill();
-          ctx.fillStyle = "#0a0b0d"; roundRectPath(ctx, bx, by, bs, bs, rad); ctx.fill();
-          var lp = Math.round(bs * 0.2), avail = bs - 2 * lp;
-          var ar = (qrLogo.naturalWidth || 2) / (qrLogo.naturalHeight || 1);
-          var dw = avail, dh = avail / ar; if (dh > avail) { dh = avail; dw = avail * ar; }
-          ctx.drawImage(qrLogo, bx + (bs - dw) / 2, by + (bs - dh) / 2, dw, dh);
+          var ar = (qrLogo.naturalWidth || 537) / (qrLogo.naturalHeight || 780); // portrait BLK logo
+          var lh = Math.round(size * 0.30), lw = Math.round(lh * ar);
+          var pad = Math.round(size * 0.022);
+          var bw = lw + 2 * pad, bh = lh + 2 * pad;
+          var bx = Math.round((size - bw) / 2), by = Math.round((size - bh) / 2);
+          var rad = Math.round(Math.min(bw, bh) * 0.16);
+          ctx.fillStyle = "#ffffff"; roundRectPath(ctx, bx, by, bw, bh, rad); ctx.fill(); // white card = quiet zone + backing
+          ctx.drawImage(qrLogo, Math.round((size - lw) / 2), Math.round((size - lh) / 2), lw, lh);
           imgEl.src = c.toDataURL("image/png"); // throws if the logo tainted the canvas → keep plain
         } catch (e2) { imgEl.src = plain; }
       }
