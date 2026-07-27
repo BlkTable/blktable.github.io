@@ -1719,6 +1719,7 @@
       '<div class="r2"><select class="ftype">' + typeOpts + '</select>' +
       '<textarea class="opts" rows="1" placeholder="Options: en|ar, en|ar" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
+      '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
       '<button type="button" class="rm">Remove</button></div>';
     document.getElementById("bld-fields").appendChild(row);
     if (data) {
@@ -1730,6 +1731,7 @@
       optsInp.style.display = sel.value === "dropdown" ? "" : "none";
       optsInp.value = data.opts || "";
       row.querySelector(".freq").checked = data.required !== false;
+      row.querySelector(".fint").checked = !!data.internal;
     }
     row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = this.value === "dropdown" ? "" : "none"; bldGrow(row.querySelector(".opts")); });
     [].slice.call(row.querySelectorAll("textarea")).forEach(wireBldGrow);
@@ -1746,7 +1748,7 @@
         return {
           label: r.querySelector(".lab").value, labelAr: r.querySelector(".lab-ar").value,
           type: r.querySelector(".ftype").value, opts: r.querySelector(".opts").value,
-          required: r.querySelector(".freq").checked
+          required: r.querySelector(".freq").checked, internal: r.querySelector(".fint").checked
         };
       })
     };
@@ -1826,7 +1828,7 @@
       document.getElementById("bld-msg").textContent = "";
       var fields = (res && res.data) || [];
       if (!fields.length) addBuilderField();
-      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required }); });
+      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal }); });
       requestAnimationFrame(growAllBld);
     }).catch(function () { document.getElementById("bld-msg").textContent = ""; });
   }
@@ -1866,7 +1868,7 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal });
       });
       requestAnimationFrame(growAllBld);
     });
@@ -1896,7 +1898,7 @@
         if (!raw) { msg.textContent = "Dropdown fields need options."; return; }
         options = raw.split(",").map(function (p) { var kv = p.split("|"); return { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() }; }).filter(function (o) { return o.en; });
       }
-      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, options: options });
+      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options });
     }
     if (!fields.length) { msg.textContent = "Add at least one field."; return; }
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
@@ -1905,7 +1907,7 @@
     db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
-      var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options }; });
+      var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }; });
       return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return tRes.data; });
     }).then(function (t) {
       clearDraft(); closeBuilder(); loadCustomTables();
@@ -1927,8 +1929,8 @@
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
-      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options }).eq("id", f.id));
-      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options });
+      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options });
     });
     if (toInsert.length) ops.push(db.from("app_fields").insert(toInsert));
     if (toDelete.length) ops.push(db.from("app_fields").delete().in("id", toDelete));

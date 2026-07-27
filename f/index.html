@@ -191,7 +191,7 @@
     document.getElementById("head").style.display = "block";
     document.getElementById("card").style.display = "block";
     var host = document.getElementById("fields");
-    fields.forEach(function (f) { host.appendChild(buildField(f)); });
+    fields.filter(function (f) { return !f.internal; }).forEach(function (f) { host.appendChild(buildField(f)); }); // staff-only fields never render publicly
     [].slice.call(host.querySelectorAll("textarea.autogrow")).forEach(autoGrow);
 
     var formEl = document.getElementById("form");
