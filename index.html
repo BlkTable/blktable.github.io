@@ -279,6 +279,18 @@
   .ed-in:focus { border-color: var(--silver); }
   textarea.ed-in { min-height: 70px; resize: vertical; }
   .m-editbtn { margin: 0 0 14px auto; display: block; }
+  .phone-row { display: flex; gap: 8px; align-items: stretch; margin-top: 4px; }
+  .phone-row .ed-in { margin-top: 0; }
+  .cc-picker { position: relative; flex: 0 0 auto; }
+  .cc-btn { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; font-family: inherit; }
+  .cc-btn:hover { border-color: var(--silver); }
+  .cc-flag, .cc-menu li img { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
+  .cc-caret { color: var(--muted); font-size: 0.65rem; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+  .cc-menu.open { display: block; }
+  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 8px; cursor: pointer; color: var(--text); font-size: 0.85rem; }
+  .cc-menu li:hover { background: rgba(255,255,255,0.06); }
+  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
   .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
@@ -972,6 +984,41 @@
     }).join("") + "</select>";
   }
   function edRow(label, inner, full) { return '<div class="m-field' + (full ? " full" : "") + '"><div class="k">' + esc(label) + "</div>" + inner + "</div>"; }
+  // Phone editor with the full country/flag picker
+  var COUNTRIES_ED = [
+    { cc: "962", len: [9], ph: "7X XXX XXXX", flag: "jo", name: "Jordan" },
+    { cc: "961", len: [7, 8], ph: "XX XXX XXX", flag: "lb", name: "Lebanon" },
+    { cc: "963", len: [9], ph: "9XX XXX XXX", flag: "sy", name: "Syria" },
+    { cc: "964", len: [10], ph: "7XX XXX XXXX", flag: "iq", name: "Iraq" }
+  ];
+  function edFlagUrl(c) { return "https://flagcdn.com/" + c + ".svg"; }
+  var edPhoneReg = {};
+  function parsePhone(value) {
+    var v = (value || "").replace(/[^\d]/g, "");
+    for (var i = 0; i < COUNTRIES_ED.length; i++) { var cc = COUNTRIES_ED[i].cc; if (v.indexOf(cc) === 0) return { idx: i, local: v.slice(cc.length) }; }
+    return { idx: 0, local: v };
+  }
+  function edPhone(id, value) {
+    var p = parsePhone(value), c = COUNTRIES_ED[p.idx];
+    return '<div class="phone-row" id="' + id + '-row" data-idx="' + p.idx + '">' +
+      '<div class="cc-picker" id="' + id + '-picker"><button type="button" class="cc-btn" id="' + id + '-btn"><img class="cc-flag" id="' + id + '-flag" src="' + edFlagUrl(c.flag) + '" alt=""><span class="cc-dial" id="' + id + '-dial">+' + c.cc + '</span><span class="cc-caret">▾</span></button><ul class="cc-menu" id="' + id + '-menu" role="listbox"></ul></div>' +
+      '<input type="tel" inputmode="numeric" class="ed-in" id="' + id + '" value="' + esc(p.local) + '">' +
+      "</div>";
+  }
+  function wireEdPhone(id) {
+    var row = document.getElementById(id + "-row"); if (!row) return;
+    var state = { idx: parseInt(row.getAttribute("data-idx"), 10) || 0 };
+    var btn = document.getElementById(id + "-btn"), menu = document.getElementById(id + "-menu"),
+        flag = document.getElementById(id + "-flag"), dial = document.getElementById(id + "-dial"),
+        picker = document.getElementById(id + "-picker"), local = document.getElementById(id);
+    function apply(i) { state.idx = i; var c = COUNTRIES_ED[i]; flag.src = edFlagUrl(c.flag); dial.textContent = "+" + c.cc; local.placeholder = c.ph; local.maxLength = Math.max.apply(null, c.len) + 1; }
+    COUNTRIES_ED.forEach(function (c, i) { var li = document.createElement("li"); li.innerHTML = '<img src="' + edFlagUrl(c.flag) + '" alt=""> <span>' + c.name + "</span> <b>+" + c.cc + "</b>"; li.addEventListener("click", function () { apply(i); menu.classList.remove("open"); }); menu.appendChild(li); });
+    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
+    document.addEventListener("click", function (e) { if (!picker.contains(e.target)) menu.classList.remove("open"); });
+    local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
+    apply(state.idx);
+    edPhoneReg[id] = function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + COUNTRIES_ED[state.idx].cc + d : null; };
+  }
   function edExtraRows(defs, extra) {
     extra = extra || {};
     return (defs || []).map(function (f) {
@@ -1029,7 +1076,7 @@
   function editApp(a) {
     var grid =
       edRow("Full name", edText("ed-full_name", a.full_name)) +
-      edRow("Phone", edText("ed-phone", a.phone)) +
+      edRow("Phone", edPhone("ed-phone", a.phone)) +
       edRow("Date of birth", edDate("ed-date_of_birth", a.date_of_birth)) +
       edRow("How found", edText("ed-how_found", a.how_found)) +
       edRow("City", edText("ed-city", a.city)) +
@@ -1044,11 +1091,12 @@
     document.getElementById("modal-body").innerHTML =
       '<div class="m-name">Edit application</div><div class="m-grid">' + grid + "</div>" +
       '<div class="m-actions" style="margin-top:14px;gap:10px;"><button class="btn-wa" id="ed-save">Save changes</button><button class="linkbtn" id="ed-cancel">Cancel</button></div><div class="m-msg" id="ed-msg"></div>';
+    wireEdPhone("ed-phone");
     document.getElementById("ed-cancel").addEventListener("click", function () { openDetail(a); });
     document.getElementById("ed-save").addEventListener("click", function () {
       function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
       var upd = {
-        full_name: gv("ed-full_name"), phone: gv("ed-phone") || null, date_of_birth: gv("ed-date_of_birth") || null,
+        full_name: gv("ed-full_name"), phone: edPhoneReg["ed-phone"] ? edPhoneReg["ed-phone"]() : (gv("ed-phone") || null), date_of_birth: gv("ed-date_of_birth") || null,
         how_found: gv("ed-how_found") || null, city: gv("ed-city") || null, living_area: gv("ed-living_area") || null,
         gender: gv("ed-gender") || null, work_type: gv("ed-work_type") || null, currently_working: gv("ed-currently_working") || null,
         education_level: gv("ed-education_level") || null, favorite_drink: gv("ed-favorite_drink") || null, why_join: gv("ed-why_join") || null,
@@ -1290,7 +1338,7 @@
     var grid =
       edRow("Full name", edText("ed-full_name", c.full_name)) +
       edRow("Date of birth", edDate("ed-date_of_birth", c.date_of_birth)) +
-      edRow("Phone", edText("ed-phone", c.phone)) +
+      edRow("Phone", edPhone("ed-phone", c.phone)) +
       edRow("Branch", edText("ed-branch", c.branch)) +
       edRow("University student?", edSelect("ed-university_student", c.university_student, ["", "Yes", "No"])) +
       edRow("Ever acted?", edSelect("ed-ever_acted", c.ever_acted, ["", "Yes", "No"])) +
@@ -1298,11 +1346,12 @@
     document.getElementById("modal-body").innerHTML =
       '<div class="m-name">Edit entry</div><div class="m-grid">' + grid + "</div>" +
       '<div class="m-actions" style="margin-top:14px;gap:10px;"><button class="btn-wa" id="ed-save">Save changes</button><button class="linkbtn" id="ed-cancel">Cancel</button></div><div class="m-msg" id="ed-msg"></div>';
+    wireEdPhone("ed-phone");
     document.getElementById("ed-cancel").addEventListener("click", function () { openCastingDetail(c); });
     document.getElementById("ed-save").addEventListener("click", function () {
       function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
       var upd = {
-        full_name: gv("ed-full_name"), date_of_birth: gv("ed-date_of_birth") || null, phone: gv("ed-phone") || null,
+        full_name: gv("ed-full_name"), date_of_birth: gv("ed-date_of_birth") || null, phone: edPhoneReg["ed-phone"] ? edPhoneReg["ed-phone"]() : (gv("ed-phone") || null),
         branch: gv("ed-branch") || null, university_student: gv("ed-university_student") || null, ever_acted: gv("ed-ever_acted") || null,
         extra: collectExtra(builtinExtra.casting, c.extra)
       };
