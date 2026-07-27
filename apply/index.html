@@ -386,6 +386,20 @@
       return;
     }
 
+    // Admin-defined extra questions
+    var extraData = {}, extraMissing = [];
+    extraControls.forEach(function (c) {
+      c.el.classList.remove("invalid");
+      var v = (c.el.value || "").trim();
+      if (c.f.required && !v) { c.el.classList.add("invalid"); extraMissing.push(c.el); }
+      else if (v !== "") extraData[c.f.id] = v;
+    });
+    if (extraMissing.length) {
+      msg.textContent = "Please fill in the highlighted fields.";
+      if (extraMissing[0].scrollIntoView) extraMissing[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+
     var fullName = val("full_name");
     var phone = "+" + selCountry.cc + local;
 
@@ -420,7 +434,8 @@
           education_level: val("education_level") || null,
           favorite_drink: val("favorite_drink") || null,
           why_join: val("why_join") || null,
-          photo_path: photoPath
+          photo_path: photoPath,
+          extra: extraData
         });
       })
       .then(function (res) {
@@ -436,6 +451,38 @@
         if (window.console) console.error(err);
       });
   });
+
+  // ---- Admin-defined extra questions (loaded from the dashboard's table editor) ----
+  var extraControls = [];
+  function buildExtraField(f) {
+    var wrap = document.createElement("div"); wrap.className = "field";
+    var lab = document.createElement("label");
+    lab.appendChild(document.createTextNode(f.label || ""));
+    if (f.label_ar) { var s = document.createElement("span"); s.className = "ar"; s.textContent = " / " + f.label_ar; lab.appendChild(s); }
+    if (f.required) { var r = document.createElement("span"); r.className = "req"; r.textContent = " *"; lab.appendChild(r); }
+    wrap.appendChild(lab);
+    var el;
+    if (f.type === "long_text") { el = document.createElement("textarea"); }
+    else if (f.type === "yesno" || f.type === "dropdown") {
+      el = document.createElement("select");
+      var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Select… / اختر"; el.appendChild(o0);
+      var opts = f.type === "yesno" ? [{ en: "Yes", ar: "نعم" }, { en: "No", ar: "لا" }] : (f.options || []);
+      opts.forEach(function (o) { var v = typeof o === "string" ? o : o.en; var ar = typeof o === "string" ? "" : (o.ar || ""); var op = document.createElement("option"); op.value = v; op.textContent = v + (ar ? " / " + ar : ""); el.appendChild(op); });
+    } else {
+      el = document.createElement("input");
+      el.type = f.type === "number" ? "number" : (f.type === "date" ? "date" : (f.type === "email" ? "email" : "text"));
+    }
+    el.id = "extra-" + f.id; wrap.appendChild(el);
+    extraControls.push({ f: f, el: el });
+    return wrap;
+  }
+  db.rpc("get_extra_fields", { p_key: "job_applications" }).then(function (res) {
+    if (!res || res.error || !res.data || !res.data.length) return;
+    var host = document.createElement("div"); host.id = "extra-fields";
+    res.data.forEach(function (f) { host.appendChild(buildExtraField(f)); });
+    var submitBtn = document.getElementById("submit-btn");
+    submitBtn.parentNode.insertBefore(host, submitBtn);
+  }).catch(function () {});
 
   // Auto-grow: single-line text fields expand with their content instead of hiding it
   (function () {

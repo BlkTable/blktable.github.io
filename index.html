@@ -327,6 +327,9 @@
   .bld-field .opts { flex: 1; min-width: 120px; min-height: 40px; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
   .bld-field .req-lbl { margin-top: 8px; }
   .bld-field .rm { margin-left: auto; background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+  .bld-fixed { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+  .bld-fixed-h { color: var(--muted); font-size: 0.8rem; margin-bottom: 8px; }
+  .bld-chip { display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px; border-radius: 999px; background: rgba(214,218,222,0.1); color: var(--silver); font-size: 0.8rem; }
   .u-inp { width: 100%; height: 44px; padding: 0 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; }
   .u-inp:focus { border-color: var(--silver); }
   .u-tables { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
@@ -609,6 +612,7 @@
         <button class="modal-close" id="builder-close" aria-label="Close">✕</button>
         <div class="m-name" id="bld-title">New table</div>
         <div class="m-sub" id="bld-sub">Create a form — it gets its own public link.</div>
+        <div id="bld-builtin-note" style="display:none;"></div>
         <div class="bld-two">
           <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
           <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
@@ -666,6 +670,7 @@
     loadApps();
     loadCustomTables();
     loadBuiltinTokens();
+    loadBuiltinExtra();
   }
   function showLogin() {
     app.style.display = "none";
@@ -964,6 +969,7 @@
         fieldHtml("Education", a.education_level) +
         fieldHtml("Favorite drink", a.favorite_drink) +
         '<div class="m-field full"><div class="k">Why join</div><div class="v">' + esc(a.why_join || "—") + "</div></div>" +
+        extraFieldsHtml(a.extra, builtinExtra.job_applications) +
         fieldHtml("Submitted IP", a.submitted_ip) +
         '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>" +
       "</div>";
@@ -1182,6 +1188,7 @@
     function fld(k, v) { return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>"; }
     var grid = fld("Phone", c.phone) + fld("Age", age == null ? "—" : (age + " yrs")) + fld("Date of birth", c.date_of_birth) +
       fld("Branch", c.branch) + fld("University student?", c.university_student) + fld("Ever acted?", c.ever_acted) +
+      extraFieldsHtml(c.extra, builtinExtra.casting) +
       fld("Submitted IP", c.submitted_ip) + '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
     var html = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       '<div class="m-name">' + esc(c.full_name) + '</div><div class="m-sub">Submitted ' + fmtDate(c.created_at) + '</div><div class="m-grid">' + grid + "</div>";
@@ -1200,13 +1207,29 @@
   ];
   var customTables = [];
   var currentCustom = null;
+  // Built-in forms (Job Applications, Casting) can carry admin-added extra questions
+  var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
+  var builtinExtra = { job_applications: [], casting: [] };
+  function loadBuiltinExtra() {
+    ["job_applications", "casting"].forEach(function (k) {
+      db.rpc("get_extra_fields", { p_key: k }).then(function (res) { if (res && !res.error) builtinExtra[k] = res.data || []; });
+    });
+  }
+  function extraFieldsHtml(extra, defs) {
+    if (!defs || !defs.length) return "";
+    extra = extra || {};
+    return defs.map(function (f) {
+      var v = extra[f.id];
+      return '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(v == null || v === "" ? "—" : String(v)) + "</div></div>";
+    }).join("");
+  }
   function slugify(s) { var x = (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""); return x || "t"; }
   function publicFormLink(slug) { return "https://blktable.blk.jo/f/?t=" + encodeURIComponent(slug); }
 
   function loadCustomTables() {
     db.from("app_tables").select("*").order("created_at", { ascending: true }).then(function (res) {
       if (res.error) return;
-      customTables = res.data || [];
+      customTables = (res.data || []).filter(function (t) { return !t.builtin_key; }); // hide built-in placeholders
       var slot = document.getElementById("custom-tables-slot");
       slot.innerHTML = "";
       customTables.forEach(function (t) {
@@ -1510,14 +1533,41 @@
     document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     addBuilderField();
   }
-  function setBuilderChrome(mode) {
+  function setBuilderChrome(mode, name) {
     builderMode = mode;
-    var isCreate = mode === "create";
-    document.getElementById("bld-title").textContent = isCreate ? "New table" : "Edit table";
-    document.getElementById("bld-sub").textContent = isCreate ? "Create a form — it gets its own public link." : "Add, edit, or remove questions. Changes apply to new submissions.";
+    var isCreate = mode === "create", isBuiltin = mode === "builtin";
+    document.getElementById("bld-title").textContent = isCreate ? "New table" : (isBuiltin ? "Edit: " + name : "Edit table");
+    document.getElementById("bld-sub").textContent = isCreate ? "Create a form — it gets its own public link."
+      : (isBuiltin ? "The built-in questions are fixed. Add your own extra questions below — they appear on the form and in each entry."
+      : "Add, edit, or remove questions. Changes apply to new submissions.");
     document.getElementById("bld-save").textContent = isCreate ? "Create table" : "Save changes";
     document.getElementById("bld-discard").style.display = isCreate ? "" : "none";
     var note = document.getElementById("bld-draft-note"); if (note) note.style.display = isCreate ? "" : "none";
+    var two = document.querySelector("#builder-modal .bld-two"); if (two) two.style.display = isBuiltin ? "none" : "flex";
+    var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
+  }
+  function builtinFixedList(formKey) {
+    var items = formKey === "job_applications"
+      ? ["Full name", "Date of birth", "Phone", "City", "Living area", "Gender", "Full / Part time", "Currently working", "Education level", "Favorite drink", "Why join", "Photo"]
+      : ["Full name", "Date of birth", "Phone", "Branch", "University student?", "Ever acted?", "Photo"];
+    return '<div class="bld-fixed"><div class="bld-fixed-h">Built-in questions (fixed — always on the form):</div>' + items.map(function (x) { return '<span class="bld-chip">' + esc(x) + "</span>"; }).join("") + "</div>";
+  }
+  function openBuiltinEdit(formKey) {
+    var name = formKey === "job_applications" ? "Job Applications" : "BLK Casting";
+    editingTableId = BUILTIN_PLACEHOLDER[formKey]; editingFieldIds = [];
+    setBuilderChrome("builtin", name);
+    document.getElementById("bld-builtin-note").innerHTML = builtinFixedList(formKey);
+    document.getElementById("bld-name").value = name; document.getElementById("bld-name-ar").value = "";
+    document.getElementById("bld-msg").textContent = "Loading…";
+    document.getElementById("bld-fields").innerHTML = "";
+    builder.classList.add("open");
+    db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true }).then(function (res) {
+      document.getElementById("bld-msg").textContent = "";
+      var fields = (res && res.data) || [];
+      if (!fields.length) addBuilderField();
+      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required }); });
+      requestAnimationFrame(growAllBld);
+    });
   }
   function openBuilder() {
     editingTableId = null; editingFieldIds = [];
@@ -1588,7 +1638,7 @@
       fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, options: options });
     }
     if (!fields.length) { msg.textContent = "Add at least one field."; return; }
-    if (builderMode === "edit") { saveTableEdit(name, nameAr, fields, msg); return; }
+    if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
     msg.textContent = "Creating…";
     db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null }).select().single().then(function (tRes) {
@@ -1622,6 +1672,7 @@
       if (currentCustom && currentCustom.table.id === tid) { currentCustom.table.name = name; currentCustom.table.name_ar = nameAr || null; }
       closeBuilder();
       loadCustomTables();
+      loadBuiltinExtra();
       if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table);
     }).catch(function (err) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(err); });
   }
@@ -1793,7 +1844,7 @@
     var cid = item.getAttribute("data-custom");
     if (cid) { var t = customTables.filter(function (x) { return x.id === cid; })[0]; if (t) openBuilderEdit(t); return; }
     var dv = item.getAttribute("data-view");
-    if (dv === "job_applications" || dv === "casting") showBuiltinSettings(dv);
+    if (dv === "job_applications" || dv === "casting") openBuiltinEdit(dv);
   }, true);
 
   // ---- Auto-hiding sidebar toggle ----
