@@ -261,6 +261,14 @@
   .qr-bar a { color: var(--silver); word-break: break-all; text-decoration: none; font-size: 0.82rem; }
   .qr-bar a:hover { text-decoration: underline; }
   .qr-bar .qr-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+  .qr-regen { color: #ff9b9b !important; border-color: rgba(255,107,107,0.4) !important; }
+  .qr-regen:hover { color: #ff6b6b !important; border-color: #ff6b6b !important; }
+  .regen-math { margin-top: 8px; }
+  .regen-math label { display: block; color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; }
+  .regen-q { color: var(--text); font-weight: 700; font-size: 1.05rem; letter-spacing: 0.03em; }
+  .regen-math input { width: 130px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; }
+  .regen-math input:focus { border-color: var(--silver); }
+  .regen-danger { background: linear-gradient(180deg, #e05555, #c0392b) !important; color: #fff !important; }
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
   .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
@@ -388,10 +396,11 @@
             <div class="qr-side">
               <div class="qr-cap">Scan to open the public form</div>
               <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-              <a href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
+              <a id="ja-link" href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
               <div class="qr-btns">
                 <button class="linkbtn" id="ja-qr-dl" type="button">Download QR</button>
                 <button class="linkbtn" id="ja-qr-share" type="button">Share QR</button>
+                <button class="linkbtn qr-regen" id="ja-qr-regen" type="button" style="display:none;">Regenerate</button>
               </div>
             </div>
           </div>
@@ -476,10 +485,11 @@
             <div class="qr-side">
               <div class="qr-cap">Scan to open the public form</div>
               <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-              <a href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
+              <a id="cast-link" href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
               <div class="qr-btns">
                 <button class="linkbtn" id="cast-qr-dl" type="button">Download QR</button>
                 <button class="linkbtn" id="cast-qr-share" type="button">Share QR</button>
+                <button class="linkbtn qr-regen" id="cast-qr-regen" type="button" style="display:none;">Regenerate</button>
               </div>
             </div>
           </div>
@@ -509,6 +519,7 @@
               <div class="qr-btns">
                 <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
                 <button class="linkbtn" id="custom-qr-share" type="button">Share QR</button>
+                <button class="linkbtn qr-regen" id="custom-qr-regen" type="button" style="display:none;">Regenerate</button>
               </div>
             </div>
           </div>
@@ -549,6 +560,24 @@
       <div class="modal">
         <button class="modal-close" id="modal-close" aria-label="Close">✕</button>
         <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Regenerate QR confirmation (math-gated) -->
+    <div class="modal-overlay" id="regen-modal">
+      <div class="modal" style="max-width: 420px;">
+        <button class="modal-close" id="regen-cancel" aria-label="Close">✕</button>
+        <div class="m-name">Regenerate QR code?</div>
+        <div class="m-sub">This creates a brand-new link. <b>Every existing QR code and shared link for this form will stop working.</b> Anything already printed or sent will need to be replaced.</div>
+        <div class="regen-math">
+          <label for="regen-input">To confirm, solve: <span id="regen-q" class="regen-q">—</span></label>
+          <input id="regen-input" type="number" inputmode="numeric" placeholder="Answer" autocomplete="off">
+        </div>
+        <div class="m-actions" style="margin-top:16px; gap:10px;">
+          <button class="btn-wa regen-danger" id="regen-confirm" type="button">Regenerate</button>
+          <button class="linkbtn" id="regen-cancel2" type="button" onclick="document.getElementById('regen-modal').classList.remove('open')">Cancel</button>
+        </div>
+        <div class="m-msg" id="regen-msg"></div>
       </div>
     </div>
 
@@ -629,6 +658,7 @@
     loadRole(session.user.id);
     loadApps();
     loadCustomTables();
+    loadBuiltinTokens();
   }
   function showLogin() {
     app.style.display = "none";
@@ -643,6 +673,7 @@
         isAdmin = role === "admin";
         document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
         document.getElementById("users-btn").style.display = isAdmin ? "flex" : "none";
+        ["ja-qr-regen", "cast-qr-regen", "custom-qr-regen"].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = isAdmin ? "inline-block" : "none"; });
         applyBuiltinAccess();
       });
   }
@@ -1249,11 +1280,47 @@
   }
   document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
-  // ---- QR codes for public form links ----
+  // ---- QR codes for public form links (with centered BLK logo) ----
+  var qrLogo = new Image(); var qrLogoReady = false;
+  qrLogo.onload = function () {
+    qrLogoReady = true;
+    ["ja-qr", "cast-qr", "custom-qr"].forEach(function (id) {
+      var el = document.getElementById(id); var lk = el && el.getAttribute("data-link");
+      if (lk) drawQR(el, lk);
+    });
+  };
+  qrLogo.src = "assets/blk-logo.svg";
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
   function drawQR(imgEl, text) {
     if (!imgEl || !text || !window.qrcode) return;
-    try { var qr = qrcode(0, "M"); qr.addData(text); qr.make(); imgEl.src = qr.createDataURL(6, 12); imgEl.setAttribute("data-link", text); }
-    catch (e) { if (window.console) console.error(e); }
+    imgEl.setAttribute("data-link", text);
+    try {
+      var qr = qrcode(0, "H"); qr.addData(text); qr.make(); // high error-correction tolerates the logo
+      var count = qr.getModuleCount(), cell = 8, margin = 4, size = (count + margin * 2) * cell;
+      var c = document.createElement("canvas"); c.width = size; c.height = size;
+      var ctx = c.getContext("2d");
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = "#0a0b0d";
+      for (var r = 0; r < count; r++) for (var col = 0; col < count; col++) if (qr.isDark(r, col)) ctx.fillRect((col + margin) * cell, (r + margin) * cell, cell, cell);
+      var plain = c.toDataURL("image/png"); // clean fallback before any external image
+      imgEl.src = plain;
+      if (qrLogoReady) {
+        try {
+          var bs = Math.round(size * 0.24), bx = Math.round((size - bs) / 2), by = Math.round((size - bs) / 2), gap = Math.round(size * 0.015), rad = Math.round(bs * 0.18);
+          ctx.fillStyle = "#ffffff"; roundRectPath(ctx, bx - gap, by - gap, bs + 2 * gap, bs + 2 * gap, rad); ctx.fill();
+          ctx.fillStyle = "#0a0b0d"; roundRectPath(ctx, bx, by, bs, bs, rad); ctx.fill();
+          var lp = Math.round(bs * 0.2), avail = bs - 2 * lp;
+          var ar = (qrLogo.naturalWidth || 2) / (qrLogo.naturalHeight || 1);
+          var dw = avail, dh = avail / ar; if (dh > avail) { dh = avail; dw = avail * ar; }
+          ctx.drawImage(qrLogo, bx + (bs - dw) / 2, by + (bs - dh) / 2, dw, dh);
+          imgEl.src = c.toDataURL("image/png"); // throws if the logo tainted the canvas → keep plain
+        } catch (e2) { imgEl.src = plain; }
+      }
+    } catch (e) { if (window.console) console.error(e); }
   }
   function downloadQR(imgEl, filename) {
     if (!imgEl || !imgEl.src) return;
@@ -1275,19 +1342,86 @@
     } else if (navigator.share) {
       navigator.share({ title: name || "BLK form", text: "Open the form: " + link, url: link }).catch(function () {});
     } else {
-      // Desktop with no share support: hand them the image file to attach
-      downloadQR(imgEl, filename);
+      downloadQR(imgEl, filename); // desktop with no share sheet: hand over the image to attach
     }
   }
-  // static QR codes (job applications, casting) + download / share buttons
-  drawQR(document.getElementById("ja-qr"), "https://blktable.blk.jo/apply/");
-  drawQR(document.getElementById("cast-qr"), "https://blktable.blk.jo/cast/");
+
+  // ---- Built-in form links carry a rotatable token (?k=…) so old QRs can be killed ----
+  var FORM_LINKS = {
+    job_applications: { base: "https://blktable.blk.jo/apply/", token: null, img: "ja-qr", aid: "ja-link" },
+    casting: { base: "https://blktable.blk.jo/cast/", token: null, img: "cast-qr", aid: "cast-link" }
+  };
+  function builtinLink(key) { var f = FORM_LINKS[key]; return f.base + (f.token ? "?k=" + encodeURIComponent(f.token) : ""); }
+  function refreshBuiltinQR(key) {
+    var f = FORM_LINKS[key]; if (!f) return; var link = builtinLink(key);
+    var a = document.getElementById(f.aid); if (a) { a.href = link; a.textContent = link; }
+    drawQR(document.getElementById(f.img), link);
+  }
+  function loadBuiltinTokens() {
+    ["job_applications", "casting"].forEach(function (key) {
+      db.rpc("get_form_token", { p_key: key }).then(function (res) {
+        if (!res.error && res.data) FORM_LINKS[key].token = res.data;
+        refreshBuiltinQR(key);
+      });
+    });
+  }
+  // initial placeholder render (corrected once tokens load after login)
+  refreshBuiltinQR("job_applications");
+  refreshBuiltinQR("casting");
   document.getElementById("ja-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("ja-qr"), "job-applications-qr.png"); });
   document.getElementById("cast-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("cast-qr"), "blk-casting-qr.png"); });
   document.getElementById("custom-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("custom-qr"), ((currentCustom && currentCustom.table.slug) || "table") + "-qr.png"); });
-  document.getElementById("ja-qr-share").addEventListener("click", function () { shareQR(document.getElementById("ja-qr"), "job-applications", "https://blktable.blk.jo/apply/"); });
-  document.getElementById("cast-qr-share").addEventListener("click", function () { shareQR(document.getElementById("cast-qr"), "blk-casting", "https://blktable.blk.jo/cast/"); });
+  document.getElementById("ja-qr-share").addEventListener("click", function () { shareQR(document.getElementById("ja-qr"), "job-applications", builtinLink("job_applications")); });
+  document.getElementById("cast-qr-share").addEventListener("click", function () { shareQR(document.getElementById("cast-qr"), "blk-casting", builtinLink("casting")); });
   document.getElementById("custom-qr-share").addEventListener("click", function () { if (currentCustom) shareQR(document.getElementById("custom-qr"), currentCustom.table.slug, publicFormLink(currentCustom.table.slug)); });
+
+  // ---- Regenerate QR (admin only, math-gated so it can't happen by accident) ----
+  var regenCtx = null;
+  function openRegen(key) {
+    var a = Math.floor(Math.random() * 8) + 2, b = Math.floor(Math.random() * 8) + 2;
+    regenCtx = { key: key, ans: a + b };
+    document.getElementById("regen-q").textContent = a + " + " + b + " = ?";
+    document.getElementById("regen-input").value = "";
+    document.getElementById("regen-msg").textContent = "";
+    document.getElementById("regen-modal").classList.add("open");
+    setTimeout(function () { document.getElementById("regen-input").focus(); }, 50);
+  }
+  function closeRegen() { document.getElementById("regen-modal").classList.remove("open"); regenCtx = null; }
+  function doRegen(key) {
+    var msg = document.getElementById("regen-msg"); msg.textContent = "Regenerating…";
+    if (key === "custom") {
+      if (!currentCustom) { closeRegen(); return; }
+      var newSlug = slugify(currentCustom.table.name) + "-" + Math.random().toString(36).slice(2, 6);
+      db.from("app_tables").update({ slug: newSlug }).eq("id", currentCustom.table.id).then(function (res) {
+        if (res.error) { msg.textContent = "Could not regenerate. Please try again."; return; }
+        currentCustom.table.slug = newSlug;
+        var t = customTables.filter(function (x) { return x.id === currentCustom.table.id; })[0]; if (t) t.slug = newSlug;
+        var clink = publicFormLink(newSlug);
+        var ca = document.getElementById("custom-link-a"); if (ca) { ca.href = clink; ca.textContent = clink; }
+        drawQR(document.getElementById("custom-qr"), clink);
+        closeRegen();
+      });
+    } else {
+      db.rpc("rotate_form_token", { p_key: key }).then(function (res) {
+        if (res.error || !res.data) { msg.textContent = "Could not regenerate. Please try again."; return; }
+        FORM_LINKS[key].token = res.data;
+        refreshBuiltinQR(key);
+        closeRegen();
+      });
+    }
+  }
+  document.getElementById("regen-confirm").addEventListener("click", function () {
+    if (!regenCtx) return;
+    var v = parseInt(document.getElementById("regen-input").value, 10);
+    if (v !== regenCtx.ans) { document.getElementById("regen-msg").textContent = "That answer is not correct — try again."; return; }
+    doRegen(regenCtx.key);
+  });
+  document.getElementById("regen-cancel").addEventListener("click", closeRegen);
+  document.getElementById("regen-modal").addEventListener("click", function (e) { if (e.target === this) closeRegen(); });
+  document.getElementById("regen-input").addEventListener("keydown", function (e) { if (e.key === "Enter") document.getElementById("regen-confirm").click(); });
+  document.getElementById("ja-qr-regen").addEventListener("click", function () { openRegen("job_applications"); });
+  document.getElementById("cast-qr-regen").addEventListener("click", function () { openRegen("casting"); });
+  document.getElementById("custom-qr-regen").addEventListener("click", function () { openRegen("custom"); });
 
   var builder = document.getElementById("builder-modal");
   var BLD_DRAFT_KEY = "blk_table_draft";

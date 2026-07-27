@@ -166,6 +166,18 @@
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   var MAX_BYTES = 10 * 1024 * 1024;
 
+  // Rotatable link gate: only blocks when the token is explicitly invalid; any error fails open.
+  function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
+  db.rpc("form_token_valid", { p_key: "casting", p_k: getParam("k") }).then(function (res) {
+    if (res && !res.error && res.data === false) {
+      var card = document.getElementById("card"); if (card) card.style.display = "none";
+      var host = document.querySelector(".sheet") || document.body;
+      var m = document.createElement("div"); m.className = "card";
+      m.innerHTML = '<div style="text-align:center;padding:14px 6px;"><div style="font-size:1.15rem;font-weight:800;margin-bottom:8px;">This link is no longer active</div><div style="color:var(--muted);line-height:1.5;">Please request the current link or QR code from BLK.</div></div>';
+      host.appendChild(m);
+    }
+  }).catch(function () {});
+
   function val(id) { return document.getElementById(id).value.trim(); }
   function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80); }
   function markInvalid(id, bad) { var el = document.getElementById(id); if (el) el.classList.toggle("invalid", !!bad); }

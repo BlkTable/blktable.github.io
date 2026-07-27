@@ -249,6 +249,18 @@
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // Rotatable link gate: only blocks when the token is explicitly invalid; any error fails open.
+  function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
+  db.rpc("form_token_valid", { p_key: "job_applications", p_k: getParam("k") }).then(function (res) {
+    if (res && !res.error && res.data === false) {
+      var card = document.getElementById("card"); if (card) card.style.display = "none";
+      var host = document.querySelector(".sheet") || document.body;
+      var m = document.createElement("div"); m.className = "card";
+      m.innerHTML = '<div style="text-align:center;padding:14px 6px;"><div style="font-size:1.15rem;font-weight:800;margin-bottom:8px;">This link is no longer active</div><div style="color:var(--muted);line-height:1.5;">Please request the current link or QR code from BLK.</div></div>';
+      host.appendChild(m);
+    }
+  }).catch(function () {});
+
   var MAX_BYTES = 10 * 1024 * 1024; // 10 MB
   var fileInput = document.getElementById("photo");
   var fileName = document.getElementById("file-name");
