@@ -299,17 +299,19 @@
   .btn-save { padding: 12px 18px; border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); cursor: pointer; font-weight: 600; }
   .btn-save:hover { border-color: var(--silver); }
   .m-msg { font-size: 0.8rem; color: var(--muted); margin-top: 10px; text-align: center; min-height: 1em; }
-  .bld-two { display: flex; gap: 10px; margin-bottom: 14px; }
-  .bld-two input { flex: 1; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; }
-  .bld-two input:focus { border-color: var(--silver); }
+  .bld-two { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
+  .bld-two textarea { flex: 1; min-height: 44px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
+  .bld-two textarea:focus { border-color: var(--silver); }
   .bld-field { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.02); }
-  .bld-field .r1 { display: flex; gap: 8px; margin-bottom: 8px; }
-  .bld-field .r1 input { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); outline: none; font-size: 0.9rem; }
-  .bld-field .r2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bld-field .r1 { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+  .bld-field .r1 textarea { flex: 1; min-width: 0; min-height: 40px; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); outline: none; font-size: 0.9rem; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
+  .bld-field .r1 textarea:focus { border-color: var(--silver); }
+  .bld-field .r2 { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
   .bld-field select { height: 40px; padding: 0 28px 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; appearance: none; -webkit-appearance: none;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   .bld-field .req-lbl { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
-  .bld-field .opts { flex: 1; min-width: 120px; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; }
+  .bld-field .opts { flex: 1; min-width: 120px; min-height: 40px; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
+  .bld-field .req-lbl { margin-top: 8px; }
   .bld-field .rm { margin-left: auto; background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
   .u-inp { width: 100%; height: 44px; padding: 0 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; }
   .u-inp:focus { border-color: var(--silver); }
@@ -572,8 +574,8 @@
         <div class="m-name">New table</div>
         <div class="m-sub">Create a form — it gets its own public link.</div>
         <div class="bld-two">
-          <input id="bld-name" placeholder="Table name (English)">
-          <input id="bld-name-ar" placeholder="اسم الجدول (عربي)" dir="rtl">
+          <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
+          <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
         </div>
         <div class="bld-fields" id="bld-fields"></div>
         <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add field</button>
@@ -1289,13 +1291,26 @@
 
   var builder = document.getElementById("builder-modal");
   var BLD_DRAFT_KEY = "blk_table_draft";
+  function bldGrow(el) { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+  function wireBldGrow(el) {
+    if (!el) return;
+    el.addEventListener("input", function () { bldGrow(el); });
+    el.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+    bldGrow(el);
+  }
+  function growAllBld() {
+    bldGrow(document.getElementById("bld-name")); bldGrow(document.getElementById("bld-name-ar"));
+    [].slice.call(document.querySelectorAll("#bld-fields textarea")).forEach(bldGrow);
+  }
+  wireBldGrow(document.getElementById("bld-name"));
+  wireBldGrow(document.getElementById("bld-name-ar"));
   function addBuilderField(data) {
     var row = document.createElement("div"); row.className = "bld-field";
     var typeOpts = FIELD_TYPES.map(function (t) { return '<option value="' + t.v + '">' + t.label + "</option>"; }).join("");
     row.innerHTML =
-      '<div class="r1"><input class="lab" placeholder="Question (English)"><input class="lab-ar" placeholder="السؤال (عربي)" dir="rtl"></div>' +
+      '<div class="r1"><textarea class="lab" rows="1" placeholder="Question (English)"></textarea><textarea class="lab-ar" rows="1" placeholder="السؤال (عربي)" dir="rtl"></textarea></div>' +
       '<div class="r2"><select class="ftype">' + typeOpts + '</select>' +
-      '<input class="opts" placeholder="Options: en|ar, en|ar" style="display:none;">' +
+      '<textarea class="opts" rows="1" placeholder="Options: en|ar, en|ar" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<button type="button" class="rm">Remove</button></div>';
     document.getElementById("bld-fields").appendChild(row);
@@ -1308,7 +1323,8 @@
       optsInp.value = data.opts || "";
       row.querySelector(".freq").checked = data.required !== false;
     }
-    row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = this.value === "dropdown" ? "" : "none"; });
+    row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = this.value === "dropdown" ? "" : "none"; bldGrow(row.querySelector(".opts")); });
+    [].slice.call(row.querySelectorAll("textarea")).forEach(wireBldGrow);
     row.querySelector(".rm").addEventListener("click", function () { row.remove(); saveDraft(); });
     return row;
   }
@@ -1357,6 +1373,7 @@
       resetBuilder();
     }
     builder.classList.add("open");
+    requestAnimationFrame(growAllBld);
   }
   function closeBuilder() { builder.classList.remove("open"); }
   document.getElementById("new-table-btn").addEventListener("click", openBuilder);
