@@ -105,6 +105,12 @@
   .side-item:hover { background: rgba(255,255,255,0.05); }
   .side-item.active { background: rgba(214,218,222,0.12); color: var(--silver); font-weight: 600; }
   .side-item .ico { width: 8px; height: 8px; border-radius: 2px; background: currentColor; opacity: 0.7; flex: 0 0 auto; }
+  .side-item .side-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .side-gear { display: none; margin-left: auto; flex: 0 0 auto; font-size: 0.95rem; line-height: 1; color: var(--muted);
+    padding: 3px 5px; border-radius: 7px; opacity: 0; transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease; }
+  #side-tables.show-gears .side-gear { display: inline-flex; }
+  .side-item:hover .side-gear, .side-item.active .side-gear { opacity: 0.75; }
+  .side-gear:hover { color: var(--silver); background: rgba(255,255,255,0.1); opacity: 1; }
   .main { flex: 1; min-width: 0; padding: 30px 26px 48px; max-width: 920px; }
   .view.hidden { display: none; }
   .topbar-left { display: flex; align-items: center; gap: 12px; }
@@ -366,8 +372,8 @@
         <div class="side-group">
           <div class="side-label">Tables</div>
           <nav class="side-list" id="side-tables">
-            <button class="side-item active" data-view="job_applications"><span class="ico"></span>Job Applications</button>
-            <button class="side-item" data-view="casting"><span class="ico"></span>BLK Casting</button>
+            <button class="side-item active" data-view="job_applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-gear" title="Settings">⚙</span></button>
+            <button class="side-item" data-view="casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Settings">⚙</span></button>
             <span id="custom-tables-slot"></span>
             <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
           </nav>
@@ -675,6 +681,7 @@
         document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
         document.getElementById("users-btn").style.display = isAdmin ? "flex" : "none";
         ["ja-qr-regen", "cast-qr-regen", "custom-qr-regen"].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = isAdmin ? "inline-block" : "none"; });
+        document.getElementById("side-tables").classList.toggle("show-gears", isAdmin);
         applyBuiltinAccess();
       });
   }
@@ -1205,7 +1212,7 @@
       customTables.forEach(function (t) {
         var b = document.createElement("button");
         b.className = "side-item"; b.setAttribute("data-custom", t.id);
-        b.innerHTML = '<span class="ico"></span>' + esc(t.name);
+        b.innerHTML = '<span class="ico"></span><span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Edit table">⚙</span>';
         b.addEventListener("click", function () { openCustomTable(t); });
         slot.appendChild(b);
       });
@@ -1768,6 +1775,26 @@
     if (!sideItems[si].getAttribute("data-view")) continue; // custom tables + New-table have their own handlers
     sideItems[si].addEventListener("click", function () { showView(this.getAttribute("data-view")); });
   }
+  // Sidebar gear ⚙ (settings/edit) on every table — capture phase so it wins over the item's open-click.
+  // Works for current AND future custom tables because it's delegated on the container.
+  function showBuiltinSettings(dv) {
+    var name = dv === "job_applications" ? "Job Applications" : "BLK Casting";
+    document.getElementById("modal-body").innerHTML =
+      '<div class="m-name">' + name + ' · settings</div>' +
+      '<div class="m-sub" style="margin-top:12px; line-height:1.65;">This is a <b>built-in form</b>, so its questions are fixed in the app and can\'t be edited from here. You can still view submissions, share its QR code, and regenerate its link from the table\'s page.<br><br>Want its questions changed? Tell me what to add or remove and I\'ll update the form.</div>';
+    document.getElementById("modal").classList.add("open");
+  }
+  document.getElementById("side-tables").addEventListener("click", function (e) {
+    var gear = e.target && e.target.closest ? e.target.closest(".side-gear") : null;
+    if (!gear) return;
+    e.stopPropagation(); e.preventDefault();
+    if (!isAdmin) return;
+    var item = gear.closest(".side-item"); if (!item) return;
+    var cid = item.getAttribute("data-custom");
+    if (cid) { var t = customTables.filter(function (x) { return x.id === cid; })[0]; if (t) openBuilderEdit(t); return; }
+    var dv = item.getAttribute("data-view");
+    if (dv === "job_applications" || dv === "casting") showBuiltinSettings(dv);
+  }, true);
 
   // ---- Auto-hiding sidebar toggle ----
   var workspaceEl = document.querySelector(".workspace");
