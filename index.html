@@ -389,7 +389,7 @@
               <a href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
               <div class="qr-btns">
                 <button class="linkbtn" id="ja-qr-dl" type="button">Download QR</button>
-                <button class="linkbtn copy" data-link="https://blktable.blk.jo/apply/" type="button">Copy link</button>
+                <button class="linkbtn" id="ja-qr-share" type="button">Share QR</button>
               </div>
             </div>
           </div>
@@ -477,7 +477,7 @@
               <a href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
               <div class="qr-btns">
                 <button class="linkbtn" id="cast-qr-dl" type="button">Download QR</button>
-                <button class="linkbtn copy" data-link="https://blktable.blk.jo/cast/" type="button">Copy link</button>
+                <button class="linkbtn" id="cast-qr-share" type="button">Share QR</button>
               </div>
             </div>
           </div>
@@ -506,7 +506,7 @@
               <a id="custom-link-a" target="_blank" rel="noopener">—</a>
               <div class="qr-btns">
                 <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
-                <button class="linkbtn copy" id="custom-copy" type="button">Copy link</button>
+                <button class="linkbtn" id="custom-qr-share" type="button">Share QR</button>
               </div>
             </div>
           </div>
@@ -1247,13 +1247,6 @@
   }
   document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
-  document.getElementById("custom-copy").addEventListener("click", function () {
-    if (!currentCustom) return;
-    var link = publicFormLink(currentCustom.table.slug);
-    if (navigator.clipboard) navigator.clipboard.writeText(link).then(flashCopy, function () { window.prompt("Copy link:", link); });
-    else window.prompt("Copy link:", link);
-  });
-  function flashCopy() { var b = document.getElementById("custom-copy"); var t = b.textContent; b.textContent = "Copied!"; setTimeout(function () { b.textContent = t; }, 1500); }
   // ---- QR codes for public form links ----
   function drawQR(imgEl, text) {
     if (!imgEl || !text || !window.qrcode) return;
@@ -1264,21 +1257,35 @@
     if (!imgEl || !imgEl.src) return;
     var a = document.createElement("a"); a.href = imgEl.src; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
   }
-  // fixed-link copy buttons (Job Applications, BLK Casting)
-  [].slice.call(document.querySelectorAll(".copy[data-link]")).forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var link = btn.getAttribute("data-link");
-      var done = function () { var t = btn.textContent; btn.textContent = "Copied!"; setTimeout(function () { btn.textContent = t; }, 1500); };
-      if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, function () { window.prompt("Copy link:", link); });
-      else window.prompt("Copy link:", link);
-    });
-  });
-  // static QR codes (job applications, casting) + download buttons
+  function dataURLtoBlob(dataURL) {
+    var parts = dataURL.split(","), mime = (parts[0].match(/:(.*?);/) || [null, "image/png"])[1];
+    var bstr = atob(parts[1]), n = bstr.length, u8 = new Uint8Array(n);
+    while (n--) u8[n] = bstr.charCodeAt(n);
+    return new Blob([u8], { type: mime });
+  }
+  function shareQR(imgEl, name, link) {
+    if (!imgEl || !imgEl.src) return;
+    var filename = (name || "form") + "-qr.png";
+    var file;
+    try { file = new File([dataURLtoBlob(imgEl.src)], filename, { type: "image/png" }); } catch (e) { file = null; }
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: name || "BLK form", text: "Scan this QR to open the form:\n" + link }).catch(function () {});
+    } else if (navigator.share) {
+      navigator.share({ title: name || "BLK form", text: "Open the form: " + link, url: link }).catch(function () {});
+    } else {
+      // Desktop with no share support: hand them the image file to attach
+      downloadQR(imgEl, filename);
+    }
+  }
+  // static QR codes (job applications, casting) + download / share buttons
   drawQR(document.getElementById("ja-qr"), "https://blktable.blk.jo/apply/");
   drawQR(document.getElementById("cast-qr"), "https://blktable.blk.jo/cast/");
   document.getElementById("ja-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("ja-qr"), "job-applications-qr.png"); });
   document.getElementById("cast-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("cast-qr"), "blk-casting-qr.png"); });
   document.getElementById("custom-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("custom-qr"), ((currentCustom && currentCustom.table.slug) || "table") + "-qr.png"); });
+  document.getElementById("ja-qr-share").addEventListener("click", function () { shareQR(document.getElementById("ja-qr"), "job-applications", "https://blktable.blk.jo/apply/"); });
+  document.getElementById("cast-qr-share").addEventListener("click", function () { shareQR(document.getElementById("cast-qr"), "blk-casting", "https://blktable.blk.jo/cast/"); });
+  document.getElementById("custom-qr-share").addEventListener("click", function () { if (currentCustom) shareQR(document.getElementById("custom-qr"), currentCustom.table.slug, publicFormLink(currentCustom.table.slug)); });
 
   var builder = document.getElementById("builder-modal");
   var BLD_DRAFT_KEY = "blk_table_draft";
