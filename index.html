@@ -356,8 +356,11 @@
   .u-inp { width: 100%; height: 44px; padding: 0 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; }
   .u-inp:focus { border-color: var(--silver); }
   .u-tables { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-  .u-chk { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 0.9rem; cursor: pointer; }
+  .u-chk { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 0.9rem; cursor: pointer; flex: 1; min-width: 0; }
   .u-chk input { width: auto; height: auto; }
+  .u-trow { display: flex; align-items: center; gap: 10px; }
+  .u-editopt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 0.78rem; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
+  .u-editopt input { width: auto; height: auto; }
 </style>
 </head>
 <body>
@@ -684,6 +687,8 @@
 
   var isAdmin = false;
   var myUserId = null;
+  var editKeys = {}; // table_key -> true when this user may edit that table's records
+  function canEdit(key) { return isAdmin || !!editKeys[key]; }
   function showApp(session) {
     loginWrap.style.display = "none";
     app.style.display = "flex";
@@ -718,8 +723,9 @@
     var castBtn = document.querySelector('.side-item[data-view="casting"]');
     if (isAdmin) { jaBtn.style.display = "flex"; castBtn.style.display = "flex"; return; }
     jaBtn.style.display = "none"; castBtn.style.display = "none";
-    db.from("table_access").select("table_key").then(function (res) {
-      var keys = {}; (res.data || []).forEach(function (r) { keys[r.table_key] = true; });
+    db.from("table_access").select("table_key, can_edit").then(function (res) {
+      var keys = {}; editKeys = {};
+      (res.data || []).forEach(function (r) { keys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; });
       if (keys["job_applications"]) jaBtn.style.display = "flex";
       if (keys["casting"]) castBtn.style.display = "flex";
       ensureDefaultView();
@@ -1053,7 +1059,7 @@
   function openDetail(a) {
     currentApp = a;
     var body = document.getElementById("modal-body");
-    if (!isAdmin) {
+    if (!canEdit("job_applications")) {
       body.innerHTML =
         '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
         '<div class="m-name">' + esc(a.full_name) + "</div>" +
@@ -1329,7 +1335,7 @@
   }
   function openCastingDetail(c) {
     var body = document.getElementById("modal-body");
-    if (!isAdmin) {
+    if (!canEdit("casting")) {
       var age = calcAge(c.date_of_birth);
       var fld = function (k, v) { return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>"; };
       var grid = fld("Phone", c.phone) + fld("Age", age == null ? "—" : (age + " yrs")) + fld("Date of birth", c.date_of_birth) +
@@ -1495,7 +1501,7 @@
     var d = s.data || {}, photoPath = null;
     var body = document.getElementById("modal-body");
     fields.forEach(function (f) { if (f.type === "photo" && d[f.id]) photoPath = d[f.id]; });
-    if (!isAdmin) {
+    if (!canEdit(currentCustom && currentCustom.table ? currentCustom.table.id : "")) {
       var grid = "";
       fields.forEach(function (f) {
         if (f.type === "photo") return;
@@ -1962,9 +1968,12 @@
     var all = [{ key: "job_applications", name: "Job Applications" }, { key: "casting", name: "BLK Casting" }]
       .concat(customTables.map(function (t) { return { key: t.id, name: t.name }; }));
     all.forEach(function (t) {
-      var lab = document.createElement("label"); lab.className = "u-chk";
-      lab.innerHTML = '<input type="checkbox" value="' + esc(t.key) + '"> ' + esc(t.name);
-      host.appendChild(lab);
+      var row = document.createElement("div"); row.className = "u-trow";
+      row.innerHTML = '<label class="u-chk"><input type="checkbox" class="u-acc" value="' + esc(t.key) + '"> ' + esc(t.name) + "</label>" +
+        '<label class="u-editopt"><input type="checkbox" class="u-can-edit" data-key="' + esc(t.key) + '" disabled> can edit</label>';
+      var acc = row.querySelector(".u-acc"), ce = row.querySelector(".u-can-edit");
+      acc.addEventListener("change", function () { ce.disabled = !acc.checked; if (!acc.checked) ce.checked = false; });
+      host.appendChild(row);
     });
   }
   function loadUsers() {
@@ -1972,15 +1981,15 @@
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     Promise.all([
       db.from("profiles").select("id,email,role,created_at").order("created_at", { ascending: true }),
-      db.from("table_access").select("user_id,table_key")
+      db.from("table_access").select("user_id,table_key,can_edit")
     ]).then(function (r) {
       var profs = (r[0] && r[0].data) || [], acc = (r[1] && r[1].data) || [];
-      var byUser = {}; acc.forEach(function (a) { (byUser[a.user_id] = byUser[a.user_id] || []).push(a.table_key); });
+      var byUser = {}; acc.forEach(function (a) { (byUser[a.user_id] = byUser[a.user_id] || []).push({ table_key: a.table_key, can_edit: a.can_edit }); });
       if (!profs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
       emptyEl.style.display = "none"; listEl.innerHTML = "";
       profs.forEach(function (p) {
-        var keys = byUser[p.id] || [];
-        var tnames = p.role === "admin" ? "All tables" : (keys.map(keyName).join(", ") || "no tables");
+        var access = byUser[p.id] || [];
+        var tnames = p.role === "admin" ? "All tables" : (access.map(function (a) { return keyName(a.table_key) + (a.can_edit ? " (edit)" : ""); }).join(", ") || "no tables");
         var me = p.id === myUserId;
         var row = document.createElement("div"); row.className = "ja-row";
         row.innerHTML =
@@ -1988,13 +1997,13 @@
           '<div class="info"><div class="name">' + esc(p.email || "—") + (me ? ' <span style="color:var(--muted);font-size:0.72rem;">(you)</span>' : "") + "</div>" +
           '<div class="sub">' + esc(p.role) + " · " + esc(tnames) + "</div></div>" +
           '<div class="row-actions"><div class="card-actions"><button class="btn-view u-edit">Edit</button>' + (me ? "" : '<button class="btn-del u-del">Delete</button>') + "</div></div>";
-        row.querySelector(".u-edit").addEventListener("click", function () { openUserModal(p, keys); });
+        row.querySelector(".u-edit").addEventListener("click", function () { openUserModal(p, access); });
         var dl = row.querySelector(".u-del"); if (dl) dl.addEventListener("click", function () { deleteUser(p); });
         listEl.appendChild(row);
       });
     });
   }
-  function openUserModal(user, keys) {
+  function openUserModal(user, accessList) {
     editingUser = user || null;
     document.getElementById("u-title").textContent = user ? "Edit user" : "New user";
     document.getElementById("u-email").value = user ? (user.email || "") : "";
@@ -2005,7 +2014,10 @@
     document.getElementById("u-msg").textContent = "";
     document.getElementById("u-tables-wrap").style.display = document.getElementById("u-role").value === "admin" ? "none" : "block";
     renderUserTables();
-    if (user && keys) keys.forEach(function (k) { var cb = document.querySelector('#u-tables input[value="' + k + '"]'); if (cb) cb.checked = true; });
+    if (user && accessList) accessList.forEach(function (a) {
+      var acc = document.querySelector('#u-tables .u-acc[value="' + a.table_key + '"]');
+      if (acc) { acc.checked = true; var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + a.table_key + '"]'); if (ce) { ce.disabled = false; ce.checked = !!a.can_edit; } }
+    });
     usersModal.classList.add("open");
   }
   function deleteUser(p) {
@@ -2025,10 +2037,13 @@
     var pass = document.getElementById("u-pass").value;
     var role = document.getElementById("u-role").value;
     if (!email) { msg.textContent = "Enter an email."; return; }
-    var keys = [];
+    var access = [];
     if (role !== "admin") {
-      [].slice.call(document.querySelectorAll("#u-tables input:checked")).forEach(function (c) { keys.push(c.value); });
-      if (!keys.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
+      [].slice.call(document.querySelectorAll("#u-tables .u-acc:checked")).forEach(function (c) {
+        var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + c.value + '"]');
+        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked) });
+      });
+      if (!access.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
     }
 
     if (!editingUser) {
@@ -2037,7 +2052,7 @@
       db.functions.invoke("admin-users", { body: { email: email, password: pass, role: role } }).then(function (res) {
         var e = invokeErr(res); if (e) throw new Error(e);
         var newId = res.data && res.data.id; if (!newId) throw new Error("no id returned");
-        if (role !== "admin" && keys.length) return db.from("table_access").insert(keys.map(function (k) { return { user_id: newId, table_key: k }; }));
+        if (role !== "admin" && access.length) return db.from("table_access").insert(access.map(function (a) { return { user_id: newId, table_key: a.table_key, can_edit: a.can_edit }; }));
         return { error: null };
       }).then(function (r) {
         if (r && r.error) throw r.error;
@@ -2056,7 +2071,7 @@
       if (Object.keys(patch).length) chain = chain.then(function () { return db.functions.invoke("admin-users", { body: Object.assign({ action: "update", id: id }, patch) }).then(function (res) { var e = invokeErr(res); if (e) throw new Error(e); }); });
       chain = chain.then(function () { return db.from("profiles").update({ role: role }).eq("id", id).then(function (r) { if (r.error) throw r.error; }); });
       chain = chain.then(function () { return db.from("table_access").delete().eq("user_id", id).then(function (r) { if (r.error) throw r.error; }); });
-      if (role !== "admin" && keys.length) chain = chain.then(function () { return db.from("table_access").insert(keys.map(function (k) { return { user_id: id, table_key: k }; })).then(function (r) { if (r.error) throw r.error; }); });
+      if (role !== "admin" && access.length) chain = chain.then(function () { return db.from("table_access").insert(access.map(function (a) { return { user_id: id, table_key: a.table_key, can_edit: a.can_edit }; })).then(function (r) { if (r.error) throw r.error; }); });
       chain.then(function () { usersModal.classList.remove("open"); loadUsers(); window.alert("Saved."); }).catch(function (err) { msg.textContent = "Could not save. " + errText(err); if (window.console) console.error(err); });
     }
   });
