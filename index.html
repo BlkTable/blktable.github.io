@@ -279,6 +279,7 @@
   .ed-in:focus { border-color: var(--silver); }
   textarea.ed-in { min-height: 70px; resize: vertical; }
   .m-editbtn { margin: 0 0 14px auto; display: block; }
+  .ed-status { font-size: 0.8rem; margin-left: 6px; }
   .phone-row { display: flex; gap: 8px; align-items: stretch; margin-top: 4px; }
   .phone-row .ed-in { margin-top: 0; }
   .cc-picker { position: relative; flex: 0 0 auto; }
@@ -1012,7 +1013,7 @@
         flag = document.getElementById(id + "-flag"), dial = document.getElementById(id + "-dial"),
         picker = document.getElementById(id + "-picker"), local = document.getElementById(id);
     function apply(i) { state.idx = i; var c = COUNTRIES_ED[i]; flag.src = edFlagUrl(c.flag); dial.textContent = "+" + c.cc; local.placeholder = c.ph; local.maxLength = Math.max.apply(null, c.len) + 1; }
-    COUNTRIES_ED.forEach(function (c, i) { var li = document.createElement("li"); li.innerHTML = '<img src="' + edFlagUrl(c.flag) + '" alt=""> <span>' + c.name + "</span> <b>+" + c.cc + "</b>"; li.addEventListener("click", function () { apply(i); menu.classList.remove("open"); }); menu.appendChild(li); });
+    COUNTRIES_ED.forEach(function (c, i) { var li = document.createElement("li"); li.innerHTML = '<img src="' + edFlagUrl(c.flag) + '" alt=""> <span>' + c.name + "</span> <b>+" + c.cc + "</b>"; li.addEventListener("click", function () { apply(i); menu.classList.remove("open"); try { local.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {} }); menu.appendChild(li); });
     btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
     document.addEventListener("click", function (e) { if (!picker.contains(e.target)) menu.classList.remove("open"); });
     local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
@@ -1038,81 +1039,93 @@
     (defs || []).forEach(function (f) { var el = document.getElementById("ed-x-" + f.id); if (!el) return; var v = (el.value || "").trim(); if (v === "") delete out[f.id]; else out[f.id] = v; });
     return out;
   }
+  function setEdStatus(msg, bad) { var el = document.getElementById("ed-status"); if (el) { el.textContent = msg; el.style.color = bad ? "#ff6b6b" : "var(--muted)"; } }
+  // Autosave every field on blur/change (Airtable-style live editing).
+  // Only one handler at a time — otherwise a stale record could be overwritten.
+  var _autosaveHandler = null;
+  function clearAutosave() { if (_autosaveHandler) { document.getElementById("modal-body").removeEventListener("change", _autosaveHandler); _autosaveHandler = null; } }
+  function wireAutosave(saveFn) {
+    clearAutosave();
+    _autosaveHandler = function () { setEdStatus("Saving…"); saveFn(); };
+    document.getElementById("modal-body").addEventListener("change", _autosaveHandler);
+  }
 
   function openDetail(a) {
     currentApp = a;
-    document.getElementById("modal-body").innerHTML =
-      '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
-      '<div class="m-name">' + esc(a.full_name) + "</div>" +
-      '<div class="m-sub">Applied ' + fmtDate(a.created_at) + "</div>" +
-      '<div class="m-grid">' +
-        fieldHtml("Phone", a.phone) +
-        fieldHtml("Age", ageText(a.date_of_birth) + (a.date_of_birth ? " · " + a.date_of_birth : "")) +
-        hideableFieldHtml("job_applications", "How found", a.how_found, "how_found") +
-        hideableFieldHtml("job_applications", "City", a.city, "city") +
-        hideableFieldHtml("job_applications", "Living area", a.living_area, "living_area") +
-        hideableFieldHtml("job_applications", "Gender", a.gender, "gender") +
-        hideableFieldHtml("job_applications", "Full / Part", a.work_type, "work_type") +
-        hideableFieldHtml("job_applications", "Currently working", a.currently_working, "currently_working") +
-        hideableFieldHtml("job_applications", "Education", a.education_level, "education_level") +
-        hideableFieldHtml("job_applications", "Favorite drink", a.favorite_drink, "favorite_drink") +
-        hideableFullHtml("job_applications", "Why join", a.why_join, "why_join") +
-        extraFieldsHtml(a.extra, builtinExtra.job_applications) +
-        fieldHtml("Submitted IP", a.submitted_ip) +
-        '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>" +
-      "</div>";
-
-    if (isAdmin) {
-      var eb = document.createElement("button"); eb.className = "linkbtn m-editbtn"; eb.textContent = "✎ Edit entry";
-      eb.addEventListener("click", function () { editApp(a); });
-      document.getElementById("modal-body").insertBefore(eb, document.getElementById("modal-body").firstChild);
+    var body = document.getElementById("modal-body");
+    if (!isAdmin) {
+      body.innerHTML =
+        '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
+        '<div class="m-name">' + esc(a.full_name) + "</div>" +
+        '<div class="m-sub">Applied ' + fmtDate(a.created_at) + "</div>" +
+        '<div class="m-grid">' +
+          fieldHtml("Phone", a.phone) +
+          fieldHtml("Age", ageText(a.date_of_birth) + (a.date_of_birth ? " · " + a.date_of_birth : "")) +
+          hideableFieldHtml("job_applications", "How found", a.how_found, "how_found") +
+          hideableFieldHtml("job_applications", "City", a.city, "city") +
+          hideableFieldHtml("job_applications", "Living area", a.living_area, "living_area") +
+          hideableFieldHtml("job_applications", "Gender", a.gender, "gender") +
+          hideableFieldHtml("job_applications", "Full / Part", a.work_type, "work_type") +
+          hideableFieldHtml("job_applications", "Currently working", a.currently_working, "currently_working") +
+          hideableFieldHtml("job_applications", "Education", a.education_level, "education_level") +
+          hideableFieldHtml("job_applications", "Favorite drink", a.favorite_drink, "favorite_drink") +
+          hideableFullHtml("job_applications", "Why join", a.why_join, "why_join") +
+          extraFieldsHtml(a.extra, builtinExtra.job_applications) +
+          fieldHtml("Submitted IP", a.submitted_ip) +
+          '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>" +
+        "</div>";
+      document.getElementById("modal").classList.add("open");
+      if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) { if (url) { var im = document.getElementById("m-photo"); im.src = url; im.style.display = "block"; } });
+      return;
     }
-    document.getElementById("modal").classList.add("open");
-
-    if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) {
-      if (url) { var im = document.getElementById("m-photo"); im.src = url; im.style.display = "block"; }
-    });
-  }
-  function editApp(a) {
+    // Admin: fields are directly editable and autosave on blur
+    var isHidden = function (col) { return (builtinHidden.job_applications || []).indexOf(col) !== -1; };
+    var er = function (label, inner, col, full) { return isHidden(col) ? "" : edRow(label, inner, full); };
     var grid =
       edRow("Full name", edText("ed-full_name", a.full_name)) +
       edRow("Phone", edPhone("ed-phone", a.phone)) +
       edRow("Date of birth", edDate("ed-date_of_birth", a.date_of_birth)) +
-      edRow("How found", edText("ed-how_found", a.how_found)) +
-      edRow("City", edText("ed-city", a.city)) +
-      edRow("Living area", edText("ed-living_area", a.living_area)) +
-      edRow("Gender", edSelect("ed-gender", a.gender, ["", "Male", "Female"])) +
-      edRow("Full / Part", edText("ed-work_type", a.work_type)) +
-      edRow("Currently working", edText("ed-currently_working", a.currently_working)) +
-      edRow("Education", edText("ed-education_level", a.education_level)) +
-      edRow("Favorite drink", edText("ed-favorite_drink", a.favorite_drink)) +
-      edRow("Why join", edText("ed-why_join", a.why_join, true), true) +
+      er("How found", edText("ed-how_found", a.how_found), "how_found") +
+      er("City", edText("ed-city", a.city), "city") +
+      er("Living area", edText("ed-living_area", a.living_area), "living_area") +
+      er("Gender", edSelect("ed-gender", a.gender, ["", "Male", "Female"]), "gender") +
+      er("Full / Part", edText("ed-work_type", a.work_type), "work_type") +
+      er("Currently working", edText("ed-currently_working", a.currently_working), "currently_working") +
+      er("Education", edText("ed-education_level", a.education_level), "education_level") +
+      er("Favorite drink", edText("ed-favorite_drink", a.favorite_drink), "favorite_drink") +
+      er("Why join", edText("ed-why_join", a.why_join, true), "why_join", true) +
       edExtraRows(builtinExtra.job_applications, a.extra);
-    document.getElementById("modal-body").innerHTML =
-      '<div class="m-name">Edit application</div><div class="m-grid">' + grid + "</div>" +
-      '<div class="m-actions" style="margin-top:14px;gap:10px;"><button class="btn-wa" id="ed-save">Save changes</button><button class="linkbtn" id="ed-cancel">Cancel</button></div><div class="m-msg" id="ed-msg"></div>';
+    var meta = fieldHtml("Age", ageText(a.date_of_birth)) + fieldHtml("Submitted IP", a.submitted_ip) +
+      '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>";
+    body.innerHTML =
+      '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
+      '<div class="m-sub">Applied ' + fmtDate(a.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
+      '<div class="m-grid">' + grid + "</div>" +
+      '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
     wireEdPhone("ed-phone");
-    document.getElementById("ed-cancel").addEventListener("click", function () { openDetail(a); });
-    document.getElementById("ed-save").addEventListener("click", function () {
-      function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
-      var upd = {
-        full_name: gv("ed-full_name"), phone: edPhoneReg["ed-phone"] ? edPhoneReg["ed-phone"]() : (gv("ed-phone") || null), date_of_birth: gv("ed-date_of_birth") || null,
-        how_found: gv("ed-how_found") || null, city: gv("ed-city") || null, living_area: gv("ed-living_area") || null,
-        gender: gv("ed-gender") || null, work_type: gv("ed-work_type") || null, currently_working: gv("ed-currently_working") || null,
-        education_level: gv("ed-education_level") || null, favorite_drink: gv("ed-favorite_drink") || null, why_join: gv("ed-why_join") || null,
-        extra: collectExtra(builtinExtra.job_applications, a.extra)
-      };
-      if (!upd.full_name) { document.getElementById("ed-msg").textContent = "Name can't be empty."; return; }
-      document.getElementById("ed-msg").textContent = "Saving…";
-      db.from("job_applications").update(upd).eq("id", a.id).then(function (res) {
-        if (res.error) { document.getElementById("ed-msg").textContent = "Could not save. Please try again."; if (window.console) console.error(res.error); return; }
-        Object.keys(upd).forEach(function (k) { a[k] = upd[k]; });
-        renderApps(); openDetail(a);
-      });
+    wireAutosave(function () { return saveApp(a); });
+    document.getElementById("modal").classList.add("open");
+    if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) { if (url) { var im = document.getElementById("m-photo"); if (im) { im.src = url; im.style.display = "block"; } } });
+  }
+  function saveApp(a) {
+    function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
+    function gvo(id, cur) { return document.getElementById(id) ? (gv(id) || null) : cur; } // untouched (hidden) fields keep current value
+    var upd = {
+      full_name: gv("ed-full_name"), phone: edPhoneReg["ed-phone"] ? edPhoneReg["ed-phone"]() : (gv("ed-phone") || null), date_of_birth: gv("ed-date_of_birth") || null,
+      how_found: gvo("ed-how_found", a.how_found), city: gvo("ed-city", a.city), living_area: gvo("ed-living_area", a.living_area),
+      gender: gvo("ed-gender", a.gender), work_type: gvo("ed-work_type", a.work_type), currently_working: gvo("ed-currently_working", a.currently_working),
+      education_level: gvo("ed-education_level", a.education_level), favorite_drink: gvo("ed-favorite_drink", a.favorite_drink), why_join: gvo("ed-why_join", a.why_join),
+      extra: collectExtra(builtinExtra.job_applications, a.extra)
+    };
+    if (!upd.full_name) { setEdStatus("Name can't be empty", true); return; }
+    return db.from("job_applications").update(upd).eq("id", a.id).then(function (res) {
+      if (res.error) { setEdStatus("Not saved — try again", true); if (window.console) console.error(res.error); return; }
+      Object.keys(upd).forEach(function (k) { a[k] = upd[k]; });
+      renderApps(); setEdStatus("Saved ✓");
     });
   }
 
-  function closeModal() { document.getElementById("modal").classList.remove("open"); currentApp = null; }
+  function closeModal() { clearAutosave(); document.getElementById("modal").classList.remove("open"); currentApp = null; }
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("modal").addEventListener("click", function (e) { if (e.target === this) closeModal(); });
 
@@ -1315,53 +1328,56 @@
     });
   }
   function openCastingDetail(c) {
-    var age = calcAge(c.date_of_birth);
-    function fld(k, v) { return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>"; }
-    var grid = fld("Phone", c.phone) + fld("Age", age == null ? "—" : (age + " yrs")) + fld("Date of birth", c.date_of_birth) +
-      hideableFieldHtml("casting", "Branch", c.branch, "branch") +
-      hideableFieldHtml("casting", "University student?", c.university_student, "university_student") +
-      hideableFieldHtml("casting", "Ever acted?", c.ever_acted, "ever_acted") +
-      extraFieldsHtml(c.extra, builtinExtra.casting) +
-      fld("Submitted IP", c.submitted_ip) + '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
-    var html = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
-      '<div class="m-name">' + esc(c.full_name) + '</div><div class="m-sub">Submitted ' + fmtDate(c.created_at) + '</div><div class="m-grid">' + grid + "</div>";
-    document.getElementById("modal-body").innerHTML = html;
-    if (isAdmin) {
-      var eb = document.createElement("button"); eb.className = "linkbtn m-editbtn"; eb.textContent = "✎ Edit entry";
-      eb.addEventListener("click", function () { editCasting(c); });
-      document.getElementById("modal-body").insertBefore(eb, document.getElementById("modal-body").firstChild);
+    var body = document.getElementById("modal-body");
+    if (!isAdmin) {
+      var age = calcAge(c.date_of_birth);
+      var fld = function (k, v) { return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>"; };
+      var grid = fld("Phone", c.phone) + fld("Age", age == null ? "—" : (age + " yrs")) + fld("Date of birth", c.date_of_birth) +
+        hideableFieldHtml("casting", "Branch", c.branch, "branch") +
+        hideableFieldHtml("casting", "University student?", c.university_student, "university_student") +
+        hideableFieldHtml("casting", "Ever acted?", c.ever_acted, "ever_acted") +
+        extraFieldsHtml(c.extra, builtinExtra.casting) +
+        fld("Submitted IP", c.submitted_ip) + '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
+      body.innerHTML = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+        '<div class="m-name">' + esc(c.full_name) + '</div><div class="m-sub">Submitted ' + fmtDate(c.created_at) + '</div><div class="m-grid">' + grid + "</div>";
+      document.getElementById("modal").classList.add("open");
+      if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+      return;
     }
-    document.getElementById("modal").classList.add("open");
-    if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
-  }
-  function editCasting(c) {
+    var isHidden = function (col) { return (builtinHidden.casting || []).indexOf(col) !== -1; };
+    var er = function (label, inner, col) { return isHidden(col) ? "" : edRow(label, inner); };
     var grid =
       edRow("Full name", edText("ed-full_name", c.full_name)) +
       edRow("Date of birth", edDate("ed-date_of_birth", c.date_of_birth)) +
       edRow("Phone", edPhone("ed-phone", c.phone)) +
-      edRow("Branch", edText("ed-branch", c.branch)) +
-      edRow("University student?", edSelect("ed-university_student", c.university_student, ["", "Yes", "No"])) +
-      edRow("Ever acted?", edSelect("ed-ever_acted", c.ever_acted, ["", "Yes", "No"])) +
+      er("Branch", edText("ed-branch", c.branch), "branch") +
+      er("University student?", edSelect("ed-university_student", c.university_student, ["", "Yes", "No"]), "university_student") +
+      er("Ever acted?", edSelect("ed-ever_acted", c.ever_acted, ["", "Yes", "No"]), "ever_acted") +
       edExtraRows(builtinExtra.casting, c.extra);
-    document.getElementById("modal-body").innerHTML =
-      '<div class="m-name">Edit entry</div><div class="m-grid">' + grid + "</div>" +
-      '<div class="m-actions" style="margin-top:14px;gap:10px;"><button class="btn-wa" id="ed-save">Save changes</button><button class="linkbtn" id="ed-cancel">Cancel</button></div><div class="m-msg" id="ed-msg"></div>';
+    var meta = '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(c.submitted_ip || "—") + '</div></div><div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
+    body.innerHTML =
+      (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+      '<div class="m-sub">Submitted ' + fmtDate(c.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
+      '<div class="m-grid">' + grid + "</div>" +
+      '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
     wireEdPhone("ed-phone");
-    document.getElementById("ed-cancel").addEventListener("click", function () { openCastingDetail(c); });
-    document.getElementById("ed-save").addEventListener("click", function () {
-      function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
-      var upd = {
-        full_name: gv("ed-full_name"), date_of_birth: gv("ed-date_of_birth") || null, phone: edPhoneReg["ed-phone"] ? edPhoneReg["ed-phone"]() : (gv("ed-phone") || null),
-        branch: gv("ed-branch") || null, university_student: gv("ed-university_student") || null, ever_acted: gv("ed-ever_acted") || null,
-        extra: collectExtra(builtinExtra.casting, c.extra)
-      };
-      if (!upd.full_name) { document.getElementById("ed-msg").textContent = "Name can't be empty."; return; }
-      document.getElementById("ed-msg").textContent = "Saving…";
-      db.from("casting_applications").update(upd).eq("id", c.id).then(function (res) {
-        if (res.error) { document.getElementById("ed-msg").textContent = "Could not save. Please try again."; if (window.console) console.error(res.error); return; }
-        Object.keys(upd).forEach(function (k) { c[k] = upd[k]; });
-        renderCasting(); openCastingDetail(c);
-      });
+    wireAutosave(function () { return saveCasting(c); });
+    document.getElementById("modal").classList.add("open");
+    if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+  }
+  function saveCasting(c) {
+    function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
+    function gvo(id, cur) { return document.getElementById(id) ? (gv(id) || null) : cur; }
+    var upd = {
+      full_name: gv("ed-full_name"), date_of_birth: gv("ed-date_of_birth") || null, phone: edPhoneReg["ed-phone"] ? edPhoneReg["ed-phone"]() : (gv("ed-phone") || null),
+      branch: gvo("ed-branch", c.branch), university_student: gvo("ed-university_student", c.university_student), ever_acted: gvo("ed-ever_acted", c.ever_acted),
+      extra: collectExtra(builtinExtra.casting, c.extra)
+    };
+    if (!upd.full_name) { setEdStatus("Name can't be empty", true); return; }
+    return db.from("casting_applications").update(upd).eq("id", c.id).then(function (res) {
+      if (res.error) { setEdStatus("Not saved — try again", true); if (window.console) console.error(res.error); return; }
+      Object.keys(upd).forEach(function (k) { c[k] = upd[k]; });
+      renderCasting(); setEdStatus("Saved ✓");
     });
   }
   document.getElementById("casting-search").addEventListener("input", debounce(renderCasting, 180));
@@ -1476,26 +1492,22 @@
     });
   }
   function openCustomDetail(s, fields) {
-    var d = s.data || {}, photoPath = null, grid = "";
-    fields.forEach(function (f) {
-      if (f.type === "photo") { if (d[f.id]) photoPath = d[f.id]; return; }
-      grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(d[f.id] || "—") + "</div></div>";
-    });
-    grid += '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(s.submitted_ip || "—") + '</div></div>';
-    grid += '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(s.device || "—") + "</div></div>";
-    var html = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
-      '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + "</div>";
-    document.getElementById("modal-body").innerHTML = html;
-    if (isAdmin) {
-      var eb = document.createElement("button"); eb.className = "linkbtn m-editbtn"; eb.textContent = "✎ Edit entry";
-      eb.addEventListener("click", function () { editCustomDetail(s, fields); });
-      document.getElementById("modal-body").insertBefore(eb, document.getElementById("modal-body").firstChild);
+    var d = s.data || {}, photoPath = null;
+    var body = document.getElementById("modal-body");
+    fields.forEach(function (f) { if (f.type === "photo" && d[f.id]) photoPath = d[f.id]; });
+    if (!isAdmin) {
+      var grid = "";
+      fields.forEach(function (f) {
+        if (f.type === "photo") return;
+        grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(d[f.id] || "—") + "</div></div>";
+      });
+      grid += '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(s.submitted_ip || "—") + '</div></div><div class="m-field full"><div class="k">Device</div><div class="v">' + esc(s.device || "—") + "</div></div>";
+      body.innerHTML = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+        '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + "</div>";
+      document.getElementById("modal").classList.add("open");
+      if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+      return;
     }
-    document.getElementById("modal").classList.add("open");
-    if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
-  }
-  function editCustomDetail(s, fields) {
-    var d = s.data || {};
     var grid = fields.map(function (f) {
       if (f.type === "photo") return "";
       var id = "ed-" + f.id, v = d[f.id], inner;
@@ -1504,21 +1516,34 @@
       else if (f.type === "dropdown") inner = edSelect(id, v, [""].concat((f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })));
       else if (f.type === "date") inner = edDate(id, v);
       else if (f.type === "number") inner = edNum(id, v);
+      else if (f.type === "phone") inner = edPhone(id, v);
       else inner = edText(id, v, false);
       return edRow(f.label, inner, f.type === "long_text");
     }).join("");
-    document.getElementById("modal-body").innerHTML =
-      '<div class="m-name">Edit entry</div><div class="m-grid">' + grid + "</div>" +
-      '<div class="m-actions" style="margin-top:14px;gap:10px;"><button class="btn-wa" id="ed-save">Save changes</button><button class="linkbtn" id="ed-cancel">Cancel</button></div><div class="m-msg" id="ed-msg"></div>';
-    document.getElementById("ed-cancel").addEventListener("click", function () { openCustomDetail(s, fields); });
-    document.getElementById("ed-save").addEventListener("click", function () {
-      var nd = {}; Object.keys(d).forEach(function (k) { nd[k] = d[k]; });
-      fields.forEach(function (f) { if (f.type === "photo") return; var el = document.getElementById("ed-" + f.id); if (!el) return; var v = (el.value || "").trim(); if (v === "") delete nd[f.id]; else nd[f.id] = v; });
-      document.getElementById("ed-msg").textContent = "Saving…";
-      db.from("app_submissions").update({ data: nd }).eq("id", s.id).then(function (res) {
-        if (res.error) { document.getElementById("ed-msg").textContent = "Could not save. Please try again."; if (window.console) console.error(res.error); return; }
-        s.data = nd; renderCustom(); openCustomDetail(s, fields);
-      });
+    var meta = '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(s.submitted_ip || "—") + '</div></div><div class="m-field full"><div class="k">Device</div><div class="v">' + esc(s.device || "—") + "</div></div>";
+    body.innerHTML =
+      (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+      '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
+      '<div class="m-grid">' + grid + "</div>" +
+      '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
+    fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
+    wireAutosave(function () { return saveCustom(s, fields); });
+    document.getElementById("modal").classList.add("open");
+    if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+  }
+  function saveCustom(s, fields) {
+    var d = s.data || {};
+    var nd = {}; Object.keys(d).forEach(function (k) { nd[k] = d[k]; });
+    fields.forEach(function (f) {
+      if (f.type === "photo") return;
+      var v;
+      if (f.type === "phone" && edPhoneReg["ed-" + f.id]) v = edPhoneReg["ed-" + f.id]();
+      else { var el = document.getElementById("ed-" + f.id); if (!el) return; v = (el.value || "").trim(); }
+      if (v == null || v === "") delete nd[f.id]; else nd[f.id] = v;
+    });
+    return db.from("app_submissions").update({ data: nd }).eq("id", s.id).then(function (res) {
+      if (res.error) { setEdStatus("Not saved — try again", true); if (window.console) console.error(res.error); return; }
+      s.data = nd; renderCustom(); setEdStatus("Saved ✓");
     });
   }
   document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
