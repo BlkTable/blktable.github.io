@@ -166,6 +166,19 @@
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   var MAX_BYTES = 10 * 1024 * 1024;
 
+  // Removed built-in questions (set by the dashboard editor) are hidden from this form
+  var hiddenCols = {};
+  var HIDE_MAP = { branch: "branch", university_student: "university", ever_acted: "acted" };
+  function applyHidden() {
+    Object.keys(hiddenCols).forEach(function (col) {
+      var id = HIDE_MAP[col]; if (!id) return;
+      var el = document.getElementById(id); if (el) { var f = el.closest ? el.closest(".field") : null; if (f) f.style.display = "none"; }
+    });
+  }
+  db.rpc("get_form_config", { p_key: "casting" }).then(function (res) {
+    if (res && !res.error && res.data && res.data.hidden) { res.data.hidden.forEach(function (c) { hiddenCols[c] = true; }); applyHidden(); }
+  }).catch(function () {});
+
   // Rotatable link gate: only blocks when the token is explicitly invalid; any error fails open.
   function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
   db.rpc("form_token_valid", { p_key: "casting", p_k: getParam("k") }).then(function (res) {
@@ -241,7 +254,8 @@
     var btn = document.getElementById("submit-btn");
     msg.textContent = "";
 
-    var REQUIRED = ["full_name", "dob", "branch", "university", "acted"];
+    var hiddenIds = {}; Object.keys(hiddenCols).forEach(function (c) { if (HIDE_MAP[c]) hiddenIds[HIDE_MAP[c]] = true; });
+    var REQUIRED = ["full_name", "dob", "branch", "university", "acted"].filter(function (id) { return !hiddenIds[id]; });
     REQUIRED.forEach(function (id) { markInvalid(id, false); });
     markInvalid("phone_local", false);
     var missing = [];

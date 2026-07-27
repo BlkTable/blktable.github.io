@@ -330,6 +330,12 @@
   .bld-fixed { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
   .bld-fixed-h { color: var(--muted); font-size: 0.8rem; margin-bottom: 8px; }
   .bld-chip { display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px; border-radius: 999px; background: rgba(214,218,222,0.1); color: var(--silver); font-size: 0.8rem; }
+  .bl-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid rgba(255,255,255,0.05); }
+  .bl-row:first-of-type { border-top: none; }
+  .bl-name { color: var(--text); font-size: 0.9rem; }
+  .bl-lock { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+  .bl-toggle { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.8rem; cursor: pointer; white-space: nowrap; }
+  .bl-toggle input { width: auto; height: auto; }
   .u-inp { width: 100%; height: 44px; padding: 0 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; }
   .u-inp:focus { border-color: var(--silver); }
   .u-tables { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
@@ -960,15 +966,15 @@
       '<div class="m-grid">' +
         fieldHtml("Phone", a.phone) +
         fieldHtml("Age", ageText(a.date_of_birth) + (a.date_of_birth ? " · " + a.date_of_birth : "")) +
-        fieldHtml("How found", a.how_found) +
-        fieldHtml("City", a.city) +
-        fieldHtml("Living area", a.living_area) +
-        fieldHtml("Gender", a.gender) +
-        fieldHtml("Full / Part", a.work_type) +
-        fieldHtml("Currently working", a.currently_working) +
-        fieldHtml("Education", a.education_level) +
-        fieldHtml("Favorite drink", a.favorite_drink) +
-        '<div class="m-field full"><div class="k">Why join</div><div class="v">' + esc(a.why_join || "—") + "</div></div>" +
+        hideableFieldHtml("job_applications", "How found", a.how_found, "how_found") +
+        hideableFieldHtml("job_applications", "City", a.city, "city") +
+        hideableFieldHtml("job_applications", "Living area", a.living_area, "living_area") +
+        hideableFieldHtml("job_applications", "Gender", a.gender, "gender") +
+        hideableFieldHtml("job_applications", "Full / Part", a.work_type, "work_type") +
+        hideableFieldHtml("job_applications", "Currently working", a.currently_working, "currently_working") +
+        hideableFieldHtml("job_applications", "Education", a.education_level, "education_level") +
+        hideableFieldHtml("job_applications", "Favorite drink", a.favorite_drink, "favorite_drink") +
+        hideableFullHtml("job_applications", "Why join", a.why_join, "why_join") +
         extraFieldsHtml(a.extra, builtinExtra.job_applications) +
         fieldHtml("Submitted IP", a.submitted_ip) +
         '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>" +
@@ -1187,7 +1193,9 @@
     var age = calcAge(c.date_of_birth);
     function fld(k, v) { return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>"; }
     var grid = fld("Phone", c.phone) + fld("Age", age == null ? "—" : (age + " yrs")) + fld("Date of birth", c.date_of_birth) +
-      fld("Branch", c.branch) + fld("University student?", c.university_student) + fld("Ever acted?", c.ever_acted) +
+      hideableFieldHtml("casting", "Branch", c.branch, "branch") +
+      hideableFieldHtml("casting", "University student?", c.university_student, "university_student") +
+      hideableFieldHtml("casting", "Ever acted?", c.ever_acted, "ever_acted") +
       extraFieldsHtml(c.extra, builtinExtra.casting) +
       fld("Submitted IP", c.submitted_ip) + '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
     var html = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
@@ -1210,9 +1218,11 @@
   // Built-in forms (Job Applications, Casting) can carry admin-added extra questions
   var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
   var builtinExtra = { job_applications: [], casting: [] };
+  var builtinHidden = { job_applications: [], casting: [] };
   function loadBuiltinExtra() {
     ["job_applications", "casting"].forEach(function (k) {
       db.rpc("get_extra_fields", { p_key: k }).then(function (res) { if (res && !res.error) builtinExtra[k] = res.data || []; });
+      db.rpc("get_form_config", { p_key: k }).then(function (res) { if (res && !res.error && res.data) builtinHidden[k] = res.data.hidden || []; });
     });
   }
   function extraFieldsHtml(extra, defs) {
@@ -1222,6 +1232,15 @@
       var v = extra[f.id];
       return '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(v == null || v === "" ? "—" : String(v)) + "</div></div>";
     }).join("");
+  }
+  // A removed built-in question is hidden in the detail only when it has no value (historical answers stay visible)
+  function hideableFieldHtml(formKey, label, value, col) {
+    if ((builtinHidden[formKey] || []).indexOf(col) !== -1 && (value == null || value === "")) return "";
+    return fieldHtml(label, value);
+  }
+  function hideableFullHtml(formKey, label, value, col) {
+    if ((builtinHidden[formKey] || []).indexOf(col) !== -1 && (value == null || value === "")) return "";
+    return '<div class="m-field full"><div class="k">' + esc(label) + '</div><div class="v">' + esc(value || "—") + "</div></div>";
   }
   function slugify(s) { var x = (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""); return x || "t"; }
   function publicFormLink(slug) { return "https://blktable.blk.jo/f/?t=" + encodeURIComponent(slug); }
@@ -1546,28 +1565,53 @@
     var two = document.querySelector("#builder-modal .bld-two"); if (two) two.style.display = isBuiltin ? "none" : "flex";
     var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
   }
-  function builtinFixedList(formKey) {
-    var items = formKey === "job_applications"
-      ? ["Full name", "Date of birth", "Phone", "City", "Living area", "Gender", "Full / Part time", "Currently working", "Education level", "Favorite drink", "Why join", "Photo"]
-      : ["Full name", "Date of birth", "Phone", "Branch", "University student?", "Ever acted?", "Photo"];
-    return '<div class="bld-fixed"><div class="bld-fixed-h">Built-in questions (fixed — always on the form):</div>' + items.map(function (x) { return '<span class="bld-chip">' + esc(x) + "</span>"; }).join("") + "</div>";
+  var BUILTIN_SCHEMA = {
+    job_applications: [
+      { col: "full_name", label: "Full name", core: true }, { col: "date_of_birth", label: "Date of birth", core: true },
+      { col: "phone", label: "Phone", core: true }, { col: "photo", label: "Photo", core: true },
+      { col: "how_found", label: "How did you hear about us" }, { col: "city", label: "City" },
+      { col: "living_area", label: "Living area" }, { col: "gender", label: "Gender" },
+      { col: "work_type", label: "Full / Part time" }, { col: "currently_working", label: "Currently working" },
+      { col: "education_level", label: "Education level" }, { col: "favorite_drink", label: "Favorite drink" },
+      { col: "why_join", label: "Why join" }
+    ],
+    casting: [
+      { col: "full_name", label: "Full name", core: true }, { col: "date_of_birth", label: "Date of birth", core: true },
+      { col: "phone", label: "Phone", core: true }, { col: "photo", label: "Photo", core: true },
+      { col: "branch", label: "Branch" }, { col: "university_student", label: "University student?" }, { col: "ever_acted", label: "Ever acted?" }
+    ]
+  };
+  function builtinFieldsHtml(formKey, hidden) {
+    var defs = BUILTIN_SCHEMA[formKey] || [];
+    var rows = defs.map(function (d) {
+      if (d.core) return '<div class="bl-row"><span class="bl-name">' + esc(d.label) + '</span><span class="bl-lock">🔒 required</span></div>';
+      var checked = hidden.indexOf(d.col) === -1 ? "checked" : "";
+      return '<div class="bl-row"><span class="bl-name">' + esc(d.label) + '</span><label class="bl-toggle"><input type="checkbox" class="bl-cb" data-col="' + d.col + '" ' + checked + '> on form</label></div>';
+    }).join("");
+    return '<div class="bld-fixed"><div class="bld-fixed-h">Built-in questions — untick one to remove it from the form (existing answers are kept):</div>' + rows + "</div>";
   }
+  var builtinEditKey = null;
   function openBuiltinEdit(formKey) {
     var name = formKey === "job_applications" ? "Job Applications" : "BLK Casting";
+    builtinEditKey = formKey;
     editingTableId = BUILTIN_PLACEHOLDER[formKey]; editingFieldIds = [];
     setBuilderChrome("builtin", name);
-    document.getElementById("bld-builtin-note").innerHTML = builtinFixedList(formKey);
+    document.getElementById("bld-builtin-note").innerHTML = "";
     document.getElementById("bld-name").value = name; document.getElementById("bld-name-ar").value = "";
     document.getElementById("bld-msg").textContent = "Loading…";
     document.getElementById("bld-fields").innerHTML = "";
     builder.classList.add("open");
-    db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true }).then(function (res) {
+    db.from("app_tables").select("config").eq("id", editingTableId).single().then(function (cRes) {
+      var cfg = (cRes && cRes.data && cRes.data.config) || {};
+      document.getElementById("bld-builtin-note").innerHTML = builtinFieldsHtml(formKey, (cfg && cfg.hidden) || []);
+      return db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true });
+    }).then(function (res) {
       document.getElementById("bld-msg").textContent = "";
       var fields = (res && res.data) || [];
       if (!fields.length) addBuilderField();
       else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required }); });
       requestAnimationFrame(growAllBld);
-    });
+    }).catch(function () { document.getElementById("bld-msg").textContent = ""; });
   }
   function openBuilder() {
     editingTableId = null; editingFieldIds = [];
@@ -1658,7 +1702,13 @@
     var keptIds = fields.filter(function (f) { return f.id; }).map(function (f) { return f.id; });
     var toDelete = editingFieldIds.filter(function (id) { return keptIds.indexOf(id) === -1; });
     var toInsert = [];
-    var ops = [db.from("app_tables").update({ name: name, name_ar: nameAr || null }).eq("id", tid)];
+    var tableUpdate = { name: name, name_ar: nameAr || null };
+    if (builderMode === "builtin") {
+      var hidden = [];
+      [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
+      tableUpdate.config = { hidden: hidden };
+    }
+    var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
       if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options }).eq("id", f.id));
       else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options });
