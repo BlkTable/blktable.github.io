@@ -63,6 +63,8 @@
   input[type="date"]::-webkit-datetime-edit { padding: 0; }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
   textarea { resize: vertical; min-height: 88px; }
+  textarea.autogrow { min-height: 48px; height: 48px; resize: none; overflow: hidden; line-height: 1.4; }
+  textarea.grow-y { resize: none; overflow: hidden; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
@@ -422,6 +424,28 @@
         if (window.console) console.error(err);
       });
   });
+
+  // Auto-grow: single-line text fields expand with their content instead of hiding it
+  (function () {
+    function grow(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+    [].slice.call(document.querySelectorAll('input[type="text"]')).forEach(function (inp) {
+      var ta = document.createElement("textarea");
+      ta.id = inp.id; ta.rows = 1; ta.value = inp.value;
+      ta.className = (inp.className ? inp.className + " " : "") + "autogrow";
+      if (inp.required) ta.required = true;
+      if (inp.placeholder) ta.placeholder = inp.placeholder;
+      var ac = inp.getAttribute("autocomplete"); if (ac) ta.setAttribute("autocomplete", ac);
+      inp.parentNode.replaceChild(ta, inp);
+      ta.addEventListener("input", function () { grow(ta); });
+      ta.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+      grow(ta);
+    });
+    [].slice.call(document.querySelectorAll("textarea:not(.autogrow)")).forEach(function (ta) {
+      ta.classList.add("grow-y");
+      ta.addEventListener("input", function () { grow(ta); });
+      grow(ta);
+    });
+  })();
 </script>
 </body>
 </html>

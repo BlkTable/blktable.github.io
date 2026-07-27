@@ -33,6 +33,7 @@
   input:not([type=file]), select { height: 48px; }
   input:focus, select:focus, textarea:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
   textarea { resize: vertical; min-height: 88px; }
+  textarea.autogrow { min-height: 48px; resize: none; overflow: hidden; line-height: 1.4; }
   input[type="date"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
@@ -116,6 +117,13 @@
     return esc(f.label) + ar + req;
   }
 
+  function autoGrow(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+  function growTextarea(el, singleLine) {
+    el.classList.add("autogrow");
+    el.addEventListener("input", function () { autoGrow(el); });
+    if (singleLine) el.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+  }
+
   function buildField(f) {
     var wrap = document.createElement("div");
     wrap.className = "field";
@@ -124,10 +132,10 @@
     wrap.appendChild(lab);
     var id = "fld-" + f.id;
 
-    if (f.type === "long_text") {
-      var ta = document.createElement("textarea"); ta.id = id; wrap.appendChild(ta);
+    if (f.type === "long_text" || f.type === "short_text") {
+      var ta = document.createElement("textarea"); ta.id = id; ta.rows = 1; growTextarea(ta, f.type === "short_text"); wrap.appendChild(ta);
       controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; } });
-    } else if (f.type === "number" || f.type === "short_text" || f.type === "email" || f.type === "date") {
+    } else if (f.type === "number" || f.type === "email" || f.type === "date") {
       var inp = document.createElement("input");
       inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (f.type === "date" ? "date" : "text"));
       inp.id = id; wrap.appendChild(inp);
@@ -169,7 +177,7 @@
       fin.addEventListener("change", function () { var has = fin.files.length > 0; fnm.textContent = has ? fin.files[0].name : "No photo chosen"; fchk.style.display = has ? "flex" : "none"; fbtn.textContent = has ? "Change photo" : "Choose photo"; if (has) frow.classList.remove("invalid"); });
       controls.push({ f: f, el: frow, isPhoto: true, file: function () { return fin.files[0] || null; }, validate: function () { return !f.required || fin.files.length > 0; } });
     } else {
-      var inp2 = document.createElement("input"); inp2.type = "text"; inp2.id = id; wrap.appendChild(inp2);
+      var inp2 = document.createElement("textarea"); inp2.id = id; inp2.rows = 1; growTextarea(inp2, true); wrap.appendChild(inp2);
       controls.push({ f: f, el: inp2, validate: function () { return !f.required || inp2.value.trim() !== ""; }, value: function () { return inp2.value.trim() || null; } });
     }
     return wrap;
@@ -184,6 +192,7 @@
     document.getElementById("card").style.display = "block";
     var host = document.getElementById("fields");
     fields.forEach(function (f) { host.appendChild(buildField(f)); });
+    [].slice.call(host.querySelectorAll("textarea.autogrow")).forEach(autoGrow);
 
     var formEl = document.getElementById("form");
     formEl.addEventListener("input", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);

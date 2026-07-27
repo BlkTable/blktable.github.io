@@ -251,6 +251,16 @@
   .link-bar a { color: var(--silver); word-break: break-all; text-decoration: none; }
   .link-bar a:hover { text-decoration: underline; }
   .link-bar .copy { margin-left: auto; }
+  .qr-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .qr-bar .qr-img { width: 148px; height: 148px; border-radius: 10px; background: #fff; padding: 8px;
+    box-sizing: border-box; flex: 0 0 auto; image-rendering: pixelated; }
+  .qr-bar .qr-side { display: flex; flex-direction: column; gap: 8px; min-width: 200px; flex: 1; }
+  .qr-bar .qr-cap { color: var(--text); font-weight: 600; font-size: 0.92rem; }
+  .qr-bar .qr-sub { color: var(--muted); font-size: 0.8rem; margin-top: -4px; }
+  .qr-bar a { color: var(--silver); word-break: break-all; text-decoration: none; font-size: 0.82rem; }
+  .qr-bar a:hover { text-decoration: underline; }
+  .qr-bar .qr-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
   .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
@@ -371,7 +381,18 @@
             <div class="ja-count" id="ja-count">—</div>
           </div>
 
-          <div class="link-bar"><span class="lbl">Public form:</span><a href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a><button class="linkbtn copy" data-link="https://blktable.blk.jo/apply/">Copy</button></div>
+          <div class="qr-bar">
+            <img class="qr-img" id="ja-qr" alt="QR code for the public form">
+            <div class="qr-side">
+              <div class="qr-cap">Scan to open the public form</div>
+              <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+              <a href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
+              <div class="qr-btns">
+                <button class="linkbtn" id="ja-qr-dl" type="button">Download QR</button>
+                <button class="linkbtn copy" data-link="https://blktable.blk.jo/apply/" type="button">Copy link</button>
+              </div>
+            </div>
+          </div>
 
           <div class="seg tabs" id="ja-tabs">
             <button type="button" data-s="new" class="active">New <span class="tab-count" id="cnt-new"></span></button>
@@ -448,7 +469,18 @@
             </div>
             <div class="ja-count" id="casting-count">—</div>
           </div>
-          <div class="link-bar"><span class="lbl">Public form:</span><a href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a><button class="linkbtn copy" data-link="https://blktable.blk.jo/cast/">Copy</button></div>
+          <div class="qr-bar">
+            <img class="qr-img" id="cast-qr" alt="QR code for the public form">
+            <div class="qr-side">
+              <div class="qr-cap">Scan to open the public form</div>
+              <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+              <a href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
+              <div class="qr-btns">
+                <button class="linkbtn" id="cast-qr-dl" type="button">Download QR</button>
+                <button class="linkbtn copy" data-link="https://blktable.blk.jo/cast/" type="button">Copy link</button>
+              </div>
+            </div>
+          </div>
           <div class="toolbar">
             <input type="search" id="casting-search" placeholder="Search name…">
             <div class="seg viewtoggle" id="casting-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
@@ -466,7 +498,18 @@
             <div><div class="section-title">Table</div><h2 class="ja-title" id="custom-title">—</h2></div>
             <div class="ja-count" id="custom-count">—</div>
           </div>
-          <div class="link-bar"><span class="lbl">Public form:</span><a id="custom-link-a" target="_blank" rel="noopener">—</a><button class="linkbtn copy" id="custom-copy">Copy</button></div>
+          <div class="qr-bar">
+            <img class="qr-img" id="custom-qr" alt="QR code for the public form">
+            <div class="qr-side">
+              <div class="qr-cap">Scan to open the public form</div>
+              <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+              <a id="custom-link-a" target="_blank" rel="noopener">—</a>
+              <div class="qr-btns">
+                <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
+                <button class="linkbtn copy" id="custom-copy" type="button">Copy link</button>
+              </div>
+            </div>
+          </div>
           <div class="toolbar">
             <input type="search" id="custom-search" placeholder="Search…">
             <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
@@ -534,8 +577,10 @@
         </div>
         <div class="bld-fields" id="bld-fields"></div>
         <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add field</button>
-        <div class="m-actions" style="margin-top: 16px;">
+        <div class="m-actions" style="margin-top: 16px; align-items: center; gap: 12px;">
           <button class="btn-wa" id="bld-save">Create table</button>
+          <button class="linkbtn" id="bld-discard" type="button">Discard draft</button>
+          <span id="bld-draft-note" style="color: var(--muted); font-size: 0.8rem;"></span>
         </div>
         <div class="m-msg" id="bld-msg"></div>
       </div>
@@ -563,6 +608,7 @@
   </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
   var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
@@ -1144,6 +1190,7 @@
     setActiveSide(document.querySelector('.side-item[data-custom="' + t.id + '"]'));
     document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span style="color:var(--muted);font-weight:600;font-size:0.9rem;">· ' + esc(t.name_ar) + "</span>" : "");
     var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
+    drawQR(document.getElementById("custom-qr"), clink);
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     currentCustom = { table: t, fields: [], subs: [] };
@@ -1207,8 +1254,18 @@
     else window.prompt("Copy link:", link);
   });
   function flashCopy() { var b = document.getElementById("custom-copy"); var t = b.textContent; b.textContent = "Copied!"; setTimeout(function () { b.textContent = t; }, 1500); }
+  // ---- QR codes for public form links ----
+  function drawQR(imgEl, text) {
+    if (!imgEl || !text || !window.qrcode) return;
+    try { var qr = qrcode(0, "M"); qr.addData(text); qr.make(); imgEl.src = qr.createDataURL(6, 12); imgEl.setAttribute("data-link", text); }
+    catch (e) { if (window.console) console.error(e); }
+  }
+  function downloadQR(imgEl, filename) {
+    if (!imgEl || !imgEl.src) return;
+    var a = document.createElement("a"); a.href = imgEl.src; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  }
   // fixed-link copy buttons (Job Applications, BLK Casting)
-  [].slice.call(document.querySelectorAll(".link-bar .copy[data-link]")).forEach(function (btn) {
+  [].slice.call(document.querySelectorAll(".copy[data-link]")).forEach(function (btn) {
     btn.addEventListener("click", function () {
       var link = btn.getAttribute("data-link");
       var done = function () { var t = btn.textContent; btn.textContent = "Copied!"; setTimeout(function () { btn.textContent = t; }, 1500); };
@@ -1216,9 +1273,16 @@
       else window.prompt("Copy link:", link);
     });
   });
+  // static QR codes (job applications, casting) + download buttons
+  drawQR(document.getElementById("ja-qr"), "https://blktable.blk.jo/apply/");
+  drawQR(document.getElementById("cast-qr"), "https://blktable.blk.jo/cast/");
+  document.getElementById("ja-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("ja-qr"), "job-applications-qr.png"); });
+  document.getElementById("cast-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("cast-qr"), "blk-casting-qr.png"); });
+  document.getElementById("custom-qr-dl").addEventListener("click", function () { downloadQR(document.getElementById("custom-qr"), ((currentCustom && currentCustom.table.slug) || "table") + "-qr.png"); });
 
   var builder = document.getElementById("builder-modal");
-  function addBuilderField() {
+  var BLD_DRAFT_KEY = "blk_table_draft";
+  function addBuilderField(data) {
     var row = document.createElement("div"); row.className = "bld-field";
     var typeOpts = FIELD_TYPES.map(function (t) { return '<option value="' + t.v + '">' + t.label + "</option>"; }).join("");
     row.innerHTML =
@@ -1228,19 +1292,73 @@
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<button type="button" class="rm">Remove</button></div>';
     document.getElementById("bld-fields").appendChild(row);
+    if (data) {
+      row.querySelector(".lab").value = data.label || "";
+      row.querySelector(".lab-ar").value = data.labelAr || "";
+      var sel = row.querySelector(".ftype"); if (data.type) sel.value = data.type;
+      var optsInp = row.querySelector(".opts");
+      optsInp.style.display = sel.value === "dropdown" ? "" : "none";
+      optsInp.value = data.opts || "";
+      row.querySelector(".freq").checked = data.required !== false;
+    }
     row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = this.value === "dropdown" ? "" : "none"; });
-    row.querySelector(".rm").addEventListener("click", function () { row.remove(); });
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); saveDraft(); });
+    return row;
   }
-  function openBuilder() {
+  // ---- Auto-save draft so an in-progress table survives closing/reloading ----
+  function serializeBuilder() {
+    var rows = [].slice.call(document.querySelectorAll("#bld-fields .bld-field"));
+    return {
+      name: document.getElementById("bld-name").value,
+      nameAr: document.getElementById("bld-name-ar").value,
+      fields: rows.map(function (r) {
+        return {
+          label: r.querySelector(".lab").value, labelAr: r.querySelector(".lab-ar").value,
+          type: r.querySelector(".ftype").value, opts: r.querySelector(".opts").value,
+          required: r.querySelector(".freq").checked
+        };
+      })
+    };
+  }
+  function draftHasContent(d) {
+    if (!d) return false;
+    if ((d.name || "").trim() || (d.nameAr || "").trim()) return true;
+    return (d.fields || []).some(function (f) { return (f.label || "").trim() || (f.labelAr || "").trim() || (f.opts || "").trim(); });
+  }
+  function saveDraft() {
+    var d = serializeBuilder();
+    try { if (draftHasContent(d)) localStorage.setItem(BLD_DRAFT_KEY, JSON.stringify(d)); else localStorage.removeItem(BLD_DRAFT_KEY); } catch (e) {}
+    var note = document.getElementById("bld-draft-note"); if (note) note.textContent = draftHasContent(d) ? "Draft auto-saved" : "";
+  }
+  function loadDraft() { try { return JSON.parse(localStorage.getItem(BLD_DRAFT_KEY) || "null"); } catch (e) { return null; } }
+  function clearDraft() { try { localStorage.removeItem(BLD_DRAFT_KEY); } catch (e) {} var note = document.getElementById("bld-draft-note"); if (note) note.textContent = ""; }
+  function resetBuilder() {
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
     document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
-    addBuilderField(); builder.classList.add("open");
+    addBuilderField();
+  }
+  function openBuilder() {
+    document.getElementById("bld-msg").textContent = "";
+    var d = loadDraft();
+    if (draftHasContent(d)) {
+      document.getElementById("bld-name").value = d.name || "";
+      document.getElementById("bld-name-ar").value = d.nameAr || "";
+      document.getElementById("bld-fields").innerHTML = "";
+      (d.fields && d.fields.length ? d.fields : [null]).forEach(function (f) { addBuilderField(f); });
+      var note = document.getElementById("bld-draft-note"); if (note) note.textContent = "Restored your unsaved draft";
+    } else {
+      resetBuilder();
+    }
+    builder.classList.add("open");
   }
   function closeBuilder() { builder.classList.remove("open"); }
   document.getElementById("new-table-btn").addEventListener("click", openBuilder);
   document.getElementById("builder-close").addEventListener("click", closeBuilder);
   builder.addEventListener("click", function (e) { if (e.target === this) closeBuilder(); });
-  document.getElementById("bld-add-field").addEventListener("click", addBuilderField);
+  builder.addEventListener("input", saveDraft);
+  builder.addEventListener("change", saveDraft);
+  document.getElementById("bld-add-field").addEventListener("click", function () { addBuilderField(); saveDraft(); });
+  document.getElementById("bld-discard").addEventListener("click", function () { clearDraft(); resetBuilder(); });
   document.getElementById("bld-save").addEventListener("click", function () {
     var msg = document.getElementById("bld-msg");
     var name = document.getElementById("bld-name").value.trim();
@@ -1269,7 +1387,7 @@
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, options: f.options }; });
       return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return tRes.data; });
     }).then(function (t) {
-      closeBuilder(); loadCustomTables();
+      clearDraft(); closeBuilder(); loadCustomTables();
       setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
     }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
   });

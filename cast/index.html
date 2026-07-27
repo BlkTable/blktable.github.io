@@ -31,6 +31,12 @@
     background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; font-family: inherit;
     transition: border-color 0.15s ease, box-shadow 0.15s ease; color-scheme: dark; height: 48px; }
   input:focus, select:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
+  textarea { width: 100%; padding: 12px 14px; border-radius: 11px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease; color-scheme: dark; }
+  textarea:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
+  textarea.autogrow { min-height: 48px; height: 48px; resize: none; overflow: hidden; line-height: 1.4; }
+  textarea.invalid { border-color: #ff6b6b !important; box-shadow: 0 0 0 3px rgba(255,107,107,0.16) !important; }
   input[type="date"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
   input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
@@ -279,6 +285,28 @@
         if (window.console) console.error(err);
       });
   });
+
+  // Auto-grow: single-line text fields expand with their content instead of hiding it
+  (function () {
+    function grow(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+    [].slice.call(document.querySelectorAll('input[type="text"]')).forEach(function (inp) {
+      var ta = document.createElement("textarea");
+      ta.id = inp.id; ta.rows = 1; ta.value = inp.value;
+      ta.className = (inp.className ? inp.className + " " : "") + "autogrow";
+      if (inp.required) ta.required = true;
+      if (inp.placeholder) ta.placeholder = inp.placeholder;
+      var ac = inp.getAttribute("autocomplete"); if (ac) ta.setAttribute("autocomplete", ac);
+      inp.parentNode.replaceChild(ta, inp);
+      ta.addEventListener("input", function () { grow(ta); });
+      ta.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+      grow(ta);
+    });
+    [].slice.call(document.querySelectorAll("textarea:not(.autogrow)")).forEach(function (ta) {
+      ta.classList.add("grow-y");
+      ta.addEventListener("input", function () { grow(ta); });
+      grow(ta);
+    });
+  })();
 </script>
 </body>
 </html>
