@@ -242,6 +242,25 @@
   .rec-actions li:hover { background: rgba(255,255,255,0.06); }
   .rec-actions li.danger { color: #ff6b6b; }
   .u-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #20242b; flex: 0 0 auto; }
+  /* builder: workflow stages */
+  .bld-stage { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bld-stage input.st-label { flex: 1; min-width: 0; min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
+  .bld-stage select.st-color { height: 38px; padding: 0 26px 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; appearance: none; -webkit-appearance: none; }
+  .bld-stage .rm { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; flex: 0 0 auto; }
+  /* pipeline tabs + stage pills/buttons (generic, used by any table) */
+  .pipe-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .pipe-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--field-border); background: var(--card); color: var(--muted); font-size: 0.85rem; cursor: pointer; font-family: inherit; }
+  .pipe-tab.active { color: var(--text); border-color: var(--silver); background: rgba(214,218,222,0.12); font-weight: 600; }
+  .pipe-tab .n { opacity: 0.7; margin-left: 4px; }
+  .stage-pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+  .move-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .move-btns button { flex: 1 1 auto; padding: 7px 10px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.76rem; cursor: pointer; color: #0a0b0d; }
+  .sc-gray { background: #6b7280; color: #fff; }
+  .sc-green { background: #2fbf6b; }
+  .sc-red { background: #ff6b6b; }
+  .sc-blue { background: #4a9eff; color: #fff; }
+  .sc-amber { background: #eab308; }
+  .sc-purple { background: #a855f7; color: #fff; }
   .ja-card .body { padding: 12px; text-align: center; }
   .ja-card .body .name { font-weight: 600; font-size: 0.95rem; }
   .ja-card .body .meta { color: var(--muted); font-size: 0.78rem; margin: 3px 0 8px; }
@@ -577,6 +596,7 @@
             <button class="linkbtn" id="custom-refresh">Refresh</button>
             <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
           </div>
+          <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
           <div id="custom-list" class="ja-list"></div>
           <div id="custom-empty" class="empty" style="display:none;"><h2>No submissions yet</h2><p>Submissions from the form link will show up here.</p></div>
         </section>
@@ -658,6 +678,11 @@
         </div>
         <div class="bld-fields" id="bld-fields"></div>
         <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add field</button>
+        <div class="bld-stages-wrap" id="bld-stages-wrap">
+          <div class="fp-label" style="margin: 16px 0 6px;">Workflow stages <span style="color:var(--muted);font-weight:400;">— optional. Add stages (e.g. New / Approved / Rejected) to get tabs + move buttons.</span></div>
+          <div id="bld-stages"></div>
+          <button type="button" class="btn-save" id="bld-add-stage" style="margin-top: 4px;">＋ Add stage</button>
+        </div>
         <div class="m-actions" style="margin-top: 16px; align-items: center; gap: 12px;">
           <button class="btn-wa" id="bld-save">Create table</button>
           <button class="linkbtn" id="bld-discard" type="button">Discard draft</button>
@@ -1444,6 +1469,28 @@
   ];
   var customTables = [];
   var currentCustom = null;
+  // ---- Builder: workflow stages editor ----
+  var STAGE_COLORS = ["gray", "green", "red", "blue", "amber", "purple"];
+  function addStageRow(data) {
+    data = data || {};
+    var row = document.createElement("div"); row.className = "bld-stage";
+    if (data.key) row.setAttribute("data-stage-key", data.key);
+    var opts = STAGE_COLORS.map(function (c) { return '<option value="' + c + '"' + (data.color === c ? " selected" : "") + ">" + c + "</option>"; }).join("");
+    row.innerHTML = '<input class="st-label" placeholder="Stage name (e.g. Approved)"><select class="st-color">' + opts + '</select><button type="button" class="rm">Remove</button>';
+    row.querySelector(".st-label").value = data.label || "";
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); });
+    document.getElementById("bld-stages").appendChild(row);
+    return row;
+  }
+  function serializeStages() {
+    var seen = {};
+    return [].slice.call(document.querySelectorAll("#bld-stages .bld-stage")).map(function (r) {
+      var label = r.querySelector(".st-label").value.trim(); if (!label) return null;
+      var key = r.getAttribute("data-stage-key") || slugify(label);
+      while (seen[key]) key = key + "-x"; seen[key] = true;
+      return { key: key, label: label, color: r.querySelector(".st-color").value };
+    }).filter(Boolean);
+  }
   // Built-in forms (Job Applications, Casting) can carry admin-added extra questions
   var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
   var builtinExtra = { job_applications: [], casting: [] };
@@ -1512,18 +1559,39 @@
       return db.from("app_submissions").select("*").eq("table_id", t.id).order("created_at", { ascending: false });
     }).then(function (sRes) { currentCustom.subs = (sRes && sRes.data) || []; renderCustom(); });
   }
+  function customStages() { return (currentCustom && currentCustom.table.config && currentCustom.table.config.statuses) || []; }
+  function subStage(s, stages) { return s.status || (stages[0] && stages[0].key) || null; }
+  function setSubStatus(s, key) {
+    db.from("app_submissions").update({ status: key }).eq("id", s.id).then(function (res) {
+      if (res.error) { window.alert("Could not update stage. " + (res.error.message || "")); return; }
+      s.status = key; renderCustom();
+    });
+  }
   function renderCustom() {
     if (!currentCustom) return;
     var q = (document.getElementById("custom-search").value || "").toLowerCase().trim();
     var fields = currentCustom.fields, subs = currentCustom.subs;
-    var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty");
+    var stages = customStages();
+    var mayEdit = canEdit(currentCustom.table.id);
+    var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty"), tabsEl = document.getElementById("custom-tabs");
     document.getElementById("custom-count").textContent = subs.length + (subs.length === 1 ? " entry" : " entries");
     var summary = fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
     var photoField = fields.filter(function (f) { return f.type === "photo"; })[0];
-    var rows = subs.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
+    // pipeline tabs
+    if (stages.length) {
+      if (!currentCustom.stage || !stages.some(function (x) { return x.key === currentCustom.stage; })) currentCustom.stage = stages[0].key;
+      tabsEl.style.display = "flex";
+      tabsEl.innerHTML = stages.map(function (st) {
+        var cnt = subs.filter(function (s) { return subStage(s, stages) === st.key; }).length;
+        return '<button type="button" class="pipe-tab' + (currentCustom.stage === st.key ? " active" : "") + '" data-key="' + esc(st.key) + '">' + esc(st.label) + '<span class="n">' + cnt + "</span></button>";
+      }).join("");
+      [].slice.call(tabsEl.querySelectorAll(".pipe-tab")).forEach(function (b) { b.addEventListener("click", function () { currentCustom.stage = b.getAttribute("data-key"); renderCustom(); }); });
+    } else { tabsEl.style.display = "none"; tabsEl.innerHTML = ""; }
+    var base = stages.length ? subs.filter(function (s) { return subStage(s, stages) === currentCustom.stage; }) : subs;
+    var rows = base.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
     if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
-    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">No matches.</div>'; return; }
+    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (stages.length ? "Nothing in this stage." : "No matches.") + "</div>"; return; }
     listEl.innerHTML = "";
     var kcards = customView === "cards";
     var kcont = listEl;
@@ -1534,12 +1602,20 @@
       var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(d[f.id] || "—"); });
       parts.push(fmtDate(s.created_at));
       var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
-      var viewBtn = '<div class="card-actions">' + recMenuHtml() + "</div>";
+      var moveHtml = "";
+      if (stages.length && mayEdit) {
+        var cur = subStage(s, stages);
+        moveHtml = '<div class="move-btns">' + stages.filter(function (st) { return st.key !== cur; }).map(function (st) {
+          return '<button type="button" class="sc-' + esc(st.color || "gray") + '" data-move="' + esc(st.key) + '">→ ' + esc(st.label) + "</button>";
+        }).join("") + "</div>";
+      }
+      var actions = '<div class="card-actions">' + moveHtml + recMenuHtml() + "</div>";
       var el = document.createElement("div");
-      if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div>" + viewBtn + "</div>"; }
-      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
+      if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
+      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + actions + "</div>"; }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); });
+      [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
       kcont.appendChild(el);
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
@@ -1822,6 +1898,7 @@
   function resetBuilder() {
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
     document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
+    document.getElementById("bld-stages").innerHTML = "";
     addBuilderField();
   }
   function setBuilderChrome(mode, name) {
@@ -1836,6 +1913,7 @@
     var note = document.getElementById("bld-draft-note"); if (note) note.style.display = isCreate ? "" : "none";
     var two = document.querySelector("#builder-modal .bld-two"); if (two) two.style.display = isBuiltin ? "none" : "flex";
     var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
+    var sw = document.getElementById("bld-stages-wrap"); if (sw) sw.style.display = isBuiltin ? "none" : "";
   }
   var BUILTIN_SCHEMA = {
     job_applications: [
@@ -1914,6 +1992,8 @@
     document.getElementById("bld-name").value = table.name || "";
     document.getElementById("bld-name-ar").value = table.name_ar || "";
     document.getElementById("bld-fields").innerHTML = "";
+    document.getElementById("bld-stages").innerHTML = "";
+    ((table.config && table.config.statuses) || []).forEach(function (st) { addStageRow(st); });
     builder.classList.add("open");
     db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
       document.getElementById("bld-msg").textContent = "";
@@ -1933,6 +2013,7 @@
   builder.addEventListener("input", saveDraft);
   builder.addEventListener("change", saveDraft);
   document.getElementById("bld-add-field").addEventListener("click", function () { addBuilderField(); saveDraft(); });
+  document.getElementById("bld-add-stage").addEventListener("click", function () { addStageRow(); });
   document.getElementById("bld-discard").addEventListener("click", function () { clearDraft(); resetBuilder(); });
   document.getElementById("bld-save").addEventListener("click", function () {
     var msg = document.getElementById("bld-msg");
@@ -1957,7 +2038,7 @@
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
     msg.textContent = "Creating…";
-    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null }).select().single().then(function (tRes) {
+    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages() } }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }; });
@@ -1979,6 +2060,8 @@
       var hidden = [];
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
       tableUpdate.config = { hidden: hidden };
+    } else {
+      tableUpdate.config = { statuses: serializeStages() };
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
@@ -1990,8 +2073,8 @@
     Promise.all(ops).then(function (results) {
       var bad = results.filter(function (r) { return r && r.error; })[0];
       if (bad) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(bad.error); return; }
-      var ct = customTables.filter(function (x) { return x.id === tid; })[0]; if (ct) { ct.name = name; ct.name_ar = nameAr || null; }
-      if (currentCustom && currentCustom.table.id === tid) { currentCustom.table.name = name; currentCustom.table.name_ar = nameAr || null; }
+      var ct = customTables.filter(function (x) { return x.id === tid; })[0]; if (ct) { ct.name = name; ct.name_ar = nameAr || null; if (builderMode !== "builtin") ct.config = tableUpdate.config; }
+      if (currentCustom && currentCustom.table.id === tid) { currentCustom.table.name = name; currentCustom.table.name_ar = nameAr || null; if (builderMode !== "builtin") currentCustom.table.config = tableUpdate.config; }
       closeBuilder();
       loadCustomTables();
       loadBuiltinExtra();
