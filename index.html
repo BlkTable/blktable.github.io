@@ -750,6 +750,24 @@
       </div>
     </div>
 
+    <!-- Admin: delete a whole table (math-gated) -->
+    <div class="modal-overlay" id="deltbl-modal">
+      <div class="modal" style="max-width: 440px;">
+        <button class="modal-close" id="deltbl-cancel" aria-label="Close">✕</button>
+        <div class="m-name">Delete this table?</div>
+        <div class="m-sub"><b id="deltbl-name">This table</b> and <b>every submission, field, and its whole review history</b> will be permanently deleted. This cannot be undone.</div>
+        <div class="regen-math">
+          <label for="deltbl-input">To confirm, solve: <span id="deltbl-q" class="regen-q">—</span></label>
+          <input id="deltbl-input" type="number" inputmode="numeric" placeholder="Answer" autocomplete="off">
+        </div>
+        <div class="m-actions" style="margin-top:16px; gap:10px;">
+          <button class="btn-wa regen-danger" id="deltbl-confirm" type="button">Delete permanently</button>
+          <button class="linkbtn" id="deltbl-cancel2" type="button">Cancel</button>
+        </div>
+        <div class="m-msg" id="deltbl-msg"></div>
+      </div>
+    </div>
+
     <!-- Admin: share a table with accounts -->
     <div class="modal-overlay" id="share-modal">
       <div class="modal" style="max-width: 460px;">
@@ -793,6 +811,7 @@
         <div class="m-actions" style="margin-top: 16px; align-items: center; gap: 12px;">
           <button class="btn-wa" id="bld-save">Create table</button>
           <button class="linkbtn" id="bld-discard" type="button">Discard draft</button>
+          <button class="linkbtn qr-regen" id="bld-delete" type="button" style="display:none;">Delete table</button>
           <span id="bld-draft-note" style="color: var(--muted); font-size: 0.8rem;"></span>
         </div>
         <div class="m-msg" id="bld-msg"></div>
@@ -2314,6 +2333,7 @@
     var sw = document.getElementById("bld-stages-wrap"); if (sw) sw.style.display = isBuiltin ? "none" : "";
     var aw = document.getElementById("bld-actions-wrap"); if (aw) aw.style.display = isBuiltin ? "none" : "";
     var lw = document.getElementById("bld-layers-wrap"); if (lw) lw.style.display = isBuiltin ? "none" : "";
+    var del = document.getElementById("bld-delete"); if (del) del.style.display = (mode === "edit") ? "inline-block" : "none";
   }
   var BUILTIN_SCHEMA = {
     job_applications: [
@@ -2420,6 +2440,45 @@
   document.getElementById("bld-add-stage").addEventListener("click", function () { addStageRow(); });
   document.getElementById("bld-add-action").addEventListener("click", function () { addActionRow(); });
   document.getElementById("bld-add-layer").addEventListener("click", function () { addLayerRow(); });
+  // ---- Delete whole table (admin, math-gated) ----
+  var delTableId = null, delTableAns = 0;
+  function openDeleteTable(id, name) {
+    delTableId = id;
+    document.getElementById("deltbl-name").textContent = name || "This table";
+    var a = Math.floor(Math.random() * 8) + 2, b = Math.floor(Math.random() * 8) + 2;
+    delTableAns = a + b;
+    document.getElementById("deltbl-q").textContent = a + " + " + b + " = ?";
+    document.getElementById("deltbl-input").value = "";
+    document.getElementById("deltbl-msg").textContent = "";
+    document.getElementById("deltbl-modal").classList.add("open");
+    setTimeout(function () { document.getElementById("deltbl-input").focus(); }, 50);
+  }
+  function closeDeleteTable() { document.getElementById("deltbl-modal").classList.remove("open"); delTableId = null; }
+  function doDeleteTable() {
+    var id = delTableId; if (!id) return;
+    var msg = document.getElementById("deltbl-msg"); msg.textContent = "Deleting…";
+    Promise.all([
+      db.from("table_access").delete().eq("table_key", id),
+      db.from("table_stars").delete().eq("table_key", id)
+    ]).then(function () {
+      return db.from("app_tables").delete().eq("id", id);
+    }).then(function (res) {
+      if (res && res.error) throw res.error;
+      closeDeleteTable(); closeBuilder();
+      if (currentCustom && currentCustom.table.id === id) currentCustom = null;
+      loadCustomTables();
+      showView("home");
+    }).catch(function (err) { msg.textContent = "Could not delete. " + (err.message || ""); if (window.console) console.error(err); });
+  }
+  document.getElementById("bld-delete").addEventListener("click", function () { openDeleteTable(editingTableId, document.getElementById("bld-name").value.trim()); });
+  document.getElementById("deltbl-cancel").addEventListener("click", closeDeleteTable);
+  document.getElementById("deltbl-cancel2").addEventListener("click", closeDeleteTable);
+  document.getElementById("deltbl-modal").addEventListener("click", function (e) { if (e.target === this) closeDeleteTable(); });
+  document.getElementById("deltbl-input").addEventListener("keydown", function (e) { if (e.key === "Enter") document.getElementById("deltbl-confirm").click(); });
+  document.getElementById("deltbl-confirm").addEventListener("click", function () {
+    if (parseInt(document.getElementById("deltbl-input").value, 10) !== delTableAns) { document.getElementById("deltbl-msg").textContent = "That answer is not correct — try again."; return; }
+    doDeleteTable();
+  });
   document.getElementById("bld-discard").addEventListener("click", function () { clearDraft(); resetBuilder(); });
   document.getElementById("bld-save").addEventListener("click", function () {
     var msg = document.getElementById("bld-msg");
