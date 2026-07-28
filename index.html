@@ -259,6 +259,34 @@
   .act-wa { background: #25d366 !important; color: #062916 !important; }
   .act-call { background: #4a9eff !important; color: #fff !important; }
   .act-email { background: #eab308 !important; color: #0a0b0d !important; }
+  /* builder: review-chain layers */
+  .bld-layer { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .bld-layer select, .bld-layer input.ly-label { min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
+  .bld-layer input.ly-label { flex: 1; min-width: 110px; }
+  .bld-layer .ly-num { width: 22px; height: 22px; border-radius: 50%; background: rgba(214,218,222,0.12); color: var(--silver); font: 700 0.72rem/22px var(--font-mono, monospace); text-align: center; flex: 0 0 auto; }
+  .bld-layer .rm { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+  /* record: review chain timeline */
+  .chain { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .chain-h { font: 600 0.72rem/1 var(--font-mono, monospace); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .layer { display: flex; gap: 12px; padding: 0 0 14px; position: relative; }
+  .layer:not(:last-child)::before { content: ""; position: absolute; left: 12px; top: 26px; bottom: 0; width: 2px; background: var(--line); }
+  .layer .dot { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 800; border: 2px solid var(--line); background: var(--card); color: var(--muted); z-index: 1; }
+  .layer.done .dot { background: #2fbf6b; border-color: #2fbf6b; color: #062916; }
+  .layer.rejected .dot { background: #ff6b6b; border-color: #ff6b6b; color: #2a0808; }
+  .layer.current .dot { border-color: var(--silver); color: var(--silver); }
+  .layer .lbody { flex: 1; min-width: 0; }
+  .layer .l-top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .layer .l-name { font-weight: 650; }
+  .layer .l-type { font: 600 0.64rem/1 var(--font-mono, monospace); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .layer .l-assignee { color: var(--muted); font-size: 0.82rem; }
+  .layer .l-meta { color: var(--muted); font-size: 0.8rem; margin-top: 3px; }
+  .layer .l-note { margin-top: 6px; background: var(--field-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 0.88rem; white-space: pre-wrap; }
+  .layer .l-act { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .layer .l-act textarea { width: 100%; min-height: 54px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; resize: vertical; box-sizing: border-box; }
+  .layer .l-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .layer .l-btns button { padding: 8px 14px; border-radius: 9px; border: none; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+  .l-turn { font: 600 0.64rem/1 var(--font-mono, monospace); letter-spacing: 0.08em; text-transform: uppercase; color: #eab308; }
   /* pipeline tabs + stage pills/buttons (generic, used by any table) */
   .pipe-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .pipe-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--field-border); background: var(--card); color: var(--muted); font-size: 0.85rem; cursor: pointer; font-family: inherit; }
@@ -757,6 +785,11 @@
           <div id="bld-actions"></div>
           <button type="button" class="btn-save" id="bld-add-action" style="margin-top: 4px;">＋ Add action</button>
         </div>
+        <div class="bld-layers-wrap" id="bld-layers-wrap">
+          <div class="fp-label" style="margin: 16px 0 6px;">Review chain <span style="color:var(--muted);font-weight:400;">— optional. Ordered layers each record passes through; pick a type and who's assigned.</span></div>
+          <div id="bld-layers"></div>
+          <button type="button" class="btn-save" id="bld-add-layer" style="margin-top: 4px;">＋ Add layer</button>
+        </div>
         <div class="m-actions" style="margin-top: 16px; align-items: center; gap: 12px;">
           <button class="btn-wa" id="bld-save">Create table</button>
           <button class="linkbtn" id="bld-discard" type="button">Discard draft</button>
@@ -810,6 +843,13 @@
   var stars = {};      // table_key -> true when starred by this user
   var homeView = "cards";
   var shareKey = null;
+  var myName = "";
+  var builderUsers = []; // [{id,name}] for review-chain assignee pickers (admin only)
+  function loadBuilderUsers() {
+    db.from("profiles").select("id, full_name, email").then(function (res) {
+      builderUsers = ((res && res.data) || []).map(function (p) { return { id: p.id, name: p.full_name || p.email }; });
+    });
+  }
   function canEdit(key) { return isAdmin || !!editKeys[key]; }
   function showApp(session) {
     loginWrap.style.display = "none";
@@ -834,6 +874,7 @@
       .then(function (res) {
         var role = (res.data && res.data.role) || "reviewer";
         var nm = (res.data && res.data.full_name) || document.getElementById("pf-name").textContent;
+        myName = nm;
         document.getElementById("who-role").textContent = role;
         document.getElementById("pf-name").textContent = nm;
         var av = document.getElementById("pf-avatar"); av.textContent = (nm || "?").charAt(0).toUpperCase();
@@ -841,6 +882,7 @@
         isAdmin = role === "admin";
         document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
         document.getElementById("pf-users").style.display = isAdmin ? "block" : "none";
+        if (isAdmin) loadBuilderUsers();
         ["ja-qr-regen", "cast-qr-regen", "custom-qr-regen"].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = isAdmin ? "inline-block" : "none"; });
         document.getElementById("side-tables").classList.toggle("show-gears", isAdmin);
         applyBuiltinAccess();
@@ -1733,6 +1775,33 @@
       return { type: type, label: label || null, template: type === "whatsapp" ? (r.querySelector(".act-tpl").value || "") : null };
     });
   }
+  // ---- Builder: review-chain layers editor ----
+  var LAYER_TYPES = [["note", "Log note"], ["approval", "Approval"], ["receiving", "Receiving"]];
+  function layerTypeLabel(t) { var m = { note: "Log note", approval: "Approval", receiving: "Receiving" }; return m[t] || t; }
+  function renumberLayers() { [].slice.call(document.querySelectorAll("#bld-layers .bld-layer .ly-num")).forEach(function (n, i) { n.textContent = i + 1; }); }
+  function addLayerRow(data) {
+    data = data || {};
+    var row = document.createElement("div"); row.className = "bld-layer";
+    if (data.id) row.setAttribute("data-layer-id", data.id);
+    var typeOpts = LAYER_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + "</option>"; }).join("");
+    var userOpts = '<option value="">— assign to —</option>' + builderUsers.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(u.name) + "</option>"; }).join("");
+    row.innerHTML = '<span class="ly-num"></span><select class="ly-type">' + typeOpts + '</select><input class="ly-label" placeholder="Step name (optional)"><select class="ly-assignee">' + userOpts + '</select><button type="button" class="rm">Remove</button>';
+    if (data.type) row.querySelector(".ly-type").value = data.type;
+    row.querySelector(".ly-label").value = data.label || "";
+    if (data.assignee) row.querySelector(".ly-assignee").value = data.assignee;
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); renumberLayers(); });
+    document.getElementById("bld-layers").appendChild(row);
+    renumberLayers();
+    return row;
+  }
+  function serializeLayers() {
+    return [].slice.call(document.querySelectorAll("#bld-layers .bld-layer")).map(function (r, i) {
+      var assignee = r.querySelector(".ly-assignee").value || null;
+      var aname = assignee ? ((builderUsers.filter(function (u) { return u.id === assignee; })[0] || {}).name || null) : null;
+      var id = r.getAttribute("data-layer-id") || ("L" + (i + 1) + "-" + Math.random().toString(36).slice(2, 6));
+      return { id: id, type: r.querySelector(".ly-type").value, label: r.querySelector(".ly-label").value.trim() || null, assignee: assignee, assignee_name: aname };
+    });
+  }
   // Built-in forms (Job Applications, Casting) can carry admin-added extra questions
   var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
   var builtinExtra = { job_applications: [], casting: [] };
@@ -1875,7 +1944,8 @@
       });
       grid += '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(s.submitted_ip || "—") + '</div></div><div class="m-field full"><div class="k">Device</div><div class="v">' + esc(s.device || "—") + "</div></div>";
       body.innerHTML = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
-        '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + "</div>";
+        '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + '</div><div class="chain" id="cd-chain"></div>';
+      renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
       document.getElementById("modal").classList.add("open");
       if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
       return;
@@ -1897,9 +1967,10 @@
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
-      '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
+      '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
     wireAutosave(function () { return saveCustom(s, fields); });
+    renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
     document.getElementById("modal").classList.add("open");
     if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
   }
@@ -1916,6 +1987,71 @@
     return db.from("app_submissions").update({ data: nd }).eq("id", s.id).then(function (res) {
       if (res.error) { setEdStatus("Not saved — try again", true); if (window.console) console.error(res.error); return; }
       s.data = nd; renderCustom(); setEdStatus("Saved ✓");
+    });
+  }
+  // ---- Review chain (multi-layer log / approval / receiving) ----
+  function chainState(layers, log) {
+    var first = {}; log.forEach(function (e) { if (!first[e.layer_id]) first[e.layer_id] = e; }); // earliest entry per layer (log is asc)
+    var stopped = false, foundCurrent = false;
+    return layers.map(function (ly) {
+      var e = first[ly.id];
+      if (stopped) return { layer: ly, entry: null, state: "pending" };
+      if (e) { if (e.decision === "rejected") { stopped = true; return { layer: ly, entry: e, state: "rejected" }; } return { layer: ly, entry: e, state: "done" }; }
+      if (!foundCurrent) { foundCurrent = true; return { layer: ly, entry: null, state: "current" }; }
+      return { layer: ly, entry: null, state: "pending" };
+    });
+  }
+  function logLayer(s, table, ly, decision, note, host) {
+    db.from("submission_log").insert({ submission_id: s.id, table_id: table.id, layer_id: ly.id, actor: myUserId, actor_name: myName, decision: decision, note: note || null }).then(function (res) {
+      if (res.error) { window.alert("Could not save. " + (res.error.message || "")); return; }
+      renderChain(s, table, host);
+    });
+  }
+  function renderChain(s, table, host) {
+    if (!host) return;
+    var layers = (table.config && table.config.layers) || [];
+    if (!layers.length) { host.innerHTML = ""; return; }
+    host.innerHTML = '<div class="chain-h">Review chain</div><div class="chain-body" style="color:var(--muted);font-size:0.85rem;">Loading…</div>';
+    db.from("submission_log").select("*").eq("submission_id", s.id).order("created_at", { ascending: true }).then(function (res) {
+      var log = (res && res.data) || [];
+      var states = chainState(layers, log);
+      var body = host.querySelector(".chain-body"); body.innerHTML = "";
+      states.forEach(function (st) {
+        var ly = st.layer, e = st.entry;
+        var mine = (ly.assignee && ly.assignee === myUserId) || isAdmin;
+        var el = document.createElement("div"); el.className = "layer " + st.state;
+        var dot = st.state === "done" ? "✓" : st.state === "rejected" ? "✕" : "";
+        var html = '<div class="dot">' + dot + '</div><div class="lbody">' +
+          '<div class="l-top"><span class="l-name">' + esc(ly.label || layerTypeLabel(ly.type)) + '</span><span class="l-type">' + esc(layerTypeLabel(ly.type)) + "</span>" +
+          (st.state === "current" && mine ? '<span class="l-turn">Your turn</span>' : "") + "</div>" +
+          '<div class="l-assignee">Assigned: ' + esc(ly.assignee_name || "—") + "</div>";
+        if (e) {
+          var dtxt = e.decision === "approved" ? "Approved" : e.decision === "rejected" ? "Rejected" : e.decision === "received" ? "Received" : "Logged";
+          html += '<div class="l-meta">' + esc(dtxt) + " by " + esc(e.actor_name || "—") + " · " + fmtDate(e.created_at) + "</div>";
+          if (e.note) html += '<div class="l-note">' + esc(e.note) + "</div>";
+        } else if (st.state === "current" && mine) {
+          var ph = ly.type === "approval" ? "Feedback (optional)" : ly.type === "receiving" ? "Receiving notes / feedback" : "Your note";
+          html += '<div class="l-act"><textarea class="l-note-in" placeholder="' + ph + '"></textarea><div class="l-btns"></div></div>';
+        } else if (st.state === "current") {
+          html += '<div class="l-meta">Waiting on ' + esc(ly.assignee_name || "the assignee") + "</div>";
+        }
+        el.innerHTML = html;
+        if (!e && st.state === "current" && mine) {
+          var btns = el.querySelector(".l-btns"), noteIn = el.querySelector(".l-note-in");
+          if (ly.type === "approval") {
+            btns.innerHTML = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
+            btns.querySelector(".btn-approve").addEventListener("click", function () { logLayer(s, table, ly, "approved", noteIn.value.trim(), host); });
+            btns.querySelector(".btn-reject").addEventListener("click", function () { logLayer(s, table, ly, "rejected", noteIn.value.trim(), host); });
+          } else if (ly.type === "receiving") {
+            btns.innerHTML = '<button class="btn-approve">Mark received</button>';
+            btns.querySelector(".btn-approve").addEventListener("click", function () { logLayer(s, table, ly, "received", noteIn.value.trim(), host); });
+          } else {
+            btns.innerHTML = '<button class="btn-wa">Save note</button>';
+            btns.querySelector(".btn-wa").addEventListener("click", function () { if (!noteIn.value.trim()) { noteIn.focus(); return; } logLayer(s, table, ly, "note", noteIn.value.trim(), host); });
+          }
+        }
+        body.appendChild(el);
+      });
     });
   }
   document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
@@ -2160,6 +2296,7 @@
     document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     document.getElementById("bld-stages").innerHTML = "";
     document.getElementById("bld-actions").innerHTML = "";
+    document.getElementById("bld-layers").innerHTML = "";
     addBuilderField();
   }
   function setBuilderChrome(mode, name) {
@@ -2176,6 +2313,7 @@
     var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
     var sw = document.getElementById("bld-stages-wrap"); if (sw) sw.style.display = isBuiltin ? "none" : "";
     var aw = document.getElementById("bld-actions-wrap"); if (aw) aw.style.display = isBuiltin ? "none" : "";
+    var lw = document.getElementById("bld-layers-wrap"); if (lw) lw.style.display = isBuiltin ? "none" : "";
   }
   var BUILTIN_SCHEMA = {
     job_applications: [
@@ -2258,6 +2396,8 @@
     ((table.config && table.config.statuses) || []).forEach(function (st) { addStageRow(st); });
     document.getElementById("bld-actions").innerHTML = "";
     ((table.config && table.config.actions) || []).forEach(function (a) { addActionRow(a); });
+    document.getElementById("bld-layers").innerHTML = "";
+    ((table.config && table.config.layers) || []).forEach(function (l) { addLayerRow(l); });
     builder.classList.add("open");
     db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
       document.getElementById("bld-msg").textContent = "";
@@ -2279,6 +2419,7 @@
   document.getElementById("bld-add-field").addEventListener("click", function () { addBuilderField(); saveDraft(); });
   document.getElementById("bld-add-stage").addEventListener("click", function () { addStageRow(); });
   document.getElementById("bld-add-action").addEventListener("click", function () { addActionRow(); });
+  document.getElementById("bld-add-layer").addEventListener("click", function () { addLayerRow(); });
   document.getElementById("bld-discard").addEventListener("click", function () { clearDraft(); resetBuilder(); });
   document.getElementById("bld-save").addEventListener("click", function () {
     var msg = document.getElementById("bld-msg");
@@ -2303,7 +2444,7 @@
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
     msg.textContent = "Creating…";
-    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions() } }).select().single().then(function (tRes) {
+    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers() } }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }; });
@@ -2326,7 +2467,7 @@
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
       tableUpdate.config = { hidden: hidden };
     } else {
-      tableUpdate.config = { statuses: serializeStages(), actions: serializeActions() };
+      tableUpdate.config = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers() };
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
