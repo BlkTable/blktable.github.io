@@ -881,7 +881,12 @@
     loadBuiltinTokens();
     loadBuiltinExtra();
     loadStars();
+    loadAssignUsers();
     showView("home");
+  }
+  var assignUsers = [];
+  function loadAssignUsers() {
+    db.rpc("list_users").then(function (res) { if (res && !res.error) assignUsers = res.data || []; });
   }
   function showLogin() {
     app.style.display = "none";
@@ -1803,11 +1808,9 @@
     var row = document.createElement("div"); row.className = "bld-layer";
     if (data.id) row.setAttribute("data-layer-id", data.id);
     var typeOpts = LAYER_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + "</option>"; }).join("");
-    var userOpts = '<option value="">— assign to —</option>' + builderUsers.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(u.name) + "</option>"; }).join("");
-    row.innerHTML = '<span class="ly-num"></span><select class="ly-type">' + typeOpts + '</select><input class="ly-label" placeholder="Step name (optional)"><select class="ly-assignee">' + userOpts + '</select><button type="button" class="rm">Remove</button>';
+    row.innerHTML = '<span class="ly-num"></span><select class="ly-type">' + typeOpts + '</select><input class="ly-label" placeholder="Step name (optional)"><button type="button" class="rm">Remove</button>';
     if (data.type) row.querySelector(".ly-type").value = data.type;
     row.querySelector(".ly-label").value = data.label || "";
-    if (data.assignee) row.querySelector(".ly-assignee").value = data.assignee;
     row.querySelector(".rm").addEventListener("click", function () { row.remove(); renumberLayers(); });
     document.getElementById("bld-layers").appendChild(row);
     renumberLayers();
@@ -1815,10 +1818,8 @@
   }
   function serializeLayers() {
     return [].slice.call(document.querySelectorAll("#bld-layers .bld-layer")).map(function (r, i) {
-      var assignee = r.querySelector(".ly-assignee").value || null;
-      var aname = assignee ? ((builderUsers.filter(function (u) { return u.id === assignee; })[0] || {}).name || null) : null;
       var id = r.getAttribute("data-layer-id") || ("L" + (i + 1) + "-" + Math.random().toString(36).slice(2, 6));
-      return { id: id, type: r.querySelector(".ly-type").value, label: r.querySelector(".ly-label").value.trim() || null, assignee: assignee, assignee_name: aname };
+      return { id: id, type: r.querySelector(".ly-type").value, label: r.querySelector(".ly-label").value.trim() || null };
     });
   }
   // Built-in forms (Job Applications, Casting) can carry admin-added extra questions
@@ -2008,20 +2009,29 @@
       s.data = nd; renderCustom(); setEdStatus("Saved ✓");
     });
   }
-  // ---- Review chain (multi-layer log / approval / receiving) ----
-  function chainState(layers, log) {
-    var first = {}; log.forEach(function (e) { if (!first[e.layer_id]) first[e.layer_id] = e; }); // earliest entry per layer (log is asc)
-    var stopped = false, foundCurrent = false;
-    return layers.map(function (ly) {
-      var e = first[ly.id];
-      if (stopped) return { layer: ly, entry: null, state: "pending" };
-      if (e) { if (e.decision === "rejected") { stopped = true; return { layer: ly, entry: e, state: "rejected" }; } return { layer: ly, entry: e, state: "done" }; }
-      if (!foundCurrent) { foundCurrent = true; return { layer: ly, entry: null, state: "current" }; }
-      return { layer: ly, entry: null, state: "pending" };
-    });
+  // ---- Review chain (dynamic: each person assigns who's next) ----
+  function userSelectHtml(cls) {
+    return '<select class="' + cls + '"><option value="">— choose who is next —</option>' + assignUsers.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(u.name) + "</option>"; }).join("") + "</select>";
   }
-  function logLayer(s, table, ly, decision, note, host) {
-    db.from("submission_log").insert({ submission_id: s.id, table_id: table.id, layer_id: ly.id, actor: myUserId, actor_name: myName, decision: decision, note: note || null }).then(function (res) {
+  function pickUser(sel) { var id = sel.value; if (!id) return null; return { id: id, name: (assignUsers.filter(function (u) { return u.id === id; })[0] || {}).name || "" }; }
+  function chainCompute(layers, log) {
+    var completion = {}, startEntry = null;
+    log.forEach(function (e) { if (e.layer_id === "__start__") { if (!startEntry) startEntry = e; } else if (!completion[e.layer_id]) completion[e.layer_id] = e; });
+    var assignees = {};
+    if (startEntry && startEntry.next_assignee && layers[0]) assignees[layers[0].id] = { id: startEntry.next_assignee, name: startEntry.next_assignee_name };
+    layers.forEach(function (ly, i) { if (i > 0) { var prev = completion[layers[i - 1].id]; if (prev && prev.next_assignee) assignees[ly.id] = { id: prev.next_assignee, name: prev.next_assignee_name }; } });
+    var stopped = false, foundCurrent = false;
+    var states = layers.map(function (ly) {
+      var e = completion[ly.id], a = assignees[ly.id] || null;
+      if (stopped) return { layer: ly, entry: null, state: "pending", assignee: a };
+      if (e) { if (e.decision === "rejected") { stopped = true; return { layer: ly, entry: e, state: "rejected", assignee: a }; } return { layer: ly, entry: e, state: "done", assignee: a }; }
+      if (!foundCurrent) { foundCurrent = true; return { layer: ly, entry: null, state: "current", assignee: a }; }
+      return { layer: ly, entry: null, state: "pending", assignee: a };
+    });
+    return { states: states };
+  }
+  function logLayer(s, table, layerId, decision, note, nextA, host) {
+    db.from("submission_log").insert({ submission_id: s.id, table_id: table.id, layer_id: layerId, actor: myUserId, actor_name: myName, decision: decision, note: note || null, next_assignee: nextA ? nextA.id : null, next_assignee_name: nextA ? nextA.name : null }).then(function (res) {
       if (res.error) { window.alert("Could not save. " + (res.error.message || "")); return; }
       renderChain(s, table, host);
     });
@@ -2033,43 +2043,59 @@
     host.innerHTML = '<div class="chain-h">Review chain</div><div class="chain-body" style="color:var(--muted);font-size:0.85rem;">Loading…</div>';
     db.from("submission_log").select("*").eq("submission_id", s.id).order("created_at", { ascending: true }).then(function (res) {
       var log = (res && res.data) || [];
-      var states = chainState(layers, log);
+      var states = chainCompute(layers, log).states;
       var body = host.querySelector(".chain-body"); body.innerHTML = "";
-      states.forEach(function (st) {
-        var ly = st.layer, e = st.entry;
-        var mine = (ly.assignee && ly.assignee === myUserId) || isAdmin;
+      states.forEach(function (st, idx) {
+        var ly = st.layer, e = st.entry, isLast = idx === layers.length - 1;
+        var iAmAssignee = st.assignee && st.assignee.id === myUserId;
         var el = document.createElement("div"); el.className = "layer " + st.state;
-        var dot = st.state === "done" ? "✓" : st.state === "rejected" ? "✕" : "";
+        var dot = st.state === "done" ? "✓" : st.state === "rejected" ? "✕" : (idx + 1);
         var html = '<div class="dot">' + dot + '</div><div class="lbody">' +
           '<div class="l-top"><span class="l-name">' + esc(ly.label || layerTypeLabel(ly.type)) + '</span><span class="l-type">' + esc(layerTypeLabel(ly.type)) + "</span>" +
-          (st.state === "current" && mine ? '<span class="l-turn">Your turn</span>' : "") + "</div>" +
-          '<div class="l-assignee">Assigned: ' + esc(ly.assignee_name || "—") + "</div>";
+          (st.state === "current" && st.assignee && (iAmAssignee || isAdmin) ? '<span class="l-turn">Your turn</span>' : "") + "</div>" +
+          '<div class="l-assignee">Assigned: ' + esc(st.assignee ? st.assignee.name : "—") + "</div>";
         if (e) {
           var dtxt = e.decision === "approved" ? "Approved" : e.decision === "rejected" ? "Rejected" : e.decision === "received" ? "Received" : "Logged";
           html += '<div class="l-meta">' + esc(dtxt) + " by " + esc(e.actor_name || "—") + " · " + fmtDate(e.created_at) + "</div>";
           if (e.note) html += '<div class="l-note">' + esc(e.note) + "</div>";
-        } else if (st.state === "current" && mine) {
-          var ph = ly.type === "approval" ? "Feedback (optional)" : ly.type === "receiving" ? "Receiving notes / feedback" : "Your note";
-          html += '<div class="l-act"><textarea class="l-note-in" placeholder="' + ph + '"></textarea><div class="l-btns"></div></div>';
-        } else if (st.state === "current") {
-          html += '<div class="l-meta">Waiting on ' + esc(ly.assignee_name || "the assignee") + "</div>";
+          if (e.next_assignee_name && !isLast) html += '<div class="l-meta">→ passed to ' + esc(e.next_assignee_name) + "</div>";
         }
         el.innerHTML = html;
-        if (!e && st.state === "current" && mine) {
-          var btns = el.querySelector(".l-btns"), noteIn = el.querySelector(".l-note-in");
-          if (ly.type === "approval") {
-            btns.innerHTML = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
-            btns.querySelector(".btn-approve").addEventListener("click", function () { logLayer(s, table, ly, "approved", noteIn.value.trim(), host); });
-            btns.querySelector(".btn-reject").addEventListener("click", function () { logLayer(s, table, ly, "rejected", noteIn.value.trim(), host); });
-          } else if (ly.type === "receiving") {
-            btns.innerHTML = '<button class="btn-approve">Mark received</button>';
-            btns.querySelector(".btn-approve").addEventListener("click", function () { logLayer(s, table, ly, "received", noteIn.value.trim(), host); });
-          } else {
-            btns.innerHTML = '<button class="btn-wa">Save note</button>';
-            btns.querySelector(".btn-wa").addEventListener("click", function () { if (!noteIn.value.trim()) { noteIn.focus(); return; } logLayer(s, table, ly, "note", noteIn.value.trim(), host); });
-          }
-        }
         body.appendChild(el);
+        if (st.state === "current" && !e) {
+          var lbody = el.querySelector(".lbody");
+          if (!st.assignee) {
+            if (isAdmin) {
+              var sw = document.createElement("div"); sw.className = "l-act";
+              sw.innerHTML = userSelectHtml("ln-start") + '<div class="l-btns"><button class="btn-approve">Assign &amp; start</button></div>';
+              sw.querySelector(".btn-approve").addEventListener("click", function () { var u = pickUser(sw.querySelector(".ln-start")); if (!u) { window.alert("Choose who starts the chain."); return; } logLayer(s, table, "__start__", "assign", null, u, host); });
+              lbody.appendChild(sw);
+            } else { lbody.insertAdjacentHTML("beforeend", '<div class="l-meta">Not started yet.</div>'); }
+          } else if (iAmAssignee || isAdmin) {
+            var act = document.createElement("div"); act.className = "l-act";
+            var ph = ly.type === "approval" ? "Feedback (optional)" : ly.type === "receiving" ? "Receiving notes / feedback" : "Your note";
+            act.innerHTML = '<textarea class="l-note-in" placeholder="' + ph + '"></textarea>' + (isLast ? "" : userSelectHtml("ln-next")) + '<div class="l-btns"></div>';
+            var btns = act.querySelector(".l-btns"), noteIn = act.querySelector(".l-note-in");
+            var doAct = function (decision, needNext) {
+              var nextA = null;
+              if (needNext && !isLast) { nextA = pickUser(act.querySelector(".ln-next")); if (!nextA) { window.alert("Choose who is next in the chain."); return; } }
+              if (decision === "note" && !noteIn.value.trim()) { noteIn.focus(); return; }
+              logLayer(s, table, ly.id, decision, noteIn.value.trim(), nextA, host);
+            };
+            if (ly.type === "approval") {
+              btns.innerHTML = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
+              btns.querySelector(".btn-approve").addEventListener("click", function () { doAct("approved", true); });
+              btns.querySelector(".btn-reject").addEventListener("click", function () { doAct("rejected", false); });
+            } else if (ly.type === "receiving") {
+              btns.innerHTML = '<button class="btn-approve">Mark received</button>';
+              btns.querySelector(".btn-approve").addEventListener("click", function () { doAct("received", true); });
+            } else {
+              btns.innerHTML = '<button class="btn-wa">Save note</button>';
+              btns.querySelector(".btn-wa").addEventListener("click", function () { doAct("note", true); });
+            }
+            lbody.appendChild(act);
+          } else { lbody.insertAdjacentHTML("beforeend", '<div class="l-meta">Waiting on ' + esc(st.assignee.name) + "</div>"); }
+        }
       });
     });
   }
