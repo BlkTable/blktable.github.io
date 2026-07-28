@@ -247,6 +247,18 @@
   .bld-stage input.st-label { flex: 1; min-width: 0; min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
   .bld-stage select.st-color { height: 38px; padding: 0 26px 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; appearance: none; -webkit-appearance: none; }
   .bld-stage .rm { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; flex: 0 0 auto; }
+  .bld-drag { cursor: grab; color: var(--muted); font-size: 1rem; padding: 0 2px; align-self: center; flex: 0 0 auto; user-select: none; }
+  .bld-drag:active { cursor: grabbing; }
+  .bld-field.dragging { opacity: 0.45; }
+  /* builder: actions editor */
+  .bld-action { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .bld-action select.act-type, .bld-action input.act-label { min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
+  .bld-action input.act-label { flex: 1; min-width: 120px; }
+  .bld-action textarea.act-tpl { flex-basis: 100%; min-height: 60px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.88rem; outline: none; box-sizing: border-box; font-family: inherit; resize: vertical; }
+  .bld-action .rm { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+  .act-wa { background: #25d366 !important; color: #062916 !important; }
+  .act-call { background: #4a9eff !important; color: #fff !important; }
+  .act-email { background: #eab308 !important; color: #0a0b0d !important; }
   /* pipeline tabs + stage pills/buttons (generic, used by any table) */
   .pipe-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .pipe-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--field-border); background: var(--card); color: var(--muted); font-size: 0.85rem; cursor: pointer; font-family: inherit; }
@@ -682,6 +694,11 @@
           <div class="fp-label" style="margin: 16px 0 6px;">Workflow stages <span style="color:var(--muted);font-weight:400;">— optional. Add stages (e.g. New / Approved / Rejected) to get tabs + move buttons.</span></div>
           <div id="bld-stages"></div>
           <button type="button" class="btn-save" id="bld-add-stage" style="margin-top: 4px;">＋ Add stage</button>
+        </div>
+        <div class="bld-actions-wrap" id="bld-actions-wrap">
+          <div class="fp-label" style="margin: 16px 0 6px;">Record actions <span style="color:var(--muted);font-weight:400;">— optional. Buttons on each record: WhatsApp / Call / Email (uses the table's phone/email field).</span></div>
+          <div id="bld-actions"></div>
+          <button type="button" class="btn-save" id="bld-add-action" style="margin-top: 4px;">＋ Add action</button>
         </div>
         <div class="m-actions" style="margin-top: 16px; align-items: center; gap: 12px;">
           <button class="btn-wa" id="bld-save">Create table</button>
@@ -1380,15 +1397,44 @@
   // ---- Per-record ⋯ menu (View / Delete) ----
   function closeAllRecMenus() { [].slice.call(document.querySelectorAll(".rec-menu.open")).forEach(function (m) { m.classList.remove("open"); }); }
   document.addEventListener("click", closeAllRecMenus);
-  function recMenuHtml() {
-    return '<div class="rec-menu"><button type="button" class="rec-kebab" aria-label="Actions">⋯</button><ul class="rec-actions"><li data-act="view">View</li>' + (isAdmin ? '<li data-act="delete" class="danger">Delete</li>' : "") + "</ul></div>";
+  function recMenuHtml(actions) {
+    var acts = (actions || []).map(function (a, i) { return '<li data-act="do" data-ai="' + i + '">' + esc(a.label || defaultActionLabel(a.type)) + "</li>"; }).join("");
+    return '<div class="rec-menu"><button type="button" class="rec-kebab" aria-label="Actions">⋯</button><ul class="rec-actions">' + acts + '<li data-act="view">View</li>' + (isAdmin ? '<li data-act="delete" class="danger">Delete</li>' : "") + "</ul></div>";
   }
-  function wireRecMenu(el, onView, onDelete) {
+  function wireRecMenu(el, onView, onDelete, onAction, actions) {
     var menu = el.querySelector(".rec-menu"); if (!menu) return;
     menu.querySelector(".rec-kebab").addEventListener("click", function (e) { e.stopPropagation(); var open = menu.classList.contains("open"); closeAllRecMenus(); if (!open) menu.classList.add("open"); });
     [].slice.call(menu.querySelectorAll(".rec-actions li")).forEach(function (li) {
-      li.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.remove("open"); var act = li.getAttribute("data-act"); if (act === "view" && onView) onView(); else if (act === "delete" && onDelete) onDelete(); });
+      li.addEventListener("click", function (e) {
+        e.stopPropagation(); menu.classList.remove("open"); var act = li.getAttribute("data-act");
+        if (act === "view" && onView) onView();
+        else if (act === "delete" && onDelete) onDelete();
+        else if (act === "do" && onAction && actions) { var ai = +li.getAttribute("data-ai"); if (actions[ai]) onAction(actions[ai]); }
+      });
     });
+  }
+  // Resolve + fire a record action (WhatsApp / Call / Email)
+  function fieldValueByType(s, fields, type) { var f = (fields || []).filter(function (x) { return x.type === type; })[0]; return f ? (s.data || {})[f.id] : null; }
+  function fillTemplate(tpl, s, fields) {
+    var d = s.data || {};
+    return (tpl || "").replace(/\{([^}]+)\}/g, function (m, name) {
+      name = name.trim().toLowerCase();
+      var f = (fields || []).filter(function (x) { return (x.label || "").toLowerCase() === name || (x.label_ar || "").toLowerCase() === name; })[0];
+      return f && d[f.id] != null ? String(d[f.id]) : "";
+    });
+  }
+  function doRecordAction(a, s, fields) {
+    if (a.type === "whatsapp") {
+      var ph = fieldValueByType(s, fields, "phone"); if (!ph) { window.alert("This table has no phone field to message."); return; }
+      var text = fillTemplate(a.template, s, fields);
+      window.open("https://wa.me/" + String(ph).replace(/[^\d]/g, "") + (text ? "?text=" + encodeURIComponent(text) : ""), "_blank");
+    } else if (a.type === "call") {
+      var ph2 = fieldValueByType(s, fields, "phone"); if (!ph2) { window.alert("This table has no phone field to call."); return; }
+      window.open("tel:" + String(ph2).replace(/[^\d+]/g, ""), "_self");
+    } else if (a.type === "email") {
+      var em = fieldValueByType(s, fields, "email"); if (!em) { window.alert("This table has no email field."); return; }
+      window.open("mailto:" + em, "_self");
+    }
   }
   function deleteCasting(c) {
     if (!window.confirm("Delete this entry for " + (c.full_name || "this person") + "? This can't be undone.")) return;
@@ -1491,6 +1537,32 @@
       return { key: key, label: label, color: r.querySelector(".st-color").value };
     }).filter(Boolean);
   }
+  // ---- Builder: record actions editor (WhatsApp / Call / Email) ----
+  function defaultActionLabel(type) { return type === "whatsapp" ? "💬 WhatsApp" : type === "call" ? "📞 Call" : type === "email" ? "✉️ Email" : "Action"; }
+  function addActionRow(data) {
+    data = data || {};
+    var row = document.createElement("div"); row.className = "bld-action";
+    var types = [["whatsapp", "WhatsApp"], ["call", "Call"], ["email", "Email"]];
+    var opts = types.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + "</option>"; }).join("");
+    row.innerHTML = '<select class="act-type">' + opts + '</select><input class="act-label" placeholder="Button label (optional)"><button type="button" class="rm">Remove</button>' +
+      '<textarea class="act-tpl" placeholder="WhatsApp message — use {Question name} to insert an answer, e.g. هلا {Full name} 👋"></textarea>';
+    var typeSel = row.querySelector(".act-type"), tpl = row.querySelector(".act-tpl");
+    if (data.type) typeSel.value = data.type;
+    row.querySelector(".act-label").value = data.label || "";
+    tpl.value = data.template || "";
+    function syncType() { tpl.style.display = typeSel.value === "whatsapp" ? "" : "none"; }
+    syncType(); typeSel.addEventListener("change", syncType);
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); });
+    document.getElementById("bld-actions").appendChild(row);
+    return row;
+  }
+  function serializeActions() {
+    return [].slice.call(document.querySelectorAll("#bld-actions .bld-action")).map(function (r) {
+      var type = r.querySelector(".act-type").value;
+      var label = r.querySelector(".act-label").value.trim();
+      return { type: type, label: label || null, template: type === "whatsapp" ? (r.querySelector(".act-tpl").value || "") : null };
+    });
+  }
   // Built-in forms (Job Applications, Casting) can carry admin-added extra questions
   var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
   var builtinExtra = { job_applications: [], casting: [] };
@@ -1572,6 +1644,7 @@
     var q = (document.getElementById("custom-search").value || "").toLowerCase().trim();
     var fields = currentCustom.fields, subs = currentCustom.subs;
     var stages = customStages();
+    var tableActions = (currentCustom.table.config && currentCustom.table.config.actions) || [];
     var mayEdit = canEdit(currentCustom.table.id);
     var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty"), tabsEl = document.getElementById("custom-tabs");
     document.getElementById("custom-count").textContent = subs.length + (subs.length === 1 ? " entry" : " entries");
@@ -1609,12 +1682,12 @@
           return '<button type="button" class="sc-' + esc(st.color || "gray") + '" data-move="' + esc(st.key) + '">→ ' + esc(st.label) + "</button>";
         }).join("") + "</div>";
       }
-      var actions = '<div class="card-actions">' + moveHtml + recMenuHtml() + "</div>";
+      var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions) + "</div>";
       var el = document.createElement("div");
       if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
       else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + actions + "</div>"; }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
-      wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); });
+      wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
       kcont.appendChild(el);
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
@@ -1844,7 +1917,7 @@
     var row = document.createElement("div"); row.className = "bld-field";
     var typeOpts = FIELD_TYPES.map(function (t) { return '<option value="' + t.v + '">' + t.label + "</option>"; }).join("");
     row.innerHTML =
-      '<div class="r1"><textarea class="lab" rows="1" placeholder="Question (English)"></textarea><textarea class="lab-ar" rows="1" placeholder="السؤال (عربي)" dir="rtl"></textarea></div>' +
+      '<div class="r1"><span class="bld-drag" title="Drag to reorder">⠿</span><textarea class="lab" rows="1" placeholder="Question (English)"></textarea><textarea class="lab-ar" rows="1" placeholder="السؤال (عربي)" dir="rtl"></textarea></div>' +
       '<div class="r2"><select class="ftype">' + typeOpts + '</select>' +
       '<textarea class="opts" rows="1" placeholder="Options: en|ar, en|ar" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
@@ -1865,8 +1938,25 @@
     row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = this.value === "dropdown" ? "" : "none"; bldGrow(row.querySelector(".opts")); });
     [].slice.call(row.querySelectorAll("textarea")).forEach(wireBldGrow);
     row.querySelector(".rm").addEventListener("click", function () { row.remove(); saveDraft(); });
+    var handle = row.querySelector(".bld-drag");
+    handle.addEventListener("mousedown", function () { row.draggable = true; });
+    handle.addEventListener("mouseup", function () { row.draggable = false; });
+    row.addEventListener("dragstart", function (e) { bldDragEl = row; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", ""); } catch (_) {} });
+    row.addEventListener("dragend", function () { row.classList.remove("dragging"); row.draggable = false; bldDragEl = null; saveDraft(); });
     return row;
   }
+  var bldDragEl = null;
+  function bldDragAfter(container, y) {
+    var els = [].slice.call(container.querySelectorAll(".bld-field:not(.dragging)"));
+    var closest = { offset: -Infinity, el: null };
+    els.forEach(function (c) { var box = c.getBoundingClientRect(); var off = y - box.top - box.height / 2; if (off < 0 && off > closest.offset) closest = { offset: off, el: c }; });
+    return closest.el;
+  }
+  document.getElementById("bld-fields").addEventListener("dragover", function (e) {
+    if (!bldDragEl) return; e.preventDefault();
+    var after = bldDragAfter(this, e.clientY);
+    if (after == null) this.appendChild(bldDragEl); else this.insertBefore(bldDragEl, after);
+  });
   // ---- Auto-save draft so an in-progress table survives closing/reloading ----
   function serializeBuilder() {
     var rows = [].slice.call(document.querySelectorAll("#bld-fields .bld-field"));
@@ -1899,6 +1989,7 @@
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
     document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     document.getElementById("bld-stages").innerHTML = "";
+    document.getElementById("bld-actions").innerHTML = "";
     addBuilderField();
   }
   function setBuilderChrome(mode, name) {
@@ -1914,6 +2005,7 @@
     var two = document.querySelector("#builder-modal .bld-two"); if (two) two.style.display = isBuiltin ? "none" : "flex";
     var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
     var sw = document.getElementById("bld-stages-wrap"); if (sw) sw.style.display = isBuiltin ? "none" : "";
+    var aw = document.getElementById("bld-actions-wrap"); if (aw) aw.style.display = isBuiltin ? "none" : "";
   }
   var BUILTIN_SCHEMA = {
     job_applications: [
@@ -1994,6 +2086,8 @@
     document.getElementById("bld-fields").innerHTML = "";
     document.getElementById("bld-stages").innerHTML = "";
     ((table.config && table.config.statuses) || []).forEach(function (st) { addStageRow(st); });
+    document.getElementById("bld-actions").innerHTML = "";
+    ((table.config && table.config.actions) || []).forEach(function (a) { addActionRow(a); });
     builder.classList.add("open");
     db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
       document.getElementById("bld-msg").textContent = "";
@@ -2014,6 +2108,7 @@
   builder.addEventListener("change", saveDraft);
   document.getElementById("bld-add-field").addEventListener("click", function () { addBuilderField(); saveDraft(); });
   document.getElementById("bld-add-stage").addEventListener("click", function () { addStageRow(); });
+  document.getElementById("bld-add-action").addEventListener("click", function () { addActionRow(); });
   document.getElementById("bld-discard").addEventListener("click", function () { clearDraft(); resetBuilder(); });
   document.getElementById("bld-save").addEventListener("click", function () {
     var msg = document.getElementById("bld-msg");
@@ -2038,7 +2133,7 @@
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
     msg.textContent = "Creating…";
-    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages() } }).select().single().then(function (tRes) {
+    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions() } }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }; });
@@ -2061,7 +2156,7 @@
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
       tableUpdate.config = { hidden: hidden };
     } else {
-      tableUpdate.config = { statuses: serializeStages() };
+      tableUpdate.config = { statuses: serializeStages(), actions: serializeActions() };
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
