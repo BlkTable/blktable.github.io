@@ -403,6 +403,34 @@
   .u-trow { display: flex; align-items: center; gap: 10px; }
   .u-editopt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 0.78rem; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
   .u-editopt input { width: auto; height: auto; }
+  /* top-right profile menu */
+  .profile-menu { position: relative; }
+  .profile-btn { display: flex; align-items: center; gap: 9px; background: var(--card); border: 1px solid var(--field-border); border-radius: 999px; padding: 5px 12px 5px 6px; color: var(--text); cursor: pointer; font-family: inherit; }
+  .profile-btn:hover { border-color: var(--silver); }
+  .pf-avatar { width: 30px; height: 30px; border-radius: 50%; background: #20242b center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 0.82rem; flex: 0 0 auto; }
+  .pf-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+  .pf-name { font-size: 0.85rem; font-weight: 600; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pf-role { font-size: 0.64rem; color: var(--muted); text-transform: capitalize; letter-spacing: 0.02em; }
+  .profile-btn .cc-caret { color: var(--muted); font-size: 0.62rem; }
+  .profile-dd { position: absolute; right: 0; top: calc(100% + 8px); z-index: 80; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+  .profile-menu.open .profile-dd { display: block; }
+  .profile-dd li { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text); }
+  .profile-dd li:hover { background: rgba(255,255,255,0.06); }
+  .profile-dd li.danger { color: #ff6b6b; }
+  /* home / workspace */
+  .home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .home-list { display: flex; flex-direction: column; gap: 8px; }
+  .home-card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; cursor: pointer; transition: border-color 0.15s ease; }
+  .home-card:hover { border-color: var(--silver); }
+  .home-list .home-card { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+  .hc-name { font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; }
+  .home-cards .hc-body { margin: 4px 40px 14px 0; }
+  .home-list .hc-body { flex: 1; margin: 0; }
+  .hc-actions { display: flex; gap: 8px; }
+  .home-list .hc-actions { margin-left: auto; }
+  .hc-star { position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--muted); font-size: 1.15rem; cursor: pointer; line-height: 1; padding: 2px; }
+  .hc-star.on { color: #eab308; }
+  .home-list .hc-star { position: static; order: -1; }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
   .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: #20242b center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
 </style>
@@ -432,16 +460,32 @@
         <img class="logo-img" src="assets/blk-logo.svg" alt="BLK">
       </div>
       <div class="right">
-        <div class="who">
-          <div class="email" id="who-email">—</div>
-          <span class="badge" id="who-role">—</span>
+        <div class="profile-menu">
+          <button class="profile-btn" id="profile-btn" aria-haspopup="true" aria-expanded="false">
+            <span class="pf-avatar" id="pf-avatar" aria-hidden="true">?</span>
+            <span class="pf-meta"><span class="pf-name" id="pf-name">—</span><span class="pf-role" id="who-role">—</span></span>
+            <span class="cc-caret">▾</span>
+          </button>
+          <ul class="profile-dd" id="profile-dd" role="menu">
+            <li role="menuitem" id="pf-account">Account &amp; password</li>
+            <li role="menuitem" id="pf-users" style="display:none;">Users</li>
+            <li role="menuitem" id="pf-logout" class="danger">Sign out</li>
+          </ul>
         </div>
-        <button class="linkbtn" id="logout-btn">Sign out</button>
       </div>
     </div>
 
     <div class="workspace">
       <aside class="sidebar">
+        <div class="side-group">
+          <nav class="side-list">
+            <button class="side-item home-item" data-view="home"><span class="side-label">⌂&nbsp;&nbsp;Home</span></button>
+          </nav>
+        </div>
+        <div class="side-group" id="starred-group" style="display:none;">
+          <div class="side-label">Starred</div>
+          <nav class="side-list" id="side-starred"></nav>
+        </div>
         <div class="side-group">
           <div class="side-label">Tables</div>
           <nav class="side-list" id="side-tables">
@@ -451,17 +495,18 @@
             <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
           </nav>
         </div>
-        <div class="side-group side-bottom">
-          <div class="side-label">Account</div>
-          <nav class="side-list">
-            <button class="side-item" id="users-btn" data-view="users" style="display:none; color:var(--silver);"><span class="ico"></span>Users</button>
-            <button class="side-item" data-view="account"><span class="ico"></span>Change password</button>
-          </nav>
-        </div>
       </aside>
 
       <main class="main">
-        <section class="view" id="view-job_applications">
+        <section class="view" id="view-home">
+          <div class="ja-head">
+            <div><div class="section-title">Workspace</div><h2 class="ja-title">Your tables</h2></div>
+            <div class="seg viewtoggle" id="home-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
+          </div>
+          <div id="home-grid" class="home-cards"></div>
+          <div id="home-empty" class="empty" style="display:none;"><h2>No tables yet</h2><p>Tables shared with you will appear here.</p></div>
+        </section>
+        <section class="view hidden" id="view-job_applications">
           <div class="ja-head">
             <div>
               <div class="section-title">Table</div>
@@ -677,6 +722,18 @@
       </div>
     </div>
 
+    <!-- Admin: share a table with accounts -->
+    <div class="modal-overlay" id="share-modal">
+      <div class="modal" style="max-width: 460px;">
+        <button class="modal-close" id="share-close" aria-label="Close">✕</button>
+        <div class="m-name" id="share-title">Share table</div>
+        <div class="m-sub">Choose which accounts can see this table, and whether they can edit its records.</div>
+        <div id="share-users" class="u-tables" style="margin-top:10px;"></div>
+        <div class="m-actions" style="margin-top:16px;"><button class="btn-wa" id="share-save">Save sharing</button></div>
+        <div class="m-msg" id="share-msg"></div>
+      </div>
+    </div>
+
     <!-- Admin: table builder -->
     <div class="modal-overlay" id="builder-modal">
       <div class="modal" style="max-width: 660px;">
@@ -749,17 +806,23 @@
   var isAdmin = false;
   var myUserId = null;
   var editKeys = {}; // table_key -> true when this user may edit that table's records
+  var accessKeys = {}; // table_key -> true when this user can see that table
+  var stars = {};      // table_key -> true when starred by this user
+  var homeView = "cards";
+  var shareKey = null;
   function canEdit(key) { return isAdmin || !!editKeys[key]; }
   function showApp(session) {
     loginWrap.style.display = "none";
     app.style.display = "flex";
     myUserId = session.user.id;
-    document.getElementById("who-email").textContent = session.user.email;
+    document.getElementById("pf-name").textContent = session.user.email;
     loadRole(session.user.id);
     loadApps();
     loadCustomTables();
     loadBuiltinTokens();
     loadBuiltinExtra();
+    loadStars();
+    showView("home");
   }
   function showLogin() {
     app.style.display = "none";
@@ -767,13 +830,17 @@
   }
 
   function loadRole(userId) {
-    db.from("profiles").select("role, full_name").eq("id", userId).single()
+    db.from("profiles").select("role, full_name, avatar_path").eq("id", userId).single()
       .then(function (res) {
         var role = (res.data && res.data.role) || "reviewer";
+        var nm = (res.data && res.data.full_name) || document.getElementById("pf-name").textContent;
         document.getElementById("who-role").textContent = role;
+        document.getElementById("pf-name").textContent = nm;
+        var av = document.getElementById("pf-avatar"); av.textContent = (nm || "?").charAt(0).toUpperCase();
+        if (res.data && res.data.avatar_path) getPhotoUrl(res.data.avatar_path).then(function (u) { if (u) { av.style.background = "url(" + u + ") center/cover"; av.textContent = ""; } });
         isAdmin = role === "admin";
         document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
-        document.getElementById("users-btn").style.display = isAdmin ? "flex" : "none";
+        document.getElementById("pf-users").style.display = isAdmin ? "block" : "none";
         ["ja-qr-regen", "cast-qr-regen", "custom-qr-regen"].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = isAdmin ? "inline-block" : "none"; });
         document.getElementById("side-tables").classList.toggle("show-gears", isAdmin);
         applyBuiltinAccess();
@@ -782,25 +849,128 @@
   function applyBuiltinAccess() {
     var jaBtn = document.querySelector('.side-item[data-view="job_applications"]');
     var castBtn = document.querySelector('.side-item[data-view="casting"]');
-    if (isAdmin) { jaBtn.style.display = "flex"; castBtn.style.display = "flex"; return; }
+    if (isAdmin) {
+      jaBtn.style.display = "flex"; castBtn.style.display = "flex";
+      accessKeys = { job_applications: true, casting: true };
+      renderHome(); renderStarred();
+      return;
+    }
     jaBtn.style.display = "none"; castBtn.style.display = "none";
     db.from("table_access").select("table_key, can_edit").then(function (res) {
-      var keys = {}; editKeys = {};
-      (res.data || []).forEach(function (r) { keys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; });
-      if (keys["job_applications"]) jaBtn.style.display = "flex";
-      if (keys["casting"]) castBtn.style.display = "flex";
-      ensureDefaultView();
+      accessKeys = {}; editKeys = {};
+      (res.data || []).forEach(function (r) { accessKeys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; });
+      if (accessKeys["job_applications"]) jaBtn.style.display = "flex";
+      if (accessKeys["casting"]) castBtn.style.display = "flex";
+      renderHome(); renderStarred();
     });
   }
-  function ensureDefaultView() {
-    if (isAdmin) return;
-    var items = [].slice.call(document.querySelectorAll("#side-tables .side-item")).filter(function (b) {
-      return (b.getAttribute("data-view") === "job_applications" || b.getAttribute("data-view") === "casting" || b.getAttribute("data-custom")) && b.offsetParent !== null;
-    });
-    var anyActive = items.some(function (b) { return b.classList.contains("active"); });
-    if (items.length && !anyActive) items[0].click();
-    else if (!items.length) { var v = document.querySelectorAll(".view"); for (var i = 0; i < v.length; i++) v[i].classList.add("hidden"); }
+  function ensureDefaultView() { renderHome(); renderStarred(); }
+
+  // ---- Home / Starred / Share ----
+  function allAccessibleTables() {
+    var list = [];
+    if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: "Job Applications" });
+    if (accessKeys["casting"]) list.push({ key: "casting", name: "BLK Casting" });
+    (customTables || []).forEach(function (t) { list.push({ key: t.id, name: t.name }); });
+    return list;
   }
+  function openTableByKey(key) {
+    if (key === "job_applications" || key === "casting") showView(key);
+    else { var t = (customTables || []).filter(function (x) { return x.id === key; })[0]; if (t) openCustomTable(t); }
+  }
+  function loadStars() {
+    db.from("table_stars").select("table_key").then(function (res) {
+      stars = {}; ((res && res.data) || []).forEach(function (r) { stars[r.table_key] = true; });
+      renderStarred(); renderHome();
+    });
+  }
+  function toggleStar(key) {
+    if (stars[key]) { delete stars[key]; db.from("table_stars").delete().eq("table_key", key).then(function () {}); }
+    else { stars[key] = true; db.from("table_stars").insert({ user_id: myUserId, table_key: key }).then(function () {}); }
+    renderStarred(); renderHome();
+  }
+  function renderStarred() {
+    var host = document.getElementById("side-starred"); if (!host) return;
+    var items = allAccessibleTables().filter(function (t) { return stars[t.key]; });
+    host.innerHTML = "";
+    items.forEach(function (t) {
+      var b = document.createElement("button"); b.className = "side-item"; b.title = t.name;
+      b.innerHTML = '<span class="side-label">★&nbsp;&nbsp;' + esc(t.name) + "</span>";
+      b.addEventListener("click", function () { openTableByKey(t.key); });
+      host.appendChild(b);
+    });
+    document.getElementById("starred-group").style.display = items.length ? "" : "none";
+  }
+  function renderHome() {
+    var grid = document.getElementById("home-grid"); if (!grid) return;
+    var items = allAccessibleTables();
+    var empty = document.getElementById("home-empty");
+    if (!items.length) { grid.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+    grid.className = homeView === "list" ? "home-list" : "home-cards";
+    grid.innerHTML = "";
+    items.forEach(function (t) {
+      var on = !!stars[t.key];
+      var el = document.createElement("div"); el.className = "home-card";
+      el.innerHTML = '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>" +
+        '<div class="hc-body"><div class="hc-name">' + esc(t.name) + "</div></div>" +
+        '<div class="hc-actions">' + (isAdmin ? '<button class="linkbtn hc-share">Share</button>' : "") + '<button class="linkbtn hc-open">Open</button></div>';
+      el.querySelector(".hc-star").addEventListener("click", function (e) { e.stopPropagation(); toggleStar(t.key); });
+      var sh = el.querySelector(".hc-share"); if (sh) sh.addEventListener("click", function (e) { e.stopPropagation(); openShare(t.key, t.name); });
+      el.querySelector(".hc-open").addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key); });
+      el.addEventListener("click", function () { openTableByKey(t.key); });
+      grid.appendChild(el);
+    });
+  }
+  function openShare(key, name) {
+    shareKey = key;
+    document.getElementById("share-title").textContent = "Share: " + name;
+    document.getElementById("share-msg").textContent = "";
+    var host = document.getElementById("share-users"); host.innerHTML = '<div style="color:var(--muted);padding:6px;">Loading…</div>';
+    document.getElementById("share-modal").classList.add("open");
+    Promise.all([
+      db.from("profiles").select("id,email,full_name,role").order("created_at", { ascending: true }),
+      db.from("table_access").select("user_id,can_edit").eq("table_key", key)
+    ]).then(function (r) {
+      var profs = ((r[0] && r[0].data) || []).filter(function (p) { return p.role !== "admin"; });
+      var acc = {}; ((r[1] && r[1].data) || []).forEach(function (a) { acc[a.user_id] = a.can_edit; });
+      host.innerHTML = "";
+      if (!profs.length) { host.innerHTML = '<div style="color:var(--muted);padding:6px;">No reviewer accounts yet — create one from your profile menu → Users.</div>'; return; }
+      profs.forEach(function (p) {
+        var has = p.id in acc;
+        var row = document.createElement("div"); row.className = "u-trow";
+        row.innerHTML = '<label class="u-chk"><input type="checkbox" class="sh-acc" value="' + esc(p.id) + '"' + (has ? " checked" : "") + "> " + esc(p.full_name || p.email) + "</label>" +
+          '<label class="u-editopt"><input type="checkbox" class="sh-edit" data-uid="' + esc(p.id) + '"' + (acc[p.id] ? " checked" : "") + (has ? "" : " disabled") + "> can edit</label>";
+        var a = row.querySelector(".sh-acc"), e = row.querySelector(".sh-edit");
+        a.addEventListener("change", function () { e.disabled = !a.checked; if (!a.checked) e.checked = false; });
+        host.appendChild(row);
+      });
+    }).catch(function () { host.innerHTML = '<div style="color:#ff6b6b;padding:6px;">Could not load accounts.</div>'; });
+  }
+  document.getElementById("share-close").addEventListener("click", function () { document.getElementById("share-modal").classList.remove("open"); });
+  document.getElementById("share-modal").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("open"); });
+  document.getElementById("share-save").addEventListener("click", function () {
+    if (!shareKey) return;
+    var rows = [].slice.call(document.querySelectorAll("#share-users .sh-acc:checked")).map(function (c) {
+      var e = document.querySelector('#share-users .sh-edit[data-uid="' + c.value + '"]');
+      return { user_id: c.value, table_key: shareKey, can_edit: !!(e && e.checked) };
+    });
+    var msg = document.getElementById("share-msg"); msg.textContent = "Saving…";
+    db.from("table_access").delete().eq("table_key", shareKey).then(function (res) {
+      if (res.error) throw res.error;
+      if (rows.length) return db.from("table_access").insert(rows);
+      return { error: null };
+    }).then(function (r) {
+      if (r && r.error) throw r.error;
+      document.getElementById("share-modal").classList.remove("open");
+    }).catch(function (err) { msg.textContent = "Could not save. " + (err.message || ""); if (window.console) console.error(err); });
+  });
+  // profile menu (top-right)
+  var profileMenu = document.querySelector(".profile-menu");
+  document.getElementById("profile-btn").addEventListener("click", function (e) { e.stopPropagation(); var o = profileMenu.classList.contains("open"); profileMenu.classList.remove("open"); if (!o) profileMenu.classList.add("open"); document.getElementById("profile-btn").setAttribute("aria-expanded", !o); });
+  document.addEventListener("click", function () { profileMenu.classList.remove("open"); });
+  document.getElementById("pf-account").addEventListener("click", function () { profileMenu.classList.remove("open"); showView("account"); });
+  document.getElementById("pf-users").addEventListener("click", function () { profileMenu.classList.remove("open"); showView("users"); });
 
   // ---- Login ----
   var loginBtn = document.getElementById("login-btn");
@@ -824,7 +994,7 @@
   });
 
   // ---- Logout ----
-  document.getElementById("logout-btn").addEventListener("click", function () {
+  document.getElementById("pf-logout").addEventListener("click", function () {
     db.auth.signOut().then(showLogin);
   });
 
@@ -2347,6 +2517,7 @@
   wireToggle("ja-viewtoggle", function (v) { jaView = v; renderApps(); });
   wireToggle("casting-viewtoggle", function (v) { castingView = v; renderCasting(); });
   wireToggle("custom-viewtoggle", function (v) { customView = v; renderCustom(); });
+  wireToggle("home-viewtoggle", function (v) { homeView = v; renderHome(); });
 
   // ---- Sidebar: switch which table/view is open in the main pane ----
   function showView(id) {
@@ -2358,6 +2529,7 @@
     for (var j = 0; j < items.length; j++) {
       items[j].classList.toggle("active", items[j].getAttribute("data-view") === id);
     }
+    if (id === "home") renderHome();
     if (id === "casting" && !castingLoaded) loadCasting();
     if (id === "users") loadUsers();
   }
