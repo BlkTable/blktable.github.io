@@ -226,11 +226,22 @@
   .fp-clear:hover { color: var(--text); border-color: var(--silver); }
 
   .ja-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
-  .ja-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+  .ja-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
     cursor: pointer; transition: border-color 0.15s ease; }
   .ja-card:hover { border-color: var(--silver); }
-  .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: #20242b center/cover no-repeat;
+  .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: #20242b center/cover no-repeat; border-radius: 16px 16px 0 0;
     display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 2rem; font-weight: 700; }
+  /* per-record ⋯ actions menu */
+  .rec-menu { position: relative; flex: 0 0 auto; }
+  .ja-card .card-actions { justify-content: center; }
+  .rec-kebab { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1.05rem; line-height: 1; cursor: pointer; flex: 0 0 auto !important; }
+  .rec-kebab:hover { border-color: var(--silver); }
+  .rec-actions { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: #1a1d22; border: 1px solid var(--field-border); border-radius: 10px; box-shadow: 0 14px 34px rgba(0,0,0,0.5); display: none; }
+  .rec-menu.open .rec-actions { display: block; }
+  .rec-actions li { padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 0.85rem; color: var(--text); font-weight: 500; }
+  .rec-actions li:hover { background: rgba(255,255,255,0.06); }
+  .rec-actions li.danger { color: #ff6b6b; }
+  .u-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #20242b; flex: 0 0 auto; }
   .ja-card .body { padding: 12px; text-align: center; }
   .ja-card .body .name { font-weight: 600; font-size: 0.95rem; }
   .ja-card .body .meta { color: var(--muted); font-size: 0.78rem; margin: 3px 0 8px; }
@@ -361,6 +372,8 @@
   .u-trow { display: flex; align-items: center; gap: 10px; }
   .u-editopt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 0.78rem; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
   .u-editopt input { width: auto; height: auto; }
+  .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
+  .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: #20242b center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
 </style>
 </head>
 <body>
@@ -401,8 +414,8 @@
         <div class="side-group">
           <div class="side-label">Tables</div>
           <nav class="side-list" id="side-tables">
-            <button class="side-item active" data-view="job_applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-gear" title="Settings">⚙</span></button>
-            <button class="side-item" data-view="casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Settings">⚙</span></button>
+            <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-gear" title="Settings">⚙</span></button>
+            <button class="side-item" data-view="casting" title="BLK Casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Settings">⚙</span></button>
             <span id="custom-tables-slot"></span>
             <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
           </nav>
@@ -660,6 +673,12 @@
         <button class="modal-close" id="users-close" aria-label="Close">✕</button>
         <div class="m-name" id="u-title">New user</div>
         <div class="m-sub">Create a login and choose which tables they can view.</div>
+        <div class="u-photo-row">
+          <div class="u-photo-preview" id="u-photo-preview" aria-hidden="true"></div>
+          <button type="button" class="linkbtn" id="u-photo-btn">Choose photo</button>
+          <input type="file" id="u-photo" accept="image/*" style="display:none;">
+        </div>
+        <input id="u-name" placeholder="Full name" autocomplete="off" class="u-inp">
         <input id="u-email" placeholder="Email" autocomplete="off" class="u-inp">
         <input id="u-pass" type="text" placeholder="Temporary password (min 8 chars)" autocomplete="off" class="u-inp">
         <div class="m-row" style="margin-top:4px;"><label>Role</label>
@@ -1323,16 +1342,44 @@
       var age = calcAge(c.date_of_birth);
       var initial = esc((c.full_name || "?").trim().charAt(0).toUpperCase());
       var sub = (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") + " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—");
-      var viewBtn = '<div class="card-actions"><button class="btn-view">View</button></div>';
+      var viewBtn = '<div class="card-actions">' + recMenuHtml() + "</div>";
       var el = document.createElement("div");
       if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + '</div><div class="meta">' + sub + "</div>" + viewBtn + "</div>"; }
       else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + '</div><div class="sub">' + sub + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
       el.addEventListener("click", function () { openCastingDetail(c); });
-      var cbv = el.querySelector(".btn-view"); if (cbv) cbv.addEventListener("click", function (e) { e.stopPropagation(); openCastingDetail(c); });
+      wireRecMenu(el, function () { openCastingDetail(c); }, function () { deleteCasting(c); });
       ccont.appendChild(el);
       setThumb(el.querySelector(".photo, .ja-thumb"), c);
     });
   }
+  // ---- Per-record ⋯ menu (View / Delete) ----
+  function closeAllRecMenus() { [].slice.call(document.querySelectorAll(".rec-menu.open")).forEach(function (m) { m.classList.remove("open"); }); }
+  document.addEventListener("click", closeAllRecMenus);
+  function recMenuHtml() {
+    return '<div class="rec-menu"><button type="button" class="rec-kebab" aria-label="Actions">⋯</button><ul class="rec-actions"><li data-act="view">View</li>' + (isAdmin ? '<li data-act="delete" class="danger">Delete</li>' : "") + "</ul></div>";
+  }
+  function wireRecMenu(el, onView, onDelete) {
+    var menu = el.querySelector(".rec-menu"); if (!menu) return;
+    menu.querySelector(".rec-kebab").addEventListener("click", function (e) { e.stopPropagation(); var open = menu.classList.contains("open"); closeAllRecMenus(); if (!open) menu.classList.add("open"); });
+    [].slice.call(menu.querySelectorAll(".rec-actions li")).forEach(function (li) {
+      li.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.remove("open"); var act = li.getAttribute("data-act"); if (act === "view" && onView) onView(); else if (act === "delete" && onDelete) onDelete(); });
+    });
+  }
+  function deleteCasting(c) {
+    if (!window.confirm("Delete this entry for " + (c.full_name || "this person") + "? This can't be undone.")) return;
+    var done = function () { castingRows = castingRows.filter(function (x) { return x.id !== c.id; }); renderCasting(); };
+    var del = function () { db.from("casting_applications").delete().eq("id", c.id).then(function (res) { if (res.error) { window.alert("Could not delete. " + (res.error.message || "")); return; } done(); }); };
+    if (c.photo_path) db.storage.from("photos").remove([c.photo_path]).then(del, del); else del();
+  }
+  function deleteCustomSub(s, fields) {
+    if (!window.confirm("Delete this entry? This can't be undone.")) return;
+    var pf = (fields || []).filter(function (f) { return f.type === "photo"; })[0];
+    var photo = pf && s.data ? s.data[pf.id] : null;
+    var done = function () { if (currentCustom) currentCustom.subs = currentCustom.subs.filter(function (x) { return x.id !== s.id; }); renderCustom(); };
+    var del = function () { db.from("app_submissions").delete().eq("id", s.id).then(function (res) { if (res.error) { window.alert("Could not delete. " + (res.error.message || "")); return; } done(); }); };
+    if (photo) db.storage.from("photos").remove([photo]).then(del, del); else del();
+  }
+
   function openCastingDetail(c) {
     var body = document.getElementById("modal-body");
     if (!canEdit("casting")) {
@@ -1435,7 +1482,7 @@
       slot.innerHTML = "";
       customTables.forEach(function (t) {
         var b = document.createElement("button");
-        b.className = "side-item"; b.setAttribute("data-custom", t.id);
+        b.className = "side-item"; b.setAttribute("data-custom", t.id); b.title = t.name;
         b.innerHTML = '<span class="ico"></span><span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Edit table">⚙</span>';
         b.addEventListener("click", function () { openCustomTable(t); });
         slot.appendChild(b);
@@ -1487,12 +1534,12 @@
       var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(d[f.id] || "—"); });
       parts.push(fmtDate(s.created_at));
       var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
-      var viewBtn = '<div class="card-actions"><button class="btn-view">View</button></div>';
+      var viewBtn = '<div class="card-actions">' + recMenuHtml() + "</div>";
       var el = document.createElement("div");
       if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div>" + viewBtn + "</div>"; }
       else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
-      var kbv = el.querySelector(".btn-view"); if (kbv) kbv.addEventListener("click", function (e) { e.stopPropagation(); openCustomDetail(s, fields); });
+      wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); });
       kcont.appendChild(el);
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
@@ -1980,7 +2027,7 @@
     var listEl = document.getElementById("users-list"), emptyEl = document.getElementById("users-empty");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     Promise.all([
-      db.from("profiles").select("id,email,role,created_at").order("created_at", { ascending: true }),
+      db.from("profiles").select("id,email,role,created_at,full_name,avatar_path").order("created_at", { ascending: true }),
       db.from("table_access").select("user_id,table_key,can_edit")
     ]).then(function (r) {
       var profs = (r[0] && r[0].data) || [], acc = (r[1] && r[1].data) || [];
@@ -1991,20 +2038,26 @@
         var access = byUser[p.id] || [];
         var tnames = p.role === "admin" ? "All tables" : (access.map(function (a) { return keyName(a.table_key) + (a.can_edit ? " (edit)" : ""); }).join(", ") || "no tables");
         var me = p.id === myUserId;
+        var display = p.full_name || p.email || "—";
         var row = document.createElement("div"); row.className = "ja-row";
         row.innerHTML =
-          '<div class="ja-thumb">' + esc((p.email || "?").charAt(0).toUpperCase()) + "</div>" +
-          '<div class="info"><div class="name">' + esc(p.email || "—") + (me ? ' <span style="color:var(--muted);font-size:0.72rem;">(you)</span>' : "") + "</div>" +
-          '<div class="sub">' + esc(p.role) + " · " + esc(tnames) + "</div></div>" +
+          '<div class="ja-thumb">' + esc((display || "?").charAt(0).toUpperCase()) + "</div>" +
+          '<div class="info"><div class="name">' + esc(display) + (me ? ' <span style="color:var(--muted);font-size:0.72rem;">(you)</span>' : "") + "</div>" +
+          '<div class="sub">' + esc(p.email || "") + " · " + esc(p.role) + " · " + esc(tnames) + "</div></div>" +
           '<div class="row-actions"><div class="card-actions"><button class="btn-view u-edit">Edit</button>' + (me ? "" : '<button class="btn-del u-del">Delete</button>') + "</div></div>";
         row.querySelector(".u-edit").addEventListener("click", function () { openUserModal(p, access); });
         var dl = row.querySelector(".u-del"); if (dl) dl.addEventListener("click", function () { deleteUser(p); });
+        if (p.avatar_path) { var th = row.querySelector(".ja-thumb"); getPhotoUrl(p.avatar_path).then(function (url) { if (url && th) { th.style.background = "url(" + url + ") center/cover"; th.textContent = ""; } }); }
         listEl.appendChild(row);
       });
     });
   }
   function openUserModal(user, accessList) {
     editingUser = user || null;
+    uPhotoFile = null; document.getElementById("u-photo").value = "";
+    var pv = document.getElementById("u-photo-preview"); pv.style.background = "#20242b"; pv.textContent = "👤";
+    document.getElementById("u-name").value = user ? (user.full_name || "") : "";
+    if (user && user.avatar_path) getPhotoUrl(user.avatar_path).then(function (url) { if (url) { pv.style.background = "url(" + url + ") center/cover"; pv.textContent = ""; } });
     document.getElementById("u-title").textContent = user ? "Edit user" : "New user";
     document.getElementById("u-email").value = user ? (user.email || "") : "";
     document.getElementById("u-pass").value = "";
@@ -2027,6 +2080,26 @@
       loadUsers();
     }).catch(function (err) { window.alert("Could not delete. " + errText(err)); });
   }
+  var uPhotoFile = null;
+  document.getElementById("u-photo-btn").addEventListener("click", function () { document.getElementById("u-photo").click(); });
+  document.getElementById("u-photo").addEventListener("change", function () {
+    uPhotoFile = this.files[0] || null;
+    var pv = document.getElementById("u-photo-preview");
+    if (uPhotoFile) { pv.style.background = "url(" + URL.createObjectURL(uPhotoFile) + ") center/cover"; pv.textContent = ""; }
+  });
+  function uploadAvatar(id, file) {
+    var safe = (file.name || "img").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-40);
+    var path = "avatars/" + id + "_" + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : String(Date.now())) + "_" + safe;
+    return db.storage.from("photos").upload(path, file, { upsert: false }).then(function (r) { if (r.error) throw r.error; return r.data.path; });
+  }
+  function saveProfileExtras(id, name, file) {
+    var p = file ? uploadAvatar(id, file) : Promise.resolve(null);
+    return p.then(function (path) {
+      var patch = { full_name: name || null };
+      if (path) patch.avatar_path = path;
+      return db.from("profiles").update(patch).eq("id", id).then(function (r) { if (r.error) throw r.error; });
+    });
+  }
   document.getElementById("users-new").addEventListener("click", function () { openUserModal(null); });
   document.getElementById("users-close").addEventListener("click", function () { usersModal.classList.remove("open"); });
   usersModal.addEventListener("click", function (e) { if (e.target === this) usersModal.classList.remove("open"); });
@@ -2036,6 +2109,8 @@
     var email = document.getElementById("u-email").value.trim();
     var pass = document.getElementById("u-pass").value;
     var role = document.getElementById("u-role").value;
+    var name = document.getElementById("u-name").value.trim();
+    if (!name) { msg.textContent = "Enter a name."; return; }
     if (!email) { msg.textContent = "Enter an email."; return; }
     var access = [];
     if (role !== "admin") {
@@ -2052,8 +2127,10 @@
       db.functions.invoke("admin-users", { body: { email: email, password: pass, role: role } }).then(function (res) {
         var e = invokeErr(res); if (e) throw new Error(e);
         var newId = res.data && res.data.id; if (!newId) throw new Error("no id returned");
-        if (role !== "admin" && access.length) return db.from("table_access").insert(access.map(function (a) { return { user_id: newId, table_key: a.table_key, can_edit: a.can_edit }; }));
-        return { error: null };
+        return saveProfileExtras(newId, name, uPhotoFile).then(function () {
+          if (role !== "admin" && access.length) return db.from("table_access").insert(access.map(function (a) { return { user_id: newId, table_key: a.table_key, can_edit: a.can_edit }; }));
+          return { error: null };
+        });
       }).then(function (r) {
         if (r && r.error) throw r.error;
         usersModal.classList.remove("open"); loadUsers();
@@ -2070,6 +2147,7 @@
       var chain = Promise.resolve();
       if (Object.keys(patch).length) chain = chain.then(function () { return db.functions.invoke("admin-users", { body: Object.assign({ action: "update", id: id }, patch) }).then(function (res) { var e = invokeErr(res); if (e) throw new Error(e); }); });
       chain = chain.then(function () { return db.from("profiles").update({ role: role }).eq("id", id).then(function (r) { if (r.error) throw r.error; }); });
+      chain = chain.then(function () { return saveProfileExtras(id, name, uPhotoFile); });
       chain = chain.then(function () { return db.from("table_access").delete().eq("user_id", id).then(function (r) { if (r.error) throw r.error; }); });
       if (role !== "admin" && access.length) chain = chain.then(function () { return db.from("table_access").insert(access.map(function (a) { return { user_id: id, table_key: a.table_key, can_edit: a.can_edit }; })).then(function (r) { if (r.error) throw r.error; }); });
       chain.then(function () { usersModal.classList.remove("open"); loadUsers(); window.alert("Saved."); }).catch(function (err) { msg.textContent = "Could not save. " + errText(err); if (window.console) console.error(err); });
