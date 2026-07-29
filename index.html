@@ -858,6 +858,7 @@
   var isAdmin = false;
   var myUserId = null;
   var editKeys = {}; // table_key -> true when this user may edit that table's records
+  var manageKeys = {}; // table_key -> true when this user is a form manager (drive the review chain)
   var accessKeys = {}; // table_key -> true when this user can see that table
   var stars = {};      // table_key -> true when starred by this user
   var homeView = "cards";
@@ -870,6 +871,7 @@
     });
   }
   function canEdit(key) { return isAdmin || !!editKeys[key]; }
+  function canManage(key) { return isAdmin || !!manageKeys[key]; }
   function showApp(session) {
     loginWrap.style.display = "none";
     app.style.display = "flex";
@@ -922,9 +924,9 @@
       return;
     }
     jaBtn.style.display = "none"; castBtn.style.display = "none";
-    db.from("table_access").select("table_key, can_edit").then(function (res) {
-      accessKeys = {}; editKeys = {};
-      (res.data || []).forEach(function (r) { accessKeys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; });
+    db.from("table_access").select("table_key, can_edit, can_manage").then(function (res) {
+      accessKeys = {}; editKeys = {}; manageKeys = {};
+      (res.data || []).forEach(function (r) { accessKeys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; if (r.can_manage) manageKeys[r.table_key] = true; });
       if (accessKeys["job_applications"]) jaBtn.style.display = "flex";
       if (accessKeys["casting"]) castBtn.style.display = "flex";
       renderHome(); renderStarred();
@@ -996,19 +998,20 @@
     document.getElementById("share-modal").classList.add("open");
     Promise.all([
       db.from("profiles").select("id,email,full_name,role").order("created_at", { ascending: true }),
-      db.from("table_access").select("user_id,can_edit").eq("table_key", key)
+      db.from("table_access").select("user_id,can_edit,can_manage").eq("table_key", key)
     ]).then(function (r) {
       var profs = ((r[0] && r[0].data) || []).filter(function (p) { return p.role !== "admin"; });
-      var acc = {}; ((r[1] && r[1].data) || []).forEach(function (a) { acc[a.user_id] = a.can_edit; });
+      var acc = {}; ((r[1] && r[1].data) || []).forEach(function (a) { acc[a.user_id] = a; });
       host.innerHTML = "";
       if (!profs.length) { host.innerHTML = '<div style="color:var(--muted);padding:6px;">No reviewer accounts yet — create one from your profile menu → Users.</div>'; return; }
       profs.forEach(function (p) {
-        var has = p.id in acc;
+        var cur = acc[p.id], has = !!cur;
         var row = document.createElement("div"); row.className = "u-trow";
         row.innerHTML = '<label class="u-chk"><input type="checkbox" class="sh-acc" value="' + esc(p.id) + '"' + (has ? " checked" : "") + "> " + esc(p.full_name || p.email) + "</label>" +
-          '<label class="u-editopt"><input type="checkbox" class="sh-edit" data-uid="' + esc(p.id) + '"' + (acc[p.id] ? " checked" : "") + (has ? "" : " disabled") + "> can edit</label>";
-        var a = row.querySelector(".sh-acc"), e = row.querySelector(".sh-edit");
-        a.addEventListener("change", function () { e.disabled = !a.checked; if (!a.checked) e.checked = false; });
+          '<label class="u-editopt"><input type="checkbox" class="sh-edit" data-uid="' + esc(p.id) + '"' + (cur && cur.can_edit ? " checked" : "") + (has ? "" : " disabled") + "> can edit</label>" +
+          '<label class="u-editopt"><input type="checkbox" class="sh-manage" data-uid="' + esc(p.id) + '"' + (cur && cur.can_manage ? " checked" : "") + (has ? "" : " disabled") + "> manager</label>";
+        var a = row.querySelector(".sh-acc"), e = row.querySelector(".sh-edit"), m = row.querySelector(".sh-manage");
+        a.addEventListener("change", function () { e.disabled = !a.checked; m.disabled = !a.checked; if (!a.checked) { e.checked = false; m.checked = false; } });
         host.appendChild(row);
       });
     }).catch(function () { host.innerHTML = '<div style="color:#ff6b6b;padding:6px;">Could not load accounts.</div>'; });
@@ -1019,7 +1022,8 @@
     if (!shareKey) return;
     var rows = [].slice.call(document.querySelectorAll("#share-users .sh-acc:checked")).map(function (c) {
       var e = document.querySelector('#share-users .sh-edit[data-uid="' + c.value + '"]');
-      return { user_id: c.value, table_key: shareKey, can_edit: !!(e && e.checked) };
+      var m = document.querySelector('#share-users .sh-manage[data-uid="' + c.value + '"]');
+      return { user_id: c.value, table_key: shareKey, can_edit: !!(e && e.checked), can_manage: !!(m && m.checked) };
     });
     var msg = document.getElementById("share-msg"); msg.textContent = "Saving…";
     db.from("table_access").delete().eq("table_key", shareKey).then(function (res) {
@@ -2040,6 +2044,7 @@
     if (!host) return;
     var layers = (table.config && table.config.layers) || [];
     if (!layers.length) { host.innerHTML = ""; return; }
+    var mayManage = isAdmin || canManage(table.id);
     host.innerHTML = '<div class="chain-h">Review chain</div><div class="chain-body" style="color:var(--muted);font-size:0.85rem;">Loading…</div>';
     db.from("submission_log").select("*").eq("submission_id", s.id).order("created_at", { ascending: true }).then(function (res) {
       var log = (res && res.data) || [];
@@ -2065,13 +2070,13 @@
         if (st.state === "current" && !e) {
           var lbody = el.querySelector(".lbody");
           if (!st.assignee) {
-            if (isAdmin) {
+            if (mayManage) {
               var sw = document.createElement("div"); sw.className = "l-act";
               sw.innerHTML = userSelectHtml("ln-start") + '<div class="l-btns"><button class="btn-approve">Assign &amp; start</button></div>';
               sw.querySelector(".btn-approve").addEventListener("click", function () { var u = pickUser(sw.querySelector(".ln-start")); if (!u) { window.alert("Choose who starts the chain."); return; } logLayer(s, table, "__start__", "assign", null, u, host); });
               lbody.appendChild(sw);
             } else { lbody.insertAdjacentHTML("beforeend", '<div class="l-meta">Not started yet.</div>'); }
-          } else if (iAmAssignee || isAdmin) {
+          } else if (iAmAssignee || mayManage) {
             var act = document.createElement("div"); act.className = "l-act";
             var ph = ly.type === "approval" ? "Feedback (optional)" : ly.type === "receiving" ? "Receiving notes / feedback" : "Your note";
             act.innerHTML = '<textarea class="l-note-in" placeholder="' + ph + '"></textarea>' + (isLast ? "" : userSelectHtml("ln-next")) + '<div class="l-btns"></div>';
@@ -2591,9 +2596,10 @@
     all.forEach(function (t) {
       var row = document.createElement("div"); row.className = "u-trow";
       row.innerHTML = '<label class="u-chk"><input type="checkbox" class="u-acc" value="' + esc(t.key) + '"> ' + esc(t.name) + "</label>" +
-        '<label class="u-editopt"><input type="checkbox" class="u-can-edit" data-key="' + esc(t.key) + '" disabled> can edit</label>';
-      var acc = row.querySelector(".u-acc"), ce = row.querySelector(".u-can-edit");
-      acc.addEventListener("change", function () { ce.disabled = !acc.checked; if (!acc.checked) ce.checked = false; });
+        '<label class="u-editopt"><input type="checkbox" class="u-can-edit" data-key="' + esc(t.key) + '" disabled> can edit</label>' +
+        '<label class="u-editopt"><input type="checkbox" class="u-can-manage" data-key="' + esc(t.key) + '" disabled> manager</label>';
+      var acc = row.querySelector(".u-acc"), ce = row.querySelector(".u-can-edit"), cm = row.querySelector(".u-can-manage");
+      acc.addEventListener("change", function () { ce.disabled = !acc.checked; cm.disabled = !acc.checked; if (!acc.checked) { ce.checked = false; cm.checked = false; } });
       host.appendChild(row);
     });
   }
@@ -2602,15 +2608,15 @@
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     Promise.all([
       db.from("profiles").select("id,email,role,created_at,full_name,avatar_path").order("created_at", { ascending: true }),
-      db.from("table_access").select("user_id,table_key,can_edit")
+      db.from("table_access").select("user_id,table_key,can_edit,can_manage")
     ]).then(function (r) {
       var profs = (r[0] && r[0].data) || [], acc = (r[1] && r[1].data) || [];
-      var byUser = {}; acc.forEach(function (a) { (byUser[a.user_id] = byUser[a.user_id] || []).push({ table_key: a.table_key, can_edit: a.can_edit }); });
+      var byUser = {}; acc.forEach(function (a) { (byUser[a.user_id] = byUser[a.user_id] || []).push({ table_key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage }); });
       if (!profs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
       emptyEl.style.display = "none"; listEl.innerHTML = "";
       profs.forEach(function (p) {
         var access = byUser[p.id] || [];
-        var tnames = p.role === "admin" ? "All tables" : (access.map(function (a) { return keyName(a.table_key) + (a.can_edit ? " (edit)" : ""); }).join(", ") || "no tables");
+        var tnames = p.role === "admin" ? "All tables" : (access.map(function (a) { return keyName(a.table_key) + (a.can_manage ? " (manager)" : a.can_edit ? " (edit)" : ""); }).join(", ") || "no tables");
         var me = p.id === myUserId;
         var display = p.full_name || p.email || "—";
         var row = document.createElement("div"); row.className = "ja-row";
@@ -2643,7 +2649,11 @@
     renderUserTables();
     if (user && accessList) accessList.forEach(function (a) {
       var acc = document.querySelector('#u-tables .u-acc[value="' + a.table_key + '"]');
-      if (acc) { acc.checked = true; var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + a.table_key + '"]'); if (ce) { ce.disabled = false; ce.checked = !!a.can_edit; } }
+      if (acc) {
+        acc.checked = true;
+        var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + a.table_key + '"]'); if (ce) { ce.disabled = false; ce.checked = !!a.can_edit; }
+        var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + a.table_key + '"]'); if (cm) { cm.disabled = false; cm.checked = !!a.can_manage; }
+      }
     });
     usersModal.classList.add("open");
   }
@@ -2690,7 +2700,8 @@
     if (role !== "admin") {
       [].slice.call(document.querySelectorAll("#u-tables .u-acc:checked")).forEach(function (c) {
         var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + c.value + '"]');
-        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked) });
+        var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + c.value + '"]');
+        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked), can_manage: !!(cm && cm.checked) });
       });
       if (!access.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
     }
@@ -2702,7 +2713,7 @@
         var e = invokeErr(res); if (e) throw new Error(e);
         var newId = res.data && res.data.id; if (!newId) throw new Error("no id returned");
         return saveProfileExtras(newId, name, uPhotoFile).then(function () {
-          if (role !== "admin" && access.length) return db.from("table_access").insert(access.map(function (a) { return { user_id: newId, table_key: a.table_key, can_edit: a.can_edit }; }));
+          if (role !== "admin" && access.length) return db.from("table_access").insert(access.map(function (a) { return { user_id: newId, table_key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage }; }));
           return { error: null };
         });
       }).then(function (r) {
@@ -2723,7 +2734,7 @@
       chain = chain.then(function () { return db.from("profiles").update({ role: role }).eq("id", id).then(function (r) { if (r.error) throw r.error; }); });
       chain = chain.then(function () { return saveProfileExtras(id, name, uPhotoFile); });
       chain = chain.then(function () { return db.from("table_access").delete().eq("user_id", id).then(function (r) { if (r.error) throw r.error; }); });
-      if (role !== "admin" && access.length) chain = chain.then(function () { return db.from("table_access").insert(access.map(function (a) { return { user_id: id, table_key: a.table_key, can_edit: a.can_edit }; })).then(function (r) { if (r.error) throw r.error; }); });
+      if (role !== "admin" && access.length) chain = chain.then(function () { return db.from("table_access").insert(access.map(function (a) { return { user_id: id, table_key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage }; })).then(function (r) { if (r.error) throw r.error; }); });
       chain.then(function () { usersModal.classList.remove("open"); loadUsers(); window.alert("Saved."); }).catch(function (err) { msg.textContent = "Could not save. " + errText(err); if (window.console) console.error(err); });
     }
   });
