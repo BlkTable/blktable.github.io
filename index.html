@@ -461,6 +461,10 @@
   .home-list .hc-star { position: static; order: -1; }
   .hc-badge { display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px; background: #eab308; color: #1a1400; font-size: 0.72rem; font-weight: 800; }
   .home-list .hc-badge { margin: 0 8px 0 0; }
+  .mine-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #eab308; color: #1a1400; font-size: 0.66rem; font-weight: 800; vertical-align: middle; }
+  .ja-card.is-mine, .ja-row.is-mine { box-shadow: inset 3px 0 0 #eab308; }
+  .mine-chip { border: 1px solid var(--field-border); background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+  .mine-chip.on { background: #eab308; color: #1a1400; border-color: #eab308; }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
   .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: #20242b center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
 </style>
@@ -681,6 +685,7 @@
           <div class="toolbar">
             <input type="search" id="custom-search" placeholder="Search…">
             <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
+            <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
             <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
           </div>
@@ -954,9 +959,9 @@
     (customTables || []).forEach(function (t) { list.push({ key: t.id, name: t.name }); });
     return list;
   }
-  function openTableByKey(key) {
+  function openTableByKey(key, mineOnly) {
     if (key === "job_applications" || key === "casting") showView(key);
-    else { var t = (customTables || []).filter(function (x) { return x.id === key; })[0]; if (t) openCustomTable(t); }
+    else { var t = (customTables || []).filter(function (x) { return x.id === key; })[0]; if (t) openCustomTable(t, mineOnly); }
   }
   function loadStars() {
     db.from("table_stars").select("table_key").then(function (res) {
@@ -1000,8 +1005,9 @@
         '<div class="hc-actions">' + (isAdmin ? '<button class="linkbtn hc-share">Share</button>' : "") + '<button class="linkbtn hc-open">Open</button></div>';
       el.querySelector(".hc-star").addEventListener("click", function (e) { e.stopPropagation(); toggleStar(t.key); });
       var sh = el.querySelector(".hc-share"); if (sh) sh.addEventListener("click", function (e) { e.stopPropagation(); openShare(t.key, t.name); });
-      el.querySelector(".hc-open").addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key); });
-      el.addEventListener("click", function () { openTableByKey(t.key); });
+      var openMine = homeFilter === "mine" || n > 0;
+      el.querySelector(".hc-open").addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key, openMine); });
+      el.addEventListener("click", function () { openTableByKey(t.key, openMine); });
       grid.appendChild(el);
     });
   }
@@ -1892,7 +1898,7 @@
     for (var i = 0; i < items.length; i++) items[i].classList.remove("active");
     if (el) el.classList.add("active");
   }
-  function openCustomTable(t) {
+  function openCustomTable(t, mineOnly) {
     var views = document.querySelectorAll(".view");
     for (var i = 0; i < views.length; i++) views[i].classList.add("hidden");
     document.getElementById("view-custom").classList.remove("hidden");
@@ -1903,7 +1909,7 @@
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-    currentCustom = { table: t, fields: [], subs: [] };
+    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
     db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
       currentCustom.fields = fRes.data || [];
       return db.from("app_submissions").select("*").eq("table_id", t.id).order("created_at", { ascending: false });
@@ -1925,7 +1931,17 @@
     var tableActions = (currentCustom.table.config && currentCustom.table.config.actions) || [];
     var mayEdit = canEdit(currentCustom.table.id);
     var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty"), tabsEl = document.getElementById("custom-tabs");
-    document.getElementById("custom-count").textContent = subs.length + (subs.length === 1 ? " entry" : " entries");
+    var isMine = function (s) { return s.current_assignee && s.current_assignee === myUserId; };
+    var mineCount = subs.filter(isMine).length;
+    // "Assigned to me" chip: only offer it when something is actually assigned to this user
+    var mineChip = document.getElementById("custom-mine");
+    if (mineCount > 0) {
+      mineChip.style.display = "";
+      mineChip.textContent = "Assigned to me (" + mineCount + ")";
+      mineChip.classList.toggle("on", !!currentCustom.mineOnly);
+    } else { mineChip.style.display = "none"; currentCustom.mineOnly = false; }
+    var pool = currentCustom.mineOnly ? subs.filter(isMine) : subs;
+    document.getElementById("custom-count").textContent = pool.length + (pool.length === 1 ? " entry" : " entries");
     var summary = fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
     var photoField = fields.filter(function (f) { return f.type === "photo"; })[0];
     // pipeline tabs
@@ -1933,16 +1949,16 @@
       if (!currentCustom.stage || !stages.some(function (x) { return x.key === currentCustom.stage; })) currentCustom.stage = stages[0].key;
       tabsEl.style.display = "flex";
       tabsEl.innerHTML = stages.map(function (st) {
-        var cnt = subs.filter(function (s) { return subStage(s, stages) === st.key; }).length;
+        var cnt = pool.filter(function (s) { return subStage(s, stages) === st.key; }).length;
         return '<button type="button" class="pipe-tab' + (currentCustom.stage === st.key ? " active" : "") + '" data-key="' + esc(st.key) + '">' + esc(st.label) + '<span class="n">' + cnt + "</span></button>";
       }).join("");
       [].slice.call(tabsEl.querySelectorAll(".pipe-tab")).forEach(function (b) { b.addEventListener("click", function () { currentCustom.stage = b.getAttribute("data-key"); renderCustom(); }); });
     } else { tabsEl.style.display = "none"; tabsEl.innerHTML = ""; }
-    var base = stages.length ? subs.filter(function (s) { return subStage(s, stages) === currentCustom.stage; }) : subs;
+    var base = stages.length ? pool.filter(function (s) { return subStage(s, stages) === currentCustom.stage; }) : pool;
     var rows = base.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
     if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
-    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (stages.length ? "Nothing in this stage." : "No matches.") + "</div>"; return; }
+    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (currentCustom.mineOnly ? "Nothing assigned to you here." : (stages.length ? "Nothing in this stage." : "No matches.")) + "</div>"; return; }
     listEl.innerHTML = "";
     var kcards = customView === "cards";
     var kcont = listEl;
@@ -1961,9 +1977,11 @@
         }).join("") + "</div>";
       }
       var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions) + "</div>";
+      var mine = isMine(s);
+      var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       var el = document.createElement("div");
-      if (kcards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
-      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + actions + "</div>"; }
+      if (kcards) { el.className = "ja-card" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + tag + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
+      else { el.className = "ja-row" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + tag + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + actions + "</div>"; }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
@@ -2126,7 +2144,8 @@
     });
   }
   document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
-  document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
+  document.getElementById("custom-mine").addEventListener("click", function () { if (currentCustom) { currentCustom.mineOnly = !currentCustom.mineOnly; renderCustom(); } });
+  document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table, currentCustom.mineOnly); });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
   // ---- QR codes for public form links (with centered BLK logo) ----
   var qrLogo = new Image(); var qrLogoReady = false;
@@ -2595,7 +2614,7 @@
       closeBuilder();
       loadCustomTables();
       loadBuiltinExtra();
-      if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table);
+      if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table, currentCustom.mineOnly);
     }).catch(function (err) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(err); });
   }
 
