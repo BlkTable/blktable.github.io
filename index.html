@@ -459,6 +459,8 @@
   .hc-star { position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--muted); font-size: 1.15rem; cursor: pointer; line-height: 1; padding: 2px; }
   .hc-star.on { color: #eab308; }
   .home-list .hc-star { position: static; order: -1; }
+  .hc-badge { display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px; background: #eab308; color: #1a1400; font-size: 0.72rem; font-weight: 800; }
+  .home-list .hc-badge { margin: 0 8px 0 0; }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
   .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: #20242b center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
 </style>
@@ -531,6 +533,7 @@
             <div><div class="section-title">Workspace</div><h2 class="ja-title">Your tables</h2></div>
             <div class="seg viewtoggle" id="home-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
           </div>
+          <div class="seg viewtoggle" id="home-filter" style="margin-bottom:16px;"><button type="button" data-f="all" class="active">All forms</button><button type="button" data-f="mine">Assigned to me</button></div>
           <div id="home-grid" class="home-cards"></div>
           <div id="home-empty" class="empty" style="display:none;"><h2>No tables yet</h2><p>Tables shared with you will appear here.</p></div>
         </section>
@@ -884,11 +887,20 @@
     loadBuiltinExtra();
     loadStars();
     loadAssignUsers();
+    loadMyAssigned();
     showView("home");
   }
   var assignUsers = [];
   function loadAssignUsers() {
     db.rpc("list_users").then(function (res) { if (res && !res.error) assignUsers = res.data || []; });
+  }
+  var myAssigned = {}; // table_id -> count of records currently waiting on me
+  var homeFilter = "all";
+  function loadMyAssigned() {
+    db.from("app_submissions").select("table_id").eq("current_assignee", myUserId).then(function (res) {
+      myAssigned = {}; ((res && res.data) || []).forEach(function (r) { myAssigned[r.table_id] = (myAssigned[r.table_id] || 0) + 1; });
+      renderHome();
+    });
   }
   function showLogin() {
     app.style.display = "none";
@@ -972,16 +984,19 @@
   function renderHome() {
     var grid = document.getElementById("home-grid"); if (!grid) return;
     var items = allAccessibleTables();
+    if (homeFilter === "mine") items = items.filter(function (t) { return (myAssigned[t.key] || 0) > 0; });
     var empty = document.getElementById("home-empty");
-    if (!items.length) { grid.innerHTML = ""; empty.style.display = "block"; return; }
+    if (!items.length) { grid.innerHTML = ""; empty.style.display = "block"; empty.querySelector("h2").textContent = homeFilter === "mine" ? "Nothing assigned to you" : "No tables yet"; return; }
     empty.style.display = "none";
     grid.className = homeView === "list" ? "home-list" : "home-cards";
     grid.innerHTML = "";
     items.forEach(function (t) {
       var on = !!stars[t.key];
+      var n = myAssigned[t.key] || 0;
+      var badge = n > 0 ? '<span class="hc-badge" title="Records waiting on you">' + n + " for you</span>" : "";
       var el = document.createElement("div"); el.className = "home-card";
       el.innerHTML = '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>" +
-        '<div class="hc-body"><div class="hc-name">' + esc(t.name) + "</div></div>" +
+        '<div class="hc-body"><div class="hc-name">' + esc(t.name) + "</div>" + badge + "</div>" +
         '<div class="hc-actions">' + (isAdmin ? '<button class="linkbtn hc-share">Share</button>' : "") + '<button class="linkbtn hc-open">Open</button></div>';
       el.querySelector(".hc-star").addEventListener("click", function (e) { e.stopPropagation(); toggleStar(t.key); });
       var sh = el.querySelector(".hc-share"); if (sh) sh.addEventListener("click", function (e) { e.stopPropagation(); openShare(t.key, t.name); });
@@ -2021,23 +2036,23 @@
   function chainCompute(layers, log) {
     var completion = {}, startEntry = null;
     log.forEach(function (e) { if (e.layer_id === "__start__") { if (!startEntry) startEntry = e; } else if (!completion[e.layer_id]) completion[e.layer_id] = e; });
-    var assignees = {};
-    if (startEntry && startEntry.next_assignee && layers[0]) assignees[layers[0].id] = { id: startEntry.next_assignee, name: startEntry.next_assignee_name };
-    layers.forEach(function (ly, i) { if (i > 0) { var prev = completion[layers[i - 1].id]; if (prev && prev.next_assignee) assignees[ly.id] = { id: prev.next_assignee, name: prev.next_assignee_name }; } });
+    var assignees = {}, assignerOf = {};
+    if (startEntry && layers[0]) { if (startEntry.next_assignee) assignees[layers[0].id] = { id: startEntry.next_assignee, name: startEntry.next_assignee_name }; assignerOf[layers[0].id] = { id: startEntry.actor, name: startEntry.actor_name }; }
+    layers.forEach(function (ly, i) { if (i > 0) { var prev = completion[layers[i - 1].id]; if (prev) { if (prev.next_assignee) assignees[ly.id] = { id: prev.next_assignee, name: prev.next_assignee_name }; assignerOf[ly.id] = { id: prev.actor, name: prev.actor_name }; } } });
     var stopped = false, foundCurrent = false;
     var states = layers.map(function (ly) {
-      var e = completion[ly.id], a = assignees[ly.id] || null;
-      if (stopped) return { layer: ly, entry: null, state: "pending", assignee: a };
-      if (e) { if (e.decision === "rejected") { stopped = true; return { layer: ly, entry: e, state: "rejected", assignee: a }; } return { layer: ly, entry: e, state: "done", assignee: a }; }
-      if (!foundCurrent) { foundCurrent = true; return { layer: ly, entry: null, state: "current", assignee: a }; }
-      return { layer: ly, entry: null, state: "pending", assignee: a };
+      var e = completion[ly.id], a = assignees[ly.id] || null, ag = assignerOf[ly.id] || null;
+      if (stopped) return { layer: ly, entry: null, state: "pending", assignee: a, assigner: ag };
+      if (e) { if (e.decision === "rejected") { stopped = true; return { layer: ly, entry: e, state: "rejected", assignee: a, assigner: ag }; } return { layer: ly, entry: e, state: "done", assignee: a, assigner: ag }; }
+      if (!foundCurrent) { foundCurrent = true; return { layer: ly, entry: null, state: "current", assignee: a, assigner: ag }; }
+      return { layer: ly, entry: null, state: "pending", assignee: a, assigner: ag };
     });
     return { states: states };
   }
   function logLayer(s, table, layerId, decision, note, nextA, host) {
     db.from("submission_log").insert({ submission_id: s.id, table_id: table.id, layer_id: layerId, actor: myUserId, actor_name: myName, decision: decision, note: note || null, next_assignee: nextA ? nextA.id : null, next_assignee_name: nextA ? nextA.name : null }).then(function (res) {
       if (res.error) { window.alert("Could not save. " + (res.error.message || "")); return; }
-      renderChain(s, table, host);
+      renderChain(s, table, host); loadMyAssigned();
     });
   }
   function renderChain(s, table, host) {
@@ -2079,11 +2094,17 @@
           } else if (iAmAssignee || mayManage) {
             var act = document.createElement("div"); act.className = "l-act";
             var ph = ly.type === "approval" ? "Feedback (optional)" : ly.type === "receiving" ? "Receiving notes / feedback" : "Your note";
-            act.innerHTML = '<textarea class="l-note-in" placeholder="' + ph + '"></textarea>' + (isLast ? "" : userSelectHtml("ln-next")) + '<div class="l-btns"></div>';
+            var showPicker = mayManage && !isLast;               // managers/editors route freely
+            var returnsTo = (!mayManage && !isLast && st.assigner) ? st.assigner.name : null; // regular user → back to assigner
+            act.innerHTML = '<textarea class="l-note-in" placeholder="' + ph + '"></textarea>' + (showPicker ? userSelectHtml("ln-next") : "") +
+              (returnsTo ? '<div class="l-meta">Returns to ' + esc(returnsTo) + ' when you submit.</div>' : "") + '<div class="l-btns"></div>';
             var btns = act.querySelector(".l-btns"), noteIn = act.querySelector(".l-note-in");
             var doAct = function (decision, needNext) {
               var nextA = null;
-              if (needNext && !isLast) { nextA = pickUser(act.querySelector(".ln-next")); if (!nextA) { window.alert("Choose who is next in the chain."); return; } }
+              if (needNext && !isLast) {
+                if (mayManage) { nextA = pickUser(act.querySelector(".ln-next")); if (!nextA) { window.alert("Choose who is next in the chain."); return; } }
+                else { nextA = st.assigner || null; } // return to whoever assigned this user
+              }
               if (decision === "note" && !noteIn.value.trim()) { noteIn.focus(); return; }
               logLayer(s, table, ly.id, decision, noteIn.value.trim(), nextA, host);
             };
@@ -2755,6 +2776,12 @@
   wireToggle("casting-viewtoggle", function (v) { castingView = v; renderCasting(); });
   wireToggle("custom-viewtoggle", function (v) { customView = v; renderCustom(); });
   wireToggle("home-viewtoggle", function (v) { homeView = v; renderHome(); });
+  document.getElementById("home-filter").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button") : null; if (!b) return;
+    homeFilter = b.getAttribute("data-f");
+    [].slice.call(this.querySelectorAll("button")).forEach(function (x) { x.classList.toggle("active", x === b); });
+    if (homeFilter === "mine") loadMyAssigned(); else renderHome();
+  });
 
   // ---- Sidebar: switch which table/view is open in the main pane ----
   function showView(id) {
