@@ -146,7 +146,7 @@
             <div class="hint">A clear photo of your face — up to 10 MB.</div>
           </div>
 
-          <button type="submit" class="submit" id="submit-btn">Submit</button>
+          <button type="button" class="submit" id="submit-btn">Submit</button>
           <div class="form-msg" id="form-msg"></div>
         </form>
       </div>
@@ -318,9 +318,14 @@
       })
       .catch(function (err) {
         btn.disabled = false; btn.textContent = "Submit";
-        msg.textContent = "Sorry, something went wrong. Please try again.";
+        msg.textContent = "Couldn't submit — " + ((err && (err.message || err.error_description || err.hint)) || "please try again.");
         if (window.console) console.error(err);
       });
+  });
+  // Plain button → run submit via the form's own handler; guarantees no native page-reload submit (the desktop failure).
+  document.getElementById("submit-btn").addEventListener("click", function (e) {
+    e.preventDefault(); var f = document.getElementById("form");
+    if (f.requestSubmit) f.requestSubmit(); else f.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
   });
 
   // ---- Admin-defined extra questions (loaded from the dashboard's table editor) ----

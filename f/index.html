@@ -82,7 +82,7 @@
       <div class="card" id="card" style="display:none;">
         <form id="form" novalidate>
           <div id="fields"></div>
-          <button type="submit" class="submit" id="submit-btn">Submit</button>
+          <button type="button" class="submit" id="submit-btn">Submit</button>
           <div class="form-msg" id="form-msg"></div>
         </form>
       </div>
@@ -110,6 +110,7 @@
 
   var slug = getParam("t");
   var controls = []; // {field, validate(), value(), isPhoto, file()}
+  var currentTable = null;
 
   function labelHtml(f) {
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
@@ -186,6 +187,7 @@
   function markCtl(ctl, bad) { if (ctl.isPhoto) ctl.el.classList.toggle("invalid", bad); else ctl.el.classList.toggle("invalid", bad); }
 
   function init(table, fields) {
+    currentTable = table;
     document.getElementById("loading").style.display = "none";
     document.getElementById("form-title").innerHTML = esc(table.name) + (table.name_ar ? ' <span style="color:var(--muted);font-weight:600;">· ' + esc(table.name_ar) + "</span>" : "");
     document.getElementById("head").style.display = "block";
@@ -197,41 +199,48 @@
     var formEl = document.getElementById("form");
     formEl.addEventListener("input", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
     formEl.addEventListener("change", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
+  }
 
-    formEl.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var msg = document.getElementById("form-msg"); var btn = document.getElementById("submit-btn"); msg.textContent = "";
-      var firstBad = null;
-      controls.forEach(function (c) { var ok = c.validate(); markCtl(c, !ok); if (!ok && !firstBad) firstBad = c; });
-      if (firstBad) { msg.textContent = "Please fill in the highlighted fields."; if (firstBad.el.scrollIntoView) firstBad.el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+  function submitForm() {
+    if (!currentTable) return;
+    var msg = document.getElementById("form-msg"); var btn = document.getElementById("submit-btn"); msg.textContent = "";
+    var firstBad = null;
+    controls.forEach(function (c) { var ok = c.validate(); markCtl(c, !ok); if (!ok && !firstBad) firstBad = c; });
+    if (firstBad) { msg.textContent = "Please fill in the highlighted fields."; if (firstBad.el.scrollIntoView) firstBad.el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
 
-      btn.disabled = true; btn.textContent = "Submitting…";
-      var photoCtls = controls.filter(function (c) { return c.isPhoto && c.file(); });
-      var uploads = photoCtls.map(function (c) {
-        var file = c.file();
-        if (file.size > MAX_BYTES) return Promise.reject({ tooBig: true });
-        var path = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())) + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
-        return db.storage.from("photos").upload(path, file, { upsert: false }).then(function (r) { if (r.error) throw r.error; return { id: c.f.id, path: r.data.path }; });
-      });
+    btn.disabled = true; btn.textContent = "Submitting…";
+    var photoCtls = controls.filter(function (c) { return c.isPhoto && c.file(); });
+    var uploads = photoCtls.map(function (c) {
+      var file = c.file();
+      if (file.size > MAX_BYTES) return Promise.reject({ tooBig: true });
+      var path = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.round(Math.random() * 1e9)) + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
+      return db.storage.from("photos").upload(path, file, { upsert: false }).then(function (r) { if (r.error) throw r.error; return { id: c.f.id, path: r.data.path }; });
+    });
 
-      Promise.all(uploads).then(function (results) {
-        var data = {};
-        controls.forEach(function (c) { if (!c.isPhoto) data[c.f.id] = c.value(); });
-        results.forEach(function (r) { data[r.id] = r.path; });
-        return db.from("app_submissions").insert({ table_id: table.id, data: data });
-      }).then(function (res) {
-        if (res && res.error) throw res.error;
-        document.getElementById("card").style.display = "none";
-        document.getElementById("head").style.display = "none";
-        document.getElementById("success").style.display = "block";
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }).catch(function (err) {
-        btn.disabled = false; btn.textContent = "Submit";
-        msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one." : "Sorry, something went wrong. Please try again.";
-        if (window.console) console.error(err);
-      });
+    Promise.all(uploads).then(function (results) {
+      var data = {};
+      controls.forEach(function (c) { if (!c.isPhoto) data[c.f.id] = c.value(); });
+      results.forEach(function (r) { data[r.id] = r.path; });
+      return db.from("app_submissions").insert({ table_id: currentTable.id, data: data });
+    }).then(function (res) {
+      if (res && res.error) throw res.error;
+      document.getElementById("card").style.display = "none";
+      document.getElementById("head").style.display = "none";
+      document.getElementById("success").style.display = "block";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }).catch(function (err) {
+      btn.disabled = false; btn.textContent = "Submit";
+      msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one." : ("Couldn't submit — " + ((err && (err.message || err.error_description || err.hint)) || "please try again."));
+      if (window.console) console.error(err);
     });
   }
+  // Wired once at load; the button is a plain button + explicit preventDefault, so a form can never do a native page-reload submit (the desktop failure).
+  (function () {
+    var f = document.getElementById("form");
+    if (f) f.addEventListener("submit", function (e) { e.preventDefault(); submitForm(); });
+    var b = document.getElementById("submit-btn");
+    if (b) b.addEventListener("click", function (e) { e.preventDefault(); submitForm(); });
+  })();
 
   function notFound() { document.getElementById("loading").style.display = "none"; document.getElementById("notfound").style.display = "block"; }
 
