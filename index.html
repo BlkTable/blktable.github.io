@@ -2044,7 +2044,7 @@
     if (!host) return;
     var layers = (table.config && table.config.layers) || [];
     if (!layers.length) { host.innerHTML = ""; return; }
-    var mayManage = isAdmin || canManage(table.id);
+    var mayManage = isAdmin || canManage(table.id) || canEdit(table.id);
     host.innerHTML = '<div class="chain-h">Review chain</div><div class="chain-body" style="color:var(--muted);font-size:0.85rem;">Loading…</div>';
     db.from("submission_log").select("*").eq("submission_id", s.id).order("created_at", { ascending: true }).then(function (res) {
       var log = (res && res.data) || [];
