@@ -224,8 +224,8 @@
   .fp-clear { width: 100%; padding: 9px; border-radius: 9px; border: 1px solid var(--field-border);
     background: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; }
   .fp-clear:hover { color: var(--text); border-color: var(--silver); }
-  /* Airtable-style condition builder (custom tables) */
-  #custom-filter-panel { width: min(92vw, 500px); max-height: 68vh; overflow-y: auto; }
+  /* Airtable-style condition builder (standard filter on every table) */
+  .filter-panel.fp-cond { width: min(92vw, 500px); max-height: 68vh; overflow-y: auto; }
   .fp-head { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 10px; }
   .fc-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
   .fc-conj { flex: 0 0 56px; height: 38px; display: flex; align-items: center; color: var(--muted); font-size: 0.82rem; }
@@ -606,45 +606,7 @@
               <button class="filter-btn" id="filter-btn" aria-label="Filters" title="Filters">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
               </button>
-              <div class="filter-panel" id="filter-panel">
-                <div class="fp-group">
-                  <div class="fp-label">Country</div>
-                  <div class="seg" id="fp-country">
-                    <button type="button" data-c="" class="active">All</button>
-                    <button type="button" data-c="962">JO</button>
-                    <button type="button" data-c="961">LB</button>
-                    <button type="button" data-c="963">SY</button>
-                    <button type="button" data-c="964">IQ</button>
-                  </div>
-                </div>
-                <div class="fp-group">
-                  <div class="fp-label">Gender</div>
-                  <div class="seg" id="fp-gender">
-                    <button type="button" data-g="" class="active">All</button>
-                    <button type="button" data-g="Female">Female</button>
-                    <button type="button" data-g="Male">Male</button>
-                  </div>
-                </div>
-                <div class="fp-group">
-                  <div class="fp-label">City</div>
-                  <select id="fp-city" class="fp-select">
-                    <option value="">All</option>
-                    <option value="Amman">Amman</option>
-                    <option value="Zarqa">Zarqa</option>
-                    <option value="Aqaba">Aqaba</option>
-                    <option value="Irbid">Irbid</option>
-                  </select>
-                </div>
-                <div class="fp-group">
-                  <div class="fp-label">Age range</div>
-                  <div class="fp-age">
-                    <input type="number" id="fp-age-min" placeholder="Min" min="0" max="120" inputmode="numeric">
-                    <span>–</span>
-                    <input type="number" id="fp-age-max" placeholder="Max" min="0" max="120" inputmode="numeric">
-                  </div>
-                </div>
-                <button type="button" class="fp-clear" id="fp-clear">Clear filters</button>
-              </div>
+              <div class="filter-panel" id="filter-panel"></div>
             </div>
             <div class="seg viewtoggle" id="ja-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             <button class="linkbtn" id="ja-refresh">Refresh</button>
@@ -684,6 +646,12 @@
           </div>
           <div class="toolbar">
             <input type="search" id="casting-search" placeholder="Search name…">
+            <div class="filter-wrap" id="casting-filter-wrap" style="display:none;">
+              <button type="button" class="filter-btn" id="casting-filter-btn" aria-label="Filters" title="Filter by field">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              </button>
+              <div class="filter-panel" id="casting-filter-panel"></div>
+            </div>
             <div class="seg viewtoggle" id="casting-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             <button class="linkbtn" id="casting-refresh">Refresh</button>
           </div>
@@ -1245,15 +1213,10 @@
         return;
       }
       allApps = res.data || [];
+      buildFilterPanel(jobFV);
       renderApps();
     });
   }
-
-  var fGender = "";
-  var fAgeMin = null;
-  var fAgeMax = null;
-  var fCountry = "";
-  var fCity = "";
 
   var COUNTRIES = [
     { dial: "962", name: "Jordan", flag: "jo" },
@@ -1289,16 +1252,7 @@
         var hay = ((a.full_name || "") + " " + (a.phone || "") + " " + (a.living_area || "")).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
-      if (fGender && a.gender !== fGender) return false;
-      if (fCountry) { var pc = phoneCountry(a.phone); if (!pc || pc.dial !== fCountry) return false; }
-      if (fCity && a.city !== fCity) return false;
-      if (fAgeMin != null || fAgeMax != null) {
-        var age = calcAge(a.date_of_birth);
-        if (age == null) return false;
-        if (fAgeMin != null && age < fAgeMin) return false;
-        if (fAgeMax != null && age > fAgeMax) return false;
-      }
-      return true;
+      return passesFilters(jobFV, a);
     });
   }
   function sectionCounts() {
@@ -1678,47 +1632,7 @@
     renderApps();
   });
 
-  // ---- Filter panel: gender + age range ----
-  var filterBtn = document.getElementById("filter-btn");
-  var filterPanel = document.getElementById("filter-panel");
-  var filterWrap = document.getElementById("filter-wrap");
-  function updateFilterActive() {
-    filterBtn.classList.toggle("active", !!(fCountry || fCity || fGender || fAgeMin != null || fAgeMax != null));
-  }
-  filterBtn.addEventListener("click", function (e) { e.stopPropagation(); filterPanel.classList.toggle("open"); });
-  document.addEventListener("click", function (e) { if (!filterWrap.contains(e.target)) filterPanel.classList.remove("open"); });
-
-  document.getElementById("fp-gender").addEventListener("click", function (e) {
-    var b = e.target.closest ? e.target.closest("button") : null;
-    if (!b) return;
-    fGender = b.getAttribute("data-g");
-    var btns = this.querySelectorAll("button");
-    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
-    updateFilterActive(); renderApps();
-  });
-  document.getElementById("fp-country").addEventListener("click", function (e) {
-    var b = e.target.closest ? e.target.closest("button") : null;
-    if (!b) return;
-    fCountry = b.getAttribute("data-c");
-    var btns = this.querySelectorAll("button");
-    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
-    updateFilterActive(); renderApps();
-  });
-  function readAge(id) { var v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? null : v; }
-  document.getElementById("fp-city").addEventListener("change", function () { fCity = this.value; updateFilterActive(); renderApps(); });
-  document.getElementById("fp-age-min").addEventListener("input", function () { fAgeMin = readAge("fp-age-min"); updateFilterActive(); renderApps(); });
-  document.getElementById("fp-age-max").addEventListener("input", function () { fAgeMax = readAge("fp-age-max"); updateFilterActive(); renderApps(); });
-  document.getElementById("fp-clear").addEventListener("click", function () {
-    fGender = ""; fAgeMin = null; fAgeMax = null; fCountry = ""; fCity = "";
-    document.getElementById("fp-age-min").value = "";
-    document.getElementById("fp-age-max").value = "";
-    document.getElementById("fp-city").value = "";
-    var gb = document.getElementById("fp-gender").querySelectorAll("button");
-    for (var i = 0; i < gb.length; i++) gb[i].classList.toggle("active", gb[i].getAttribute("data-g") === "");
-    var cb = document.getElementById("fp-country").querySelectorAll("button");
-    for (var j = 0; j < cb.length; j++) cb[j].classList.toggle("active", cb[j].getAttribute("data-c") === "");
-    updateFilterActive(); renderApps();
-  });
+  // ---- Job Applications now uses the shared standard filter (built in loadApps / showView) ----
 
   // ---- BLK Casting table ----
   var castingRows = [];
@@ -1730,6 +1644,7 @@
       if (res.error) { listEl.innerHTML = '<div style="color:#ff6b6b;padding:24px;text-align:center;">Could not load.</div>'; return; }
       castingRows = res.data || [];
       castingLoaded = true;
+      buildFilterPanel(castingFV);
       renderCasting();
     });
   }
@@ -1737,7 +1652,7 @@
     var q = (document.getElementById("casting-search").value || "").toLowerCase().trim();
     var listEl = document.getElementById("casting-list");
     var emptyEl = document.getElementById("casting-empty");
-    var rows = castingRows.filter(function (c) { return !q || (c.full_name || "").toLowerCase().indexOf(q) !== -1; });
+    var rows = castingRows.filter(function (c) { return (!q || (c.full_name || "").toLowerCase().indexOf(q) !== -1) && passesFilters(castingFV, c); });
     document.getElementById("casting-count").textContent = castingRows.length + (castingRows.length === 1 ? " entry" : " entries");
     if (!castingRows.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
@@ -2016,11 +1931,19 @@
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly, filter: { conj: "and", conds: [] } };
+    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
+    currentCustom.fv = makeFilterView({
+      key: "custom:" + t.id,
+      getFields: function () { return currentCustom.fields; },
+      records: function () { return currentCustom.subs; },
+      getVal: function (rec, id) { return (rec.data || {})[id]; },
+      rerender: function () { renderCustom(); },
+      panelId: "custom-filter-panel", btnId: "custom-filter-btn", wrapId: "custom-filter-wrap"
+    });
     db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
       currentCustom.fields = fRes.data || [];
       return db.from("app_submissions").select("*").eq("table_id", t.id).order("created_at", { ascending: false });
-    }).then(function (sRes) { currentCustom.subs = (sRes && sRes.data) || []; buildCustomFilterPanel(); renderCustom(); });
+    }).then(function (sRes) { currentCustom.subs = (sRes && sRes.data) || []; buildFilterPanel(currentCustom.fv); renderCustom(); });
   }
   function customStages() { return (currentCustom && currentCustom.table.config && currentCustom.table.config.statuses) || []; }
   function subStage(s, stages) { return s.status || (stages[0] && stages[0].key) || null; }
@@ -2097,11 +2020,19 @@
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
   }
-  // ---- Airtable-style condition filter (every custom table + future tables) ----
-  function customFilterableFields() {
-    return (currentCustom ? currentCustom.fields : []).filter(function (f) { return f.type !== "photo"; });
+  // ---- Airtable-style condition filter — the ONE standard filter for EVERY table ----
+  // A "filter view" (fv) adapts any table to the shared engine. It provides:
+  //   getFields() -> [{id,label,type,options?}], getVal(rec,fieldId), records(), rerender(),
+  //   and the DOM ids of its filter widget. State (conditions) lives on fv.state.
+  function makeFilterView(cfg) {
+    return {
+      key: cfg.key, getFields: cfg.getFields, records: cfg.records, getVal: cfg.getVal,
+      rerender: cfg.rerender, panelId: cfg.panelId, btnId: cfg.btnId, wrapId: cfg.wrapId,
+      state: { conj: "and", conds: [] }
+    };
   }
-  function fieldById(id) { var a = (currentCustom ? currentCustom.fields : []).filter(function (f) { return f.id === id; }); return a[0] || null; }
+  function fvFields(fv) { return (fv && fv.getFields ? fv.getFields() : []).filter(function (f) { return f.type !== "photo"; }); }
+  function fvFieldById(fv, id) { return fvFields(fv).filter(function (f) { return f.id === id; })[0] || null; }
   function opsFor(type) {
     if (type === "number") return [["eq", "="], ["neq", "≠"], ["lt", "<"], ["lte", "≤"], ["gt", ">"], ["gte", "≥"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
     if (type === "date") return [["is", "is"], ["before", "is before"], ["after", "is after"], ["onBefore", "is on or before"], ["onAfter", "is on or after"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
@@ -2118,37 +2049,38 @@
     return "text";
   }
   function defaultValFor(type, op) { var k = valueKind(type, op); return k === "multi" ? [] : (k === "none" ? null : ""); }
-  function dropdownValues(fld) {
+  function fvDropdownValues(fv, fld) {
     if (!fld) return [];
     var vals = [], seen = {};
     (fld.options || []).forEach(function (o) { var v = o && o.en != null ? o.en : o; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
-    (currentCustom.subs || []).forEach(function (s) { var v = (s.data || {})[fld.id]; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
+    (fv.records() || []).forEach(function (rec) { var v = fv.getVal(rec, fld.id); if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
     return vals;
   }
-  function buildCustomFilterPanel() {
-    var wrap = document.getElementById("custom-filter-wrap");
-    var panel = document.getElementById("custom-filter-panel");
+  function buildFilterPanel(fv) {
+    var wrap = document.getElementById(fv.wrapId), panel = document.getElementById(fv.panelId);
+    if (!wrap || !panel) return;
     panel.classList.remove("open");
-    if (!currentCustom) { wrap.style.display = "none"; return; }
-    currentCustom.filter = { conj: "and", conds: [] };
-    if (!customFilterableFields().length) { wrap.style.display = "none"; panel.innerHTML = ""; return; }
+    panel.classList.add("fp-cond");
+    // drop conditions whose field no longer exists (e.g. an admin removed that question)
+    fv.state.conds = fv.state.conds.filter(function (c) { return fvFieldById(fv, c.fieldId); });
+    if (!fvFields(fv).length) { wrap.style.display = "none"; panel.innerHTML = ""; return; }
     wrap.style.display = "";
-    panel.innerHTML = '<div class="fp-head">Show records where</div><div id="fp-conds"></div><button type="button" class="fc-add" id="fp-add">＋ Add condition</button>';
-    document.getElementById("fp-add").addEventListener("click", addFilterCond);
-    renderConds();
-    updateCustomFilterActive();
+    panel.innerHTML = '<div class="fp-head">Show records where</div><div class="fp-conds"></div><button type="button" class="fc-add">＋ Add condition</button>';
+    panel.querySelector(".fc-add").addEventListener("click", function () { addFilterCond(fv); });
+    renderConds(fv);
+    updateFilterActive(fv);
   }
-  function addFilterCond() {
-    var flds = customFilterableFields(); if (!flds.length) return;
+  function addFilterCond(fv) {
+    var flds = fvFields(fv); if (!flds.length) return;
     var f0 = flds[0], op0 = opsFor(f0.type)[0][0];
-    currentCustom.filter.conds.push({ fieldId: f0.id, op: op0, val: defaultValFor(f0.type, op0) });
-    renderConds(); renderCustom(); updateCustomFilterActive();
+    fv.state.conds.push({ fieldId: f0.id, op: op0, val: defaultValFor(f0.type, op0) });
+    renderConds(fv); fv.rerender(); updateFilterActive(fv);
   }
-  function valControlHtml(c, fld) {
+  function valControlHtml(fv, c, fld) {
     var kind = valueKind(fld ? fld.type : "short_text", c.op);
     if (kind === "none") return "";
     if (kind === "multi") {
-      var vals = dropdownValues(fld), chosen = Array.isArray(c.val) ? c.val : [];
+      var vals = fvDropdownValues(fv, fld), chosen = Array.isArray(c.val) ? c.val : [];
       if (!vals.length) return '<div class="fp-none">No options</div>';
       return '<div class="fc-multi">' + vals.map(function (v) {
         return '<label><input type="checkbox" value="' + esc(v) + '"' + (chosen.indexOf(v) !== -1 ? " checked" : "") + ">" + esc(v) + "</label>";
@@ -2156,7 +2088,7 @@
     }
     if (kind === "yesno") return '<select class="fc-input"><option value="">Select…</option><option value="Yes"' + (c.val === "Yes" ? " selected" : "") + ">Yes</option><option value=\"No\"" + (c.val === "No" ? " selected" : "") + ">No</option></select>";
     if (kind === "select") {
-      var vs = dropdownValues(fld);
+      var vs = fvDropdownValues(fv, fld);
       return '<select class="fc-input"><option value="">Select…</option>' + vs.map(function (v) {
         return '<option value="' + esc(v) + '"' + (String(c.val) === v ? " selected" : "") + ">" + esc(v) + "</option>";
       }).join("") + "</select>";
@@ -2165,9 +2097,10 @@
     if (kind === "date") return '<input class="fc-input" type="date" value="' + esc(c.val == null ? "" : c.val) + '">';
     return '<input class="fc-input" type="text" placeholder="Value" value="' + esc(c.val == null ? "" : c.val) + '">';
   }
-  function renderConds() {
-    var host = document.getElementById("fp-conds"); if (!host) return;
-    var conds = currentCustom.filter.conds, conj = currentCustom.filter.conj, flds = customFilterableFields();
+  function renderConds(fv) {
+    var panel = document.getElementById(fv.panelId); if (!panel) return;
+    var host = panel.querySelector(".fp-conds"); if (!host) return;
+    var conds = fv.state.conds, conj = fv.state.conj, flds = fvFields(fv);
     if (!conds.length) { host.innerHTML = '<div class="fc-empty">No conditions yet — showing all records.</div>'; return; }
     host.innerHTML = conds.map(function (c, i) {
       var conjCell = i === 0 ? '<span>Where</span>'
@@ -2176,37 +2109,37 @@
       var fieldSel = '<select class="fc-field">' + flds.map(function (f) {
         return '<option value="' + esc(f.id) + '"' + (f.id === c.fieldId ? " selected" : "") + ">" + esc(f.label || f.label_ar || "Field") + "</option>";
       }).join("") + "</select>";
-      var fld = fieldById(c.fieldId);
+      var fld = fvFieldById(fv, c.fieldId);
       var opSel = '<select class="fc-op">' + opsFor(fld ? fld.type : "short_text").map(function (o) {
         return '<option value="' + o[0] + '"' + (o[0] === c.op ? " selected" : "") + ">" + esc(o[1]) + "</option>";
       }).join("") + "</select>";
-      return '<div class="fc-row" data-i="' + i + '"><div class="fc-conj">' + conjCell + "</div>" + fieldSel + opSel + '<div class="fc-val">' + valControlHtml(c, fld) + '</div><button type="button" class="fc-rm" title="Remove condition">×</button></div>';
+      return '<div class="fc-row" data-i="' + i + '"><div class="fc-conj">' + conjCell + "</div>" + fieldSel + opSel + '<div class="fc-val">' + valControlHtml(fv, c, fld) + '</div><button type="button" class="fc-rm" title="Remove condition">×</button></div>';
     }).join("");
-    wireConds(host);
+    wireConds(fv, host);
   }
-  function wireConds(host) {
+  function wireConds(fv, host) {
     [].slice.call(host.querySelectorAll(".fc-row")).forEach(function (row) {
-      var i = parseInt(row.getAttribute("data-i"), 10), c = currentCustom.filter.conds[i]; if (!c) return;
+      var i = parseInt(row.getAttribute("data-i"), 10), c = fv.state.conds[i]; if (!c) return;
       var fieldSel = row.querySelector(".fc-field");
       if (fieldSel) fieldSel.addEventListener("change", function () {
-        c.fieldId = fieldSel.value; var nf = fieldById(c.fieldId), t = nf ? nf.type : "short_text";
+        c.fieldId = fieldSel.value; var nf = fvFieldById(fv, c.fieldId), t = nf ? nf.type : "short_text";
         c.op = opsFor(t)[0][0]; c.val = defaultValFor(t, c.op);
-        renderConds(); renderCustom(); updateCustomFilterActive();
+        renderConds(fv); fv.rerender(); updateFilterActive(fv);
       });
       var opSel = row.querySelector(".fc-op");
       if (opSel) opSel.addEventListener("change", function () {
-        var nf = fieldById(c.fieldId), t = nf ? nf.type : "short_text";
+        var nf = fvFieldById(fv, c.fieldId), t = nf ? nf.type : "short_text";
         var oldKind = valueKind(t, c.op); c.op = opSel.value;
         if (valueKind(t, c.op) !== oldKind) c.val = defaultValFor(t, c.op);
-        renderConds(); renderCustom(); updateCustomFilterActive();
+        renderConds(fv); fv.rerender(); updateFilterActive(fv);
       });
       var conjSel = row.querySelector(".fc-conjsel");
-      if (conjSel) conjSel.addEventListener("change", function () { currentCustom.filter.conj = conjSel.value; renderConds(); renderCustom(); });
+      if (conjSel) conjSel.addEventListener("change", function () { fv.state.conj = conjSel.value; renderConds(fv); fv.rerender(); });
       var rm = row.querySelector(".fc-rm");
-      if (rm) rm.addEventListener("click", function () { currentCustom.filter.conds.splice(i, 1); renderConds(); renderCustom(); updateCustomFilterActive(); });
+      if (rm) rm.addEventListener("click", function () { fv.state.conds.splice(i, 1); renderConds(fv); fv.rerender(); updateFilterActive(fv); });
       var inp = row.querySelector(".fc-val .fc-input");
       if (inp) {
-        var upd = function () { c.val = inp.value; renderCustom(); updateCustomFilterActive(); };
+        var upd = function () { c.val = inp.value; fv.rerender(); updateFilterActive(fv); };
         inp.addEventListener("input", upd); inp.addEventListener("change", upd);
       }
       [].slice.call(row.querySelectorAll(".fc-multi input")).forEach(function (cb) {
@@ -2214,27 +2147,20 @@
           if (!Array.isArray(c.val)) c.val = [];
           if (cb.checked) { if (c.val.indexOf(cb.value) === -1) c.val.push(cb.value); }
           else { c.val = c.val.filter(function (x) { return x !== cb.value; }); }
-          renderCustom(); updateCustomFilterActive();
+          fv.rerender(); updateFilterActive(fv);
         });
       });
     });
   }
-  function isCondActive(c) {
+  function isCondActive(fv, c) {
     if (c.op === "empty" || c.op === "notEmpty") return true;
-    var fld = fieldById(c.fieldId);
+    var fld = fvFieldById(fv, c.fieldId);
     if (valueKind(fld ? fld.type : "short_text", c.op) === "multi") return Array.isArray(c.val) && c.val.length > 0;
     return c.val != null && String(c.val) !== "";
   }
-  function customFilterCount() {
-    var filt = currentCustom && currentCustom.filter; if (!filt) return 0;
-    return filt.conds.filter(isCondActive).length;
-  }
-  function updateCustomFilterActive() {
-    var btn = document.getElementById("custom-filter-btn");
-    if (btn) btn.classList.toggle("active", customFilterCount() > 0);
-  }
-  function evalCond(c, d) {
-    var raw = d[c.fieldId];
+  function filterCount(fv) { return fv && fv.state ? fv.state.conds.filter(function (c) { return isCondActive(fv, c); }).length : 0; }
+  function updateFilterActive(fv) { var btn = document.getElementById(fv.btnId); if (btn) btn.classList.toggle("active", filterCount(fv) > 0); }
+  function evalCond(c, raw) {
     var has = raw != null && String(raw).trim() !== "";
     var s = raw == null ? "" : String(raw);
     switch (c.op) {
@@ -2259,14 +2185,65 @@
       default: return true;
     }
   }
-  function passesCustomFilters(s) {
-    var filt = currentCustom && currentCustom.filter; if (!filt) return true;
-    var active = filt.conds.filter(isCondActive); if (!active.length) return true;
-    var d = s.data || {};
-    return filt.conj === "or"
-      ? active.some(function (c) { return evalCond(c, d); })
-      : active.every(function (c) { return evalCond(c, d); });
+  function passesFilters(fv, rec) {
+    if (!fv || !fv.state) return true;
+    var active = fv.state.conds.filter(function (c) { return isCondActive(fv, c); });
+    if (!active.length) return true;
+    var test = function (c) { return evalCond(c, fv.getVal(rec, c.fieldId)); };
+    return fv.state.conj === "or" ? active.some(test) : active.every(test);
   }
+  function passesCustomFilters(s) { return currentCustom && currentCustom.fv ? passesFilters(currentCustom.fv, s) : true; }
+  function wireFilterToggle(fv) {
+    var b = document.getElementById(fv.btnId), p = document.getElementById(fv.panelId), w = document.getElementById(fv.wrapId);
+    if (b) b.addEventListener("click", function (e) { e.stopPropagation(); if (p) p.classList.toggle("open"); });
+    document.addEventListener("click", function (e) { if (w && p && !w.contains(e.target)) p.classList.remove("open"); });
+  }
+
+  // ---- Filter views for the two built-in tables (their questions become the conditions) ----
+  function builtinExtraFields(key) {
+    return (builtinExtra[key] || []).map(function (f) { return { id: "x-" + f.id, label: f.label, type: f.type || "short_text" }; });
+  }
+  function jobFilterFields() {
+    var hidden = builtinHidden.job_applications || [];
+    var core = [
+      { id: "full_name", label: "Full name", type: "short_text" },
+      { id: "phone", label: "Phone", type: "short_text" },
+      { id: "__age", label: "Age", type: "number" },
+      { id: "date_of_birth", label: "Date of birth", type: "date" },
+      { id: "how_found", label: "How found", type: "short_text", col: "how_found" },
+      { id: "city", label: "City", type: "short_text", col: "city" },
+      { id: "living_area", label: "Living area", type: "short_text", col: "living_area" },
+      { id: "gender", label: "Gender", type: "dropdown", options: ["Female", "Male"], col: "gender" },
+      { id: "work_type", label: "Full / Part", type: "short_text", col: "work_type" },
+      { id: "currently_working", label: "Currently working", type: "short_text", col: "currently_working" },
+      { id: "education_level", label: "Education", type: "short_text", col: "education_level" },
+      { id: "favorite_drink", label: "Favorite drink", type: "short_text", col: "favorite_drink" },
+      { id: "why_join", label: "Why join", type: "long_text", col: "why_join" }
+    ].filter(function (f) { return !f.col || hidden.indexOf(f.col) === -1; });
+    return core.concat(builtinExtraFields("job_applications"));
+  }
+  function castingFilterFields() {
+    var hidden = builtinHidden.casting || [];
+    var core = [
+      { id: "full_name", label: "Full name", type: "short_text" },
+      { id: "phone", label: "Phone", type: "short_text" },
+      { id: "__age", label: "Age", type: "number" },
+      { id: "date_of_birth", label: "Date of birth", type: "date" },
+      { id: "branch", label: "Branch", type: "short_text", col: "branch" },
+      { id: "university_student", label: "University student?", type: "yesno", col: "university_student" },
+      { id: "ever_acted", label: "Ever acted?", type: "yesno", col: "ever_acted" }
+    ].filter(function (f) { return !f.col || hidden.indexOf(f.col) === -1; });
+    return core.concat(builtinExtraFields("casting"));
+  }
+  function builtinGetVal(rec, id) {
+    if (id === "__age") return calcAge(rec.date_of_birth);
+    if (id.indexOf("x-") === 0) return (rec.extra || {})[id.slice(2)];
+    return rec[id];
+  }
+  var jobFV = makeFilterView({ key: "job_applications", getFields: jobFilterFields, records: function () { return allApps; }, getVal: builtinGetVal, rerender: function () { renderApps(); }, panelId: "filter-panel", btnId: "filter-btn", wrapId: "filter-wrap" });
+  var castingFV = makeFilterView({ key: "casting", getFields: castingFilterFields, records: function () { return castingRows; }, getVal: builtinGetVal, rerender: function () { renderCasting(); }, panelId: "casting-filter-panel", btnId: "casting-filter-btn", wrapId: "casting-filter-wrap" });
+  wireFilterToggle(jobFV);
+  wireFilterToggle(castingFV);
   function openCustomDetail(s, fields) {
     var d = s.data || {}, photoPath = null, photoFieldId = null;
     var body = document.getElementById("modal-body");
@@ -3102,7 +3079,8 @@
       items[j].classList.toggle("active", items[j].getAttribute("data-view") === id);
     }
     if (id === "home") renderHome();
-    if (id === "casting" && !castingLoaded) loadCasting();
+    if (id === "job_applications") buildFilterPanel(jobFV);
+    if (id === "casting") { if (!castingLoaded) loadCasting(); else buildFilterPanel(castingFV); }
     if (id === "users") loadUsers();
   }
   var sideItems = document.querySelectorAll(".side-item");
