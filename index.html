@@ -405,7 +405,13 @@
     border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 30px 70px rgba(0,0,0,0.55); }
   .modal-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 1.15rem; cursor: pointer; }
   .modal-close:hover { color: var(--text); }
-  .m-photo { width: 96px; height: 96px; border-radius: 14px; object-fit: cover; background: #20242b; margin-bottom: 14px; }
+  .m-photo { width: 96px; height: 96px; border-radius: 14px; object-fit: cover; background: #20242b; margin-bottom: 14px; cursor: zoom-in; }
+  .m-photo-actions { margin: -8px 0 14px; }
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.86); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: 12px; box-shadow: 0 12px 48px rgba(0,0,0,0.55); cursor: zoom-out; }
+  .lightbox .lb-close { position: absolute; top: 16px; right: 20px; background: rgba(255,255,255,0.14); color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.05rem; cursor: pointer; }
+  .lightbox .lb-close:hover { background: rgba(255,255,255,0.26); }
   .m-name { font-size: 1.25rem; font-weight: 800; margin: 0; }
   .m-sub { color: var(--muted); font-size: 0.8rem; margin: 2px 0 16px; }
   .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 4px; }
@@ -1161,6 +1167,75 @@
     return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  // ---- Submission fingerprint (IP + device): admin-only, table-agnostic ----
+  function fpMeta(o) {
+    if (!isAdmin) return "";
+    return '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(o.submitted_ip || "—") + "</div></div>" +
+      '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(o.device || "—") + "</div></div>";
+  }
+
+  // ---- Photo lightbox: click any review photo to view it full size (all tables) ----
+  var _lightbox = null;
+  function openLightbox(src) {
+    if (!_lightbox) {
+      _lightbox = document.createElement("div");
+      _lightbox.className = "lightbox";
+      _lightbox.innerHTML = '<img alt=""><button type="button" class="lb-close" aria-label="Close">✕</button>';
+      _lightbox.addEventListener("click", function (e) {
+        if (e.target === _lightbox || e.target === _lightbox.querySelector("img") || (e.target.classList && e.target.classList.contains("lb-close"))) closeLightbox();
+      });
+      document.body.appendChild(_lightbox);
+    }
+    _lightbox.querySelector("img").src = src;
+    _lightbox.classList.add("open");
+  }
+  function closeLightbox() { if (_lightbox) { _lightbox.classList.remove("open"); _lightbox.querySelector("img").src = ""; } }
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeLightbox(); });
+  document.addEventListener("click", function (e) {
+    var im = e.target;
+    if (im && im.tagName === "IMG" && im.classList && im.classList.contains("m-photo") && im.getAttribute("src") && im.style.display !== "none") openLightbox(im.src);
+  });
+
+  // ---- Admin: replace a submission's photo (table-agnostic). onSave(newPath) persists it. ----
+  function photoUploadName(name) {
+    name = name || "photo";
+    var ext = name.indexOf(".") >= 0 ? name.slice(name.lastIndexOf(".")) : "";
+    var base = name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40) || "photo";
+    var uid = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("id" + new Date().getTime());
+    return uid + "_" + base + ext;
+  }
+  function wireChangePhoto(imgId, onSave) {
+    var btn = document.getElementById(imgId + "-change");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var inp = document.createElement("input");
+      inp.type = "file"; inp.accept = "image/*";
+      inp.addEventListener("change", function () {
+        var file = inp.files && inp.files[0];
+        if (!file) return;
+        btn.disabled = true; btn.textContent = "Uploading…";
+        var path = photoUploadName(file.name);
+        db.storage.from("photos").upload(path, file, { upsert: false })
+          .then(function (r) { if (r.error) throw r.error; return onSave(r.data.path); })
+          .then(function () { delete signedCache[path]; return getPhotoUrl(path); })
+          .then(function (url) {
+            var im = document.getElementById(imgId);
+            if (im && url) { im.src = url; im.style.display = "block"; }
+            btn.disabled = false; btn.textContent = "Change photo";
+          })
+          .catch(function (err) {
+            btn.disabled = false; btn.textContent = "Change photo";
+            if (window.console) console.error(err);
+            window.alert("Couldn't change the photo: " + (err && err.message ? err.message : "unknown error"));
+          });
+      });
+      inp.click();
+    });
+  }
+  function changePhotoBtn(imgId, show) {
+    return show ? '<div class="m-photo-actions"><button type="button" class="linkbtn" id="' + imgId + '-change">Change photo</button></div>' : "";
+  }
+
   function loadApps() {
     var listEl = document.getElementById("ja-list");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
@@ -1429,8 +1504,7 @@
           hideableFieldHtml("job_applications", "Favorite drink", a.favorite_drink, "favorite_drink") +
           hideableFullHtml("job_applications", "Why join", a.why_join, "why_join") +
           extraFieldsHtml(a.extra, builtinExtra.job_applications) +
-          fieldHtml("Submitted IP", a.submitted_ip) +
-          '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>" +
+          fpMeta(a) +
         "</div>";
       document.getElementById("modal").classList.add("open");
       if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) { if (url) { var im = document.getElementById("m-photo"); im.src = url; im.style.display = "block"; } });
@@ -1453,10 +1527,10 @@
       er("Favorite drink", edText("ed-favorite_drink", a.favorite_drink), "favorite_drink") +
       er("Why join", edText("ed-why_join", a.why_join, true), "why_join", true) +
       edExtraRows(builtinExtra.job_applications, a.extra);
-    var meta = fieldHtml("Age", ageText(a.date_of_birth)) + fieldHtml("Submitted IP", a.submitted_ip) +
-      '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(a.device || "—") + "</div></div>";
+    var meta = fieldHtml("Age", ageText(a.date_of_birth)) + fpMeta(a);
     body.innerHTML =
       '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
+      changePhotoBtn("m-photo", isAdmin && !!a.photo_path) +
       '<div class="m-sub">Applied ' + fmtDate(a.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
@@ -1464,6 +1538,7 @@
     wireAutosave(function () { return saveApp(a); });
     document.getElementById("modal").classList.add("open");
     if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) { if (url) { var im = document.getElementById("m-photo"); if (im) { im.src = url; im.style.display = "block"; } } });
+    wireChangePhoto("m-photo", function (np) { return db.from("job_applications").update({ photo_path: np }).eq("id", a.id).then(function (r) { if (r.error) throw r.error; a.photo_path = np; }); });
   }
   function saveApp(a) {
     function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
@@ -1752,7 +1827,7 @@
         hideableFieldHtml("casting", "University student?", c.university_student, "university_student") +
         hideableFieldHtml("casting", "Ever acted?", c.ever_acted, "ever_acted") +
         extraFieldsHtml(c.extra, builtinExtra.casting) +
-        fld("Submitted IP", c.submitted_ip) + '<div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
+        fpMeta(c);
       body.innerHTML = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
         '<div class="m-name">' + esc(c.full_name) + '</div><div class="m-sub">Submitted ' + fmtDate(c.created_at) + '</div><div class="m-grid">' + grid + "</div>";
       document.getElementById("modal").classList.add("open");
@@ -1769,9 +1844,10 @@
       er("University student?", edSelect("ed-university_student", c.university_student, ["", "Yes", "No"]), "university_student") +
       er("Ever acted?", edSelect("ed-ever_acted", c.ever_acted, ["", "Yes", "No"]), "ever_acted") +
       edExtraRows(builtinExtra.casting, c.extra);
-    var meta = '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(c.submitted_ip || "—") + '</div></div><div class="m-field full"><div class="k">Device</div><div class="v">' + esc(c.device || "—") + "</div></div>";
+    var meta = fpMeta(c);
     body.innerHTML =
       (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+      changePhotoBtn("cd-photo", isAdmin && !!c.photo_path) +
       '<div class="m-sub">Submitted ' + fmtDate(c.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
@@ -1779,6 +1855,7 @@
     wireAutosave(function () { return saveCasting(c); });
     document.getElementById("modal").classList.add("open");
     if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+    wireChangePhoto("cd-photo", function (np) { return db.from("casting_applications").update({ photo_path: np }).eq("id", c.id).then(function (r) { if (r.error) throw r.error; c.photo_path = np; }); });
   }
   function saveCasting(c) {
     function gv(id) { var el = document.getElementById(id); return el ? (el.value || "").trim() : ""; }
@@ -2191,16 +2268,16 @@
       : active.every(function (c) { return evalCond(c, d); });
   }
   function openCustomDetail(s, fields) {
-    var d = s.data || {}, photoPath = null;
+    var d = s.data || {}, photoPath = null, photoFieldId = null;
     var body = document.getElementById("modal-body");
-    fields.forEach(function (f) { if (f.type === "photo" && d[f.id]) photoPath = d[f.id]; });
+    fields.forEach(function (f) { if (f.type === "photo") { if (photoFieldId == null) photoFieldId = f.id; if (d[f.id]) photoPath = d[f.id]; } });
     if (!canEdit(currentCustom && currentCustom.table ? currentCustom.table.id : "")) {
       var grid = "";
       fields.forEach(function (f) {
         if (f.type === "photo") return;
         grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(d[f.id] || "—") + "</div></div>";
       });
-      grid += '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(s.submitted_ip || "—") + '</div></div><div class="m-field full"><div class="k">Device</div><div class="v">' + esc(s.device || "—") + "</div></div>";
+      grid += fpMeta(s);
       body.innerHTML = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
         '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + '</div><div class="chain" id="cd-chain"></div>';
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
@@ -2220,9 +2297,10 @@
       else inner = edText(id, v, false);
       return edRow(f.label, inner, f.type === "long_text");
     }).join("");
-    var meta = '<div class="m-field"><div class="k">Submitted IP</div><div class="v">' + esc(s.submitted_ip || "—") + '</div></div><div class="m-field full"><div class="k">Device</div><div class="v">' + esc(s.device || "—") + "</div></div>";
+    var meta = fpMeta(s);
     body.innerHTML =
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
+      changePhotoBtn("cd-photo", isAdmin && !!photoPath) +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
@@ -2231,6 +2309,11 @@
     renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
     document.getElementById("modal").classList.add("open");
     if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+    wireChangePhoto("cd-photo", function (np) {
+      var nd = {}; Object.keys(s.data || {}).forEach(function (k) { nd[k] = s.data[k]; });
+      nd[photoFieldId] = np;
+      return db.from("app_submissions").update({ data: nd }).eq("id", s.id).then(function (r) { if (r.error) throw r.error; s.data = nd; });
+    });
   }
   function saveCustom(s, fields) {
     var d = s.data || {};
