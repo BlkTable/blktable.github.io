@@ -224,16 +224,29 @@
   .fp-clear { width: 100%; padding: 9px; border-radius: 9px; border: 1px solid var(--field-border);
     background: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; }
   .fp-clear:hover { color: var(--text); border-color: var(--silver); }
-  /* generic per-field filter panel (custom tables) */
-  #custom-filter-panel { width: 270px; max-height: 64vh; overflow-y: auto; }
-  .fp-seg { display: flex; width: 100%; height: 40px; }
-  .fp-seg button { flex: 1; padding: 0; }
-  .fp-checks { display: flex; flex-direction: column; gap: 7px; max-height: 176px; overflow-y: auto; }
-  .fp-check { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text); cursor: pointer; }
-  .fp-check input { accent-color: var(--silver); width: 15px; height: 15px; flex: 0 0 auto; }
-  .fp-text { width: 100%; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border);
-    background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; color-scheme: dark; font-family: inherit; }
-  .fp-text:focus { border-color: var(--silver); }
+  /* Airtable-style condition builder (custom tables) */
+  #custom-filter-panel { width: min(92vw, 500px); max-height: 68vh; overflow-y: auto; }
+  .fp-head { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 10px; }
+  .fc-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
+  .fc-conj { flex: 0 0 56px; height: 38px; display: flex; align-items: center; color: var(--muted); font-size: 0.82rem; }
+  .fc-conj select { width: 100%; }
+  .fc-field { flex: 1 1 110px; min-width: 0; }
+  .fc-op { flex: 0 0 130px; min-width: 0; }
+  .fc-val { flex: 1 1 120px; min-width: 0; }
+  .fc-row select, .fc-input { height: 38px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; color-scheme: dark; font-family: inherit; width: 100%; }
+  .fc-row select:focus, .fc-input:focus { border-color: var(--silver); }
+  .fc-rm { flex: 0 0 auto; width: 34px; height: 38px; border-radius: 8px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--muted); cursor: pointer; font-size: 1.05rem; line-height: 1; }
+  .fc-rm:hover { border-color: #ff6b6b; color: #ff6b6b; }
+  .fc-multi { border: 1px solid var(--field-border); border-radius: 8px; background: var(--field-bg);
+    max-height: 148px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
+  .fc-multi label { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; color: var(--text); cursor: pointer; }
+  .fc-multi input { width: 14px; height: 14px; accent-color: var(--silver); flex: 0 0 auto; }
+  .fc-add { margin-top: 4px; width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--field-border);
+    background: none; color: var(--silver); cursor: pointer; font-size: 0.85rem; }
+  .fc-add:hover { border-color: var(--silver); }
+  .fc-empty { color: var(--muted); font-size: 0.82rem; margin-bottom: 10px; }
   .fp-none { color: var(--muted); font-size: 0.82rem; }
 
   .ja-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
@@ -1926,7 +1939,7 @@
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly, filters: {} };
+    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly, filter: { conj: "and", conds: [] } };
     db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
       currentCustom.fields = fRes.data || [];
       return db.from("app_submissions").select("*").eq("table_id", t.id).order("created_at", { ascending: false });
@@ -2007,130 +2020,175 @@
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
   }
-  // ---- Generic per-field filter (every custom table + future tables) ----
+  // ---- Airtable-style condition filter (every custom table + future tables) ----
   function customFilterableFields() {
     return (currentCustom ? currentCustom.fields : []).filter(function (f) { return f.type !== "photo"; });
+  }
+  function fieldById(id) { var a = (currentCustom ? currentCustom.fields : []).filter(function (f) { return f.id === id; }); return a[0] || null; }
+  function opsFor(type) {
+    if (type === "number") return [["eq", "="], ["neq", "≠"], ["lt", "<"], ["lte", "≤"], ["gt", ">"], ["gte", "≥"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
+    if (type === "date") return [["is", "is"], ["before", "is before"], ["after", "is after"], ["onBefore", "is on or before"], ["onAfter", "is on or after"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
+    if (type === "yesno") return [["is", "is"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
+    if (type === "dropdown") return [["is", "is"], ["isNot", "is not"], ["anyOf", "is any of"], ["noneOf", "is none of"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
+    return [["contains", "contains"], ["notContains", "does not contain"], ["is", "is"], ["isNot", "is not"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
+  }
+  function valueKind(type, op) {
+    if (op === "empty" || op === "notEmpty") return "none";
+    if (type === "dropdown") return (op === "anyOf" || op === "noneOf") ? "multi" : "select";
+    if (type === "yesno") return "yesno";
+    if (type === "number") return "number";
+    if (type === "date") return "date";
+    return "text";
+  }
+  function defaultValFor(type, op) { var k = valueKind(type, op); return k === "multi" ? [] : (k === "none" ? null : ""); }
+  function dropdownValues(fld) {
+    if (!fld) return [];
+    var vals = [], seen = {};
+    (fld.options || []).forEach(function (o) { var v = o && o.en != null ? o.en : o; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
+    (currentCustom.subs || []).forEach(function (s) { var v = (s.data || {})[fld.id]; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
+    return vals;
   }
   function buildCustomFilterPanel() {
     var wrap = document.getElementById("custom-filter-wrap");
     var panel = document.getElementById("custom-filter-panel");
     panel.classList.remove("open");
     if (!currentCustom) { wrap.style.display = "none"; return; }
-    currentCustom.filters = {};
-    var flds = customFilterableFields();
-    if (!flds.length) { wrap.style.display = "none"; panel.innerHTML = ""; return; }
+    currentCustom.filter = { conj: "and", conds: [] };
+    if (!customFilterableFields().length) { wrap.style.display = "none"; panel.innerHTML = ""; return; }
     wrap.style.display = "";
-    var subs = currentCustom.subs || [];
-    var html = "";
-    flds.forEach(function (f) {
-      var label = esc(f.label || f.label_ar || "Field");
-      html += '<div class="fp-group"><div class="fp-label">' + label + "</div>";
-      if (f.type === "dropdown") {
-        var vals = [], seen = {};
-        (f.options || []).forEach(function (o) { var v = o && o.en != null ? o.en : o; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
-        subs.forEach(function (s) { var v = (s.data || {})[f.id]; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
-        if (!vals.length) { html += '<div class="fp-none">No options yet</div></div>'; return; }
-        currentCustom.filters[f.id] = { type: "set", vals: {} };
-        html += '<div class="fp-checks">' + vals.map(function (v) {
-          return '<label class="fp-check"><input type="checkbox" data-fid="' + esc(f.id) + '" value="' + esc(v) + '"><span>' + esc(v) + "</span></label>";
-        }).join("") + "</div>";
-      } else if (f.type === "yesno") {
-        currentCustom.filters[f.id] = { type: "yesno", val: "" };
-        html += '<div class="seg fp-seg" data-fid="' + esc(f.id) + '"><button type="button" data-v="" class="active">All</button><button type="button" data-v="Yes">Yes</button><button type="button" data-v="No">No</button></div>';
-      } else if (f.type === "number") {
-        currentCustom.filters[f.id] = { type: "num", min: null, max: null };
-        html += '<div class="fp-age"><input type="number" data-fid="' + esc(f.id) + '" data-k="min" placeholder="Min" inputmode="numeric"><span>–</span><input type="number" data-fid="' + esc(f.id) + '" data-k="max" placeholder="Max" inputmode="numeric"></div>';
-      } else if (f.type === "date") {
-        currentCustom.filters[f.id] = { type: "date", from: null, to: null };
-        html += '<div class="fp-age"><input type="date" data-fid="' + esc(f.id) + '" data-k="from"><span>–</span><input type="date" data-fid="' + esc(f.id) + '" data-k="to"></div>';
-      } else { // short_text, long_text, email, phone
-        currentCustom.filters[f.id] = { type: "text", q: "" };
-        html += '<input class="fp-text" type="search" data-fid="' + esc(f.id) + '" placeholder="Contains…">';
-      }
-      html += "</div>";
-    });
-    html += '<button type="button" class="fp-clear" id="custom-fp-clear">Clear filters</button>';
-    panel.innerHTML = html;
-    wireCustomFilterInputs();
+    panel.innerHTML = '<div class="fp-head">Show records where</div><div id="fp-conds"></div><button type="button" class="fc-add" id="fp-add">＋ Add condition</button>';
+    document.getElementById("fp-add").addEventListener("click", addFilterCond);
+    renderConds();
     updateCustomFilterActive();
   }
-  function wireCustomFilterInputs() {
-    var panel = document.getElementById("custom-filter-panel");
-    [].slice.call(panel.querySelectorAll(".fp-check input")).forEach(function (cb) {
-      cb.addEventListener("change", function () {
-        var st = currentCustom.filters[cb.getAttribute("data-fid")];
-        if (st) st.vals[cb.value] = cb.checked;
-        updateCustomFilterActive(); renderCustom();
+  function addFilterCond() {
+    var flds = customFilterableFields(); if (!flds.length) return;
+    var f0 = flds[0], op0 = opsFor(f0.type)[0][0];
+    currentCustom.filter.conds.push({ fieldId: f0.id, op: op0, val: defaultValFor(f0.type, op0) });
+    renderConds(); renderCustom(); updateCustomFilterActive();
+  }
+  function valControlHtml(c, fld) {
+    var kind = valueKind(fld ? fld.type : "short_text", c.op);
+    if (kind === "none") return "";
+    if (kind === "multi") {
+      var vals = dropdownValues(fld), chosen = Array.isArray(c.val) ? c.val : [];
+      if (!vals.length) return '<div class="fp-none">No options</div>';
+      return '<div class="fc-multi">' + vals.map(function (v) {
+        return '<label><input type="checkbox" value="' + esc(v) + '"' + (chosen.indexOf(v) !== -1 ? " checked" : "") + ">" + esc(v) + "</label>";
+      }).join("") + "</div>";
+    }
+    if (kind === "yesno") return '<select class="fc-input"><option value="">Select…</option><option value="Yes"' + (c.val === "Yes" ? " selected" : "") + ">Yes</option><option value=\"No\"" + (c.val === "No" ? " selected" : "") + ">No</option></select>";
+    if (kind === "select") {
+      var vs = dropdownValues(fld);
+      return '<select class="fc-input"><option value="">Select…</option>' + vs.map(function (v) {
+        return '<option value="' + esc(v) + '"' + (String(c.val) === v ? " selected" : "") + ">" + esc(v) + "</option>";
+      }).join("") + "</select>";
+    }
+    if (kind === "number") return '<input class="fc-input" type="number" inputmode="numeric" placeholder="Value" value="' + esc(c.val == null ? "" : c.val) + '">';
+    if (kind === "date") return '<input class="fc-input" type="date" value="' + esc(c.val == null ? "" : c.val) + '">';
+    return '<input class="fc-input" type="text" placeholder="Value" value="' + esc(c.val == null ? "" : c.val) + '">';
+  }
+  function renderConds() {
+    var host = document.getElementById("fp-conds"); if (!host) return;
+    var conds = currentCustom.filter.conds, conj = currentCustom.filter.conj, flds = customFilterableFields();
+    if (!conds.length) { host.innerHTML = '<div class="fc-empty">No conditions yet — showing all records.</div>'; return; }
+    host.innerHTML = conds.map(function (c, i) {
+      var conjCell = i === 0 ? '<span>Where</span>'
+        : i === 1 ? '<select class="fc-conjsel"><option value="and"' + (conj === "and" ? " selected" : "") + '>And</option><option value="or"' + (conj === "or" ? " selected" : "") + ">Or</option></select>"
+          : "<span>" + (conj === "and" ? "And" : "Or") + "</span>";
+      var fieldSel = '<select class="fc-field">' + flds.map(function (f) {
+        return '<option value="' + esc(f.id) + '"' + (f.id === c.fieldId ? " selected" : "") + ">" + esc(f.label || f.label_ar || "Field") + "</option>";
+      }).join("") + "</select>";
+      var fld = fieldById(c.fieldId);
+      var opSel = '<select class="fc-op">' + opsFor(fld ? fld.type : "short_text").map(function (o) {
+        return '<option value="' + o[0] + '"' + (o[0] === c.op ? " selected" : "") + ">" + esc(o[1]) + "</option>";
+      }).join("") + "</select>";
+      return '<div class="fc-row" data-i="' + i + '"><div class="fc-conj">' + conjCell + "</div>" + fieldSel + opSel + '<div class="fc-val">' + valControlHtml(c, fld) + '</div><button type="button" class="fc-rm" title="Remove condition">×</button></div>';
+    }).join("");
+    wireConds(host);
+  }
+  function wireConds(host) {
+    [].slice.call(host.querySelectorAll(".fc-row")).forEach(function (row) {
+      var i = parseInt(row.getAttribute("data-i"), 10), c = currentCustom.filter.conds[i]; if (!c) return;
+      var fieldSel = row.querySelector(".fc-field");
+      if (fieldSel) fieldSel.addEventListener("change", function () {
+        c.fieldId = fieldSel.value; var nf = fieldById(c.fieldId), t = nf ? nf.type : "short_text";
+        c.op = opsFor(t)[0][0]; c.val = defaultValFor(t, c.op);
+        renderConds(); renderCustom(); updateCustomFilterActive();
+      });
+      var opSel = row.querySelector(".fc-op");
+      if (opSel) opSel.addEventListener("change", function () {
+        var nf = fieldById(c.fieldId), t = nf ? nf.type : "short_text";
+        var oldKind = valueKind(t, c.op); c.op = opSel.value;
+        if (valueKind(t, c.op) !== oldKind) c.val = defaultValFor(t, c.op);
+        renderConds(); renderCustom(); updateCustomFilterActive();
+      });
+      var conjSel = row.querySelector(".fc-conjsel");
+      if (conjSel) conjSel.addEventListener("change", function () { currentCustom.filter.conj = conjSel.value; renderConds(); renderCustom(); });
+      var rm = row.querySelector(".fc-rm");
+      if (rm) rm.addEventListener("click", function () { currentCustom.filter.conds.splice(i, 1); renderConds(); renderCustom(); updateCustomFilterActive(); });
+      var inp = row.querySelector(".fc-val .fc-input");
+      if (inp) {
+        var upd = function () { c.val = inp.value; renderCustom(); updateCustomFilterActive(); };
+        inp.addEventListener("input", upd); inp.addEventListener("change", upd);
+      }
+      [].slice.call(row.querySelectorAll(".fc-multi input")).forEach(function (cb) {
+        cb.addEventListener("change", function () {
+          if (!Array.isArray(c.val)) c.val = [];
+          if (cb.checked) { if (c.val.indexOf(cb.value) === -1) c.val.push(cb.value); }
+          else { c.val = c.val.filter(function (x) { return x !== cb.value; }); }
+          renderCustom(); updateCustomFilterActive();
+        });
       });
     });
-    [].slice.call(panel.querySelectorAll(".fp-seg")).forEach(function (seg) {
-      seg.addEventListener("click", function (e) {
-        var b = e.target.closest ? e.target.closest("button") : null; if (!b) return;
-        var st = currentCustom.filters[seg.getAttribute("data-fid")]; if (st) st.val = b.getAttribute("data-v");
-        var btns = seg.querySelectorAll("button"); for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
-        updateCustomFilterActive(); renderCustom();
-      });
-    });
-    [].slice.call(panel.querySelectorAll(".fp-age input")).forEach(function (inp) {
-      inp.addEventListener("input", function () {
-        var st = currentCustom.filters[inp.getAttribute("data-fid")]; if (!st) return;
-        var k = inp.getAttribute("data-k");
-        if (st.type === "num") { var v = parseFloat(inp.value); st[k] = isNaN(v) ? null : v; }
-        else { st[k] = inp.value || null; }
-        updateCustomFilterActive(); renderCustom();
-      });
-    });
-    [].slice.call(panel.querySelectorAll(".fp-text")).forEach(function (inp) {
-      inp.addEventListener("input", debounce(function () {
-        var st = currentCustom.filters[inp.getAttribute("data-fid")]; if (st) st.q = (inp.value || "").toLowerCase().trim();
-        updateCustomFilterActive(); renderCustom();
-      }, 180));
-    });
-    var clr = document.getElementById("custom-fp-clear");
-    if (clr) clr.addEventListener("click", function () { buildCustomFilterPanel(); document.getElementById("custom-filter-panel").classList.add("open"); renderCustom(); });
+  }
+  function isCondActive(c) {
+    if (c.op === "empty" || c.op === "notEmpty") return true;
+    var fld = fieldById(c.fieldId);
+    if (valueKind(fld ? fld.type : "short_text", c.op) === "multi") return Array.isArray(c.val) && c.val.length > 0;
+    return c.val != null && String(c.val) !== "";
   }
   function customFilterCount() {
-    var f = currentCustom && currentCustom.filters; if (!f) return 0;
-    var n = 0;
-    Object.keys(f).forEach(function (k) {
-      var st = f[k];
-      if (st.type === "set") { if (Object.keys(st.vals).some(function (x) { return st.vals[x]; })) n++; }
-      else if (st.type === "yesno") { if (st.val) n++; }
-      else if (st.type === "num") { if (st.min != null || st.max != null) n++; }
-      else if (st.type === "date") { if (st.from || st.to) n++; }
-      else if (st.type === "text") { if (st.q) n++; }
-    });
-    return n;
+    var filt = currentCustom && currentCustom.filter; if (!filt) return 0;
+    return filt.conds.filter(isCondActive).length;
   }
   function updateCustomFilterActive() {
     var btn = document.getElementById("custom-filter-btn");
     if (btn) btn.classList.toggle("active", customFilterCount() > 0);
   }
-  function passesCustomFilters(s) {
-    var f = currentCustom && currentCustom.filters; if (!f) return true;
-    var d = s.data || {};
-    var flds = currentCustom.fields;
-    for (var i = 0; i < flds.length; i++) {
-      var st = f[flds[i].id]; if (!st) continue;
-      var raw = d[flds[i].id];
-      if (st.type === "set") {
-        var keys = Object.keys(st.vals).filter(function (k) { return st.vals[k]; });
-        if (keys.length && keys.indexOf(raw == null ? "" : String(raw)) === -1) return false;
-      } else if (st.type === "yesno") {
-        if (st.val && String(raw) !== st.val) return false;
-      } else if (st.type === "num") {
-        var n = parseFloat(raw);
-        if (st.min != null && (isNaN(n) || n < st.min)) return false;
-        if (st.max != null && (isNaN(n) || n > st.max)) return false;
-      } else if (st.type === "date") {
-        var dv = raw ? String(raw) : "";
-        if (st.from && (!dv || dv < st.from)) return false;
-        if (st.to && (!dv || dv > st.to)) return false;
-      } else if (st.type === "text") {
-        if (st.q && String(raw == null ? "" : raw).toLowerCase().indexOf(st.q) === -1) return false;
-      }
+  function evalCond(c, d) {
+    var raw = d[c.fieldId];
+    var has = raw != null && String(raw).trim() !== "";
+    var s = raw == null ? "" : String(raw);
+    switch (c.op) {
+      case "empty": return !has;
+      case "notEmpty": return has;
+      case "contains": return s.toLowerCase().indexOf(String(c.val).toLowerCase()) !== -1;
+      case "notContains": return s.toLowerCase().indexOf(String(c.val).toLowerCase()) === -1;
+      case "is": return s.toLowerCase() === String(c.val).toLowerCase();
+      case "isNot": return s.toLowerCase() !== String(c.val).toLowerCase();
+      case "eq": return has && parseFloat(s) === parseFloat(c.val);
+      case "neq": return !has || parseFloat(s) !== parseFloat(c.val);
+      case "lt": return has && parseFloat(s) < parseFloat(c.val);
+      case "lte": return has && parseFloat(s) <= parseFloat(c.val);
+      case "gt": return has && parseFloat(s) > parseFloat(c.val);
+      case "gte": return has && parseFloat(s) >= parseFloat(c.val);
+      case "before": return has && s < c.val;
+      case "after": return has && s > c.val;
+      case "onBefore": return has && s <= c.val;
+      case "onAfter": return has && s >= c.val;
+      case "anyOf": return c.val.indexOf(s) !== -1;
+      case "noneOf": return c.val.indexOf(s) === -1;
+      default: return true;
     }
-    return true;
+  }
+  function passesCustomFilters(s) {
+    var filt = currentCustom && currentCustom.filter; if (!filt) return true;
+    var active = filt.conds.filter(isCondActive); if (!active.length) return true;
+    var d = s.data || {};
+    return filt.conj === "or"
+      ? active.some(function (c) { return evalCond(c, d); })
+      : active.every(function (c) { return evalCond(c, d); });
   }
   function openCustomDetail(s, fields) {
     var d = s.data || {}, photoPath = null;
