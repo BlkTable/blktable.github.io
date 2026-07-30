@@ -40,6 +40,19 @@
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   input.invalid, select.invalid, textarea.invalid { border-color: #ff6b6b !important; box-shadow: 0 0 0 3px rgba(255,107,107,0.16) !important; }
+  /* searchable dropdown (combobox) */
+  .combo { position: relative; }
+  .combo-input { padding-right: 34px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .combo.open .combo-input { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
+  .combo-list { position: absolute; z-index: 25; left: 0; right: 0; top: calc(100% + 6px); max-height: 264px; overflow-y: auto;
+    background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); padding: 6px; display: none; }
+  .combo.open .combo-list { display: block; }
+  .combo-opt { padding: 11px 12px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
+  .combo-opt.hi, .combo-opt:hover { background: rgba(255,255,255,0.06); }
+  .combo-opt.sel { color: var(--silver); font-weight: 600; }
+  .combo-empty { padding: 11px 12px; color: var(--muted); font-size: 0.9rem; }
   .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
   .phone-row { display: flex; gap: 10px; align-items: stretch; }
   .phone-row input { flex: 1; }
@@ -125,6 +138,44 @@
     if (singleLine) el.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
   }
 
+  // Searchable single-select. options: [{value,label}]. Returns {wrap, input, getValue, setValue}.
+  function buildCombo(f, options) {
+    var box = document.createElement("div"); box.className = "combo";
+    var input = document.createElement("input"); input.type = "text"; input.className = "combo-input"; input.id = "fld-" + f.id;
+    input.setAttribute("autocomplete", "off"); input.setAttribute("role", "combobox"); input.placeholder = "Type to search…";
+    var list = document.createElement("div"); list.className = "combo-list";
+    box.appendChild(input); box.appendChild(list);
+    var value = "", hi = -1, typing = false, filtered = options.slice();
+    function labelFor(v) { for (var i = 0; i < options.length; i++) if (options[i].value === v) return options[i].label; return ""; }
+    function render() {
+      var q = input.value.trim().toLowerCase();
+      filtered = (typing && q) ? options.filter(function (o) { return o.label.toLowerCase().indexOf(q) !== -1; }) : options.slice();
+      if (!filtered.length) { list.innerHTML = '<div class="combo-empty">No matches</div>'; return; }
+      list.innerHTML = filtered.map(function (o, i) {
+        return '<div class="combo-opt' + (i === hi ? " hi" : "") + (o.value === value ? " sel" : "") + '" data-i="' + i + '">' + esc(o.label) + "</div>";
+      }).join("");
+    }
+    function openList() { box.classList.add("open"); render(); }
+    function closeList() { box.classList.remove("open"); }
+    function pick(o) { value = o.value; input.value = o.label; typing = false; hi = -1; input.classList.remove("invalid"); closeList(); }
+    function scrollHi() { var el = list.querySelector(".combo-opt.hi"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" }); }
+    input.addEventListener("focus", function () { typing = false; hi = -1; input.select(); openList(); });
+    input.addEventListener("click", function () { if (!box.classList.contains("open")) openList(); });
+    input.addEventListener("input", function () { typing = true; value = ""; hi = -1; box.classList.add("open"); render(); });
+    input.addEventListener("keydown", function (e) {
+      var open = box.classList.contains("open");
+      if (e.key === "ArrowDown") { e.preventDefault(); if (!open) { openList(); } hi = Math.min(hi + 1, filtered.length - 1); render(); scrollHi(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); hi = Math.max(hi - 1, 0); render(); scrollHi(); }
+      else if (e.key === "Enter") { if (open) { e.preventDefault(); if (hi >= 0 && filtered[hi]) pick(filtered[hi]); else closeList(); } }
+      else if (e.key === "Escape") { closeList(); }
+    });
+    list.addEventListener("mousedown", function (e) {
+      var t = e.target.closest ? e.target.closest(".combo-opt") : null; if (!t) return;
+      e.preventDefault(); var i = parseInt(t.getAttribute("data-i"), 10); if (filtered[i]) pick(filtered[i]);
+    });
+    input.addEventListener("blur", function () { setTimeout(function () { input.value = value ? labelFor(value) : ""; typing = false; closeList(); }, 120); });
+    return { wrap: box, input: input, getValue: function () { return value || null; }, setValue: function (v) { value = v || ""; input.value = value ? labelFor(value) : ""; } };
+  }
   function buildField(f) {
     var wrap = document.createElement("div");
     wrap.className = "field";
@@ -142,14 +193,20 @@
       inp.id = id; wrap.appendChild(inp);
       if (f.type === "date") inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
       controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; } });
-    } else if (f.type === "yesno" || f.type === "dropdown") {
-      var sel = document.createElement("select"); sel.id = id;
-      var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Select… / اختر"; sel.appendChild(opt0);
-      var opts = f.type === "yesno" ? [{ en: "Yes", ar: "نعم" }, { en: "No", ar: "لا" }] : (f.options || []);
-      opts.forEach(function (o) {
+    } else if (f.type === "dropdown") {
+      var dopts = (f.options || []).map(function (o) {
         var v = typeof o === "string" ? o : o.en;
         var arv = typeof o === "string" ? "" : (o.ar || "");
-        var op = document.createElement("option"); op.value = v; op.textContent = v + (arv ? " / " + arv : ""); sel.appendChild(op);
+        return { value: v, label: v + (arv ? " / " + arv : "") };
+      });
+      var combo = buildCombo(f, dopts);
+      wrap.appendChild(combo.wrap);
+      controls.push({ f: f, el: combo.input, validate: function () { return !f.required || !!combo.getValue(); }, value: function () { return combo.getValue(); } });
+    } else if (f.type === "yesno") {
+      var sel = document.createElement("select"); sel.id = id;
+      var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Select… / اختر"; sel.appendChild(opt0);
+      [{ en: "Yes", ar: "نعم" }, { en: "No", ar: "لا" }].forEach(function (o) {
+        var op = document.createElement("option"); op.value = o.en; op.textContent = o.en + " / " + o.ar; sel.appendChild(op);
       });
       wrap.appendChild(sel);
       controls.push({ f: f, el: sel, validate: function () { return !f.required || sel.value !== ""; }, value: function () { return sel.value || null; } });
