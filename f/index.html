@@ -147,6 +147,14 @@
     box.appendChild(input); box.appendChild(list);
     var value = "", hi = -1, typing = false, filtered = options.slice();
     function labelFor(v) { for (var i = 0; i < options.length; i++) if (options[i].value === v) return options[i].label; return ""; }
+    // Resolve typed text to a real option so desktop users who type (not click) still submit.
+    function resolve() {
+      if (value) return value;
+      var t = input.value.trim().toLowerCase(); if (!t) return "";
+      for (var i = 0; i < options.length; i++) { if (String(options[i].value).toLowerCase() === t || options[i].label.toLowerCase() === t) return options[i].value; }
+      var hits = options.filter(function (o) { return o.label.toLowerCase().indexOf(t) !== -1; });
+      return hits.length === 1 ? hits[0].value : "";
+    }
     function render() {
       var q = input.value.trim().toLowerCase();
       filtered = (typing && q) ? options.filter(function (o) { return o.label.toLowerCase().indexOf(q) !== -1; }) : options.slice();
@@ -173,8 +181,8 @@
       var t = e.target.closest ? e.target.closest(".combo-opt") : null; if (!t) return;
       e.preventDefault(); var i = parseInt(t.getAttribute("data-i"), 10); if (filtered[i]) pick(filtered[i]);
     });
-    input.addEventListener("blur", function () { setTimeout(function () { input.value = value ? labelFor(value) : ""; typing = false; closeList(); }, 120); });
-    return { wrap: box, input: input, getValue: function () { return value || null; }, setValue: function (v) { value = v || ""; input.value = value ? labelFor(value) : ""; } };
+    input.addEventListener("blur", function () { setTimeout(function () { var r = resolve(); if (r) { value = r; input.value = labelFor(r); input.classList.remove("invalid"); } else { input.value = value ? labelFor(value) : ""; } typing = false; closeList(); }, 120); });
+    return { wrap: box, input: input, getValue: function () { return resolve() || null; }, setValue: function (v) { value = v || ""; input.value = value ? labelFor(value) : ""; } };
   }
   function buildField(f) {
     var wrap = document.createElement("div");
