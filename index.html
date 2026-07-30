@@ -2521,7 +2521,7 @@
     row.innerHTML =
       '<div class="r1"><span class="bld-drag" title="Drag to reorder">⠿</span><textarea class="lab" rows="1" placeholder="Question (English)"></textarea><textarea class="lab-ar" rows="1" placeholder="السؤال (عربي)" dir="rtl"></textarea></div>' +
       '<div class="r2"><select class="ftype">' + typeOpts + '</select>' +
-      '<textarea class="opts" rows="1" placeholder="Options: en|ar, en|ar" style="display:none;"></textarea>' +
+      '<textarea class="opts" rows="1" dir="auto" placeholder="Options — one per line (or comma-separated): English|عربي" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
       '<button type="button" class="rm">Remove</button></div>';
@@ -2772,7 +2772,7 @@
       if (type === "dropdown") {
         var raw = rows[i].querySelector(".opts").value.trim();
         if (!raw) { msg.textContent = "Dropdown fields need options."; return; }
-        options = raw.split(",").map(function (p) { var kv = p.split("|"); return { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() }; }).filter(function (o) { return o.en; });
+        options = raw.split(/[\r\n,]+/).map(function (p) { var kv = p.split("|"); return { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() }; }).filter(function (o) { return o.en; });
       }
       fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options });
     }
