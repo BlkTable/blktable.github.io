@@ -224,6 +224,17 @@
   .fp-clear { width: 100%; padding: 9px; border-radius: 9px; border: 1px solid var(--field-border);
     background: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; }
   .fp-clear:hover { color: var(--text); border-color: var(--silver); }
+  /* generic per-field filter panel (custom tables) */
+  #custom-filter-panel { width: 270px; max-height: 64vh; overflow-y: auto; }
+  .fp-seg { display: flex; width: 100%; height: 40px; }
+  .fp-seg button { flex: 1; padding: 0; }
+  .fp-checks { display: flex; flex-direction: column; gap: 7px; max-height: 176px; overflow-y: auto; }
+  .fp-check { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text); cursor: pointer; }
+  .fp-check input { accent-color: var(--silver); width: 15px; height: 15px; flex: 0 0 auto; }
+  .fp-text { width: 100%; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; color-scheme: dark; font-family: inherit; }
+  .fp-text:focus { border-color: var(--silver); }
+  .fp-none { color: var(--muted); font-size: 0.82rem; }
 
   .ja-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .ja-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
@@ -684,6 +695,12 @@
           </div>
           <div class="toolbar">
             <input type="search" id="custom-search" placeholder="Search…">
+            <div class="filter-wrap" id="custom-filter-wrap" style="display:none;">
+              <button type="button" class="filter-btn" id="custom-filter-btn" aria-label="Filters" title="Filter by field">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              </button>
+              <div class="filter-panel" id="custom-filter-panel"></div>
+            </div>
             <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
@@ -1909,11 +1926,11 @@
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
+    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly, filters: {} };
     db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
       currentCustom.fields = fRes.data || [];
       return db.from("app_submissions").select("*").eq("table_id", t.id).order("created_at", { ascending: false });
-    }).then(function (sRes) { currentCustom.subs = (sRes && sRes.data) || []; renderCustom(); });
+    }).then(function (sRes) { currentCustom.subs = (sRes && sRes.data) || []; buildCustomFilterPanel(); renderCustom(); });
   }
   function customStages() { return (currentCustom && currentCustom.table.config && currentCustom.table.config.statuses) || []; }
   function subStage(s, stages) { return s.status || (stages[0] && stages[0].key) || null; }
@@ -1941,6 +1958,7 @@
       mineChip.classList.toggle("on", !!currentCustom.mineOnly);
     } else { mineChip.style.display = "none"; currentCustom.mineOnly = false; }
     var pool = currentCustom.mineOnly ? subs.filter(isMine) : subs;
+    pool = pool.filter(passesCustomFilters);
     document.getElementById("custom-count").textContent = pool.length + (pool.length === 1 ? " entry" : " entries");
     var summary = fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
     var photoField = fields.filter(function (f) { return f.type === "photo"; })[0];
@@ -1988,6 +2006,131 @@
       kcont.appendChild(el);
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
+  }
+  // ---- Generic per-field filter (every custom table + future tables) ----
+  function customFilterableFields() {
+    return (currentCustom ? currentCustom.fields : []).filter(function (f) { return f.type !== "photo"; });
+  }
+  function buildCustomFilterPanel() {
+    var wrap = document.getElementById("custom-filter-wrap");
+    var panel = document.getElementById("custom-filter-panel");
+    panel.classList.remove("open");
+    if (!currentCustom) { wrap.style.display = "none"; return; }
+    currentCustom.filters = {};
+    var flds = customFilterableFields();
+    if (!flds.length) { wrap.style.display = "none"; panel.innerHTML = ""; return; }
+    wrap.style.display = "";
+    var subs = currentCustom.subs || [];
+    var html = "";
+    flds.forEach(function (f) {
+      var label = esc(f.label || f.label_ar || "Field");
+      html += '<div class="fp-group"><div class="fp-label">' + label + "</div>";
+      if (f.type === "dropdown") {
+        var vals = [], seen = {};
+        (f.options || []).forEach(function (o) { var v = o && o.en != null ? o.en : o; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
+        subs.forEach(function (s) { var v = (s.data || {})[f.id]; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
+        if (!vals.length) { html += '<div class="fp-none">No options yet</div></div>'; return; }
+        currentCustom.filters[f.id] = { type: "set", vals: {} };
+        html += '<div class="fp-checks">' + vals.map(function (v) {
+          return '<label class="fp-check"><input type="checkbox" data-fid="' + esc(f.id) + '" value="' + esc(v) + '"><span>' + esc(v) + "</span></label>";
+        }).join("") + "</div>";
+      } else if (f.type === "yesno") {
+        currentCustom.filters[f.id] = { type: "yesno", val: "" };
+        html += '<div class="seg fp-seg" data-fid="' + esc(f.id) + '"><button type="button" data-v="" class="active">All</button><button type="button" data-v="Yes">Yes</button><button type="button" data-v="No">No</button></div>';
+      } else if (f.type === "number") {
+        currentCustom.filters[f.id] = { type: "num", min: null, max: null };
+        html += '<div class="fp-age"><input type="number" data-fid="' + esc(f.id) + '" data-k="min" placeholder="Min" inputmode="numeric"><span>–</span><input type="number" data-fid="' + esc(f.id) + '" data-k="max" placeholder="Max" inputmode="numeric"></div>';
+      } else if (f.type === "date") {
+        currentCustom.filters[f.id] = { type: "date", from: null, to: null };
+        html += '<div class="fp-age"><input type="date" data-fid="' + esc(f.id) + '" data-k="from"><span>–</span><input type="date" data-fid="' + esc(f.id) + '" data-k="to"></div>';
+      } else { // short_text, long_text, email, phone
+        currentCustom.filters[f.id] = { type: "text", q: "" };
+        html += '<input class="fp-text" type="search" data-fid="' + esc(f.id) + '" placeholder="Contains…">';
+      }
+      html += "</div>";
+    });
+    html += '<button type="button" class="fp-clear" id="custom-fp-clear">Clear filters</button>';
+    panel.innerHTML = html;
+    wireCustomFilterInputs();
+    updateCustomFilterActive();
+  }
+  function wireCustomFilterInputs() {
+    var panel = document.getElementById("custom-filter-panel");
+    [].slice.call(panel.querySelectorAll(".fp-check input")).forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var st = currentCustom.filters[cb.getAttribute("data-fid")];
+        if (st) st.vals[cb.value] = cb.checked;
+        updateCustomFilterActive(); renderCustom();
+      });
+    });
+    [].slice.call(panel.querySelectorAll(".fp-seg")).forEach(function (seg) {
+      seg.addEventListener("click", function (e) {
+        var b = e.target.closest ? e.target.closest("button") : null; if (!b) return;
+        var st = currentCustom.filters[seg.getAttribute("data-fid")]; if (st) st.val = b.getAttribute("data-v");
+        var btns = seg.querySelectorAll("button"); for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
+        updateCustomFilterActive(); renderCustom();
+      });
+    });
+    [].slice.call(panel.querySelectorAll(".fp-age input")).forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        var st = currentCustom.filters[inp.getAttribute("data-fid")]; if (!st) return;
+        var k = inp.getAttribute("data-k");
+        if (st.type === "num") { var v = parseFloat(inp.value); st[k] = isNaN(v) ? null : v; }
+        else { st[k] = inp.value || null; }
+        updateCustomFilterActive(); renderCustom();
+      });
+    });
+    [].slice.call(panel.querySelectorAll(".fp-text")).forEach(function (inp) {
+      inp.addEventListener("input", debounce(function () {
+        var st = currentCustom.filters[inp.getAttribute("data-fid")]; if (st) st.q = (inp.value || "").toLowerCase().trim();
+        updateCustomFilterActive(); renderCustom();
+      }, 180));
+    });
+    var clr = document.getElementById("custom-fp-clear");
+    if (clr) clr.addEventListener("click", function () { buildCustomFilterPanel(); document.getElementById("custom-filter-panel").classList.add("open"); renderCustom(); });
+  }
+  function customFilterCount() {
+    var f = currentCustom && currentCustom.filters; if (!f) return 0;
+    var n = 0;
+    Object.keys(f).forEach(function (k) {
+      var st = f[k];
+      if (st.type === "set") { if (Object.keys(st.vals).some(function (x) { return st.vals[x]; })) n++; }
+      else if (st.type === "yesno") { if (st.val) n++; }
+      else if (st.type === "num") { if (st.min != null || st.max != null) n++; }
+      else if (st.type === "date") { if (st.from || st.to) n++; }
+      else if (st.type === "text") { if (st.q) n++; }
+    });
+    return n;
+  }
+  function updateCustomFilterActive() {
+    var btn = document.getElementById("custom-filter-btn");
+    if (btn) btn.classList.toggle("active", customFilterCount() > 0);
+  }
+  function passesCustomFilters(s) {
+    var f = currentCustom && currentCustom.filters; if (!f) return true;
+    var d = s.data || {};
+    var flds = currentCustom.fields;
+    for (var i = 0; i < flds.length; i++) {
+      var st = f[flds[i].id]; if (!st) continue;
+      var raw = d[flds[i].id];
+      if (st.type === "set") {
+        var keys = Object.keys(st.vals).filter(function (k) { return st.vals[k]; });
+        if (keys.length && keys.indexOf(raw == null ? "" : String(raw)) === -1) return false;
+      } else if (st.type === "yesno") {
+        if (st.val && String(raw) !== st.val) return false;
+      } else if (st.type === "num") {
+        var n = parseFloat(raw);
+        if (st.min != null && (isNaN(n) || n < st.min)) return false;
+        if (st.max != null && (isNaN(n) || n > st.max)) return false;
+      } else if (st.type === "date") {
+        var dv = raw ? String(raw) : "";
+        if (st.from && (!dv || dv < st.from)) return false;
+        if (st.to && (!dv || dv > st.to)) return false;
+      } else if (st.type === "text") {
+        if (st.q && String(raw == null ? "" : raw).toLowerCase().indexOf(st.q) === -1) return false;
+      }
+    }
+    return true;
   }
   function openCustomDetail(s, fields) {
     var d = s.data || {}, photoPath = null;
@@ -2144,6 +2287,11 @@
     });
   }
   document.getElementById("custom-search").addEventListener("input", debounce(renderCustom, 180));
+  (function () {
+    var b = document.getElementById("custom-filter-btn"), p = document.getElementById("custom-filter-panel"), w = document.getElementById("custom-filter-wrap");
+    if (b) b.addEventListener("click", function (e) { e.stopPropagation(); p.classList.toggle("open"); });
+    document.addEventListener("click", function (e) { if (w && !w.contains(e.target)) p.classList.remove("open"); });
+  })();
   document.getElementById("custom-mine").addEventListener("click", function () { if (currentCustom) { currentCustom.mineOnly = !currentCustom.mineOnly; renderCustom(); } });
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table, currentCustom.mineOnly); });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
