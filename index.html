@@ -1798,11 +1798,27 @@
   // ---- Custom tables: admin builder + dynamic views ----
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
-    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "yesno", label: "Yes / No" },
+    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
     { v: "dropdown", label: "Dropdown" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "email", label: "Email" }
   ];
   var customTables = [];
   var currentCustom = null;
+  // ---- Shared custom-field semantics (every table, current + future) ----
+  // A dropdown choice flagged {other:true} opens a free-text box on the public form; that answer is
+  // stored next to the choice under "<fieldId>__other". A "dob" field stores a date but reads as an age.
+  function otherKeyFor(f) { return f.id + "__other"; }
+  function fieldHasOther(f) { return f.type === "dropdown" && (f.options || []).some(function (o) { return o && o.other; }); }
+  function isOtherChoice(f, v) {
+    if (!v || f.type !== "dropdown") return false;
+    return (f.options || []).some(function (o) { return o && o.other && String(o.en != null ? o.en : o) === String(v); });
+  }
+  function customCellText(f, d, long) {
+    d = d || {};
+    var v = d[f.id];
+    if (f.type === "dob") return v ? (ageText(v) + (long ? " · " + v : "")) : "—";
+    if (isOtherChoice(f, v) && d[otherKeyFor(f)]) return v + " — " + d[otherKeyFor(f)];
+    return (v == null || v === "") ? "—" : String(v);
+  }
   // ---- Builder: workflow stages editor ----
   var STAGE_COLORS = ["gray", "green", "red", "blue", "amber", "purple"];
   function addStageRow(data) {
@@ -1939,9 +1955,18 @@
     currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
     currentCustom.fv = makeFilterView({
       key: "custom:" + t.id,
-      getFields: function () { return currentCustom.fields; },
+      // A date-of-birth field filters as its computed Age, the same way the built-in tables do.
+      getFields: function () {
+        return (currentCustom.fields || []).map(function (f) {
+          return f.type === "dob" ? { id: f.id, label: f.label + " (age)", type: "number" } : f;
+        });
+      },
       records: function () { return currentCustom.subs; },
-      getVal: function (rec, id) { return (rec.data || {})[id]; },
+      getVal: function (rec, id) {
+        var f = (currentCustom.fields || []).filter(function (x) { return x.id === id; })[0];
+        var v = (rec.data || {})[id];
+        return (f && f.type === "dob") ? calcAge(v) : v;
+      },
       rerender: function () { renderCustom(); },
       panelId: "custom-filter-panel", btnId: "custom-filter-btn", wrapId: "custom-filter-wrap"
     });
@@ -2001,8 +2026,8 @@
     if (kcards) { kcont = document.createElement("div"); kcont.className = "ja-cards"; listEl.appendChild(kcont); }
     rows.forEach(function (s) {
       var d = s.data || {};
-      var title = summary.length ? (d[summary[0].id] || "—") : "—";
-      var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(d[f.id] || "—"); });
+      var title = summary.length ? customCellText(summary[0], d) : "—";
+      var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(customCellText(f, d)); });
       parts.push(fmtDate(s.created_at));
       var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
       var moveHtml = "";
@@ -2257,7 +2282,7 @@
       var grid = "";
       fields.forEach(function (f) {
         if (f.type === "photo") return;
-        grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(d[f.id] || "—") + "</div></div>";
+        grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(customCellText(f, d, true)) + "</div></div>";
       });
       grid += fpMeta(s);
       body.innerHTML = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
@@ -2269,15 +2294,23 @@
     }
     var grid = fields.map(function (f) {
       if (f.type === "photo") return "";
-      var id = "ed-" + f.id, v = d[f.id], inner;
+      var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
       if (f.type === "long_text") inner = edText(id, v, true);
       else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
-      else if (f.type === "dropdown") inner = edSelect(id, v, [""].concat((f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })));
+      else if (f.type === "dropdown") {
+        inner = edSelect(id, v, [""].concat((f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })));
+        if (fieldHasOther(f)) {
+          var ov = d[otherKeyFor(f)];
+          inner += '<input id="' + id + '__other" class="ed-in" placeholder="If other — what?" value="' + esc(ov == null ? "" : ov) +
+                   '" style="margin-top:6px;' + (isOtherChoice(f, v) ? "" : "display:none;") + '">';
+        }
+      }
+      else if (f.type === "dob") { inner = edDate(id, v); if (v) label += " · " + ageText(v); }
       else if (f.type === "date") inner = edDate(id, v);
       else if (f.type === "number") inner = edNum(id, v);
       else if (f.type === "phone") inner = edPhone(id, v);
       else inner = edText(id, v, false);
-      return edRow(f.label, inner, f.type === "long_text");
+      return edRow(label, inner, f.type === "long_text");
     }).join("");
     var meta = fpMeta(s);
     body.innerHTML =
@@ -2287,6 +2320,17 @@
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
+    // show/hide the "other" free-text box as the choice changes
+    fields.forEach(function (f) {
+      if (!fieldHasOther(f)) return;
+      var sel = document.getElementById("ed-" + f.id), oth = document.getElementById("ed-" + f.id + "__other");
+      if (!sel || !oth) return;
+      sel.addEventListener("change", function () {
+        var on = isOtherChoice(f, sel.value);
+        oth.style.display = on ? "" : "none";
+        if (!on) oth.value = "";
+      });
+    });
     wireAutosave(function () { return saveCustom(s, fields); });
     renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
     document.getElementById("modal").classList.add("open");
@@ -2306,6 +2350,13 @@
       if (f.type === "phone" && edPhoneReg["ed-" + f.id]) v = edPhoneReg["ed-" + f.id]();
       else { var el = document.getElementById("ed-" + f.id); if (!el) return; v = (el.value || "").trim(); }
       if (v == null || v === "") delete nd[f.id]; else nd[f.id] = v;
+    });
+    // the free text behind an "other" choice — dropped when the choice moves off "other"
+    fields.forEach(function (f) {
+      if (!fieldHasOther(f)) return;
+      var el = document.getElementById("ed-" + f.id + "__other");
+      var val = el ? (el.value || "").trim() : "";
+      if (!val || !isOtherChoice(f, nd[f.id])) delete nd[otherKeyFor(f)]; else nd[otherKeyFor(f)] = val;
     });
     return db.from("app_submissions").update({ data: nd }).eq("id", s.id).then(function (res) {
       if (res.error) { setEdStatus("Not saved — try again", true); if (window.console) console.error(res.error); return; }
@@ -2599,7 +2650,7 @@
     row.innerHTML =
       '<div class="r1"><span class="bld-drag" title="Drag to reorder">⠿</span><textarea class="lab" rows="1" placeholder="Question (English)"></textarea><textarea class="lab-ar" rows="1" placeholder="السؤال (عربي)" dir="rtl"></textarea></div>' +
       '<div class="r2"><select class="ftype">' + typeOpts + '</select>' +
-      '<textarea class="opts" rows="1" dir="auto" placeholder="Options — one per line (or comma-separated): English|عربي" style="display:none;"></textarea>' +
+      '<textarea class="opts" rows="1" dir="auto" placeholder="Options — one per line (or comma-separated): English|عربي — add |other to a choice to open a free-text box" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
       '<button type="button" class="rm">Remove</button></div>';
@@ -2763,7 +2814,11 @@
   }
   function optsToString(options) {
     if (!options || !options.length) return "";
-    return options.map(function (o) { var en = (typeof o === "string" ? o : o.en) || ""; var ar = (typeof o === "string" ? "" : o.ar) || ""; return en + (ar ? "|" + ar : ""); }).join(", ");
+    return options.map(function (o) {
+      var en = (typeof o === "string" ? o : o.en) || "", ar = (typeof o === "string" ? "" : o.ar) || "";
+      var other = (typeof o === "object" && o.other) ? (ar ? "|other" : "||other") : "";
+      return en + (ar ? "|" + ar : "") + other;
+    }).join(", ");
   }
   function openBuilderEdit(table) {
     if (!table) return;
@@ -2857,7 +2912,12 @@
       if (type === "dropdown") {
         var raw = rows[i].querySelector(".opts").value.trim();
         if (!raw) { msg.textContent = "Dropdown fields need options."; return; }
-        options = raw.split(/[\r\n,]+/).map(function (p) { var kv = p.split("|"); return { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() }; }).filter(function (o) { return o.en; });
+        options = raw.split(/[\r\n,]+/).map(function (p) {
+          var kv = p.split("|");
+          var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
+          if ((kv[2] || "").trim().toLowerCase() === "other") o.other = true;   // this choice opens a free-text box
+          return o;
+        }).filter(function (o) { return o.en; });
       }
       fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options });
     }

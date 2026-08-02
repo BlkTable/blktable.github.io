@@ -58,6 +58,7 @@
   .combo-opt.sel { color: var(--silver); font-weight: 600; }
   .combo-empty { padding: 11px 12px; color: var(--muted); font-size: 0.9rem; }
   .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
+  .other-box { margin-top: 8px; }
   .phone-row { display: flex; gap: 10px; align-items: stretch; }
   .phone-row input { flex: 1; }
   .cc-picker { position: relative; flex: 0 0 auto; }
@@ -152,8 +153,9 @@
     if (singleLine) el.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
   }
 
-  // Searchable single-select. options: [{value,label}]. Returns {wrap, input, getValue, setValue}.
-  function buildCombo(f, options) {
+  // Searchable single-select. options: [{value,label}]. onChange(value) fires whenever the choice settles.
+  // Returns {wrap, input, getValue, setValue}.
+  function buildCombo(f, options, onChange) {
     var box = document.createElement("div"); box.className = "combo";
     var input = document.createElement("input"); input.type = "text"; input.className = "combo-input"; input.id = "fld-" + f.id;
     input.setAttribute("autocomplete", "off"); input.setAttribute("role", "combobox"); input.placeholder = "Type to search…";
@@ -179,7 +181,7 @@
     }
     function openList() { box.classList.add("open"); render(); }
     function closeList() { box.classList.remove("open"); }
-    function pick(o) { value = o.value; input.value = o.label; typing = false; hi = -1; input.classList.remove("invalid"); closeList(); }
+    function pick(o) { value = o.value; input.value = o.label; typing = false; hi = -1; input.classList.remove("invalid"); closeList(); if (onChange) onChange(value); }
     function scrollHi() { var el = list.querySelector(".combo-opt.hi"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" }); }
     input.addEventListener("focus", function () { typing = false; hi = -1; input.select(); openList(); });
     input.addEventListener("click", function () { if (!box.classList.contains("open")) openList(); });
@@ -195,7 +197,7 @@
       var t = e.target.closest ? e.target.closest(".combo-opt") : null; if (!t) return;
       e.preventDefault(); var i = parseInt(t.getAttribute("data-i"), 10); if (filtered[i]) pick(filtered[i]);
     });
-    input.addEventListener("blur", function () { setTimeout(function () { var r = resolve(); if (r) { value = r; input.value = labelFor(r); input.classList.remove("invalid"); } else { input.value = value ? labelFor(value) : ""; } typing = false; closeList(); }, 120); });
+    input.addEventListener("blur", function () { setTimeout(function () { var r = resolve(); if (r) { value = r; input.value = labelFor(r); input.classList.remove("invalid"); } else { input.value = value ? labelFor(value) : ""; } typing = false; closeList(); if (onChange) onChange(value); }, 120); });
     return { wrap: box, input: input, getValue: function () { return resolve() || null; }, setValue: function (v) { value = v || ""; input.value = value ? labelFor(value) : ""; } };
   }
   function buildField(f) {
@@ -209,21 +211,53 @@
     if (f.type === "long_text" || f.type === "short_text") {
       var ta = document.createElement("textarea"); ta.id = id; ta.rows = 1; growTextarea(ta, f.type === "short_text"); wrap.appendChild(ta);
       controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; } });
-    } else if (f.type === "number" || f.type === "email" || f.type === "date") {
+    } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob") {
+      var isDate = f.type === "date" || f.type === "dob";
       var inp = document.createElement("input");
-      inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (f.type === "date" ? "date" : "text"));
+      inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (isDate ? "date" : "text"));
       inp.id = id; wrap.appendChild(inp);
-      if (f.type === "date") inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
+      if (isDate) inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
+      if (f.type === "dob") inp.max = new Date().toISOString().slice(0, 10);   // a birth date can't be in the future
       controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; } });
     } else if (f.type === "dropdown") {
+      var otherVals = {};
       var dopts = (f.options || []).map(function (o) {
         var v = typeof o === "string" ? o : o.en;
         var arv = typeof o === "string" ? "" : (o.ar || "");
+        if (o && o.other) otherVals[v] = true;      // this choice opens a free-text box
         return { value: v, label: v + (arv ? " / " + arv : "") };
       });
-      var combo = buildCombo(f, dopts);
+      var hasOther = Object.keys(otherVals).length > 0;
+      var otherWrap = null, otherInp = null;
+      if (hasOther) {
+        otherWrap = document.createElement("div"); otherWrap.className = "other-box"; otherWrap.style.display = "none";
+        otherInp = document.createElement("textarea"); otherInp.id = id + "-other"; otherInp.rows = 1;
+        otherInp.placeholder = "Tell us / احكيلنا";
+        growTextarea(otherInp, false);
+        otherWrap.appendChild(otherInp);
+      }
+      var toggleOther = function (val) {
+        if (!hasOther) return;
+        var on = !!(val && otherVals[val]);
+        otherWrap.style.display = on ? "block" : "none";
+        if (on) autoGrow(otherInp); else { otherInp.value = ""; otherInp.classList.remove("invalid"); }
+      };
+      var combo = buildCombo(f, dopts, toggleOther);
       wrap.appendChild(combo.wrap);
-      controls.push({ f: f, el: combo.input, validate: function () { return !f.required || !!combo.getValue(); }, value: function () { return combo.getValue(); } });
+      if (hasOther) wrap.appendChild(otherWrap);
+      controls.push({
+        f: f, el: combo.input, otherEl: otherInp,
+        validate: function () {
+          var v = combo.getValue();
+          if (f.required && !v) return false;
+          if (hasOther && v && otherVals[v] && otherInp.value.trim() === "") return false;   // picked "other" but said nothing
+          return true;
+        },
+        badEl: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v] && otherInp.value.trim() === "") ? otherInp : combo.input; },
+        value: function () { return combo.getValue(); },
+        otherKey: hasOther ? f.id + "__other" : null,
+        otherValue: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v]) ? (otherInp.value.trim() || null) : null; }
+      });
     } else if (f.type === "yesno") {
       var sel = document.createElement("select"); sel.id = id;
       var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Select… / اختر"; sel.appendChild(opt0);
@@ -263,7 +297,11 @@
     return wrap;
   }
 
-  function markCtl(ctl, bad) { if (ctl.isPhoto) ctl.el.classList.toggle("invalid", bad); else ctl.el.classList.toggle("invalid", bad); }
+  function markCtl(ctl, bad) {
+    ctl.el.classList.remove("invalid");
+    if (ctl.otherEl) ctl.otherEl.classList.remove("invalid");
+    if (bad) (ctl.badEl ? ctl.badEl() : ctl.el).classList.add("invalid");
+  }
 
   function init(table, fields) {
     currentTable = table;
@@ -299,7 +337,11 @@
 
     Promise.all(uploads).then(function (results) {
       var data = {};
-      controls.forEach(function (c) { if (!c.isPhoto) data[c.f.id] = c.value(); });
+      controls.forEach(function (c) {
+        if (c.isPhoto) return;
+        data[c.f.id] = c.value();
+        if (c.otherKey) { var ov = c.otherValue(); if (ov) data[c.otherKey] = ov; }   // free text behind an "other" choice
+      });
       results.forEach(function (r) { data[r.id] = r.path; });
       return db.from("app_submissions").insert({ table_id: currentTable.id, data: data });
     }).then(function (res) {
