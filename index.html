@@ -803,6 +803,11 @@
           <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
           <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
         </div>
+        <div class="fp-label" style="margin: 0 0 6px;">Form intro <span style="color:var(--muted);font-weight:400;">— optional. Shown under the title on the public form.</span></div>
+        <div class="bld-two">
+          <textarea id="bld-intro" rows="2" placeholder="Intro (English)"></textarea>
+          <textarea id="bld-intro-ar" rows="2" placeholder="مقدمة (عربي)" dir="rtl"></textarea>
+        </div>
         <div class="bld-fields" id="bld-fields"></div>
         <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add field</button>
         <div class="bld-stages-wrap" id="bld-stages-wrap">
@@ -2563,18 +2568,31 @@
   var editingTableId = null;
   var editingFieldIds = [];      // field ids that existed when the editor opened
   function bldGrow(el) { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
-  function wireBldGrow(el) {
+  function wireBldGrow(el, multiline) {
     if (!el) return;
     el.addEventListener("input", function () { bldGrow(el); });
-    el.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
+    if (!multiline) el.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
     bldGrow(el);
   }
   function growAllBld() {
     bldGrow(document.getElementById("bld-name")); bldGrow(document.getElementById("bld-name-ar"));
+    bldGrow(document.getElementById("bld-intro")); bldGrow(document.getElementById("bld-intro-ar"));
     [].slice.call(document.querySelectorAll("#bld-fields textarea")).forEach(bldGrow);
   }
   wireBldGrow(document.getElementById("bld-name"));
   wireBldGrow(document.getElementById("bld-name-ar"));
+  wireBldGrow(document.getElementById("bld-intro"), true);      // intro is multi-line — Enter must work
+  wireBldGrow(document.getElementById("bld-intro-ar"), true);
+  // config.intro = {en, ar} — the one intro standard, used by every public form (f/, apply/, cast/).
+  function serializeIntro() {
+    var en = (document.getElementById("bld-intro").value || "").trim();
+    var ar = (document.getElementById("bld-intro-ar").value || "").trim();
+    return (en || ar) ? { en: en, ar: ar } : null;
+  }
+  function setIntroInputs(intro) {
+    document.getElementById("bld-intro").value = (intro && intro.en) || "";
+    document.getElementById("bld-intro-ar").value = (intro && intro.ar) || "";
+  }
   function addBuilderField(data) {
     var row = document.createElement("div"); row.className = "bld-field";
     var typeOpts = FIELD_TYPES.map(function (t) { return '<option value="' + t.v + '">' + t.label + "</option>"; }).join("");
@@ -2625,6 +2643,8 @@
     return {
       name: document.getElementById("bld-name").value,
       nameAr: document.getElementById("bld-name-ar").value,
+      intro: document.getElementById("bld-intro").value,
+      introAr: document.getElementById("bld-intro-ar").value,
       fields: rows.map(function (r) {
         return {
           label: r.querySelector(".lab").value, labelAr: r.querySelector(".lab-ar").value,
@@ -2636,7 +2656,7 @@
   }
   function draftHasContent(d) {
     if (!d) return false;
-    if ((d.name || "").trim() || (d.nameAr || "").trim()) return true;
+    if ((d.name || "").trim() || (d.nameAr || "").trim() || (d.intro || "").trim() || (d.introAr || "").trim()) return true;
     return (d.fields || []).some(function (f) { return (f.label || "").trim() || (f.labelAr || "").trim() || (f.opts || "").trim(); });
   }
   function saveDraft() {
@@ -2649,6 +2669,7 @@
   function clearDraft() { try { localStorage.removeItem(BLD_DRAFT_KEY); } catch (e) {} var note = document.getElementById("bld-draft-note"); if (note) note.textContent = ""; }
   function resetBuilder() {
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
+    setIntroInputs(null);
     document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     document.getElementById("bld-stages").innerHTML = "";
     document.getElementById("bld-actions").innerHTML = "";
@@ -2705,12 +2726,14 @@
     setBuilderChrome("builtin", name);
     document.getElementById("bld-builtin-note").innerHTML = "";
     document.getElementById("bld-name").value = name; document.getElementById("bld-name-ar").value = "";
+    setIntroInputs(null);
     document.getElementById("bld-msg").textContent = "Loading…";
     document.getElementById("bld-fields").innerHTML = "";
     builder.classList.add("open");
     db.from("app_tables").select("config").eq("id", editingTableId).single().then(function (cRes) {
       var cfg = (cRes && cRes.data && cRes.data.config) || {};
       document.getElementById("bld-builtin-note").innerHTML = builtinFieldsHtml(formKey, (cfg && cfg.hidden) || []);
+      setIntroInputs(cfg && cfg.intro);
       return db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true });
     }).then(function (res) {
       document.getElementById("bld-msg").textContent = "";
@@ -2728,6 +2751,7 @@
     if (draftHasContent(d)) {
       document.getElementById("bld-name").value = d.name || "";
       document.getElementById("bld-name-ar").value = d.nameAr || "";
+      setIntroInputs({ en: d.intro, ar: d.introAr });
       document.getElementById("bld-fields").innerHTML = "";
       (d.fields && d.fields.length ? d.fields : [null]).forEach(function (f) { addBuilderField(f); });
       var note = document.getElementById("bld-draft-note"); if (note) note.textContent = "Restored your unsaved draft";
@@ -2748,6 +2772,7 @@
     document.getElementById("bld-msg").textContent = "Loading…";
     document.getElementById("bld-name").value = table.name || "";
     document.getElementById("bld-name-ar").value = table.name_ar || "";
+    setIntroInputs(table.config && table.config.intro);
     document.getElementById("bld-fields").innerHTML = "";
     document.getElementById("bld-stages").innerHTML = "";
     ((table.config && table.config.statuses) || []).forEach(function (st) { addStageRow(st); });
@@ -2840,7 +2865,7 @@
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
     msg.textContent = "Creating…";
-    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers() } }).select().single().then(function (tRes) {
+    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() } }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }; });
@@ -2861,9 +2886,9 @@
     if (builderMode === "builtin") {
       var hidden = [];
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
-      tableUpdate.config = { hidden: hidden };
+      tableUpdate.config = { hidden: hidden, intro: serializeIntro() };
     } else {
-      tableUpdate.config = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers() };
+      tableUpdate.config = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() };
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {

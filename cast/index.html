@@ -21,6 +21,10 @@
   .head { text-align: center; margin-bottom: 26px; }
   .head h1 { font-size: 1.3rem; margin: 0 0 6px; font-weight: 800; letter-spacing: 0.02em; }
   .head p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .intro { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; }
+  .intro p { margin: 0; color: var(--silver-lo); font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; }
+  .intro p + p { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .intro p.ar { direction: rtl; text-align: right; }
   .card { background: linear-gradient(180deg, #16181d 0%, var(--card) 100%); border: 1px solid var(--line);
     border-radius: 18px; padding: 24px 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04); }
   .field { margin-bottom: 16px; }
@@ -89,6 +93,7 @@
         <h1>BLK Casting <span style="color:var(--muted);font-weight:600;">· كاستنج</span></h1>
         <p>Fill in your details below.</p>
       </div>
+      <div class="intro" id="form-intro" style="display:none;"></div>
 
       <div class="card" id="card">
         <form id="form" novalidate>
@@ -175,8 +180,21 @@
       var el = document.getElementById(id); if (el) { var f = el.closest ? el.closest(".field") : null; if (f) f.style.display = "none"; }
     });
   }
+  // Optional bilingual intro shown under the title, from the form's config.intro = {en, ar}.
+  function renderIntro(intro) {
+    var box = document.getElementById("form-intro"); if (!box) return;
+    var en = ((intro && intro.en) || "").trim(), ar = ((intro && intro.ar) || "").trim();
+    box.innerHTML = "";
+    if (!en && !ar) { box.style.display = "none"; return; }
+    if (en) { var pe = document.createElement("p"); pe.textContent = en; box.appendChild(pe); }
+    if (ar) { var pa = document.createElement("p"); pa.className = "ar"; pa.setAttribute("dir", "rtl"); pa.textContent = ar; box.appendChild(pa); }
+    box.style.display = "block";
+  }
   db.rpc("get_form_config", { p_key: "casting" }).then(function (res) {
-    if (res && !res.error && res.data && res.data.hidden) { res.data.hidden.forEach(function (c) { hiddenCols[c] = true; }); applyHidden(); }
+    if (res && !res.error && res.data) {
+      if (res.data.hidden) { res.data.hidden.forEach(function (c) { hiddenCols[c] = true; }); applyHidden(); }
+      renderIntro(res.data.intro);
+    }
   }).catch(function () {});
 
   // Rotatable link gate: only blocks when the token is explicitly invalid; any error fails open.
@@ -313,6 +331,7 @@
       .then(function (res) {
         if (res && res.error) throw res.error;
         document.getElementById("card").style.display = "none";
+        document.getElementById("form-intro").style.display = "none";
         document.getElementById("success").style.display = "block";
         window.scrollTo({ top: 0, behavior: "smooth" });
       })

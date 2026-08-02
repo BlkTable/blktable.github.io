@@ -21,6 +21,10 @@
   .head { text-align: center; margin-bottom: 26px; }
   .head h1 { font-size: 1.3rem; margin: 0 0 6px; font-weight: 800; letter-spacing: 0.02em; }
   .head p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+  .intro { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; }
+  .intro p { margin: 0; color: var(--silver-lo); font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; }
+  .intro p + p { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .intro p.ar { direction: rtl; text-align: right; }
   .card { background: linear-gradient(180deg, #16181d 0%, var(--card) 100%); border: 1px solid var(--line);
     border-radius: 18px; padding: 24px 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04); }
   .field { margin-bottom: 16px; }
@@ -91,6 +95,7 @@
     <div class="sheet">
       <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
       <div class="head" id="head" style="display:none;"><h1 id="form-title">—</h1></div>
+      <div class="intro" id="form-intro" style="display:none;"></div>
       <div class="loading" id="loading">Loading…</div>
       <div class="card" id="card" style="display:none;">
         <form id="form" novalidate>
@@ -129,6 +134,15 @@
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
     var req = f.required ? ' <span class="req">*</span>' : "";
     return esc(f.label) + ar + req;
+  }
+
+  // Optional bilingual intro shown under the title, from app_tables.config.intro = {en, ar}.
+  function renderIntro(intro) {
+    var box = document.getElementById("form-intro"); if (!box) return;
+    var en = (intro && intro.en || "").trim(), ar = (intro && intro.ar || "").trim();
+    if (!en && !ar) { box.style.display = "none"; return; }
+    box.innerHTML = (en ? "<p>" + esc(en) + "</p>" : "") + (ar ? '<p class="ar" dir="rtl">' + esc(ar) + "</p>" : "");
+    box.style.display = "block";
   }
 
   function autoGrow(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
@@ -256,6 +270,7 @@
     document.getElementById("loading").style.display = "none";
     document.getElementById("form-title").innerHTML = esc(table.name) + (table.name_ar ? ' <span style="color:var(--muted);font-weight:600;">· ' + esc(table.name_ar) + "</span>" : "");
     document.getElementById("head").style.display = "block";
+    renderIntro(table.config && table.config.intro);
     document.getElementById("card").style.display = "block";
     var host = document.getElementById("fields");
     fields.filter(function (f) { return !f.internal; }).forEach(function (f) { host.appendChild(buildField(f)); }); // staff-only fields never render publicly
@@ -291,6 +306,7 @@
       if (res && res.error) throw res.error;
       document.getElementById("card").style.display = "none";
       document.getElementById("head").style.display = "none";
+      document.getElementById("form-intro").style.display = "none";
       document.getElementById("success").style.display = "block";
       window.scrollTo({ top: 0, behavior: "smooth" });
     }).catch(function (err) {
