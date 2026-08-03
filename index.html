@@ -345,6 +345,16 @@
   .tabs { margin-bottom: 16px; }
   .tab-count { font-size: 0.72rem; opacity: 0.7; margin-left: 3px; }
   .ja-bulk { margin-bottom: 14px; }
+  /* Category grouping (sidebar + Home). Generic: any table with a category is grouped. */
+  .side-cat { color: var(--muted); font-size: 0.82rem; letter-spacing: .04em; text-transform: uppercase; }
+  .side-cat .side-cat-n { margin-left: auto; opacity: .7; font-size: 0.78rem; }
+  .side-cat-items { display: block; }
+  .side-cat-items .side-item .side-label { padding-left: 14px; }
+  .home-group-title { color: var(--muted); font-size: 0.82rem; letter-spacing: .06em; text-transform: uppercase;
+    margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .home-groups > .home-group-title:first-child { margin-top: 0; }
+  .hc-kind { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+    font-size: 0.7rem; letter-spacing: .04em; color: var(--muted); border: 1px solid var(--line); vertical-align: middle; }
   .link-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--card);
     border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.85rem; }
   .link-bar .lbl { color: var(--muted); }
@@ -389,6 +399,7 @@
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
   .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
+  .card-note { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
   .ja-row .row-actions { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; margin-left: auto; }
   .ja-row .card-actions { margin: 0; }
   .ja-row .card-actions button { flex: 0 0 auto; padding: 8px 12px; font-size: 0.78rem; }
@@ -669,7 +680,7 @@
             <div><div class="section-title">Table</div><h2 class="ja-title" id="custom-title">—</h2></div>
             <div class="ja-count" id="custom-count">—</div>
           </div>
-          <div class="qr-bar">
+          <div class="qr-bar" id="custom-qr-bar">
             <img class="qr-img" id="custom-qr" alt="QR code for the public form">
             <div class="qr-side">
               <div class="qr-cap">Scan to open the public form</div>
@@ -754,7 +765,7 @@
       <div class="modal" style="max-width: 400px;">
         <button class="modal-close" id="sched-close" aria-label="Close">✕</button>
         <div class="m-name" id="sched-name">—</div>
-        <div class="m-sub">Schedule the interview, then send the WhatsApp invite.</div>
+        <div class="m-sub" id="sched-note">Schedule the interview, then send the WhatsApp invite.</div>
         <label class="sched-label">Interview date &amp; time</label>
         <input type="datetime-local" id="sched-dt">
         <div class="m-actions" style="margin-top:16px;">
@@ -963,12 +974,38 @@
   }
   function ensureDefaultView() { renderHome(); renderStarred(); }
 
+  // ---- Category grouping (table-agnostic: any table with app_tables.category is grouped) ----
+  // Uncategorised tables come first under no heading, then categories A→Z.
+  function groupByCategory(list) {
+    var order = [], byName = {};
+    (list || []).forEach(function (t) {
+      var c = (t.category || "").trim();
+      if (!byName[c]) { byName[c] = { name: c, items: [] }; order.push(c); }
+      byName[c].items.push(t);
+    });
+    order.sort(function (a, b) { if (!a) return -1; if (!b) return 1; return a.localeCompare(b); });
+    return order.map(function (c) { return byName[c]; });
+  }
+  function collapsedMap() {
+    try { return JSON.parse(localStorage.getItem("blk_cat_collapsed") || "{}") || {}; } catch (e) { return {}; }
+  }
+  function catCollapsed(name) {
+    var m = collapsedMap();
+    return Object.prototype.hasOwnProperty.call(m, name) ? !!m[name] : true; // collapsed by default
+  }
+  function setCatCollapsed(name, v) {
+    var m = collapsedMap(); m[name] = !!v;
+    try { localStorage.setItem("blk_cat_collapsed", JSON.stringify(m)); } catch (e) {}
+  }
+
   // ---- Home / Starred / Share ----
   function allAccessibleTables() {
     var list = [];
-    if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: "Job Applications" });
-    if (accessKeys["casting"]) list.push({ key: "casting", name: "BLK Casting" });
-    (customTables || []).forEach(function (t) { list.push({ key: t.id, name: t.name }); });
+    if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: "Job Applications", category: "", kind: "form" });
+    if (accessKeys["casting"]) list.push({ key: "casting", name: "BLK Casting", category: "", kind: "form" });
+    (customTables || []).forEach(function (t) {
+      list.push({ key: t.id, name: t.name, category: t.category || "", kind: t.kind || "form" });
+    });
     return list;
   }
   function openTableByKey(key, mineOnly) {
@@ -1005,22 +1042,41 @@
     var empty = document.getElementById("home-empty");
     if (!items.length) { grid.innerHTML = ""; empty.style.display = "block"; empty.querySelector("h2").textContent = homeFilter === "mine" ? "Nothing assigned to you" : "No tables yet"; return; }
     empty.style.display = "none";
-    grid.className = homeView === "list" ? "home-list" : "home-cards";
-    grid.innerHTML = "";
-    items.forEach(function (t) {
+    function homeCard(t) {
       var on = !!stars[t.key];
       var n = myAssigned[t.key] || 0;
       var badge = n > 0 ? '<span class="hc-badge" title="Records waiting on you">' + n + " for you</span>" : "";
+      var kind = t.kind === "task" ? '<span class="hc-kind" title="Scheduled task, not a public form">Task</span>' : "";
       var el = document.createElement("div"); el.className = "home-card";
       el.innerHTML = '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>" +
-        '<div class="hc-body"><div class="hc-name">' + esc(t.name) + "</div>" + badge + "</div>" +
+        '<div class="hc-body"><div class="hc-name">' + esc(t.name) + kind + "</div>" + badge + "</div>" +
         '<div class="hc-actions">' + (isAdmin ? '<button class="linkbtn hc-share">Share</button>' : "") + '<button class="linkbtn hc-open">Open</button></div>';
       el.querySelector(".hc-star").addEventListener("click", function (e) { e.stopPropagation(); toggleStar(t.key); });
       var sh = el.querySelector(".hc-share"); if (sh) sh.addEventListener("click", function (e) { e.stopPropagation(); openShare(t.key, t.name); });
       var openMine = homeFilter === "mine" || n > 0;
       el.querySelector(".hc-open").addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key, openMine); });
       el.addEventListener("click", function () { openTableByKey(t.key, openMine); });
-      grid.appendChild(el);
+      return el;
+    }
+    var groups = groupByCategory(items);
+    grid.innerHTML = "";
+    if (groups.length === 1 && !groups[0].name) {
+      // No categories in play — keep the original flat layout exactly as before.
+      grid.className = homeView === "list" ? "home-list" : "home-cards";
+      groups[0].items.forEach(function (t) { grid.appendChild(homeCard(t)); });
+      return;
+    }
+    grid.className = "home-groups";
+    groups.forEach(function (g) {
+      if (g.name) {
+        var h = document.createElement("div"); h.className = "home-group-title";
+        h.textContent = g.name + " (" + g.items.length + ")";
+        grid.appendChild(h);
+      }
+      var box = document.createElement("div");
+      box.className = homeView === "list" ? "home-list" : "home-cards";
+      g.items.forEach(function (t) { box.appendChild(homeCard(t)); });
+      grid.appendChild(box);
     });
   }
   function openShare(key, name) {
@@ -1308,7 +1364,7 @@
     document.getElementById("ja-count").textContent = rows.length + (rows.length === 1 ? " applicant" : " applicants");
 
     // "Send to all" bar: only in Approved, and only if someone still needs messaging
-    var unsent = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent; }).length;
+    var unsent = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent && waEligible(a); }).length;
     var bulk = document.getElementById("ja-bulk");
     if (isAdmin && section === "approved" && unsent > 0) {
       bulk.style.display = "block";
@@ -1338,10 +1394,10 @@
       var metaHtml = chip + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—")));
 
       var adminBtns = "", extraHtml = "";
-      if (section === "approved") extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "");
+      if (section === "approved") extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "") + (waEligible(a) ? "" : '<div class="card-note">WhatsApp invite is for Jordanian numbers only</div>');
       if (isAdmin) {
         if (section === "new") adminBtns = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
-        else if (section === "approved") adminBtns = '<button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + '</button><button class="btn-reject">Reject</button>';
+        else if (section === "approved") adminBtns = (waEligible(a) ? '<button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + "</button>" : "") + '<button class="btn-reject">Reject</button>';
         else adminBtns = '<button class="btn-restore">Restore</button><button class="btn-del">Delete</button>';
       }
       var actionsHtml = '<div class="card-actions"><button class="btn-view">View</button>' + adminBtns + "</div>";
@@ -1351,7 +1407,7 @@
         el.className = "ja-card";
         el.innerHTML = '<div class="photo">' + esc(initial) + '</div><div class="body"><div class="name">' + esc(a.full_name) + '</div><div class="meta">' + metaHtml + "</div>" + extraHtml + actionsHtml + "</div>";
       } else {
-        var rowExtra = section === "approved" ? ((a.interview_at ? " · 📅 " + esc(fmtInterview(a.interview_at)) : "") + (a.message_sent ? " · ✓ sent" : "")) : "";
+        var rowExtra = section === "approved" ? ((a.interview_at ? " · 📅 " + esc(fmtInterview(a.interview_at)) : "") + (a.message_sent ? " · ✓ sent" : "") + (waEligible(a) ? "" : " · WhatsApp: Jordan only")) : "";
         el.className = "ja-row";
         el.innerHTML = '<div class="ja-thumb">' + esc(initial) + '</div><div class="info"><div class="name">' + esc(a.full_name) + '</div><div class="sub">' + metaHtml + rowExtra + '</div></div><div class="row-actions">' + actionsHtml + "</div>";
       }
@@ -1547,6 +1603,9 @@
     document.getElementById("sched-name").textContent = a.full_name;
     document.getElementById("sched-dt").value = "";
     document.getElementById("sched-msg").textContent = "";
+    document.getElementById("sched-note").textContent = waEligible(a)
+      ? "Schedule the interview, then send the WhatsApp invite."
+      : "Schedule the interview. The WhatsApp invite is for Jordanian numbers only — contact this applicant another way.";
     document.getElementById("sched-modal").classList.add("open");
   }
   function closeSched() { document.getElementById("sched-modal").classList.remove("open"); schedApp = null; }
@@ -1576,7 +1635,11 @@
   }
   function reject(a) { setStatus(a, "rejected"); }
 
+  // WhatsApp invites are Jordan-only: the Arabic invite and the fixed BLK location are Jordan-specific.
+  var WA_DIAL = "962";
+  function waEligible(a) { var c = phoneCountry(a && a.phone); return !!c && c.dial === WA_DIAL; }
   function waUrlFor(a) {
+    if (!waEligible(a)) return null;
     var num = (a.phone || "").replace(/[^\d]/g, "");
     if (!num) return null;
     var dateText = "", timeText = "";
@@ -1598,6 +1661,11 @@
     db.from("job_applications").update({ message_sent: true }).in("id", ids).then(function () { renderApps(); });
   }
   function sendWhatsApp(a) {
+    if (!waEligible(a)) {
+      var cn = (phoneCountry(a && a.phone) || {}).name;
+      alert("WhatsApp invites go to Jordanian numbers only." + (cn ? " This applicant has a " + cn + " number." : "") + " Please contact them another way.");
+      return;
+    }
     var url = waUrlFor(a);
     if (!url) { alert("No phone number on file for this applicant."); return; }
     var w = window.open(url, "_blank");
@@ -1605,8 +1673,8 @@
     else { alert("Your browser blocked the pop-up. Please allow pop-ups for this site."); }
   }
   function sendAll() {
-    var pend = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent; });
-    if (!pend.length) { alert("Everyone in Approved has already been messaged."); return; }
+    var pend = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent && waEligible(a); });
+    if (!pend.length) { alert("No Jordanian applicant in Approved is waiting for a message."); return; }
     var openedIds = [];
     pend.forEach(function (a) {
       var url = waUrlFor(a);
@@ -1932,12 +2000,32 @@
       customTables = (res.data || []).filter(function (t) { return !t.builtin_key; }); // hide built-in placeholders
       var slot = document.getElementById("custom-tables-slot");
       slot.innerHTML = "";
-      customTables.forEach(function (t) {
+      function sideItem(t) {
         var b = document.createElement("button");
         b.className = "side-item"; b.setAttribute("data-custom", t.id); b.title = t.name;
         b.innerHTML = '<span class="ico"></span><span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Edit table">⚙</span>';
         b.addEventListener("click", function () { openCustomTable(t); });
-        slot.appendChild(b);
+        return b;
+      }
+      // Uncategorised tables stay flat (unchanged); categorised ones get a collapsible group.
+      groupByCategory(customTables).forEach(function (g) {
+        if (!g.name) { g.items.forEach(function (t) { slot.appendChild(sideItem(t)); }); return; }
+        var collapsed = catCollapsed(g.name);
+        var head = document.createElement("button");
+        head.className = "side-item side-cat"; head.title = g.name;
+        var wrap = document.createElement("span");
+        wrap.className = "side-cat-items"; wrap.style.display = collapsed ? "none" : "block";
+        function paint() {
+          head.innerHTML = '<span class="side-label">' + (collapsed ? "▸" : "▾") + "&nbsp;&nbsp;" + esc(g.name) +
+            '</span><span class="side-cat-n">' + g.items.length + "</span>";
+        }
+        paint();
+        head.addEventListener("click", function () {
+          collapsed = !collapsed; setCatCollapsed(g.name, collapsed);
+          wrap.style.display = collapsed ? "none" : "block"; paint();
+        });
+        g.items.forEach(function (t) { wrap.appendChild(sideItem(t)); });
+        slot.appendChild(head); slot.appendChild(wrap);
       });
       ensureDefaultView();
     });
@@ -1953,8 +2041,12 @@
     document.getElementById("view-custom").classList.remove("hidden");
     setActiveSide(document.querySelector('.side-item[data-custom="' + t.id + '"]'));
     document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span style="color:var(--muted);font-weight:600;font-size:0.9rem;">· ' + esc(t.name_ar) + "</span>" : "");
+    // Task tables are not public forms — no shareable link or QR for them.
+    var isTask = (t.kind === "task");
+    var qrBar = document.getElementById("custom-qr-bar");
+    if (qrBar) qrBar.style.display = isTask ? "none" : "";
     var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
-    drawQR(document.getElementById("custom-qr"), clink);
+    if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
