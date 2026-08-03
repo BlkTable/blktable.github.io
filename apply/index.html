@@ -179,6 +179,14 @@
               <option value="Irbid">Irbid / إربد</option>
             </select>
           </div>
+          <div class="field" id="leb-field">
+            <label for="is_lebanese">Are you Lebanese? <span class="ar">/ هل أنت لبناني؟</span> <span class="req">*</span></label>
+            <select id="is_lebanese">
+              <option value="">Select… / اختر</option>
+              <option value="Yes">Yes / نعم</option>
+              <option value="No">No / لا</option>
+            </select>
+          </div>
           <div class="field">
             <label for="living_area">Living area <span class="ar">/ منطقة السكن</span> <span class="req">*</span></label>
             <input type="text" id="living_area" required>
@@ -260,6 +268,7 @@
   function applyHidden() {
     Object.keys(hiddenCols).forEach(function (col) {
       if (col === "city") { var cf = document.getElementById("city-field"); if (cf) cf.style.display = "none"; return; }
+      if (col === "is_lebanese") { var lf = document.getElementById("leb-field"); if (lf) lf.style.display = "none"; return; }
       var id = HIDE_MAP[col]; if (!id) return;
       var el = document.getElementById(id); if (el) { var f = el.closest ? el.closest(".field") : null; if (f) f.style.display = "none"; }
     });
@@ -340,6 +349,17 @@
         if (!isJordan) { document.getElementById("city").value = ""; document.getElementById("city").classList.remove("invalid"); }
       }
     }
+    // "Are you Lebanese?" only makes sense for Lebanese numbers
+    var lebField = document.getElementById("leb-field");
+    if (lebField) {
+      var lebSel = document.getElementById("is_lebanese");
+      if (hiddenCols.is_lebanese) { lebField.style.display = "none"; lebSel.value = ""; }
+      else {
+        var isLeb = selCountry.cc === "961";
+        lebField.style.display = isLeb ? "" : "none";
+        if (!isLeb) { lebSel.value = ""; lebSel.classList.remove("invalid"); }
+      }
+    }
   }
   function closeMenu() { ccMenu.classList.remove("open"); ccBtn.setAttribute("aria-expanded", "false"); }
 
@@ -387,12 +407,16 @@
     REQUIRED.forEach(function (id) { markInvalid(id, false); });
     markInvalid("phone_local", false);
     markInvalid("city", false);
+    markInvalid("is_lebanese", false);
 
     var missing = [];
     REQUIRED.forEach(function (id) { if (!val(id)) { markInvalid(id, true); missing.push(id); } });
 
     // City is required only for Jordanian numbers (the list is Jordan-only)
     if (!hiddenCols.city && selCountry.cc === "962" && !val("city")) { markInvalid("city", true); missing.push("city"); }
+
+    // "Are you Lebanese?" is asked (and required) only for Lebanese numbers
+    if (!hiddenCols.is_lebanese && selCountry.cc === "961" && !val("is_lebanese")) { markInvalid("is_lebanese", true); missing.push("is_lebanese"); }
 
     // Phone: strip non-digits + any leading zero, then length-check for the selected country.
     var local = phoneLocal.value.replace(/\D/g, "").replace(/^0+/, "");
@@ -463,6 +487,7 @@
           date_of_birth: val("dob") || null,
           how_found: val("how_found") || null,
           city: (selCountry.cc === "962" ? val("city") : "") || null,
+          is_lebanese: (selCountry.cc === "961" ? val("is_lebanese") : "") || null,
           living_area: val("living_area") || null,
           gender: val("gender") || null,
           work_type: val("work_type") || null,

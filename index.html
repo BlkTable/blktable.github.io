@@ -1459,6 +1459,7 @@
           fieldHtml("Age", ageText(a.date_of_birth) + (a.date_of_birth ? " · " + a.date_of_birth : "")) +
           hideableFieldHtml("job_applications", "How found", a.how_found, "how_found") +
           hideableFieldHtml("job_applications", "City", a.city, "city") +
+          hideableFieldHtml("job_applications", "Lebanese?", a.is_lebanese, "is_lebanese") +
           hideableFieldHtml("job_applications", "Living area", a.living_area, "living_area") +
           hideableFieldHtml("job_applications", "Gender", a.gender, "gender") +
           hideableFieldHtml("job_applications", "Full / Part", a.work_type, "work_type") +
@@ -1482,6 +1483,7 @@
       edRow("Date of birth", edDate("ed-date_of_birth", a.date_of_birth)) +
       er("How found", edText("ed-how_found", a.how_found), "how_found") +
       er("City", edText("ed-city", a.city), "city") +
+      er("Lebanese?", edSelect("ed-is_lebanese", a.is_lebanese, ["", "Yes", "No"]), "is_lebanese") +
       er("Living area", edText("ed-living_area", a.living_area), "living_area") +
       er("Gender", edSelect("ed-gender", a.gender, ["", "Male", "Female"]), "gender") +
       er("Full / Part", edText("ed-work_type", a.work_type), "work_type") +
@@ -1508,7 +1510,7 @@
     function gvo(id, cur) { return document.getElementById(id) ? (gv(id) || null) : cur; } // untouched (hidden) fields keep current value
     var upd = {
       full_name: gv("ed-full_name"), phone: edPhoneReg["ed-phone"] ? edPhoneReg["ed-phone"]() : (gv("ed-phone") || null), date_of_birth: gv("ed-date_of_birth") || null,
-      how_found: gvo("ed-how_found", a.how_found), city: gvo("ed-city", a.city), living_area: gvo("ed-living_area", a.living_area),
+      how_found: gvo("ed-how_found", a.how_found), city: gvo("ed-city", a.city), is_lebanese: gvo("ed-is_lebanese", a.is_lebanese), living_area: gvo("ed-living_area", a.living_area),
       gender: gvo("ed-gender", a.gender), work_type: gvo("ed-work_type", a.work_type), currently_working: gvo("ed-currently_working", a.currently_working),
       education_level: gvo("ed-education_level", a.education_level), favorite_drink: gvo("ed-favorite_drink", a.favorite_drink), why_join: gvo("ed-why_join", a.why_join),
       extra: collectExtra(builtinExtra.job_applications, a.extra)
@@ -2246,6 +2248,7 @@
       { id: "date_of_birth", label: "Date of birth", type: "date" },
       { id: "how_found", label: "How found", type: "short_text", col: "how_found" },
       { id: "city", label: "City", type: "short_text", col: "city" },
+      { id: "is_lebanese", label: "Lebanese?", type: "yesno", col: "is_lebanese" },
       { id: "living_area", label: "Living area", type: "short_text", col: "living_area" },
       { id: "gender", label: "Gender", type: "dropdown", options: ["Female", "Male"], col: "gender" },
       { id: "work_type", label: "Full / Part", type: "short_text", col: "work_type" },
@@ -2753,6 +2756,7 @@
       { col: "full_name", label: "Full name", core: true }, { col: "date_of_birth", label: "Date of birth", core: true },
       { col: "phone", label: "Phone", core: true }, { col: "photo", label: "Photo", core: true },
       { col: "how_found", label: "How did you hear about us" }, { col: "city", label: "City" },
+      { col: "is_lebanese", label: "Are you Lebanese? (asked only for Lebanese numbers)" },
       { col: "living_area", label: "Living area" }, { col: "gender", label: "Gender" },
       { col: "work_type", label: "Full / Part time" }, { col: "currently_working", label: "Currently working" },
       { col: "education_level", label: "Education level" }, { col: "favorite_drink", label: "Favorite drink" },
