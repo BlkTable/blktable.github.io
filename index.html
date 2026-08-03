@@ -901,7 +901,13 @@
       builderUsers = ((res && res.data) || []).map(function (p) { return { id: p.id, name: p.full_name || p.email }; });
     });
   }
-  function canEdit(key) { return isAdmin || !!editKeys[key]; }
+  // Permission ladder (table-agnostic — applies to every table, built-in or custom):
+  //   view    → accessKeys   : can open the table and read records
+  //   edit    → canEdit(key) : can change record values / move stages
+  //   manage  → canManage(key): everything an editor can, PLUS approve/reject, send the
+  //                             WhatsApp message, delete records, and drive the review chain.
+  // Manager is a superset of editor, so a manager never needs the "edit" box ticked too.
+  function canEdit(key) { return isAdmin || !!editKeys[key] || !!manageKeys[key]; }
   function canManage(key) { return isAdmin || !!manageKeys[key]; }
   function showApp(session) {
     loginWrap.style.display = "none";
@@ -1099,7 +1105,7 @@
         var row = document.createElement("div"); row.className = "u-trow";
         row.innerHTML = '<label class="u-chk"><input type="checkbox" class="sh-acc" value="' + esc(p.id) + '"' + (has ? " checked" : "") + "> " + esc(p.full_name || p.email) + "</label>" +
           '<label class="u-editopt"><input type="checkbox" class="sh-edit" data-uid="' + esc(p.id) + '"' + (cur && cur.can_edit ? " checked" : "") + (has ? "" : " disabled") + "> can edit</label>" +
-          '<label class="u-editopt"><input type="checkbox" class="sh-manage" data-uid="' + esc(p.id) + '"' + (cur && cur.can_manage ? " checked" : "") + (has ? "" : " disabled") + "> manager</label>";
+          '<label class="u-editopt" title="Everything an editor can do, plus approve/reject, send WhatsApp, delete records, and drive the review chain."><input type="checkbox" class="sh-manage" data-uid="' + esc(p.id) + '"' + (cur && cur.can_manage ? " checked" : "") + (has ? "" : " disabled") + "> manager (full control)</label>";
         var a = row.querySelector(".sh-acc"), e = row.querySelector(".sh-edit"), m = row.querySelector(".sh-manage");
         a.addEventListener("change", function () { e.disabled = !a.checked; m.disabled = !a.checked; if (!a.checked) { e.checked = false; m.checked = false; } });
         host.appendChild(row);
@@ -1366,7 +1372,7 @@
     // "Send to all" bar: only in Approved, and only if someone still needs messaging
     var unsent = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent && waEligible(a); }).length;
     var bulk = document.getElementById("ja-bulk");
-    if (isAdmin && section === "approved" && unsent > 0) {
+    if (canManage("job_applications") && section === "approved" && unsent > 0) {
       bulk.style.display = "block";
       document.getElementById("send-all").textContent = "Send WhatsApp to all unsent (" + unsent + ")";
     } else {
@@ -1393,14 +1399,14 @@
       var chip = c ? ('<img class="mini-flag" src="https://flagcdn.com/' + esc(c.flag) + '.svg" alt=""> ' + esc(c.name) + ' · ') : "";
       var metaHtml = chip + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—")));
 
-      var adminBtns = "", extraHtml = "";
+      var mgrBtns = "", extraHtml = "";
       if (section === "approved") extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "") + (waEligible(a) ? "" : '<div class="card-note">WhatsApp invite is for Jordanian numbers only</div>');
-      if (isAdmin) {
-        if (section === "new") adminBtns = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
-        else if (section === "approved") adminBtns = (waEligible(a) ? '<button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + "</button>" : "") + '<button class="btn-reject">Reject</button>';
-        else adminBtns = '<button class="btn-restore">Restore</button><button class="btn-del">Delete</button>';
+      if (canManage("job_applications")) {
+        if (section === "new") mgrBtns = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
+        else if (section === "approved") mgrBtns = (waEligible(a) ? '<button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + "</button>" : "") + '<button class="btn-reject">Reject</button>';
+        else mgrBtns = '<button class="btn-restore">Restore</button><button class="btn-del">Delete</button>';
       }
-      var actionsHtml = '<div class="card-actions"><button class="btn-view">View</button>' + adminBtns + "</div>";
+      var actionsHtml = '<div class="card-actions"><button class="btn-view">View</button>' + mgrBtns + "</div>";
 
       var el = document.createElement("div");
       if (cards) {
@@ -1551,7 +1557,7 @@
     var meta = fieldHtml("Age", ageText(a.date_of_birth)) + fpMeta(a);
     body.innerHTML =
       '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
-      changePhotoBtn("m-photo", isAdmin && !!a.photo_path) +
+      changePhotoBtn("m-photo", canEdit("job_applications") && !!a.photo_path) +
       '<div class="m-sub">Applied ' + fmtDate(a.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
@@ -1744,7 +1750,7 @@
       var age = calcAge(c.date_of_birth);
       var initial = esc((c.full_name || "?").trim().charAt(0).toUpperCase());
       var sub = (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") + " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—");
-      var viewBtn = '<div class="card-actions">' + recMenuHtml() + "</div>";
+      var viewBtn = '<div class="card-actions">' + recMenuHtml(null, canManage("casting")) + "</div>";
       var el = document.createElement("div");
       if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + '</div><div class="meta">' + sub + "</div>" + viewBtn + "</div>"; }
       else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + '</div><div class="sub">' + sub + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
@@ -1757,9 +1763,10 @@
   // ---- Per-record ⋯ menu (View / Delete) ----
   function closeAllRecMenus() { [].slice.call(document.querySelectorAll(".rec-menu.open")).forEach(function (m) { m.classList.remove("open"); }); }
   document.addEventListener("click", closeAllRecMenus);
-  function recMenuHtml(actions) {
+  // mayDelete: pass canManage(<table key>) — admins and that table's managers get Delete.
+  function recMenuHtml(actions, mayDelete) {
     var acts = (actions || []).map(function (a, i) { return '<li data-act="do" data-ai="' + i + '">' + esc(a.label || defaultActionLabel(a.type)) + "</li>"; }).join("");
-    return '<div class="rec-menu"><button type="button" class="rec-kebab" aria-label="Actions">⋯</button><ul class="rec-actions">' + acts + '<li data-act="view">View</li>' + (isAdmin ? '<li data-act="delete" class="danger">Delete</li>' : "") + "</ul></div>";
+    return '<div class="rec-menu"><button type="button" class="rec-kebab" aria-label="Actions">⋯</button><ul class="rec-actions">' + acts + '<li data-act="view">View</li>' + (mayDelete ? '<li data-act="delete" class="danger">Delete</li>' : "") + "</ul></div>";
   }
   function wireRecMenu(el, onView, onDelete, onAction, actions) {
     var menu = el.querySelector(".rec-menu"); if (!menu) return;
@@ -1841,7 +1848,7 @@
     var meta = fpMeta(c);
     body.innerHTML =
       (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
-      changePhotoBtn("cd-photo", isAdmin && !!c.photo_path) +
+      changePhotoBtn("cd-photo", canEdit("casting") && !!c.photo_path) +
       '<div class="m-sub">Submitted ' + fmtDate(c.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
@@ -2088,6 +2095,7 @@
     var stages = customStages();
     var tableActions = (currentCustom.table.config && currentCustom.table.config.actions) || [];
     var mayEdit = canEdit(currentCustom.table.id);
+    var mayManageTbl = canManage(currentCustom.table.id);
     var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty"), tabsEl = document.getElementById("custom-tabs");
     var isMine = function (s) { return s.current_assignee && s.current_assignee === myUserId; };
     var mineCount = subs.filter(isMine).length;
@@ -2135,7 +2143,7 @@
           return '<button type="button" class="sc-' + esc(st.color || "gray") + '" data-move="' + esc(st.key) + '">→ ' + esc(st.label) + "</button>";
         }).join("") + "</div>";
       }
-      var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions) + "</div>";
+      var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions, mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       var el = document.createElement("div");
@@ -2414,7 +2422,7 @@
     var meta = fpMeta(s);
     body.innerHTML =
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
-      changePhotoBtn("cd-photo", isAdmin && !!photoPath) +
+      changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
@@ -3109,7 +3117,7 @@
       var row = document.createElement("div"); row.className = "u-trow";
       row.innerHTML = '<label class="u-chk"><input type="checkbox" class="u-acc" value="' + esc(t.key) + '"> ' + esc(t.name) + "</label>" +
         '<label class="u-editopt"><input type="checkbox" class="u-can-edit" data-key="' + esc(t.key) + '" disabled> can edit</label>' +
-        '<label class="u-editopt"><input type="checkbox" class="u-can-manage" data-key="' + esc(t.key) + '" disabled> manager</label>' +
+        '<label class="u-editopt" title="Everything an editor can do, plus approve/reject, send WhatsApp, delete records, and drive the review chain."><input type="checkbox" class="u-can-manage" data-key="' + esc(t.key) + '" disabled> manager (full control)</label>' +
         scopeSelectHtml(t.key);
       var acc = row.querySelector(".u-acc"), ce = row.querySelector(".u-can-edit"), cm = row.querySelector(".u-can-manage"), sc = row.querySelector(".u-scope");
       acc.addEventListener("change", function () {
