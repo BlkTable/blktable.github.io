@@ -24,6 +24,8 @@ What works right now:
 - **Custom tables live:** Sample Submissions (vendor-facing product-sample intake + staff evaluation pipeline); Hackathon in the garage (event signup, form `/f/?t=garage-day-7q3m`).
 - QR codes per form (regenerate = rotate link/token), submission fingerprint (IP + device captured server-side).
 
+- **Operate tasks (NEW, in progress):** the 33 active tasks from Operate Solution are imported into the DB as 33 task tables under a new **"Operate" category** (249 questions, 31 branches). They are `kind='task'` and `is_active=false`, so they are **invisible in the live app and not servable as public forms** until the task UI ships. Nothing existing changed.
+
 ## Decisions made
 - **Own code, not Airtable:** user explicitly rejected building inside Airtable; we only mimic the idea.
 - **Stack:** GitHub Pages (static) + Supabase, same as the Qahwa site. No framework, no build step — keep it simple.
@@ -46,6 +48,7 @@ What works right now:
 6. Optional: whose-turn badge on Home list rows; storage cleanup for deleted-table photos; fully migrate built-in forms to the editable engine.
 
 ## Log
+- 2026-08-03: **Per-reviewer country restriction (row-level scoping).** A Lebanon reviewer (Pope Harout, `popeharout@blk.jo`) needed to see only Lebanese job applications, not all. Added a nullable `table_access.scope jsonb` (null = full access, unchanged for everyone); first scope type `{"phone_prefix":"+961"}` ("Lebanese" = phone starts +961, the only country signal — no nationality column). Enforced in the DB via `ja_scope_ok(phone)` in the `read`/`write` RLS policies on `job_applications` (verified by simulating Pope's JWT: he sees only +961 rows, admins see all). UI: the Users panel table-access rows now show a **country dropdown** (All / Lebanon / Jordan / Syria / Iraq) for scopable tables (`SCOPABLE = {job_applications}`), saved into `scope`; the per-table **Share** modal preserves existing scope so it can't silently wipe it. Note: only Job Applications is scopable for now (Casting/custom would each need their own RLS scope check). No Lebanese applications exist yet, so Pope's list is empty until +961 people apply.
 - 2026-07-29: Fixed desktop form-submit bug (native page-reload submit → JS AJAX on all three public forms). Home assignment badge/filter + delegate-return chain routing. Form-manager per-table access. Created this STATUS.md (the save ritual's required file, missing until now) and committed it.
 - 2026-07-29: Shipped "assigned to me" separation on custom tables — "For you" tag + gold edge on entries you're the current assignee of, an "Assigned to me (N)" toolbar toggle (filters list + stage tabs + count), and Home cards now open filtered to your entries when they have any. Pushed & live (commit 3ef482d).
 - 2026-07-30: Discussed & proposed the chain workflow upgrade (auto 3-stage board + return-to-assigner sign-off + realtime) — see Next steps #1. Not built yet; awaiting final go. Verified realtime publication is empty and Sample Request Form is the only chain table (2 layers).
