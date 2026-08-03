@@ -1,0 +1,7 @@
+# This repo is PUBLIC (GitHub Pages). Anything committed here is served at
+# https://blktable.blk.jo/<path> and is publicly readable. Keep internal
+# operational data out of it.
+
+# Operate Solution export + generated import SQL: contains every internal
+# checklist question and the full branch list. Local only.
+operate-import/
