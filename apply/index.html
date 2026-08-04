@@ -265,12 +265,17 @@
   // Removed built-in questions (set by the dashboard editor) are hidden from this form
   var hiddenCols = {};
   var HIDE_MAP = { how_found: "how_found", city: "city", living_area: "living_area", gender: "gender", work_type: "work_type", currently_working: "currently_working", education_level: "education_level", favorite_drink: "favorite_drink", why_join: "why_join" };
+  // The .field wrapper of a built-in question — used both to hide it and to place extra questions after it
+  function builtinWrap(col) {
+    if (col === "city") return document.getElementById("city-field");
+    if (col === "is_lebanese") return document.getElementById("leb-field");
+    var id = HIDE_MAP[col]; if (!id) return null;
+    var el = document.getElementById(id);
+    return (el && el.closest) ? el.closest(".field") : null;
+  }
   function applyHidden() {
     Object.keys(hiddenCols).forEach(function (col) {
-      if (col === "city") { var cf = document.getElementById("city-field"); if (cf) cf.style.display = "none"; return; }
-      if (col === "is_lebanese") { var lf = document.getElementById("leb-field"); if (lf) lf.style.display = "none"; return; }
-      var id = HIDE_MAP[col]; if (!id) return;
-      var el = document.getElementById(id); if (el) { var f = el.closest ? el.closest(".field") : null; if (f) f.style.display = "none"; }
+      var f = builtinWrap(col); if (f) f.style.display = "none";
     });
   }
   // Optional bilingual intro shown under the title, from the form's config.intro = {en, ar}.
@@ -546,9 +551,20 @@
   db.rpc("get_extra_fields", { p_key: "job_applications" }).then(function (res) {
     if (!res || res.error || !res.data || !res.data.length) return;
     var host = document.createElement("div"); host.id = "extra-fields";
-    res.data.forEach(function (f) { host.appendChild(buildExtraField(f)); });
     var submitBtn = document.getElementById("submit-btn");
     submitBtn.parentNode.insertBefore(host, submitBtn);
+    // after_field = place this question right after that built-in question; no anchor = end of the form.
+    // cursors keep several questions anchored to the same field in their configured order.
+    var cursors = [];
+    res.data.forEach(function (f) {
+      var wrap = buildExtraField(f);
+      var anchor = f.after_field ? builtinWrap(f.after_field) : null;
+      if (!anchor || !anchor.parentNode) { host.appendChild(wrap); return; }
+      var c = cursors.filter(function (x) { return x.anchor === anchor; })[0];
+      if (!c) { c = { anchor: anchor, last: anchor }; cursors.push(c); }
+      c.anchor.parentNode.insertBefore(wrap, c.last.nextSibling);
+      c.last = wrap;
+    });
   }).catch(function () {});
 
   // Auto-grow: single-line text fields expand with their content instead of hiding it

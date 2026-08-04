@@ -2760,10 +2760,12 @@
       '<textarea class="opts" rows="1" dir="auto" placeholder="Options — one per line (or comma-separated): English|عربي — add |other to a choice to open a free-text box" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
+      afterFieldSelectHtml() +
       '<button type="button" class="rm">Remove</button></div>';
     document.getElementById("bld-fields").appendChild(row);
     if (data) {
       if (data.id) row.setAttribute("data-field-id", data.id);
+      var af = row.querySelector(".fafter"); if (af && data.afterField) af.value = data.afterField;
       row.querySelector(".lab").value = data.label || "";
       row.querySelector(".lab-ar").value = data.labelAr || "";
       var sel = row.querySelector(".ftype"); if (data.type) sel.value = data.type;
@@ -2877,6 +2879,16 @@
     }).join("");
     return '<div class="bld-fixed"><div class="bld-fixed-h">Built-in questions — untick one to remove it from the form (existing answers are kept):</div>' + rows + "</div>";
   }
+  // Built-in forms only: where an extra question sits on the public form (app_fields.after_field).
+  // Empty = at the end. Any built-in question can be the anchor, so this works for every built-in form.
+  function afterFieldSelectHtml() {
+    if (builderMode !== "builtin") return "";
+    var defs = BUILTIN_SCHEMA[builtinEditKey] || [];
+    if (!defs.length) return "";
+    return '<label class="req-lbl">show after <select class="fafter"><option value="">end of form</option>' +
+      defs.map(function (d) { return '<option value="' + d.col + '">' + esc(d.label) + "</option>"; }).join("") +
+      "</select></label>";
+  }
   var builtinEditKey = null;
   function openBuiltinEdit(formKey) {
     var name = formKey === "job_applications" ? "Job Applications" : "BLK Casting";
@@ -2898,7 +2910,7 @@
       document.getElementById("bld-msg").textContent = "";
       var fields = (res && res.data) || [];
       if (!fields.length) addBuilderField();
-      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal }); });
+      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, afterField: f.after_field }); });
       requestAnimationFrame(growAllBld);
     }).catch(function () { document.getElementById("bld-msg").textContent = ""; });
   }
@@ -3027,7 +3039,8 @@
           return o;
         }).filter(function (o) { return o.en; });
       }
-      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options });
+      var afterSel = rows[i].querySelector(".fafter");
+      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null });
     }
     if (!fields.length) { msg.textContent = "Add at least one field."; return; }
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
@@ -3060,8 +3073,8 @@
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
-      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }).eq("id", f.id));
-      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options });
+      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field });
     });
     if (toInsert.length) ops.push(db.from("app_fields").insert(toInsert));
     if (toDelete.length) ops.push(db.from("app_fields").delete().in("id", toDelete));
