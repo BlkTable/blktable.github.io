@@ -115,6 +115,31 @@
   var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ---- Photo storage: Supabase Storage now, Cloudflare R2 after cutover ----
+  // Flip STORAGE_MODE to "r2" at cutover (with SUPABASE_URL/KEY above). Uploads
+  // then go through our own `r2` edge function, which keeps the stored path shape
+  // identical and means the R2 bucket needs no CORS rule.
+  var STORAGE_MODE = "supabase";
+  function storageUpload(file) {
+    if (STORAGE_MODE === "r2") {
+      var fd = new FormData();
+      fd.append("file", file);
+      return fetch(SUPABASE_URL + "/functions/v1/r2/upload", {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY },
+        body: fd
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) throw new Error(j.error ? j.error + (j.detail ? ": " + j.detail : "") : "upload_failed_" + r.status);
+          return j.path;
+        });
+      });
+    }
+    var path = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.round(Math.random() * 1e9)) + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
+    return db.storage.from("photos").upload(path, file, { upsert: false })
+      .then(function (r) { if (r.error) throw r.error; return r.data.path; });
+  }
   var MAX_BYTES = 10 * 1024 * 1024;
 
   var COUNTRIES = [
@@ -331,8 +356,7 @@
     var uploads = photoCtls.map(function (c) {
       var file = c.file();
       if (file.size > MAX_BYTES) return Promise.reject({ tooBig: true });
-      var path = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.round(Math.random() * 1e9)) + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
-      return db.storage.from("photos").upload(path, file, { upsert: false }).then(function (r) { if (r.error) throw r.error; return { id: c.f.id, path: r.data.path }; });
+      return storageUpload(file).then(function (p) { return { id: c.f.id, path: p }; });
     });
 
     Promise.all(uploads).then(function (results) {

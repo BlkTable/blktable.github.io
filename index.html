@@ -882,6 +882,67 @@
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // ---- Attachment storage: Supabase Storage now, Cloudflare R2 after cutover ----
+  // Flip STORAGE_MODE to "r2" at cutover, together with SUPABASE_URL/KEY above.
+  // In "r2" mode nothing touches Supabase Storage: uploads are proxied through our
+  // own `r2` edge function (so the R2 bucket needs no CORS rule) and viewing uses
+  // short-lived presigned GET urls, which <img> loads without CORS.
+  // Stored paths are identical in both modes, so records never need rewriting.
+  var STORAGE_MODE = "supabase";
+  var R2_FN = SUPABASE_URL + "/functions/v1/r2";
+
+  function r2Post(action, body, token, isForm) {
+    var h = { apikey: SUPABASE_KEY, Authorization: "Bearer " + (token || SUPABASE_KEY) };
+    if (!isForm) h["Content-Type"] = "application/json";
+    return fetch(R2_FN + "/" + action, { method: "POST", headers: h, body: isForm ? body : JSON.stringify(body) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) throw new Error(j.error ? j.error + (j.detail ? ": " + j.detail : "") : "r2_" + action + "_" + r.status);
+          return j;
+        });
+      });
+  }
+  // sign/delete need the caller's own session, not the anon key
+  function sessionToken() {
+    try {
+      return db.auth.getSession().then(function (s) {
+        return (s && s.data && s.data.session && s.data.session.access_token) || null;
+      }).catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+  function storageUpload(file, folder) {
+    if (STORAGE_MODE === "r2") {
+      var fd = new FormData();
+      fd.append("file", file);
+      if (folder) fd.append("folder", folder);
+      return r2Post("upload", fd, null, true).then(function (j) { return j.path; });
+    }
+    var path = (folder ? folder + "/" : "") + photoUploadName(file.name);
+    return db.storage.from("photos").upload(path, file, { upsert: false })
+      .then(function (r) { if (r.error) throw r.error; return r.data.path; });
+  }
+  function storageSignedUrl(path) {
+    if (STORAGE_MODE === "r2") {
+      return sessionToken()
+        .then(function (t) { return r2Post("sign", { path: path }, t); })
+        .then(function (j) { return j.url || null; })
+        .catch(function () { return null; });
+    }
+    return db.storage.from("photos").createSignedUrl(path, 3600)
+      .then(function (r) { return (r.data && r.data.signedUrl) || null; })
+      .catch(function () { return null; });
+  }
+  // best effort: always resolves, so deleting a record is never blocked by its photo
+  function storageDelete(path) {
+    if (!path) return Promise.resolve();
+    if (STORAGE_MODE === "r2") {
+      return sessionToken()
+        .then(function (t) { return r2Post("delete", { path: path }, t); })
+        .then(function () {}, function () {});
+    }
+    return db.storage.from("photos").remove([path]).then(function () {}, function () {});
+  }
+
   var loginWrap = document.getElementById("login-wrap");
   var app = document.getElementById("app");
 
@@ -1191,9 +1252,7 @@
   function getPhotoUrl(path) {
     if (!path) return Promise.resolve(null);
     if (signedCache[path]) return signedCache[path];
-    signedCache[path] = db.storage.from("photos").createSignedUrl(path, 3600)
-      .then(function (r) { return (r.data && r.data.signedUrl) || null; })
-      .catch(function () { return null; });
+    signedCache[path] = storageSignedUrl(path);
     return signedCache[path];
   }
   function esc(s) {
@@ -1253,9 +1312,9 @@
         var file = inp.files && inp.files[0];
         if (!file) return;
         btn.disabled = true; btn.textContent = "Uploading…";
-        var path = photoUploadName(file.name);
-        db.storage.from("photos").upload(path, file, { upsert: false })
-          .then(function (r) { if (r.error) throw r.error; return onSave(r.data.path); })
+        var path = null;
+        storageUpload(file)
+          .then(function (p) { path = p; return onSave(p); })
           .then(function () { delete signedCache[path]; return getPhotoUrl(path); })
           .then(function (url) {
             var im = document.getElementById(imgId);
@@ -1700,7 +1759,7 @@
         renderApps();
       });
     };
-    if (a.photo_path) db.storage.from("photos").remove([a.photo_path]).then(removeRow, removeRow);
+    if (a.photo_path) storageDelete(a.photo_path).then(removeRow, removeRow);
     else removeRow();
   }
 
@@ -1807,7 +1866,7 @@
     if (!window.confirm("Delete this entry for " + (c.full_name || "this person") + "? This can't be undone.")) return;
     var done = function () { castingRows = castingRows.filter(function (x) { return x.id !== c.id; }); renderCasting(); };
     var del = function () { db.from("casting_applications").delete().eq("id", c.id).then(function (res) { if (res.error) { window.alert("Could not delete. " + (res.error.message || "")); return; } done(); }); };
-    if (c.photo_path) db.storage.from("photos").remove([c.photo_path]).then(del, del); else del();
+    if (c.photo_path) storageDelete(c.photo_path).then(del, del); else del();
   }
   function deleteCustomSub(s, fields) {
     if (!window.confirm("Delete this entry? This can't be undone.")) return;
@@ -1815,7 +1874,7 @@
     var photo = pf && s.data ? s.data[pf.id] : null;
     var done = function () { if (currentCustom) currentCustom.subs = currentCustom.subs.filter(function (x) { return x.id !== s.id; }); renderCustom(); };
     var del = function () { db.from("app_submissions").delete().eq("id", s.id).then(function (res) { if (res.error) { window.alert("Could not delete. " + (res.error.message || "")); return; } done(); }); };
-    if (photo) db.storage.from("photos").remove([photo]).then(del, del); else del();
+    if (photo) storageDelete(photo).then(del, del); else del();
   }
 
   function openCastingDetail(c) {
@@ -3210,6 +3269,8 @@
     if (uPhotoFile) { pv.style.background = "url(" + URL.createObjectURL(uPhotoFile) + ") center/cover"; pv.textContent = ""; }
   });
   function uploadAvatar(id, file) {
+    // r2 mode generates the key server-side; keep the existing supabase path shape
+    if (STORAGE_MODE === "r2") return storageUpload(file, "avatars");
     var safe = (file.name || "img").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-40);
     var path = "avatars/" + id + "_" + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : String(Date.now())) + "_" + safe;
     return db.storage.from("photos").upload(path, file, { upsert: false }).then(function (r) { if (r.error) throw r.error; return r.data.path; });
