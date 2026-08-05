@@ -249,9 +249,12 @@
   .fc-empty { color: var(--muted); font-size: 0.82rem; margin-bottom: 10px; }
   .fp-none { color: var(--muted); font-size: 0.82rem; }
 
-  .ja-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  /* equal-height cards: rows size to the tallest card, and each card fills its cell */
+  .ja-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 14px; align-items: stretch; }
   .ja-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-    cursor: pointer; transition: border-color 0.15s ease; }
+    cursor: pointer; transition: border-color 0.15s ease;
+    display: flex; flex-direction: column; height: 100%; overflow: hidden; }
   .ja-card:hover { border-color: var(--silver); }
   .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: #20242b center/cover no-repeat; border-radius: 16px 16px 0 0;
     display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 2rem; font-weight: 700; }
@@ -325,13 +328,32 @@
   .sc-blue { background: #4a9eff; color: #fff; }
   .sc-amber { background: #eab308; }
   .sc-purple { background: #a855f7; color: #fff; }
-  .ja-card .body { padding: 12px; text-align: center; }
-  .ja-card .body .name { font-weight: 600; font-size: 0.95rem; }
-  .ja-card .body .meta { color: var(--muted); font-size: 0.78rem; margin: 3px 0 8px; }
-  .card-actions { display: flex; gap: 8px; margin-top: 10px; }
-  .card-actions button { flex: 1; padding: 8px 0; border-radius: 9px; border: none; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
-  .card-actions .btn-view { background: var(--field-bg); color: var(--text); border: 1px solid var(--field-border); }
+  /* body grows to fill, so the action row always sits on the card's bottom edge */
+  .ja-card .body { padding: 12px; text-align: center; display: flex; flex-direction: column; flex: 1 1 auto; }
+  /* fixed line counts keep a long name from making one card taller than its neighbours */
+  .ja-card .body .name { font-weight: 600; font-size: 0.95rem; min-height: 2.4em; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ja-card .body .meta { color: var(--muted); font-size: 0.78rem; margin: 3px 0 8px; min-height: 2.2em;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ja-card .card-when, .ja-card .card-sent, .ja-card .card-note { font-size: 0.74rem; }
+  /* Every card shows the same three slots in the same places: a round action on
+     the left, View in the middle, a round action on the right. Empty slots are
+     kept so View never shifts between cards. */
+  .card-actions { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center;
+    gap: 8px; margin-top: auto; padding-top: 10px; }
+  .card-actions .btn-view { padding: 8px 0; border-radius: 9px; font-weight: 700; font-size: 0.8rem;
+    cursor: pointer; background: var(--field-bg); color: var(--text); border: 1px solid var(--field-border); }
   .card-actions .btn-view:hover { border-color: var(--silver); }
+  .card-actions .slot { width: 34px; height: 34px; }
+  .btn-circle { width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 800;
+    line-height: 1; padding: 0; flex: 0 0 auto; }
+  .btn-circle.good { background: #25d366; color: #07301a; }
+  .btn-circle.bad  { background: #ff5c5c; color: #3a0b0b; }
+  .btn-circle:hover { filter: brightness(1.08); }
+  .btn-circle:active { transform: translateY(1px); }
+  /* list view reuses the same three slots, without the card's bottom alignment */
+  .ja-row .card-actions { margin-top: 0; padding-top: 0; }
   .btn-approve { background: #2fbf6b; color: #062916; }
   .btn-approve:hover { filter: brightness(1.07); }
   .btn-reject { background: #ff5a5a; color: #3a0808; }
@@ -429,7 +451,9 @@
   .m-field .k { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .m-field .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
-  /* country sub-groups under a table in the sidebar */
+  /* country sub-groups under a table in the sidebar — collapsed until the parent is pressed */
+  .side-caret { margin-left: auto; color: var(--muted); font-size: 0.7rem; flex: 0 0 auto; padding-right: 2px; }
+  #side-tables.show-gears .side-caret { margin-left: auto; }
   .side-kids { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 0; }
   .side-kid { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
     background: none; border: 0; color: var(--muted); font: inherit; font-size: 0.82rem;
@@ -590,8 +614,8 @@
         <div class="side-group">
           <div class="side-label">Tables</div>
           <nav class="side-list" id="side-tables">
-            <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-gear" title="Settings">⚙</span></button>
-            <div class="side-kids" id="ja-kids"></div>
+            <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-caret" id="ja-caret">▸</span><span class="side-gear" title="Settings">⚙</span></button>
+            <div class="side-kids" id="ja-kids" style="display:none;"></div>
             <button class="side-item" data-view="casting" title="BLK Casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Settings">⚙</span></button>
             <span id="custom-tables-slot"></span>
             <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
@@ -742,6 +766,7 @@
             <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
             <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
+            <button class="linkbtn qr-regen" id="custom-delete" style="display:none;">🗑 Delete form</button>
           </div>
           <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
           <div id="custom-list" class="ja-list"></div>
@@ -1560,12 +1585,31 @@
     }
     var kids = document.getElementById("ja-kids");
     if (kids) {
-      kids.innerHTML = order.map(function (k) {
-        var m = COUNTRY_META[k] || { name: k, flag: null };
-        return '<button class="side-kid' + (jaScope.country === k ? " active" : "") + '" data-c="' + k + '">' +
-          flagImg(m.flag) + "<span>" + esc(m.name) + '</span><span class="kid-n">' + cs[k] + "</span></button>";
-      }).join("");
+      kids.innerHTML = '<button class="side-kid' + (jaScope.country ? "" : " active") + '" data-c="">' +
+          '<span>All countries</span><span class="kid-n">' +
+          order.reduce(function (n, k) { return n + cs[k]; }, 0) + "</span></button>" +
+        order.map(function (k) {
+          var m = COUNTRY_META[k] || { name: k, flag: null };
+          return '<button class="side-kid' + (jaScope.country === k ? " active" : "") + '" data-c="' + k + '">' +
+            flagImg(m.flag) + "<span>" + esc(m.name) + '</span><span class="kid-n">' + cs[k] + "</span></button>";
+        }).join("");
     }
+    applyJaKids();
+  }
+  // The sidebar line stays a single row until you press it; then the countries
+  // appear underneath to choose from. The choice is remembered.
+  var jaKidsOpen = false;
+  try { jaKidsOpen = localStorage.getItem("blk_ja_kids") === "1"; } catch (e) {}
+  function applyJaKids() {
+    var kids = document.getElementById("ja-kids");
+    var caret = document.getElementById("ja-caret");
+    if (kids) kids.style.display = jaKidsOpen ? "flex" : "none";
+    if (caret) caret.textContent = jaKidsOpen ? "▾" : "▸";
+  }
+  function toggleJaKids(force) {
+    jaKidsOpen = (force === undefined) ? !jaKidsOpen : !!force;
+    try { localStorage.setItem("blk_ja_kids", jaKidsOpen ? "1" : "0"); } catch (e) {}
+    applyJaKids();
   }
   function fmtInterview(iso) {
     if (!iso) return "";
@@ -1657,14 +1701,27 @@
       var chip = c ? ('<img class="mini-flag" src="https://flagcdn.com/' + esc(c.flag) + '.svg" alt=""> ' + esc(c.name) + ' · ') : "";
       var metaHtml = chip + (age == null ? esc(a.living_area || "—") : (age + " yrs" + ageFlag(age) + " · " + esc(a.living_area || "—")));
 
-      var mgrBtns = "", extraHtml = "";
+      var extraHtml = "";
       if (section === "approved") extraHtml = (a.interview_at ? '<div class="card-when">📅 ' + esc(fmtInterview(a.interview_at)) + "</div>" : "") + (a.message_sent ? '<div class="card-sent">✓ Message sent</div>' : "") + (waEligible(a) ? "" : '<div class="card-note">WhatsApp invite is for Jordanian numbers only</div>');
+      // Same three slots on every card, whatever the tab: a round action left,
+      // View in the middle, a round action right. Missing ones become empty slots
+      // so View and the circles never move between cards.
+      var slotL = '<span class="slot"></span>', slotR = '<span class="slot"></span>';
       if (canManage("job_applications")) {
-        if (section === "new") mgrBtns = '<button class="btn-approve">Approve</button><button class="btn-reject">Reject</button>';
-        else if (section === "approved") mgrBtns = (waEligible(a) ? '<button class="btn-send">' + (a.message_sent ? "Resend" : "Send WhatsApp") + "</button>" : "") + '<button class="btn-reject">Reject</button>';
-        else mgrBtns = '<button class="btn-restore">Restore</button><button class="btn-del">Delete</button>';
+        if (section === "new") {
+          slotL = '<button class="btn-circle bad btn-reject" title="Reject">✕</button>';
+          slotR = '<button class="btn-circle good btn-approve" title="Approve">✓</button>';
+        } else if (section === "approved") {
+          slotL = '<button class="btn-circle bad btn-reject" title="Reject">✕</button>';
+          if (waEligible(a)) slotR = '<button class="btn-circle good btn-send" title="' +
+            (a.message_sent ? "Resend WhatsApp" : "Send WhatsApp") + '">✆</button>';
+        } else {
+          slotL = '<button class="btn-circle bad btn-del" title="Delete permanently">🗑</button>';
+          slotR = '<button class="btn-circle good btn-restore" title="Restore to New">↺</button>';
+        }
       }
-      var actionsHtml = '<div class="card-actions"><button class="btn-view">View</button>' + mgrBtns + "</div>";
+      var actionsHtml = '<div class="card-actions">' + slotL +
+        '<button class="btn-view">View</button>' + slotR + "</div>";
 
       var el = document.createElement("div");
       if (cards) {
@@ -1995,6 +2052,12 @@
     showView("job_applications");
     loadApps();
   });
+  // pressing the Job Applications line reveals the countries to choose from
+  document.querySelector('.side-item[data-view="job_applications"]').addEventListener("click", function (e) {
+    if (e.target && e.target.closest && e.target.closest(".side-gear")) return; // gear = settings
+    toggleJaKids();
+  });
+  applyJaKids();
   document.getElementById("ja-more-btn").addEventListener("click", function () {
     jaRenderCap += JA_RENDER_STEP;
     renderApps();
@@ -2348,6 +2411,9 @@
     var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
     if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
+    // Deleting a form used to be reachable only from inside the table editor, which
+    // made it look like the ability had gone. It's a first-class button now.
+    document.getElementById("custom-delete").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
@@ -2869,6 +2935,9 @@
   document.getElementById("custom-mine").addEventListener("click", function () { if (currentCustom) { currentCustom.mineOnly = !currentCustom.mineOnly; renderCustom(); } });
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table, currentCustom.mineOnly); });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
+  document.getElementById("custom-delete").addEventListener("click", function () {
+    if (currentCustom) openDeleteTable(currentCustom.table.id, currentCustom.table.name);
+  });
   // ---- QR codes for public form links (with centered BLK logo) ----
   var qrLogo = new Image(); var qrLogoReady = false;
   qrLogo.onload = function () {
