@@ -429,6 +429,23 @@
   .m-field .k { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .m-field .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
+  /* country sub-groups under a table in the sidebar */
+  .side-kids { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 0; }
+  .side-kid { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+    background: none; border: 0; color: var(--muted); font: inherit; font-size: 0.82rem;
+    padding: 5px 10px 5px 30px; border-radius: 8px; }
+  .side-kid:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .side-kid.active { background: rgba(255,255,255,0.08); color: var(--silver); font-weight: 600; }
+  .side-kid img { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); }
+  .side-kid .kid-n { margin-left: auto; color: var(--muted); font-size: 0.74rem; }
+  /* year + country scope bar */
+  .ja-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .ja-scope .scope-lab { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ja-scope select { height: 34px; padding: 0 10px; }
+  .ja-scope .scope-sep { width: 1px; height: 20px; background: var(--line); }
+  .ja-scope .seg button img { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+  .ja-more { text-align: center; padding: 14px 0 4px; }
+  .ja-more-note { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 8px; }
   /* imported (migrated) records */
   .imp-head { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
   .imp-head .k { color: var(--silver); }
@@ -574,6 +591,7 @@
           <div class="side-label">Tables</div>
           <nav class="side-list" id="side-tables">
             <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-gear" title="Settings">⚙</span></button>
+            <div class="side-kids" id="ja-kids"></div>
             <button class="side-item" data-view="casting" title="BLK Casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Settings">⚙</span></button>
             <span id="custom-tables-slot"></span>
             <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
@@ -614,6 +632,14 @@
             </div>
           </div>
 
+          <div class="ja-scope" id="ja-scope">
+            <label class="scope-lab">Year</label>
+            <select id="ja-year"></select>
+            <span class="scope-sep"></span>
+            <label class="scope-lab">Country</label>
+            <div class="seg" id="ja-country"></div>
+          </div>
+
           <div class="seg tabs" id="ja-tabs">
             <button type="button" data-s="new" class="active">New <span class="tab-count" id="cnt-new"></span></button>
             <button type="button" data-s="approved">Approved <span class="tab-count" id="cnt-approved"></span></button>
@@ -637,6 +663,10 @@
           </div>
 
           <div id="ja-list" class="ja-list"></div>
+          <div class="ja-more" id="ja-more" style="display:none;">
+            <button class="linkbtn" id="ja-more-btn" type="button">Show more</button>
+            <span class="ja-more-note" id="ja-more-note"></span>
+          </div>
           <div id="ja-empty" class="empty" style="display:none;">
             <h2>No applications yet</h2>
             <p>Submissions from the public form will show up here.</p>
@@ -1252,6 +1282,25 @@
   var section = "new"; // active tab: new | approved | rejected
   var jaView = "cards", castingView = "cards", customView = "cards"; // per-table Cards/List
 
+  // ---- Job Applications at scale -------------------------------------------
+  // After the Airtable migration this table holds tens of thousands of rows, so
+  // it can no longer be pulled into the browser and filtered there. Instead the
+  // board loads one SCOPE at a time (a year + a country), the true counts come
+  // from the ja_facets() RPC, and searching outside the loaded slice is done by
+  // the database. Country is a stored column filled from the phone dial code by
+  // a trigger, so the grouping maintains itself.
+  var JA_PAGE = 500;        // rows fetched per scope (API caps a response at 1000)
+  var JA_RENDER_STEP = 300; // cards drawn before "Show more"
+  // Default to the current year: the board is for live hiring, and older years are
+  // history you switch to. Everything is still one table and one search away.
+  var jaScope = { year: new Date().getFullYear(), country: null }; // null = all
+  var jaFacets = { years: {}, countries: {}, statuses: {}, total: 0, unsent: 0 };
+  var jaRenderCap = JA_RENDER_STEP;
+  var jaServerSearch = false; // true when the list came from a database search
+  var COUNTRY_META = { JO: { name: "Jordan", flag: "jo" }, LB: { name: "Lebanon", flag: "lb" },
+                       SY: { name: "Syria", flag: "sy" }, IQ: { name: "Iraq", flag: "iq" },
+                       __none: { name: "No phone", flag: null } };
+
   var allApps = [];
   var signedCache = {};
   var currentApp = null;
@@ -1381,16 +1430,58 @@
     return show ? '<div class="m-photo-actions"><button type="button" class="linkbtn" id="' + imgId + '-change">Change photo</button></div>' : "";
   }
 
+  // Apply the current scope (year + country) to a job_applications query.
+  function jaScoped(q) {
+    if (jaScope.year) {
+      q = q.gte("created_at", jaScope.year + "-01-01T00:00:00Z")
+           .lt("created_at", (jaScope.year + 1) + "-01-01T00:00:00Z");
+    }
+    if (jaScope.country === "__none") q = q.is("country", null);
+    else if (jaScope.country) q = q.eq("country", jaScope.country);
+    return q;
+  }
+  function loadFacets() {
+    return db.rpc("ja_facets", { p_year: jaScope.year, p_country: jaScope.country })
+      .then(function (r) {
+        if (!r.error && r.data) jaFacets = r.data;
+        return jaFacets;
+      })
+      .catch(function () { return jaFacets; });
+  }
   function loadApps() {
     var listEl = document.getElementById("ja-list");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-    db.from("job_applications").select("*").order("created_at", { ascending: false }).then(function (res) {
+    jaRenderCap = JA_RENDER_STEP;
+    jaServerSearch = false;
+    var q = jaScoped(db.from("job_applications").select("*"))
+      .order("created_at", { ascending: false }).limit(JA_PAGE);
+    return Promise.all([q, loadFacets()]).then(function (out) {
+      var res = out[0];
       if (res.error) {
         listEl.innerHTML = '<div style="color:#ff6b6b;padding:24px;text-align:center;">Could not load applications.</div>';
+        if (window.console) console.error(res.error);
         return;
       }
       allApps = res.data || [];
+      renderScopeBar();
       buildFilterPanel(jobFV);
+      renderApps();
+    });
+  }
+  // Search the whole scope in the database, not just the loaded slice — otherwise a
+  // 2024 applicant would be unfindable while appearing to be "in the system".
+  function searchApps(term) {
+    var listEl = document.getElementById("ja-list");
+    listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Searching…</div>';
+    var safe = term.replace(/[,()*%]/g, " ").trim();
+    var q = jaScoped(db.from("job_applications").select("*"))
+      .or("full_name.ilike.%" + safe + "%,phone.ilike.%" + safe + "%,living_area.ilike.%" + safe + "%")
+      .order("created_at", { ascending: false }).limit(JA_PAGE);
+    return q.then(function (res) {
+      if (res.error) { if (window.console) console.error(res.error); return; }
+      allApps = res.data || [];
+      jaServerSearch = true;
+      jaRenderCap = JA_RENDER_STEP;
       renderApps();
     });
   }
@@ -1432,10 +1523,49 @@
       return passesFilters(jobFV, a);
     });
   }
+  // True counts for the whole scope, from the database — the loaded slice is only
+  // a page, so counting it would understate every tab.
   function sectionCounts() {
-    var c = { new: 0, approved: 0, rejected: 0 };
-    allApps.forEach(function (a) { var s = (a.status || "new"); if (c[s] != null) c[s]++; });
-    return c;
+    var s = jaFacets.statuses || {};
+    return { new: s.new || 0, approved: s.approved || 0, rejected: s.rejected || 0 };
+  }
+  function flagImg(code) {
+    return code ? '<img src="https://flagcdn.com/' + esc(code) + '.svg" alt="">' : "";
+  }
+  // Year switch + country chips + the sidebar's country children, all driven by
+  // ja_facets() so they always reflect what this user is allowed to see.
+  function renderScopeBar() {
+    var years = Object.keys(jaFacets.years || {}).sort().reverse();
+    var sel = document.getElementById("ja-year");
+    if (sel) {
+      sel.innerHTML = '<option value="">All years (' + (jaFacets.total || 0) + ")</option>" +
+        years.map(function (y) {
+          return '<option value="' + y + '"' + (String(jaScope.year) === y ? " selected" : "") +
+            ">" + y + " (" + jaFacets.years[y] + ")</option>";
+        }).join("");
+      if (!jaScope.year) sel.value = "";
+    }
+    var cs = jaFacets.countries || {};
+    var order = ["JO", "LB", "SY", "IQ", "__none"].filter(function (k) { return cs[k]; });
+    var seg = document.getElementById("ja-country");
+    if (seg) {
+      var total = order.reduce(function (n, k) { return n + cs[k]; }, 0);
+      seg.innerHTML = '<button type="button" data-c=""' + (jaScope.country ? "" : ' class="active"') +
+        ">All (" + total + ")</button>" +
+        order.map(function (k) {
+          var m = COUNTRY_META[k] || { name: k, flag: null };
+          return '<button type="button" data-c="' + k + '"' + (jaScope.country === k ? ' class="active"' : "") + ">" +
+            flagImg(m.flag) + esc(m.name) + " (" + cs[k] + ")</button>";
+        }).join("");
+    }
+    var kids = document.getElementById("ja-kids");
+    if (kids) {
+      kids.innerHTML = order.map(function (k) {
+        var m = COUNTRY_META[k] || { name: k, flag: null };
+        return '<button class="side-kid' + (jaScope.country === k ? " active" : "") + '" data-c="' + k + '">' +
+          flagImg(m.flag) + "<span>" + esc(m.name) + '</span><span class="kid-n">' + cs[k] + "</span></button>";
+      }).join("");
+    }
   }
   function fmtInterview(iso) {
     if (!iso) return "";
@@ -1473,10 +1603,15 @@
     document.getElementById("cnt-rejected").textContent = counts.rejected ? "(" + counts.rejected + ")" : "";
 
     var rows = filterApps();
-    document.getElementById("ja-count").textContent = rows.length + (rows.length === 1 ? " applicant" : " applicants");
+    var scopeTotal = counts[section] || 0;
+    var partial = !jaServerSearch && rows.length < scopeTotal;
+    document.getElementById("ja-count").textContent =
+      partial ? ("showing " + rows.length + " of " + scopeTotal)
+              : (rows.length + (rows.length === 1 ? " applicant" : " applicants"));
 
-    // "Send to all" bar: only in Approved, and only if someone still needs messaging
-    var unsent = allApps.filter(function (a) { return a.status === "approved" && !a.message_sent && waEligible(a); }).length;
+    // "Send to all" bar: only in Approved, and only if someone still needs messaging.
+    // Count comes from the database so it isn't limited to the loaded page.
+    var unsent = jaFacets.unsent || 0;
     var bulk = document.getElementById("ja-bulk");
     if (canManage("job_applications") && section === "approved" && unsent > 0) {
       bulk.style.display = "block";
@@ -1498,7 +1633,24 @@
     var container = listEl;
     if (cards) { container = document.createElement("div"); container.className = "ja-cards"; listEl.appendChild(container); }
 
-    rows.forEach(function (a) {
+    // draw a bounded number of cards — a scope can hold thousands
+    var shown = rows.slice(0, jaRenderCap);
+    var more = document.getElementById("ja-more");
+    if (more) {
+      var hiddenLocally = rows.length - shown.length;
+      if (hiddenLocally > 0 || partial) {
+        more.style.display = "block";
+        document.getElementById("ja-more-btn").style.display = hiddenLocally > 0 ? "" : "none";
+        document.getElementById("ja-more-note").textContent =
+          hiddenLocally > 0 ? (hiddenLocally + " more loaded — showing " + shown.length)
+                            : "Only the newest " + rows.length + " of " + scopeTotal +
+                              " are loaded. Narrow by year or country, or search to reach the rest.";
+      } else {
+        more.style.display = "none";
+      }
+    }
+
+    shown.forEach(function (a) {
       var initial = (a.full_name || "?").trim().charAt(0).toUpperCase();
       var age = calcAge(a.date_of_birth);
       var c = phoneCountry(a.phone);
@@ -1812,7 +1964,41 @@
   }
 
   function debounce(fn, ms) { var t; return function () { clearTimeout(t); t = setTimeout(fn, ms); }; }
-  document.getElementById("ja-search").addEventListener("input", debounce(renderApps, 180));
+  // Search: filter locally when the whole scope is already loaded, otherwise ask the
+  // database so records outside the loaded page are still findable.
+  document.getElementById("ja-search").addEventListener("input", debounce(function () {
+    var term = (document.getElementById("ja-search").value || "").trim();
+    var fullyLoaded = !jaServerSearch && allApps.length >= (jaFacets.total || 0);
+    if (!term) { if (jaServerSearch) loadApps(); else renderApps(); return; }
+    if (fullyLoaded) { renderApps(); return; }
+    if (term.length < 2) return;   // don't hit the database on one character
+    searchApps(term);
+  }, 250));
+
+  // year / country scope controls
+  document.getElementById("ja-year").addEventListener("change", function () {
+    jaScope.year = this.value ? parseInt(this.value, 10) : null;
+    document.getElementById("ja-search").value = "";
+    loadApps();
+  });
+  document.getElementById("ja-country").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-c]"); if (!b) return;
+    jaScope.country = b.getAttribute("data-c") || null;
+    document.getElementById("ja-search").value = "";
+    loadApps();
+  });
+  // the sidebar's country children open the board already scoped
+  document.getElementById("ja-kids").addEventListener("click", function (e) {
+    var b = e.target.closest(".side-kid[data-c]"); if (!b) return;
+    jaScope.country = b.getAttribute("data-c") || null;
+    document.getElementById("ja-search").value = "";
+    showView("job_applications");
+    loadApps();
+  });
+  document.getElementById("ja-more-btn").addEventListener("click", function () {
+    jaRenderCap += JA_RENDER_STEP;
+    renderApps();
+  });
   document.getElementById("ja-refresh").addEventListener("click", loadApps);
   document.getElementById("send-all").addEventListener("click", sendAll);
   document.getElementById("ja-tabs").addEventListener("click", function (e) {
