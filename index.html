@@ -878,8 +878,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
-  var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
-  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
+  var SUPABASE_URL = "https://db.blktable.blk.jo";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg0NzExNjYwLCJleHAiOjIxMDAwNzE2NjB9.jve2CB0Dt8dESno2dgVHu5kcLnmCE-fISi0TYT_prwc";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   // ---- Attachment storage: Supabase Storage now, Cloudflare R2 after cutover ----
@@ -888,7 +888,7 @@
   // own `r2` edge function (so the R2 bucket needs no CORS rule) and viewing uses
   // short-lived presigned GET urls, which <img> loads without CORS.
   // Stored paths are identical in both modes, so records never need rewriting.
-  var STORAGE_MODE = "supabase";
+  var STORAGE_MODE = "r2";
   var R2_FN = SUPABASE_URL + "/functions/v1/r2";
 
   function r2Post(action, body, token, isForm) {

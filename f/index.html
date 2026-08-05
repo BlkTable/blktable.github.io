@@ -112,15 +112,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  var SUPABASE_URL = "https://cisqemycewkqakyqmusw.supabase.co";
-  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNpc3FlbXljZXdrcWFreXFtdXN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NDY1NDEsImV4cCI6MjEwMDEyMjU0MX0.OHvaGhRKB2Pi82UQfyV-Qh7l-ZPx1Gjhz0irDnDSINg";
+  var SUPABASE_URL = "https://db.blktable.blk.jo";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg0NzExNjYwLCJleHAiOjIxMDAwNzE2NjB9.jve2CB0Dt8dESno2dgVHu5kcLnmCE-fISi0TYT_prwc";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
   // ---- Photo storage: Supabase Storage now, Cloudflare R2 after cutover ----
   // Flip STORAGE_MODE to "r2" at cutover (with SUPABASE_URL/KEY above). Uploads
   // then go through our own `r2` edge function, which keeps the stored path shape
   // identical and means the R2 bucket needs no CORS rule.
-  var STORAGE_MODE = "supabase";
+  var STORAGE_MODE = "r2";
   function storageUpload(file) {
     if (STORAGE_MODE === "r2") {
       var fd = new FormData();
