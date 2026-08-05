@@ -429,6 +429,13 @@
   .m-field .k { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .m-field .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
+  /* imported (migrated) records */
+  .imp-head { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+  .imp-head .k { color: var(--silver); }
+  .imp-src { color: var(--muted); font-size: 0.8rem !important; }
+  .imp-file { color: var(--silver); text-decoration: underline; cursor: pointer; }
+  .imp-file.dead { color: var(--muted); text-decoration: none; cursor: default; }
+  .imp-sz { color: var(--muted); font-size: 0.78rem; }
   .m-section { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
   .m-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .m-row label { font-size: 0.8rem; color: var(--muted); width: 62px; flex: 0 0 auto; }
@@ -1265,6 +1272,46 @@
     return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  // ---- Migrated records: surface everything that came across from Airtable ----
+  // Import metadata lives under `extra` keys prefixed with "_", which the builder's
+  // extraFieldsHtml() correctly ignores (it only knows app_fields questions) — so
+  // without this block the imported answers and files would be stored but invisible.
+  // Table-agnostic: any table whose rows carry extra._import gets the same section.
+  function importedBlockHtml(extra) {
+    if (!extra || !extra._import) return "";
+    var imp = extra._import || {}, answers = extra._answers || [], files = extra._files || [];
+    var h = '<div class="m-field full imp-head"><div class="k">Imported from Airtable</div>' +
+      '<div class="v imp-src">' + esc(imp.base_name || "") + (imp.table ? " · " + esc(imp.table) : "") + "</div></div>";
+    if (extra._age_given) h += fieldHtml("Age (as given)", extra._age_given);
+    answers.forEach(function (a) {
+      if (a && a.value != null && a.value !== "") {
+        h += '<div class="m-field full"><div class="k">' + esc(a.label) + '</div><div class="v">' + esc(a.value) + "</div></div>";
+      }
+    });
+    if (files.length) {
+      h += '<div class="m-field full"><div class="k">Attachments (' + files.length + ')</div><div class="v">' +
+        files.map(function (f, i) {
+          return '<a class="imp-file" data-path="' + esc(f.path || "") + '" target="_blank" rel="noopener">' +
+            esc(f.name || "file " + (i + 1)) + "</a> " +
+            '<span class="imp-sz">' + (f.size ? Math.round(f.size / 1024) + " KB" : "") + "</span>";
+        }).join("<br>") + "</div></div>";
+    }
+    return h;
+  }
+  // Signed links are resolved after the markup is in the DOM (one signing call each,
+  // cached by getPhotoUrl). Videos and CVs open in a new tab.
+  function wireImportedFiles() {
+    [].slice.call(document.querySelectorAll(".imp-file[data-path]")).forEach(function (el) {
+      var p = el.getAttribute("data-path");
+      el.removeAttribute("data-path");
+      if (!p) { el.className = "imp-file dead"; return; }
+      getPhotoUrl(p).then(function (url) {
+        if (url) el.href = url;
+        else { el.className = "imp-file dead"; el.title = "file not available"; }
+      });
+    });
+  }
+
   // ---- Submission fingerprint (IP + device): admin-only, table-agnostic ----
   function fpMeta(o) {
     if (!isAdmin) return "";
@@ -1589,9 +1636,10 @@
           hideableFieldHtml("job_applications", "Favorite drink", a.favorite_drink, "favorite_drink") +
           hideableFullHtml("job_applications", "Why join", a.why_join, "why_join") +
           extraFieldsHtml(a.extra, builtinExtra.job_applications) +
+          importedBlockHtml(a.extra) +
           fpMeta(a) +
         "</div>";
-      document.getElementById("modal").classList.add("open");
+      document.getElementById("modal").classList.add("open"); wireImportedFiles();
       if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) { if (url) { var im = document.getElementById("m-photo"); im.src = url; im.style.display = "block"; } });
       return;
     }
@@ -1613,7 +1661,7 @@
       er("Favorite drink", edText("ed-favorite_drink", a.favorite_drink), "favorite_drink") +
       er("Why join", edText("ed-why_join", a.why_join, true), "why_join", true) +
       edExtraRows(builtinExtra.job_applications, a.extra);
-    var meta = fieldHtml("Age", ageText(a.date_of_birth)) + fpMeta(a);
+    var meta = fieldHtml("Age", ageText(a.date_of_birth)) + importedBlockHtml(a.extra) + fpMeta(a);
     body.innerHTML =
       '<img class="m-photo" id="m-photo" alt="" style="display:none;">' +
       changePhotoBtn("m-photo", canEdit("job_applications") && !!a.photo_path) +
@@ -1622,7 +1670,7 @@
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
     wireEdPhone("ed-phone");
     wireAutosave(function () { return saveApp(a); });
-    document.getElementById("modal").classList.add("open");
+    document.getElementById("modal").classList.add("open"); wireImportedFiles();
     if (a.photo_path) getPhotoUrl(a.photo_path).then(function (url) { if (url) { var im = document.getElementById("m-photo"); if (im) { im.src = url; im.style.display = "block"; } } });
     wireChangePhoto("m-photo", function (np) { return db.from("job_applications").update({ photo_path: np }).eq("id", a.id).then(function (r) { if (r.error) throw r.error; a.photo_path = np; }); });
   }
@@ -1887,10 +1935,10 @@
         hideableFieldHtml("casting", "University student?", c.university_student, "university_student") +
         hideableFieldHtml("casting", "Ever acted?", c.ever_acted, "ever_acted") +
         extraFieldsHtml(c.extra, builtinExtra.casting) +
-        fpMeta(c);
+        importedBlockHtml(c.extra) + fpMeta(c);
       body.innerHTML = (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
         '<div class="m-name">' + esc(c.full_name) + '</div><div class="m-sub">Submitted ' + fmtDate(c.created_at) + '</div><div class="m-grid">' + grid + "</div>";
-      document.getElementById("modal").classList.add("open");
+      document.getElementById("modal").classList.add("open"); wireImportedFiles();
       if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
       return;
     }
@@ -1904,7 +1952,7 @@
       er("University student?", edSelect("ed-university_student", c.university_student, ["", "Yes", "No"]), "university_student") +
       er("Ever acted?", edSelect("ed-ever_acted", c.ever_acted, ["", "Yes", "No"]), "ever_acted") +
       edExtraRows(builtinExtra.casting, c.extra);
-    var meta = fpMeta(c);
+    var meta = importedBlockHtml(c.extra) + fpMeta(c);
     body.innerHTML =
       (c.photo_path ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", canEdit("casting") && !!c.photo_path) +
@@ -1913,7 +1961,7 @@
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + "</div>";
     wireEdPhone("ed-phone");
     wireAutosave(function () { return saveCasting(c); });
-    document.getElementById("modal").classList.add("open");
+    document.getElementById("modal").classList.add("open"); wireImportedFiles();
     if (c.photo_path) getPhotoUrl(c.photo_path).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
     wireChangePhoto("cd-photo", function (np) { return db.from("casting_applications").update({ photo_path: np }).eq("id", c.id).then(function (r) { if (r.error) throw r.error; c.photo_path = np; }); });
   }
@@ -2450,11 +2498,11 @@
         if (f.type === "photo") return;
         grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(customCellText(f, d, true)) + "</div></div>";
       });
-      grid += fpMeta(s);
+      grid += importedBlockHtml(s.extra) + fpMeta(s);
       body.innerHTML = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
         '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + '</div><div class="chain" id="cd-chain"></div>';
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
-      document.getElementById("modal").classList.add("open");
+      document.getElementById("modal").classList.add("open"); wireImportedFiles();
       if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
       return;
     }
@@ -2478,7 +2526,7 @@
       else inner = edText(id, v, false);
       return edRow(label, inner, f.type === "long_text");
     }).join("");
-    var meta = fpMeta(s);
+    var meta = importedBlockHtml(s.extra) + fpMeta(s);
     body.innerHTML =
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
@@ -2499,7 +2547,7 @@
     });
     wireAutosave(function () { return saveCustom(s, fields); });
     renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
-    document.getElementById("modal").classList.add("open");
+    document.getElementById("modal").classList.add("open"); wireImportedFiles();
     if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
     wireChangePhoto("cd-photo", function (np) {
       var nd = {}; Object.keys(s.data || {}).forEach(function (k) { nd[k] = s.data[k]; });
@@ -3389,7 +3437,7 @@
     document.getElementById("modal-body").innerHTML =
       '<div class="m-name">' + name + ' · settings</div>' +
       '<div class="m-sub" style="margin-top:12px; line-height:1.65;">This is a <b>built-in form</b>, so its questions are fixed in the app and can\'t be edited from here. You can still view submissions, share its QR code, and regenerate its link from the table\'s page.<br><br>Want its questions changed? Tell me what to add or remove and I\'ll update the form.</div>';
-    document.getElementById("modal").classList.add("open");
+    document.getElementById("modal").classList.add("open"); wireImportedFiles();
   }
   document.getElementById("side-tables").addEventListener("click", function (e) {
     var gear = e.target && e.target.closest ? e.target.closest(".side-gear") : null;
