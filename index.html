@@ -6,6 +6,12 @@
 <meta name="robots" content="noindex, nofollow">
 <title>BLKTable</title>
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<!-- Warm the connections while the page is still parsing: DNS + TLS to our own API
+     and to the CDN the client library comes from, which otherwise happens serially
+     before the very first request can be sent. -->
+<link rel="preconnect" href="https://db.blktable.blk.jo" crossorigin>
+<link rel="dns-prefetch" href="https://db.blktable.blk.jo">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <style>
   :root {
     --bg: #0a0b0d;
@@ -1409,10 +1415,43 @@
   var signedCache = {};
   var currentApp = null;
 
+  // A list of 300 records asks for 300 signatures at once. One HTTPS call each
+  // meant hundreds of round trips queued six-at-a-time by the browser, each doing
+  // its own SigV4 — the single biggest reason the dashboard felt slow. The /r2/sign
+  // endpoint already accepts a batch, so requests made in the same tick are
+  // collected and served together: 300 photos become 2 calls instead of 300.
+  var signQueue = [], signTimer = null, SIGN_BATCH = 150;
+  function flushSignQueue() {
+    signTimer = null;
+    var batch = signQueue.splice(0, SIGN_BATCH);
+    if (signQueue.length) signTimer = setTimeout(flushSignQueue, 0);
+    var paths = batch.map(function (e) { return e.path; });
+    sessionToken()
+      .then(function (t) { return r2Post("sign", { paths: paths }, t); })
+      .then(function (j) {
+        var urls = (j && j.urls) || {};
+        batch.forEach(function (e) { e.settle(urls[e.path] || null); });
+      })
+      .catch(function () { batch.forEach(function (e) { e.settle(null); }); });
+  }
   function getPhotoUrl(path) {
     if (!path) return Promise.resolve(null);
     if (signedCache[path]) return signedCache[path];
-    signedCache[path] = storageSignedUrl(path);
+    if (STORAGE_MODE !== "r2") {
+      signedCache[path] = storageSignedUrl(path);
+      return signedCache[path];
+    }
+    var entry = { path: path, settle: null };
+    signedCache[path] = new Promise(function (res) {
+      entry.settle = function (url) {
+        // a failure is not cached, so scrolling back retries instead of showing a
+        // permanently broken thumbnail
+        if (!url) delete signedCache[path];
+        res(url);
+      };
+    });
+    signQueue.push(entry);
+    if (!signTimer) signTimer = setTimeout(flushSignQueue, 0);
     return signedCache[path];
   }
   function esc(s) {
@@ -2517,9 +2556,16 @@
       rerender: function () { renderCustom(); },
       panelId: "custom-filter-panel", btnId: "custom-filter-btn", wrapId: "custom-filter-wrap"
     });
-    db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
-      currentCustom.fields = fRes.data || [];
-      return loadViews(t.id).then(loadCustomSubs);
+    // These three used to run one after another — fields, then views, then rows —
+    // so opening a table cost three round trips before anything was drawn. None of
+    // them needs the others' answer, so they all start now. The rows query in
+    // particular starts before the field list has come back.
+    var fieldsP = db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true });
+    var subsP = subsQuery(t, 0, CUSTOM_FIRST - 1);
+    var viewsP = loadViews(t.id);
+    Promise.all([fieldsP, viewsP]).then(function (out) {
+      currentCustom.fields = (out[0] && out[0].data) || [];
+      return loadCustomSubs(subsP);
     });
   }
 
@@ -2527,24 +2573,46 @@
   // Same problem the job board had: a table can hold thousands of rows (Mystery
   // Shopper alone is 6,235, and task tables will add ~2,000/day), so the view
   // loads one branch at a time and gets its counts from the database.
-  var CUSTOM_PAGE = 500, CUSTOM_RENDER_STEP = 300;
+  var CUSTOM_PAGE = 500, CUSTOM_RENDER_STEP = 300, CUSTOM_FIRST = 150;
   var customFacets = { branches: {}, statuses: {}, total: 0, all_total: 0 };
   var customRenderCap = CUSTOM_RENDER_STEP;
-  function loadCustomSubs() {
-    var t = currentCustom && currentCustom.table; if (!t) return Promise.resolve();
-    customRenderCap = CUSTOM_RENDER_STEP;
+  function subsQuery(t, from, to) {
     var q = db.from("app_submissions").select("*").eq("table_id", t.id);
     if (currentCustom.branch === "__none") q = q.is("branch", null);
     else if (currentCustom.branch) q = q.eq("branch", currentCustom.branch);
-    q = q.order("created_at", { ascending: false }).limit(CUSTOM_PAGE);
+    return q.order("created_at", { ascending: false }).range(from, to);
+  }
+  function applyCustomSubs(rows, rebuildFilter) {
+    currentCustom.subs = rows;
+    renderCustomScope();
+    // only on the first paint: rebuilding the panel underneath a filter the user has
+    // just set would throw their selection away
+    if (rebuildFilter) buildFilterPanel(currentCustom.fv);
+    renderCustom();
+  }
+  // Two-stage load. A Mystery Shopper page is 500 rows of a 249-column table — 3.5 MB
+  // of JSON — and nothing was drawn until all of it had arrived and parsed. Now the
+  // first 150 rows paint immediately and the rest of the page fills in behind them.
+  // `prefetch` lets openCustomTable start the query before this even runs.
+  function loadCustomSubs(prefetch) {
+    var t = currentCustom && currentCustom.table; if (!t) return Promise.resolve();
+    customRenderCap = CUSTOM_RENDER_STEP;
+    var first = prefetch || subsQuery(t, 0, CUSTOM_FIRST - 1);
     var facets = db.rpc("table_facets", { p_table: t.id, p_branch: currentCustom.branch || null })
       .then(function (r) { if (!r.error && r.data) customFacets = r.data; })
       .catch(function () {});
-    return Promise.all([q, facets]).then(function (out) {
-      currentCustom.subs = (out[0] && out[0].data) || [];
-      renderCustomScope();
-      buildFilterPanel(currentCustom.fv);
-      renderCustom();
+    return Promise.all([first, facets]).then(function (out) {
+      var rows = (out[0] && out[0].data) || [];
+      applyCustomSubs(rows, true);
+      if (rows.length < CUSTOM_FIRST) return;   // that was the whole table already
+      var tid = t.id, br = currentCustom.branch;
+      subsQuery(t, CUSTOM_FIRST, CUSTOM_PAGE - 1).then(function (r2) {
+        // the user may have moved to another table or branch while this was in flight
+        if (!currentCustom || !currentCustom.table || currentCustom.table.id !== tid) return;
+        if (currentCustom.branch !== br) return;
+        if (r2.error || !r2.data || !r2.data.length) return;
+        applyCustomSubs(currentCustom.subs.concat(r2.data), false);
+      });
     });
   }
   // Branch chips on the page, and the same list under the table in the sidebar.
