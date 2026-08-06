@@ -616,6 +616,7 @@
           <nav class="side-list" id="side-tables">
             <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-caret" id="ja-caret">▸</span><span class="side-gear" title="Settings">⚙</span></button>
             <div class="side-kids" id="ja-kids" style="display:none;"></div>
+            <div class="side-kids" id="custom-kids" style="display:none;"></div>
             <button class="side-item" data-view="casting" title="BLK Casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Settings">⚙</span></button>
             <span id="custom-tables-slot"></span>
             <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
@@ -767,6 +768,10 @@
             <button class="linkbtn" id="custom-refresh">Refresh</button>
             <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
             <button class="linkbtn qr-regen" id="custom-delete" style="display:none;">🗑 Delete form</button>
+          </div>
+          <div class="ja-scope" id="custom-scope" style="display:none;">
+            <label class="scope-lab">Branch</label>
+            <div class="seg" id="custom-branch"></div>
           </div>
           <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
           <div id="custom-list" class="ja-list"></div>
@@ -2436,9 +2441,70 @@
     });
     db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
       currentCustom.fields = fRes.data || [];
-      return db.from("app_submissions").select("*").eq("table_id", t.id).order("created_at", { ascending: false });
-    }).then(function (sRes) { currentCustom.subs = (sRes && sRes.data) || []; buildFilterPanel(currentCustom.fv); renderCustom(); });
+      return loadCustomSubs();
+    });
   }
+
+  // ---- Custom tables at scale, grouped by branch --------------------------
+  // Same problem the job board had: a table can hold thousands of rows (Mystery
+  // Shopper alone is 6,235, and task tables will add ~2,000/day), so the view
+  // loads one branch at a time and gets its counts from the database.
+  var CUSTOM_PAGE = 500, CUSTOM_RENDER_STEP = 300;
+  var customFacets = { branches: {}, statuses: {}, total: 0, all_total: 0 };
+  var customRenderCap = CUSTOM_RENDER_STEP;
+  function loadCustomSubs() {
+    var t = currentCustom && currentCustom.table; if (!t) return Promise.resolve();
+    customRenderCap = CUSTOM_RENDER_STEP;
+    var q = db.from("app_submissions").select("*").eq("table_id", t.id);
+    if (currentCustom.branch === "__none") q = q.is("branch", null);
+    else if (currentCustom.branch) q = q.eq("branch", currentCustom.branch);
+    q = q.order("created_at", { ascending: false }).limit(CUSTOM_PAGE);
+    var facets = db.rpc("table_facets", { p_table: t.id, p_branch: currentCustom.branch || null })
+      .then(function (r) { if (!r.error && r.data) customFacets = r.data; })
+      .catch(function () {});
+    return Promise.all([q, facets]).then(function (out) {
+      currentCustom.subs = (out[0] && out[0].data) || [];
+      renderCustomScope();
+      buildFilterPanel(currentCustom.fv);
+      renderCustom();
+    });
+  }
+  // Branch chips on the page, and the same list under the table in the sidebar.
+  function renderCustomScope() {
+    var br = customFacets.branches || {};
+    var names = Object.keys(br).sort(function (a, b) { return br[b] - br[a]; });
+    var bar = document.getElementById("custom-scope");
+    var seg = document.getElementById("custom-branch");
+    var kids = document.getElementById("custom-kids");
+    var meaningful = names.filter(function (n) { return n !== "__none"; }).length > 1;
+    if (!meaningful) { // nothing to group by — keep the page as it was
+      if (bar) bar.style.display = "none";
+      if (kids) { kids.innerHTML = ""; kids.style.display = "none"; }
+      return;
+    }
+    if (bar) bar.style.display = "flex";
+    var label = function (n) { return n === "__none" ? "No branch" : n; };
+    if (seg) {
+      seg.innerHTML = '<button type="button" data-b=""' + (currentCustom.branch ? "" : ' class="active"') +
+        ">All (" + (customFacets.all_total || 0) + ")</button>" +
+        names.map(function (n) {
+          return '<button type="button" data-b="' + esc(n) + '"' +
+            (currentCustom.branch === n ? ' class="active"' : "") + ">" +
+            esc(label(n)) + " (" + br[n] + ")</button>";
+        }).join("");
+    }
+    if (kids) {
+      var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
+      if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
+      kids.innerHTML = names.map(function (n) {
+        return '<button class="side-kid' + (currentCustom.branch === n ? " active" : "") +
+          '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
+      }).join("");
+      kids.style.display = customKidsOpen ? "flex" : "none";
+    }
+  }
+  var customKidsOpen = false;
+  try { customKidsOpen = localStorage.getItem("blk_custom_kids") === "1"; } catch (e) {}
   function customStages() { return (currentCustom && currentCustom.table.config && currentCustom.table.config.statuses) || []; }
   function subStage(s, stages) { return s.status || (stages[0] && stages[0].key) || null; }
   function setSubStatus(s, key) {
@@ -2467,7 +2533,12 @@
     } else { mineChip.style.display = "none"; currentCustom.mineOnly = false; }
     var pool = currentCustom.mineOnly ? subs.filter(isMine) : subs;
     pool = pool.filter(passesCustomFilters);
-    document.getElementById("custom-count").textContent = pool.length + (pool.length === 1 ? " entry" : " entries");
+    // the loaded slice may be a page of a much larger branch/table
+    var scopeTotal = customFacets.total || pool.length;
+    var partial = pool.length < scopeTotal && !q;
+    document.getElementById("custom-count").textContent =
+      partial ? ("showing " + pool.length + " of " + scopeTotal)
+              : (pool.length + (pool.length === 1 ? " entry" : " entries"));
     var summary = fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
     var photoField = fields.filter(function (f) { return f.type === "photo"; })[0];
     // pipeline tabs
@@ -2937,6 +3008,32 @@
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
   document.getElementById("custom-delete").addEventListener("click", function () {
     if (currentCustom) openDeleteTable(currentCustom.table.id, currentCustom.table.name);
+  });
+  // branch scope: chips on the page and the children in the sidebar do the same thing
+  document.getElementById("custom-branch").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-b]"); if (!b || !currentCustom) return;
+    currentCustom.branch = b.getAttribute("data-b") || null;
+    document.getElementById("custom-search").value = "";
+    loadCustomSubs();
+  });
+  document.getElementById("custom-kids").addEventListener("click", function (e) {
+    var b = e.target.closest(".side-kid[data-b]"); if (!b || !currentCustom) return;
+    currentCustom.branch = b.getAttribute("data-b") || null;
+    document.getElementById("custom-search").value = "";
+    loadCustomSubs();
+  });
+  // pressing a custom table's own sidebar line reveals its branches
+  document.getElementById("side-tables").addEventListener("click", function (e) {
+    var item = e.target && e.target.closest ? e.target.closest(".side-item[data-custom]") : null;
+    if (!item || (e.target.closest && e.target.closest(".side-gear"))) return;
+    if (currentCustom && currentCustom.table.id === item.getAttribute("data-custom")) {
+      customKidsOpen = !customKidsOpen;
+      try { localStorage.setItem("blk_custom_kids", customKidsOpen ? "1" : "0"); } catch (err) {}
+      var k = document.getElementById("custom-kids");
+      if (k) k.style.display = customKidsOpen ? "flex" : "none";
+    } else {
+      customKidsOpen = true;   // opening a different table shows its branches
+    }
   });
   // ---- QR codes for public form links (with centered BLK logo) ----
   var qrLogo = new Image(); var qrLogoReady = false;
