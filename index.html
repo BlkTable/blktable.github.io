@@ -451,6 +451,15 @@
   .m-field .k { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .m-field .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
+  /* per-form ⋯ menu (sidebar) */
+  #form-menu { position: fixed; z-index: 300; min-width: 190px; margin: 0; padding: 6px; list-style: none;
+    background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.55); display: none; }
+  #form-menu.open { display: block; }
+  #form-menu li { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text); }
+  #form-menu li:hover { background: rgba(255,255,255,0.07); }
+  #form-menu li.danger { color: #ff6b6b; }
+  #form-menu li.sep { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 10px; border-radius: 0; }
   /* country sub-groups under a table in the sidebar — collapsed until the parent is pressed */
   .side-caret { margin-left: auto; color: var(--muted); font-size: 0.7rem; flex: 0 0 auto; padding-right: 2px; }
   #side-tables.show-gears .side-caret { margin-left: auto; }
@@ -474,6 +483,13 @@
   .imp-head { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
   .imp-head .k { color: var(--silver); }
   .imp-src { color: var(--muted); font-size: 0.8rem !important; }
+  /* imported photos shown as photos, not links */
+  .imp-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .imp-thumb { width: 104px; height: 104px; object-fit: cover; border-radius: 10px; cursor: zoom-in;
+    background: #20242b; border: 1px solid var(--field-border); }
+  .imp-thumb:hover { border-color: var(--silver); }
+  .imp-thumb.dead { opacity: 0.35; cursor: default; }
+  .imp-docs { margin-top: 8px; }
   .imp-file { color: var(--silver); text-decoration: underline; cursor: pointer; }
   .imp-file.dead { color: var(--muted); text-decoration: none; cursor: default; }
   .imp-sz { color: var(--muted); font-size: 0.78rem; }
@@ -614,10 +630,10 @@
         <div class="side-group">
           <div class="side-label">Tables</div>
           <nav class="side-list" id="side-tables">
-            <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-caret" id="ja-caret">▸</span><span class="side-gear" title="Settings">⚙</span></button>
+            <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-caret" id="ja-caret">▸</span><span class="side-gear" title="Options">⋯</span></button>
             <div class="side-kids" id="ja-kids" style="display:none;"></div>
             <div class="side-kids" id="custom-kids" style="display:none;"></div>
-            <button class="side-item" data-view="casting" title="BLK Casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Settings">⚙</span></button>
+            <button class="side-item" data-view="casting" title="BLK Casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Options">⋯</span></button>
             <span id="custom-tables-slot"></span>
             <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
           </nav>
@@ -657,12 +673,11 @@
             </div>
           </div>
 
+          <!-- Country grouping lives in the sidebar only — it doesn't fit here.
+               The year is a filter, not grouping, so it stays. -->
           <div class="ja-scope" id="ja-scope">
             <label class="scope-lab">Year</label>
             <select id="ja-year"></select>
-            <span class="scope-sep"></span>
-            <label class="scope-lab">Country</label>
-            <div class="seg" id="ja-country"></div>
           </div>
 
           <div class="seg tabs" id="ja-tabs">
@@ -767,12 +782,8 @@
             <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
             <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
-            <button class="linkbtn qr-regen" id="custom-delete" style="display:none;">🗑 Delete form</button>
           </div>
-          <div class="ja-scope" id="custom-scope" style="display:none;">
-            <label class="scope-lab">Branch</label>
-            <div class="seg" id="custom-branch"></div>
-          </div>
+          <!-- branch grouping is in the sidebar only, by design -->
           <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
           <div id="custom-list" class="ja-list"></div>
           <div id="custom-empty" class="empty" style="display:none;"><h2>No submissions yet</h2><p>Submissions from the form link will show up here.</p></div>
@@ -843,7 +854,9 @@
     </div>
 
     <!-- Admin: delete a whole table (math-gated) -->
-    <div class="modal-overlay" id="deltbl-modal">
+    <ul id="form-menu"></ul>
+
+  <div class="modal-overlay" id="deltbl-modal">
       <div class="modal" style="max-width: 440px;">
         <button class="modal-close" id="deltbl-cancel" aria-label="Close">✕</button>
         <div class="m-name">Delete this table?</div>
@@ -1368,12 +1381,25 @@
       }
     });
     if (files.length) {
-      h += '<div class="m-field full"><div class="k">Attachments (' + files.length + ')</div><div class="v">' +
-        files.map(function (f, i) {
+      // Images show as images, the way they do in Airtable — a list of links is
+      // useless when the photo IS the evidence. Click opens the full-screen viewer.
+      var imgs = files.filter(function (f) { return /^image\//.test(f.type || ""); });
+      var docs = files.filter(function (f) { return !/^image\//.test(f.type || ""); });
+      h += '<div class="m-field full"><div class="k">Attachments (' + files.length + ')</div><div class="v">';
+      if (imgs.length) {
+        h += '<div class="imp-gallery">' + imgs.map(function (f) {
+          return '<img class="imp-thumb" data-path="' + esc(f.path || "") + '" alt="' + esc(f.name || "") +
+            '" title="' + esc((f.label || "") + " · " + (f.name || "")) + '">';
+        }).join("") + "</div>";
+      }
+      if (docs.length) {
+        h += '<div class="imp-docs">' + docs.map(function (f, i) {
           return '<a class="imp-file" data-path="' + esc(f.path || "") + '" target="_blank" rel="noopener">' +
             esc(f.name || "file " + (i + 1)) + "</a> " +
             '<span class="imp-sz">' + (f.size ? Math.round(f.size / 1024) + " KB" : "") + "</span>";
-        }).join("<br>") + "</div></div>";
+        }).join("<br>") + "</div>";
+      }
+      h += "</div></div>";
     }
     return h;
   }
@@ -1387,6 +1413,17 @@
       getPhotoUrl(p).then(function (url) {
         if (url) el.href = url;
         else { el.className = "imp-file dead"; el.title = "file not available"; }
+      });
+    });
+    // imported photos: load the real image, and open the lightbox on click
+    [].slice.call(document.querySelectorAll(".imp-thumb[data-path]")).forEach(function (im) {
+      var p = im.getAttribute("data-path");
+      im.removeAttribute("data-path");
+      if (!p) return;
+      getPhotoUrl(p).then(function (url) {
+        if (!url) { im.classList.add("dead"); return; }
+        im.src = url;
+        im.addEventListener("click", function (e) { e.stopPropagation(); openLightbox(url); });
       });
     });
   }
@@ -1577,17 +1614,6 @@
     }
     var cs = jaFacets.countries || {};
     var order = ["JO", "LB", "SY", "IQ", "__none"].filter(function (k) { return cs[k]; });
-    var seg = document.getElementById("ja-country");
-    if (seg) {
-      var total = order.reduce(function (n, k) { return n + cs[k]; }, 0);
-      seg.innerHTML = '<button type="button" data-c=""' + (jaScope.country ? "" : ' class="active"') +
-        ">All (" + total + ")</button>" +
-        order.map(function (k) {
-          var m = COUNTRY_META[k] || { name: k, flag: null };
-          return '<button type="button" data-c="' + k + '"' + (jaScope.country === k ? ' class="active"' : "") + ">" +
-            flagImg(m.flag) + esc(m.name) + " (" + cs[k] + ")</button>";
-        }).join("");
-    }
     var kids = document.getElementById("ja-kids");
     if (kids) {
       kids.innerHTML = '<button class="side-kid' + (jaScope.country ? "" : " active") + '" data-c="">' +
@@ -2043,12 +2069,6 @@
     document.getElementById("ja-search").value = "";
     loadApps();
   });
-  document.getElementById("ja-country").addEventListener("click", function (e) {
-    var b = e.target.closest("button[data-c]"); if (!b) return;
-    jaScope.country = b.getAttribute("data-c") || null;
-    document.getElementById("ja-search").value = "";
-    loadApps();
-  });
   // the sidebar's country children open the board already scoped
   document.getElementById("ja-kids").addEventListener("click", function (e) {
     var b = e.target.closest(".side-kid[data-c]"); if (!b) return;
@@ -2371,7 +2391,7 @@
       function sideItem(t) {
         var b = document.createElement("button");
         b.className = "side-item"; b.setAttribute("data-custom", t.id); b.title = t.name;
-        b.innerHTML = '<span class="ico"></span><span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Edit table">⚙</span>';
+        b.innerHTML = '<span class="ico"></span><span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Options">⋯</span>';
         b.addEventListener("click", function () { openCustomTable(t); });
         return b;
       }
@@ -2416,9 +2436,6 @@
     var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
     if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
-    // Deleting a form used to be reachable only from inside the table editor, which
-    // made it look like the ability had gone. It's a first-class button now.
-    document.getElementById("custom-delete").style.display = isAdmin ? "inline-block" : "none";
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
@@ -2473,30 +2490,21 @@
   function renderCustomScope() {
     var br = customFacets.branches || {};
     var names = Object.keys(br).sort(function (a, b) { return br[b] - br[a]; });
-    var bar = document.getElementById("custom-scope");
-    var seg = document.getElementById("custom-branch");
     var kids = document.getElementById("custom-kids");
     var meaningful = names.filter(function (n) { return n !== "__none"; }).length > 1;
-    if (!meaningful) { // nothing to group by — keep the page as it was
-      if (bar) bar.style.display = "none";
+    if (!meaningful) { // nothing to group by
       if (kids) { kids.innerHTML = ""; kids.style.display = "none"; }
       return;
     }
-    if (bar) bar.style.display = "flex";
     var label = function (n) { return n === "__none" ? "No branch" : n; };
-    if (seg) {
-      seg.innerHTML = '<button type="button" data-b=""' + (currentCustom.branch ? "" : ' class="active"') +
-        ">All (" + (customFacets.all_total || 0) + ")</button>" +
-        names.map(function (n) {
-          return '<button type="button" data-b="' + esc(n) + '"' +
-            (currentCustom.branch === n ? ' class="active"' : "") + ">" +
-            esc(label(n)) + " (" + br[n] + ")</button>";
-        }).join("");
-    }
     if (kids) {
+      // "All" first, so a branch choice can be cleared from the sidebar
+      var allBtn = '<button class="side-kid' + (currentCustom.branch ? "" : " active") +
+        '" data-b=""><span>All branches</span><span class="kid-n">' +
+        (customFacets.all_total || 0) + "</span></button>";
       var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
       if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
-      kids.innerHTML = names.map(function (n) {
+      kids.innerHTML = allBtn + names.map(function (n) {
         return '<button class="side-kid' + (currentCustom.branch === n ? " active" : "") +
           '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
       }).join("");
@@ -2539,7 +2547,13 @@
     document.getElementById("custom-count").textContent =
       partial ? ("showing " + pool.length + " of " + scopeTotal)
               : (pool.length + (pool.length === 1 ? " entry" : " entries"));
-    var summary = fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
+    // A table can name which fields belong on the card (config.card_fields), so the
+    // number that matters — a Mystery Shopper's Final Score, say — is visible without
+    // opening the record. Otherwise fall back to the first few answers as before.
+    var cardIds = (currentCustom.table.config && currentCustom.table.config.card_fields) || null;
+    var summary = cardIds && cardIds.length
+      ? cardIds.map(function (id) { return fields.filter(function (f) { return f.id === id; })[0]; }).filter(Boolean)
+      : fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
     var photoField = fields.filter(function (f) { return f.type === "photo"; })[0];
     // pipeline tabs
     if (stages.length) {
@@ -3006,16 +3020,7 @@
   document.getElementById("custom-mine").addEventListener("click", function () { if (currentCustom) { currentCustom.mineOnly = !currentCustom.mineOnly; renderCustom(); } });
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table, currentCustom.mineOnly); });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
-  document.getElementById("custom-delete").addEventListener("click", function () {
-    if (currentCustom) openDeleteTable(currentCustom.table.id, currentCustom.table.name);
-  });
   // branch scope: chips on the page and the children in the sidebar do the same thing
-  document.getElementById("custom-branch").addEventListener("click", function (e) {
-    var b = e.target.closest("button[data-b]"); if (!b || !currentCustom) return;
-    currentCustom.branch = b.getAttribute("data-b") || null;
-    document.getElementById("custom-search").value = "";
-    loadCustomSubs();
-  });
   document.getElementById("custom-kids").addEventListener("click", function (e) {
     var b = e.target.closest(".side-kid[data-b]"); if (!b || !currentCustom) return;
     currentCustom.branch = b.getAttribute("data-b") || null;
@@ -3797,11 +3802,66 @@
     e.stopPropagation(); e.preventDefault();
     if (!isAdmin) return;
     var item = gear.closest(".side-item"); if (!item) return;
-    var cid = item.getAttribute("data-custom");
-    if (cid) { var t = customTables.filter(function (x) { return x.id === cid; })[0]; if (t) openBuilderEdit(t); return; }
-    var dv = item.getAttribute("data-view");
-    if (dv === "job_applications" || dv === "casting") openBuiltinEdit(dv);
+    openFormMenu(gear, item);
   }, true);
+
+  // ---- ⋯ menu on every form in the sidebar -------------------------------
+  // One place for everything you can do to a form, instead of a hover gear that
+  // jumped straight into the editor and a stray Delete button on the page.
+  var formMenuCtx = null;
+  function openFormMenu(anchor, item) {
+    var menu = document.getElementById("form-menu");
+    var cid = item.getAttribute("data-custom");
+    var dv = item.getAttribute("data-view");
+    var t = cid ? customTables.filter(function (x) { return x.id === cid; })[0] : null;
+    formMenuCtx = { table: t, view: dv, key: cid || dv };
+    var items = [];
+    if (t) {
+      items.push('<li data-a="open">Open</li>');
+      items.push('<li data-a="edit">Edit form</li>');
+      items.push('<li data-a="share">Who can see it…</li>');
+      if (t.kind !== "task") items.push('<li data-a="link">Copy public link</li>');
+      items.push('<li data-a="delete" class="danger sep">Delete form…</li>');
+    } else if (dv === "job_applications" || dv === "casting") {
+      items.push('<li data-a="open">Open</li>');
+      items.push('<li data-a="edit">Edit questions</li>');
+      items.push('<li data-a="share">Who can see it…</li>');
+      items.push('<li data-a="link">Copy public link</li>');
+    } else { return; }
+    menu.innerHTML = items.join("");
+    var r = anchor.getBoundingClientRect();
+    menu.style.left = Math.min(r.left, window.innerWidth - 210) + "px";
+    menu.style.top = (r.bottom + 6) + "px";
+    menu.classList.add("open");
+  }
+  function closeFormMenu() {
+    var m = document.getElementById("form-menu");
+    if (m) m.classList.remove("open");
+    formMenuCtx = null;
+  }
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest || !e.target.closest("#form-menu, .side-gear")) closeFormMenu();
+  });
+  document.getElementById("form-menu").addEventListener("click", function (e) {
+    var li = e.target.closest("li[data-a]"); if (!li || !formMenuCtx) return;
+    var act = li.getAttribute("data-a"), ctx = formMenuCtx;
+    closeFormMenu();
+    if (act === "open") {
+      if (ctx.table) openCustomTable(ctx.table); else showView(ctx.view);
+    } else if (act === "edit") {
+      if (ctx.table) openBuilderEdit(ctx.table); else openBuiltinEdit(ctx.view);
+    } else if (act === "share") {
+      openShare(ctx.key, ctx.table ? ctx.table.name : (ctx.view === "casting" ? "BLK Casting" : "Job Applications"));
+    } else if (act === "link") {
+      var link = ctx.table ? publicFormLink(ctx.table.slug)
+        : ("https://blktable.blk.jo/" + (ctx.view === "casting" ? "cast/" : "apply/"));
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).catch(function () { window.prompt("Copy this link:", link); });
+      } else { window.prompt("Copy this link:", link); }
+    } else if (act === "delete" && ctx.table) {
+      openDeleteTable(ctx.table.id, ctx.table.name);
+    }
+  });
 
   // ---- Auto-hiding sidebar toggle ----
   var workspaceEl = document.querySelector(".workspace");
