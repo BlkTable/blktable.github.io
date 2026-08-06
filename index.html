@@ -521,6 +521,13 @@
   .side-kid.active { background: rgba(255,255,255,0.08); color: var(--silver); font-weight: 600; }
   .side-kid img { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); }
   .side-kid .kid-n { margin-left: auto; color: var(--muted); font-size: 0.74rem; }
+  /* saved views */
+  .kid-head { color: var(--muted); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 8px 10px 3px 30px; }
+  .view-kid .vk-ico { color: var(--muted); font-size: 0.8rem; }
+  .view-kid .vk-del { margin-left: auto; color: var(--muted); opacity: 0; padding: 0 4px; font-size: 1rem; }
+  .view-kid:hover .vk-del { opacity: 0.7; }
+  .view-kid .vk-del:hover { color: #ff6b6b; opacity: 1; }
   /* year + country scope bar */
   .ja-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
   .ja-scope .scope-lab { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -2512,7 +2519,7 @@
     });
     db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true }).then(function (fRes) {
       currentCustom.fields = fRes.data || [];
-      return loadCustomSubs();
+      return loadViews(t.id).then(loadCustomSubs);
     });
   }
 
@@ -2546,8 +2553,11 @@
     var names = Object.keys(br).sort(function (a, b) { return br[b] - br[a]; });
     var kids = document.getElementById("custom-kids");
     var meaningful = names.filter(function (n) { return n !== "__none"; }).length > 1;
-    if (!meaningful) { // nothing to group by
-      if (kids) { kids.innerHTML = ""; kids.style.display = "none"; }
+    if (!meaningful) { // no branches to group by — still offer saved views
+      if (kids) {
+        kids.innerHTML = viewsHtml();
+        kids.style.display = (customKidsOpen && customViews.length) ? "flex" : "none";
+      }
       return;
     }
     var label = function (n) { return n === "__none" ? "No branch" : n; };
@@ -2558,7 +2568,7 @@
         (customFacets.all_total || 0) + "</span></button>";
       var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
       if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
-      kids.innerHTML = allBtn + names.map(function (n) {
+      kids.innerHTML = viewsHtml() + '<div class="kid-head">Branches</div>' + allBtn + names.map(function (n) {
         return '<button class="side-kid' + (currentCustom.branch === n ? " active" : "") +
           '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
       }).join("");
@@ -2567,6 +2577,73 @@
   }
   var customKidsOpen = false;
   try { customKidsOpen = localStorage.getItem("blk_custom_kids") === "1"; } catch (e) {}
+
+  // ---- Saved views -----------------------------------------------------------
+  // A view remembers everything about how you were looking at a table: its type,
+  // the branch it's locked to, its columns, sort and filter. Personal views are
+  // yours alone; shared ones are admin-created and appear for everyone.
+  var customViews = [];
+  function loadViews(tableKey) {
+    return db.from("table_views").select("*").eq("table_key", tableKey)
+      .order("is_shared", { ascending: true }).order("name", { ascending: true })
+      .then(function (r) { customViews = (r.error ? [] : (r.data || [])); return customViews; })
+      .catch(function () { customViews = []; return customViews; });
+  }
+  function viewsHtml() {
+    if (!customViews.length) return "";
+    var mine = customViews.filter(function (v) { return !v.is_shared; });
+    var shared = customViews.filter(function (v) { return v.is_shared; });
+    function row(v) {
+      var icon = v.view_type === "table" ? "▦" : v.view_type === "list" ? "☰" : "▤";
+      return '<button class="side-kid view-kid" data-view-id="' + v.id + '" title="' + esc(v.name) + '">' +
+        '<span class="vk-ico">' + icon + '</span><span>' + esc(v.name) + "</span>" +
+        (v.owner === myUserId || isAdmin ? '<span class="vk-del" title="Delete this view">×</span>' : "") +
+        "</button>";
+    }
+    var h = "";
+    if (mine.length) h += '<div class="kid-head">My views</div>' + mine.map(row).join("");
+    if (shared.length) h += '<div class="kid-head">Shared views</div>' + shared.map(row).join("");
+    return h;
+  }
+  function applyView(v) {
+    if (!v || !currentCustom) return;
+    var c = v.config || {};
+    customView = v.view_type || "table";
+    [].slice.call(document.querySelectorAll("#custom-viewtoggle button")).forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-v") === customView);
+    });
+    currentCustom.branch = c.branch || null;
+    if (c.columns) { try { localStorage.setItem(colsKey(currentCustom.table), JSON.stringify(c.columns)); } catch (e) {} }
+    customSort = c.sort || { id: null, dir: 1 };
+    if (currentCustom.fv && c.filter) currentCustom.fv.state = c.filter;
+    document.getElementById("custom-search").value = "";
+    loadCustomSubs();
+  }
+  function saveCurrentView() {
+    if (!currentCustom) return;
+    var name = window.prompt("Name this view" + (currentCustom.branch ? " (locked to " + currentCustom.branch + ")" : ""), "");
+    if (!name) return;
+    var shared = false;
+    if (isAdmin) shared = window.confirm("Share with the whole team?\n\nOK = shared    Cancel = just for me");
+    var cols = null;
+    try { cols = JSON.parse(localStorage.getItem(colsKey(currentCustom.table)) || "null"); } catch (e) {}
+    db.from("table_views").insert({
+      table_key: currentCustom.table.id, name: name.trim(), owner: myUserId, is_shared: shared,
+      view_type: customView,
+      config: { branch: currentCustom.branch || null, columns: cols,
+                sort: customSort, filter: currentCustom.fv ? currentCustom.fv.state : null }
+    }).then(function (r) {
+      if (r.error) { window.alert("Could not save the view. " + (r.error.message || "")); return; }
+      loadViews(currentCustom.table.id).then(renderCustomScope);
+    });
+  }
+  function deleteView(id) {
+    var v = customViews.filter(function (x) { return x.id === id; })[0];
+    if (!v || !window.confirm("Delete the view “" + v.name + "”?")) return;
+    db.from("table_views").delete().eq("id", id).then(function () {
+      loadViews(currentCustom.table.id).then(renderCustomScope);
+    });
+  }
   function customStages() { return (currentCustom && currentCustom.table.config && currentCustom.table.config.statuses) || []; }
   function subStage(s, stages) { return s.status || (stages[0] && stages[0].key) || null; }
   function setSubStatus(s, key) {
@@ -3243,6 +3320,10 @@
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
   // branch scope: chips on the page and the children in the sidebar do the same thing
   document.getElementById("custom-kids").addEventListener("click", function (e) {
+    var del = e.target.closest(".vk-del");
+    if (del) { e.stopPropagation(); deleteView(del.closest("[data-view-id]").getAttribute("data-view-id")); return; }
+    var vk = e.target.closest("[data-view-id]");
+    if (vk) { applyView(customViews.filter(function (x) { return x.id === vk.getAttribute("data-view-id"); })[0]); return; }
     var b = e.target.closest(".side-kid[data-b]"); if (!b || !currentCustom) return;
     currentCustom.branch = b.getAttribute("data-b") || null;
     document.getElementById("custom-search").value = "";
@@ -4047,6 +4128,7 @@
     var items = [];
     if (t) {
       items.push('<li data-a="open">Open</li>');
+      items.push('<li data-a="saveview">Save current view…</li>');
       items.push('<li data-a="edit">Edit form</li>');
       items.push('<li data-a="share">Who can see it…</li>');
       if (t.kind !== "task") items.push('<li data-a="link">Copy public link</li>');
@@ -4075,7 +4157,9 @@
     var li = e.target.closest("li[data-a]"); if (!li || !formMenuCtx) return;
     var act = li.getAttribute("data-a"), ctx = formMenuCtx;
     closeFormMenu();
-    if (act === "open") {
+    if (act === "saveview") {
+      if (ctx.table) { if (!currentCustom || currentCustom.table.id !== ctx.table.id) openCustomTable(ctx.table); setTimeout(saveCurrentView, 300); }
+    } else if (act === "open") {
       if (ctx.table) openCustomTable(ctx.table); else showView(ctx.view);
     } else if (act === "edit") {
       if (ctx.table) openBuilderEdit(ctx.table); else openBuiltinEdit(ctx.view);
