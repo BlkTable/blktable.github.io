@@ -466,6 +466,22 @@
   .pill.warn { background: #7a5b16; color: #fff6e0; }
   .empty-box { display: inline-block; width: 26px; height: 14px; border-radius: 4px;
     background: rgba(255,255,255,0.07); }
+  /* Scores. A percentage reads as a number you can judge at a glance, so it carries
+     its own colour band rather than sitting in a wall of identical grey text. */
+  .score-pill { display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-weight: 800; font-size: 0.74rem; letter-spacing: 0.2px; font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.08); color: var(--silver-hi); }
+  .score-pill.good { background: #1c5b34; color: #dcffe9; }
+  .score-pill.ok   { background: #2f5b7a; color: #e2f2ff; }
+  .score-pill.warn { background: #7a5b16; color: #fff6e0; }
+  .score-pill.bad  { background: #8c2f2f; color: #ffecec; }
+  .score-pill.big { padding: 5px 14px; font-size: 1.02rem; border-radius: 12px; }
+  .ja-card .name .score-pill.big { margin-left: 8px; vertical-align: middle; }
+  /* in the compact row layout the score sits at the right edge, aligned down the list */
+  .ja-row > .score-pill.big { margin-left: auto; flex: 0 0 auto; align-self: center; }
+  .score-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .score-head .sh-lab { color: var(--muted); font-size: 0.8rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px; }
   .m-field .v.rtl { direction: rtl; text-align: right; }
   .m-field .v.wrap { white-space: pre-wrap; line-height: 1.6; }
   /* every photo question, each labelled — QC records carry up to 51 */
@@ -1514,6 +1530,9 @@
       '<div class="v imp-src">' + esc(imp.base_name || "") + (imp.table ? " · " + esc(imp.table) : "") + "</div></div>";
     if (extra._age_given) h += fieldHtml("Age (as given)", extra._age_given);
     answers.forEach(function (a) {
+      // an answer that has been reconciled into a real field is shown as that field,
+      // so skip it here rather than print it twice; the entry stays as provenance
+      if (a && a.moved_to) return;
       if (a && a.value != null && a.value !== "") {
         h += '<div class="m-field full"><div class="k">' + esc(a.label) + '</div><div class="v">' + esc(a.value) + "</div></div>";
       }
@@ -2823,11 +2842,23 @@
     var kcards = customView === "cards";
     var kcont = listEl;
     if (kcards) { kcont = document.createElement("div"); kcont.className = "ja-cards"; listEl.appendChild(kcont); }
+    // The headline score belongs ON the card, not buried in the record: for an
+    // inspection the score IS the record. config.score_field names it (set from the
+    // scoring rules), so any scored table gets this without further wiring.
+    var scoreField = null;
+    var scoreId = currentCustom.table.config && currentCustom.table.config.score_field;
+    if (scoreId) scoreField = fields.filter(function (f) { return f.id === scoreId; })[0] || null;
     rows.forEach(function (s) {
       var d = s.data || {};
       var title = summary.length ? customCellText(summary[0], d) : "—";
-      var parts = summary.slice(1).map(function (f) { return esc(f.label) + ": " + esc(customCellText(f, d)); });
+      var parts = summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; })
+        .map(function (f) { return esc(f.label) + ": " + esc(customCellText(f, d)); });
       parts.push(fmtDate(s.created_at));
+      var scoreHtml = "";
+      if (scoreField) {
+        var sn = scoreFraction(scoreField, customCellText(scoreField, d));
+        if (sn !== null) scoreHtml = scorePillHtml(sn, true);
+      }
       var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
       var moveHtml = "";
       if (stages.length && mayEdit) {
@@ -2840,8 +2871,8 @@
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       var el = document.createElement("div");
-      if (kcards) { el.className = "ja-card" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + tag + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
-      else { el.className = "ja-row" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + tag + '</div><div class="sub">' + parts.join(" · ") + "</div></div><div class=\"row-actions\">" + actions + "</div>"; }
+      if (kcards) { el.className = "ja-card" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + tag + scoreHtml + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
+      else { el.className = "ja-row" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + tag + '</div><div class="sub">' + parts.join(" · ") + "</div></div>" + scoreHtml + "<div class=\"row-actions\">" + actions + "</div>"; }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
@@ -2863,9 +2894,28 @@
     return "pill";
   }
   function hasArabic(s) { return /[؀-ۿ]/.test(String(s || "")); }
+  // ---- Scores ------------------------------------------------------------------
+  // A percentage is stored as a fraction (0.9444) exactly as Airtable stores it, and
+  // shown the way Airtable shows it: 94%. Which fields are percentages and which are
+  // raw points was derived from the data and recorded on the field itself
+  // (options.score_fmt), so this works for every scored table without special cases.
+  function scoreFraction(f, raw) {
+    if (!f || !f.options || f.options.score_fmt !== "percent") return null;
+    var n = parseFloat(raw);
+    return isNaN(n) ? null : n;
+  }
+  function scoreTone(n) {
+    return n >= 0.9 ? "good" : (n >= 0.75 ? "ok" : (n >= 0.5 ? "warn" : "bad"));
+  }
+  function scorePillHtml(n, big) {
+    return '<span class="score-pill ' + scoreTone(n) + (big ? " big" : "") + '">' +
+      Math.round(n * 100) + "%</span>";
+  }
   function cellValueHtml(f, d) {
     var raw = customCellText(f, d, true);
     if (raw == null || String(raw).trim() === "") return '<span class="empty-box"></span>';
+    var pc = scoreFraction(f, raw);
+    if (pc !== null) return scorePillHtml(pc);
     var txt = String(raw);
     if (f.type === "dropdown" || f.type === "yesno") {
       // a multi-select arrives comma-joined; show each choice as its own pill
@@ -2955,6 +3005,8 @@
       return p ? '<img class="cellimg" data-path="' + esc(p) + '" alt="">' : "";
     }
     var txt = customCellText(f, d);
+    var pc = scoreFraction(f, txt);
+    if (pc !== null) return scorePillHtml(pc);
     return esc(txt == null || txt === "" ? "—" : txt);
   }
   function renderCustomGrid(listEl, rows, fields, t) {
@@ -3236,6 +3288,18 @@
     var d = s.data || {}, photoPath = null, photoFieldId = null;
     var body = document.getElementById("modal-body");
     fields.forEach(function (f) { if (f.type === "photo") { if (photoFieldId == null) photoFieldId = f.id; if (d[f.id]) photoPath = d[f.id]; } });
+    // the score belongs at the top of an inspection, not thirty questions down
+    var scoreHead = "";
+    var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
+               currentCustom.table.config.score_field;
+    if (shId) {
+      var shf = fields.filter(function (f) { return f.id === shId; })[0];
+      var shn = shf ? scoreFraction(shf, customCellText(shf, d)) : null;
+      if (shn !== null) {
+        scoreHead = '<div class="score-head">' + scorePillHtml(shn, true) +
+          '<span class="sh-lab">' + esc(shf.label) + "</span></div>";
+      }
+    }
     if (!canEdit(currentCustom && currentCustom.table ? currentCustom.table.id : "")) {
       var grid = "";
       fields.forEach(function (f) {
@@ -3244,7 +3308,7 @@
           esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d) + "</div></div>";
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
-      body.innerHTML = '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
+      body.innerHTML = scoreHead + '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
         '</div><div class="m-grid">' + grid + "</div>" + photoSectionHtml(fields, d) +
         '<div class="chain" id="cd-chain"></div>';
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
@@ -3273,7 +3337,7 @@
       return edRow(label, inner, f.type === "long_text");
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
-    body.innerHTML =
+    body.innerHTML = scoreHead +
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
