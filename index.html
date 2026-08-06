@@ -451,6 +451,28 @@
   .m-field .k { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
   .m-field .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
+  /* ---- record panel: label above, value below, choices as pills ---- */
+  .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+    background: rgba(255,255,255,0.08); color: var(--text); max-width: 100%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  .pill.good { background: #1e7f4a; color: #eafff2; }
+  .pill.bad  { background: #8c2f2f; color: #ffecec; }
+  .pill.warn { background: #7a5b16; color: #fff6e0; }
+  .empty-box { display: inline-block; width: 26px; height: 14px; border-radius: 4px;
+    background: rgba(255,255,255,0.07); }
+  .m-field .v.rtl { direction: rtl; text-align: right; }
+  .m-field .v.wrap { white-space: pre-wrap; line-height: 1.6; }
+  /* every photo question, each labelled — QC records carry up to 51 */
+  .photo-sec { margin-top: 16px; }
+  .photo-sec .ps-head { color: var(--muted); font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 8px; }
+  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+  .photo-cell { display: flex; flex-direction: column; gap: 4px; }
+  .photo-cell img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 10px;
+    background: #20242b; border: 1px solid var(--field-border); cursor: zoom-in; }
+  .photo-cell img:hover { border-color: var(--silver); }
+  .photo-cell .pc-lab { color: var(--muted); font-size: 0.68rem; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   /* ---- Table (grid) view: for wide forms, closer to a spreadsheet ---- */
   .grid-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
   table.grid { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 0.84rem; }
@@ -2640,6 +2662,44 @@
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
     });
   }
+  // ---- Record panel formatting ------------------------------------------------
+  // Choices read as pills, long text keeps its line breaks and flips to RTL for
+  // Arabic, and an unanswered question shows an empty box rather than a dash —
+  // so a 112-field record is scannable instead of a wall of text.
+  var YES_WORDS = /^(yes|نعم|✓|true|ok|good|clean|available|done)/i;
+  var NO_WORDS = /^(no|لا|✗|false|missing|dirty|not )/i;
+  function pillClass(v) {
+    var t = String(v || "").trim();
+    if (YES_WORDS.test(t)) return "pill good";
+    if (NO_WORDS.test(t)) return "pill bad";
+    if (/^(half|partial|sometimes|maybe)/i.test(t)) return "pill warn";
+    return "pill";
+  }
+  function hasArabic(s) { return /[؀-ۿ]/.test(String(s || "")); }
+  function cellValueHtml(f, d) {
+    var raw = customCellText(f, d, true);
+    if (raw == null || String(raw).trim() === "") return '<span class="empty-box"></span>';
+    var txt = String(raw);
+    if (f.type === "dropdown" || f.type === "yesno") {
+      // a multi-select arrives comma-joined; show each choice as its own pill
+      return txt.split(/\s*,\s*/).filter(Boolean).map(function (part) {
+        return '<span class="' + pillClass(part) + '" dir="auto">' + esc(part) + "</span>";
+      }).join(" ");
+    }
+    var cls = (f.type === "long_text" ? "wrap " : "") + (hasArabic(txt) ? "rtl" : "");
+    return '<span class="' + cls.trim() + '" dir="auto">' + esc(txt) + "</span>";
+  }
+  // every photo question that has an answer, labelled, click to enlarge
+  function photoSectionHtml(fields, d) {
+    var shots = fields.filter(function (f) { return f.type === "photo" && d[f.id]; });
+    if (!shots.length) return "";
+    return '<div class="photo-sec"><div class="ps-head">Photos (' + shots.length + ')</div><div class="photo-grid">' +
+      shots.map(function (f) {
+        return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(d[f.id]) +
+          '" alt=""><span class="pc-lab">' + esc(f.label) + "</span></div>";
+      }).join("") + "</div></div>";
+  }
+
   // ---- Table (grid) view -----------------------------------------------------
   // Cards work for a 10-question form; Mystery Shopper has 112 fields, where a
   // spreadsheet is the readable shape. Columns are chosen per table: the admin's
@@ -2991,15 +3051,17 @@
     if (!canEdit(currentCustom && currentCustom.table ? currentCustom.table.id : "")) {
       var grid = "";
       fields.forEach(function (f) {
-        if (f.type === "photo") return;
-        grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' + esc(f.label) + '</div><div class="v">' + esc(customCellText(f, d, true)) + "</div></div>";
+        if (f.type === "photo") return;   // photos get their own labelled gallery below
+        grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' +
+          esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d) + "</div></div>";
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
-      body.innerHTML = (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
-        '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + '</div><div class="m-grid">' + grid + '</div><div class="chain" id="cd-chain"></div>';
+      body.innerHTML = '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
+        '</div><div class="m-grid">' + grid + "</div>" + photoSectionHtml(fields, d) +
+        '<div class="chain" id="cd-chain"></div>';
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
-      document.getElementById("modal").classList.add("open"); wireImportedFiles();
-      if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
+      document.getElementById("modal").classList.add("open");
+      wireImportedFiles();   // resolves every .imp-thumb, including the photo gallery
       return;
     }
     var grid = fields.map(function (f) {
