@@ -1084,7 +1084,14 @@
     if (!path) return Promise.resolve();
     if (STORAGE_MODE === "r2") {
       return sessionToken()
-        .then(function (t) { return r2Post("delete", { path: path }, t); })
+        .then(function (t) {
+          // the generated thumbnail goes with it, or it is orphaned in the bucket
+          // forever; a thumb that was never built simply 404s, which is harmless
+          return Promise.all([
+            r2Post("delete", { path: path }, t),
+            r2Post("delete", { path: "thumbs/" + path }, t).catch(function () {})
+          ]);
+        })
         .then(function () {}, function () {});
     }
     return db.storage.from("photos").remove([path]).then(function () {}, function () {});
@@ -1158,7 +1165,7 @@
         document.getElementById("who-role").textContent = role;
         document.getElementById("pf-name").textContent = nm;
         var av = document.getElementById("pf-avatar"); av.textContent = (nm || "?").charAt(0).toUpperCase();
-        if (res.data && res.data.avatar_path) getPhotoUrl(res.data.avatar_path).then(function (u) { if (u) { av.style.background = "url(" + u + ") center/cover"; av.textContent = ""; } });
+        if (res.data && res.data.avatar_path) getThumbUrl(res.data.avatar_path).then(function (u) { if (u) { av.style.background = "url(" + u + ") center/cover"; av.textContent = ""; } });
         isAdmin = role === "admin";
         document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
         document.getElementById("pf-users").style.display = isAdmin ? "block" : "none";
@@ -1454,6 +1461,37 @@
     if (!signTimer) signTimer = setTimeout(flushSignQueue, 0);
     return signedCache[path];
   }
+  // ---- Thumbnails --------------------------------------------------------------
+  // Cards and grids used to load the full-size original and let CSS shrink it. The
+  // originals are phone photos: 794 KB on average, up to 5.9 MB, so one page of 150
+  // cards pulled well over 100 MB. A generated 400 px thumbnail is ~15 KB.
+  //
+  // Thumbs live at "thumbs/<name>" and are built by a background job, so one may not
+  // exist yet: ask for the thumb, and fall back to the original if it 404s. The probe
+  // also warms the browser cache, so painting it afterwards costs nothing. A missing
+  // thumb is remembered so the same photo is not probed twice.
+  var thumbMissing = {};
+  function probeImage(url) {
+    return new Promise(function (res) {
+      var im = new Image();
+      im.onload = function () { res(true); };
+      im.onerror = function () { res(false); };
+      im.src = url;
+    });
+  }
+  function getThumbUrl(path) {
+    if (!path) return Promise.resolve(null);
+    // only the R2 backend has generated thumbs
+    if (STORAGE_MODE !== "r2" || thumbMissing[path]) return getPhotoUrl(path);
+    return getPhotoUrl("thumbs/" + path).then(function (url) {
+      if (!url) return getPhotoUrl(path);
+      return probeImage(url).then(function (ok) {
+        if (ok) return url;
+        thumbMissing[path] = true;
+        return getPhotoUrl(path);
+      });
+    });
+  }
   function esc(s) {
     return (s == null ? "" : String(s)).replace(/[&<>"]/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
@@ -1520,10 +1558,14 @@
       var p = im.getAttribute("data-path");
       im.removeAttribute("data-path");
       if (!p) return;
-      getPhotoUrl(p).then(function (url) {
+      // the gallery shows the thumbnail; the lightbox opens the full-size original
+      getThumbUrl(p).then(function (url) {
         if (!url) { im.classList.add("dead"); return; }
         im.src = url;
-        im.addEventListener("click", function (e) { e.stopPropagation(); openLightbox(url); });
+      });
+      im.addEventListener("click", function (e) {
+        e.stopPropagation();
+        getPhotoUrl(p).then(function (full) { if (full) openLightbox(full); });
       });
     });
   }
@@ -1750,7 +1792,7 @@
     catch (e) { return d.toLocaleString(); }
   }
   function paintThumb(el, path) {
-    getPhotoUrl(path).then(function (url) { if (url) { el.style.background = "url(" + url + ") center/cover"; el.textContent = ""; } });
+    getThumbUrl(path).then(function (url) { if (url) { el.style.background = "url(" + url + ") center/cover"; el.textContent = ""; } });
   }
   var thumbObserver = ("IntersectionObserver" in window) ? new IntersectionObserver(function (entries) {
     entries.forEach(function (en) {
@@ -2956,10 +2998,11 @@
     });
     listEl.querySelectorAll("img.cellimg[data-path]").forEach(function (im) {
       var p = im.getAttribute("data-path"); im.removeAttribute("data-path");
-      getPhotoUrl(p).then(function (u) {
-        if (!u) return;
-        im.src = u;
-        im.addEventListener("click", function (e) { e.stopPropagation(); openLightbox(u); });
+      // grid cell: thumbnail in the cell, original in the lightbox
+      getThumbUrl(p).then(function (u) { if (u) im.src = u; });
+      im.addEventListener("click", function (e) {
+        e.stopPropagation();
+        getPhotoUrl(p).then(function (full) { if (full) openLightbox(full); });
       });
     });
   }
@@ -3998,7 +4041,7 @@
           '<div class="row-actions"><div class="card-actions"><button class="btn-view u-edit">Edit</button>' + (me ? "" : '<button class="btn-del u-del">Delete</button>') + "</div></div>";
         row.querySelector(".u-edit").addEventListener("click", function () { openUserModal(p, access); });
         var dl = row.querySelector(".u-del"); if (dl) dl.addEventListener("click", function () { deleteUser(p); });
-        if (p.avatar_path) { var th = row.querySelector(".ja-thumb"); getPhotoUrl(p.avatar_path).then(function (url) { if (url && th) { th.style.background = "url(" + url + ") center/cover"; th.textContent = ""; } }); }
+        if (p.avatar_path) { var th = row.querySelector(".ja-thumb"); getThumbUrl(p.avatar_path).then(function (url) { if (url && th) { th.style.background = "url(" + url + ") center/cover"; th.textContent = ""; } }); }
         listEl.appendChild(row);
       });
     });
@@ -4008,7 +4051,7 @@
     uPhotoFile = null; document.getElementById("u-photo").value = "";
     var pv = document.getElementById("u-photo-preview"); pv.style.background = "#20242b"; pv.textContent = "👤";
     document.getElementById("u-name").value = user ? (user.full_name || "") : "";
-    if (user && user.avatar_path) getPhotoUrl(user.avatar_path).then(function (url) { if (url) { pv.style.background = "url(" + url + ") center/cover"; pv.textContent = ""; } });
+    if (user && user.avatar_path) getThumbUrl(user.avatar_path).then(function (url) { if (url) { pv.style.background = "url(" + url + ") center/cover"; pv.textContent = ""; } });
     document.getElementById("u-title").textContent = user ? "Edit user" : "New user";
     document.getElementById("u-email").value = user ? (user.email || "") : "";
     document.getElementById("u-pass").value = "";
