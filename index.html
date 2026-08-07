@@ -3355,9 +3355,15 @@
           '<span class="sh-lab">' + esc(shf.label) + "</span></div>";
       }
     }
+    // A record shows the questions the form asks today — the same list Airtable shows.
+    // Retired questions from older versions of the form are kept (their answers are
+    // real history) but only appear on the records that actually answered them;
+    // otherwise every record repeats each question once per wording it ever had.
+    function showsOn(f, d) { return !f.internal || (d[f.id] != null && d[f.id] !== ""); }
     if (!canEdit(currentCustom && currentCustom.table ? currentCustom.table.id : "")) {
       var grid = "";
       fields.forEach(function (f) {
+        if (!showsOn(f, d)) return;
         if (f.type === "photo") return;   // photos get their own labelled gallery below
         grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' +
           esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d) + "</div></div>";
@@ -3373,6 +3379,7 @@
     }
     var grid = fields.map(function (f) {
       if (f.type === "photo") return "";
+      if (!showsOn(f, d)) return "";      // a retired question this record never answered
       var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
       if (f.type === "long_text") inner = edText(id, v, true);
       else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
