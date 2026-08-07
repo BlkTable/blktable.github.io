@@ -495,6 +495,8 @@
   .link-chip[disabled] { opacity: 0.5; cursor: default; }
   .link-chip.flat { background: rgba(255,255,255,0.07); border-color: var(--line); color: var(--silver); cursor: default; }
   .link-chip .lk { opacity: 0.65; font-size: 0.75rem; }
+  .side-archive { opacity: 0.55; margin-top: 6px; border-top: 1px solid var(--line); border-radius: 0; }
+  .side-archive:hover { opacity: 1; }
   .grid th .sort sup { font-size: 0.62rem; margin-left: 1px; opacity: 0.8; }
   /* grouped rows and the summary line under the grid */
   .grid tr.grp td { background: rgba(255,255,255,0.06); font-weight: 800; letter-spacing: 0.2px;
@@ -2483,6 +2485,8 @@
     { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "email", label: "Email" }
   ];
   var customTables = [];
+  // archived tables are excluded from the sidebar and Home until this is switched on
+  var showArchived = false;
   var currentCustom = null;
   // ---- Shared custom-field semantics (every table, current + future) ----
   // A dropdown choice flagged {other:true} opens a free-text box on the public form; that answer is
@@ -2615,7 +2619,17 @@
   function loadCustomTables() {
     db.from("app_tables").select("*").order("created_at", { ascending: true }).then(function (res) {
       if (res.error) return;
-      customTables = (res.data || []).filter(function (t) { return !t.builtin_key; }); // hide built-in placeholders
+      // Archived tables are imported history nobody needs in front of them every day —
+      // dead Airtable bases, handover sheets, wastage. They keep their data, stay
+      // searchable and queryable, and come back the moment the toggle is on or the flag
+      // is cleared. Nothing is deleted to achieve this.
+      customTables = (res.data || []).filter(function (t) {
+        if (t.builtin_key) return false;                     // built-in placeholders
+        return showArchived || !(t.config && t.config.archived);
+      });
+      var hiddenCount = (res.data || []).filter(function (t) {
+        return !t.builtin_key && t.config && t.config.archived;
+      }).length;
       var slot = document.getElementById("custom-tables-slot");
       slot.innerHTML = "";
       function sideItem(t) {
@@ -2645,6 +2659,15 @@
         g.items.forEach(function (t) { wrap.appendChild(sideItem(t)); });
         slot.appendChild(head); slot.appendChild(wrap);
       });
+      // one quiet line at the foot of the list, only when something is actually archived
+      if (hiddenCount || showArchived) {
+        var tog = document.createElement("button");
+        tog.className = "side-item side-archive";
+        tog.innerHTML = '<span class="side-label">' + (showArchived ? "Hide archived" : "Archived") +
+          '</span><span class="side-cat-n">' + hiddenCount + "</span>";
+        tog.addEventListener("click", function () { showArchived = !showArchived; loadCustomTables(); });
+        slot.appendChild(tog);
+      }
       ensureDefaultView();
     });
   }
