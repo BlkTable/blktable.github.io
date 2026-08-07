@@ -495,6 +495,7 @@
   .link-chip[disabled] { opacity: 0.5; cursor: default; }
   .link-chip.flat { background: rgba(255,255,255,0.07); border-color: var(--line); color: var(--silver); cursor: default; }
   .link-chip .lk { opacity: 0.65; font-size: 0.75rem; }
+  .grid th .sort sup { font-size: 0.62rem; margin-left: 1px; opacity: 0.8; }
   /* grouped rows and the summary line under the grid */
   .grid tr.grp td { background: rgba(255,255,255,0.06); font-weight: 800; letter-spacing: 0.2px;
     position: sticky; left: 0; padding: 9px 12px; border-top: 1px solid var(--line); }
@@ -2811,7 +2812,7 @@
     });
     currentCustom.branch = c.branch || null;
     if (c.columns) { try { localStorage.setItem(colsKey(currentCustom.table), JSON.stringify(c.columns)); } catch (e) {} }
-    customSort = c.sort || { id: null, dir: 1 };
+    customSort = normSort(c.sort);
     if (currentCustom.fv && c.filter) currentCustom.fv.state = c.filter;
     document.getElementById("custom-search").value = "";
     loadCustomSubs();
@@ -3034,7 +3035,35 @@
   // spreadsheet is the readable shape. Columns are chosen per table: the admin's
   // saved default (config.table_columns) or your own local choice, so nobody has
   // to scroll past 112 columns to find a score.
-  var customSort = { id: null, dir: 1 };
+  // Sorting is a list, not one column: Airtable sorts by a field, then another to break
+  // ties. Saved views written before this held a single {id,dir}, so both shapes are
+  // accepted and normalised here rather than migrating the stored views.
+  var customSort = [];
+  function normSort(s) {
+    if (!s) return [];
+    if (Array.isArray(s)) return s.filter(function (x) { return x && x.id; });
+    return s.id ? [{ id: s.id, dir: s.dir || 1 }] : [];
+  }
+  function sortValue(c, s) {
+    if (!c) return "";
+    if (c.id === "__created") return s.created_at || "";
+    if (c.id === "__branch") return s.branch || "";
+    return customCellText(c, s.data || {});
+  }
+  function compareRows(a, b, cols) {
+    for (var i = 0; i < customSort.length; i++) {
+      var rule = customSort[i];
+      var c = cols.filter(function (x) { return x.id === rule.id; })[0];
+      var av = sortValue(c, a), bv = sortValue(c, b);
+      var an = parseFloat(String(av).replace(/[^0-9.\-]/g, ""));
+      var bn = parseFloat(String(bv).replace(/[^0-9.\-]/g, ""));
+      var d;
+      if (!isNaN(an) && !isNaN(bn) && /\d/.test(String(av)) && /\d/.test(String(bv))) d = an - bn;
+      else d = String(av).localeCompare(String(bv));
+      if (d) return d * (rule.dir || 1);
+    }
+    return 0;
+  }
   function colsKey(t) { return "blk_cols_" + t.id; }
   function customCols(t, fields) {
     var saved = null;
@@ -3192,27 +3221,25 @@
   }
   function renderCustomGrid(listEl, rows, fields, t) {
     var cols = customCols(t, fields);
-    if (customSort.id) {
-      var sf = cols.filter(function (c) { return c.id === customSort.id; })[0];
-      rows = rows.slice().sort(function (a, b) {
-        var av = sf ? customCellText(sf, a.data || {}) : "", bv = sf ? customCellText(sf, b.data || {}) : "";
-        if (customSort.id === "__created") { av = a.created_at; bv = b.created_at; }
-        if (customSort.id === "__branch") { av = a.branch || ""; bv = b.branch || ""; }
-        var an = parseFloat(String(av).replace(/[^0-9.\-]/g, "")), bn = parseFloat(String(bv).replace(/[^0-9.\-]/g, ""));
-        if (!isNaN(an) && !isNaN(bn) && String(av).match(/\d/) && String(bv).match(/\d/)) return (an - bn) * customSort.dir;
-        return String(av).localeCompare(String(bv)) * customSort.dir;
-      });
-    }
     var allCols = [{ id: "__branch", label: "Branch", type: "short_text" }].concat(cols,
       [{ id: "__created", label: "Submitted", type: "date" }]);
+    if (customSort.length) {
+      rows = rows.slice().sort(function (a, b) { return compareRows(a, b, allCols); });
+    }
     var gcol = customGroup.id
       ? allCols.filter(function (c) { return c.id === customGroup.id; })[0] : null;
     var groups = groupRows(rows, gcol);
     var ordered = groups.reduce(function (acc, g) { return acc.concat(g.rows); }, []);
     var html = '<div class="grid-wrap"><table class="grid"><thead><tr>' +
       allCols.map(function (c, i) {
-        var arrow = customSort.id === c.id ? (customSort.dir > 0 ? "▲" : "▼") : "";
-        return "<th" + (i === 0 ? ' class="pin"' : "") + ' data-c="' + esc(c.id) + '">' + esc(c.label) +
+        var si = -1;
+        for (var k = 0; k < customSort.length; k++) if (customSort[k].id === c.id) si = k;
+        // the number appears only when more than one column is sorting, so a single
+        // sort still reads as a plain arrow
+        var arrow = si === -1 ? "" : ((customSort[si].dir > 0 ? "▲" : "▼") +
+          (customSort.length > 1 ? '<sup>' + (si + 1) + '</sup>' : ""));
+        return "<th" + (i === 0 ? ' class="pin"' : "") + ' data-c="' + esc(c.id) + '"' +
+          ' title="Click to sort · Shift-click to sort by this as well">' + esc(c.label) +
           ' <span class="sort">' + arrow + "</span></th>";
       }).join("") + "</tr></thead><tbody>" +
       groups.map(function (g) {
@@ -3235,10 +3262,21 @@
       }).join("") + "</tr></tfoot></table></div>";
     listEl.innerHTML = html;
     listEl.querySelectorAll("thead th[data-c]").forEach(function (th) {
-      th.addEventListener("click", function () {
+      th.addEventListener("click", function (ev) {
         var id = th.getAttribute("data-c");
-        if (customSort.id === id) customSort.dir = -customSort.dir;
-        else { customSort.id = id; customSort.dir = 1; }
+        // click sorts by this column alone; shift-click adds it as a tie-breaker after
+        // the columns already sorting, which is how a spreadsheet is expected to behave
+        var at = -1;
+        for (var k = 0; k < customSort.length; k++) if (customSort[k].id === id) at = k;
+        if (ev && ev.shiftKey) {
+          if (at === -1) customSort.push({ id: id, dir: 1 });
+          else if (customSort[at].dir > 0) customSort[at].dir = -1;
+          else customSort.splice(at, 1);          // third shift-click drops it again
+        } else if (at !== -1 && customSort.length === 1) {
+          customSort[0].dir = -customSort[0].dir;
+        } else {
+          customSort = [{ id: id, dir: 1 }];
+        }
         renderCustom();
       });
     });
