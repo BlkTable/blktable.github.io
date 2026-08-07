@@ -487,6 +487,7 @@
   .ed-chk:hover { background: rgba(255,255,255,0.05); }
   .ed-chk input { width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--silver); margin: 0; }
   .ed-chk.retired { color: var(--muted); font-style: italic; }
+  .more-line { margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; }
   .score-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
   .score-head .sh-lab { color: var(--muted); font-size: 0.8rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.4px; }
@@ -3339,7 +3340,11 @@
   var castingFV = makeFilterView({ key: "casting", getFields: castingFilterFields, records: function () { return castingRows; }, getVal: builtinGetVal, rerender: function () { renderCasting(); }, panelId: "casting-filter-panel", btnId: "casting-filter-btn", wrapId: "casting-filter-wrap" });
   wireFilterToggle(jobFV);
   wireFilterToggle(castingFV);
+  // "show every answer" state. Reset when a different record is opened, so each record
+  // starts clean, but kept when this same record re-renders after the toggle.
+  var detailShowAll = false, detailShowAllFor = null;
   function openCustomDetail(s, fields) {
+    if (detailShowAllFor !== s.id) { detailShowAll = false; detailShowAllFor = s.id; }
     var d = s.data || {}, photoPath = null, photoFieldId = null;
     var body = document.getElementById("modal-body");
     fields.forEach(function (f) { if (f.type === "photo") { if (photoFieldId == null) photoFieldId = f.id; if (d[f.id]) photoPath = d[f.id]; } });
@@ -3359,10 +3364,54 @@
     // Retired questions from older versions of the form are kept (their answers are
     // real history) but only appear on the records that actually answered them;
     // otherwise every record repeats each question once per wording it ever had.
-    function showsOn(f, d) { return !f.internal || (d[f.id] != null && d[f.id] !== ""); }
+    //
+    // A table can also name the handful of questions worth reading at a glance
+    // (config.detail_fields), the way an Airtable view shows a curated set rather than
+    // all 177 questions. Nothing is lost when it does: everything else moves behind a
+    // "show every answer" line at the foot of the record.
+    var pickedIds = (currentCustom && currentCustom.table && currentCustom.table.config
+                     && currentCustom.table.config.detail_fields) || null;
+    var curated = !!(pickedIds && pickedIds.length) && !detailShowAll;
+    function showsOn(f, d) {
+      if (curated) return pickedIds.indexOf(f.id) !== -1;
+      return !f.internal || (d[f.id] != null && d[f.id] !== "");
+    }
+    function detailOrder(list) {
+      if (!curated) return list;
+      // follow the chosen order, not the form's
+      return list.slice().sort(function (a, b) {
+        return pickedIds.indexOf(a.id) - pickedIds.indexOf(b.id);
+      });
+    }
+    function hiddenCount(d) {
+      if (!curated) return 0;
+      return fields.filter(function (f) {
+        return pickedIds.indexOf(f.id) === -1 && d[f.id] != null && d[f.id] !== "";
+      }).length;
+    }
+    // Nothing a record answered is ever unreachable: whatever the curated list leaves
+    // out sits behind one line at the foot of the record.
+    function moreLineHtml(dd) {
+      if (!pickedIds || !pickedIds.length) return "";
+      if (detailShowAll) {
+        return '<div class="more-line"><button type="button" class="linkbtn" id="cd-more">Show only the key questions</button></div>';
+      }
+      var n = hiddenCount(dd);
+      if (!n) return "";
+      return '<div class="more-line"><button type="button" class="linkbtn" id="cd-more">Show every answer (' +
+        n + ' more)</button></div>';
+    }
+    function wireMoreLine(rec, flds) {
+      var b = document.getElementById("cd-more");
+      if (!b) return;
+      b.addEventListener("click", function () {
+        detailShowAll = !detailShowAll;
+        openCustomDetail(rec, flds);
+      });
+    }
     if (!canEdit(currentCustom && currentCustom.table ? currentCustom.table.id : "")) {
       var grid = "";
-      fields.forEach(function (f) {
+      detailOrder(fields).forEach(function (f) {
         if (!showsOn(f, d)) return;
         if (f.type === "photo") return;   // photos get their own labelled gallery below
         grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' +
@@ -3371,13 +3420,14 @@
       grid += importedBlockHtml(s.extra) + fpMeta(s);
       body.innerHTML = scoreHead + '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
         '</div><div class="m-grid">' + grid + "</div>" + photoSectionHtml(fields, d) +
-        '<div class="chain" id="cd-chain"></div>';
+        moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
+      wireMoreLine(s, fields);
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
       document.getElementById("modal").classList.add("open");
       wireImportedFiles();   // resolves every .imp-thumb, including the photo gallery
       return;
     }
-    var grid = fields.map(function (f) {
+    var grid = detailOrder(fields).map(function (f) {
       if (f.type === "photo") return "";
       if (!showsOn(f, d)) return "";      // a retired question this record never answered
       var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
@@ -3405,7 +3455,9 @@
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" +
+      moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
+    wireMoreLine(s, fields);
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
     // show/hide the "other" free-text box as the choice changes
     fields.forEach(function (f) {
