@@ -487,6 +487,14 @@
   .ed-chk:hover { background: rgba(255,255,255,0.05); }
   .ed-chk input { width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--silver); margin: 0; }
   .ed-chk.retired { color: var(--muted); font-style: italic; }
+  /* a link to another record, the way Airtable shows one */
+  .link-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+    background: rgba(120,170,255,0.14); border: 1px solid rgba(120,170,255,0.35);
+    color: #cfe0ff; font: inherit; font-size: 0.82rem; font-weight: 650; }
+  .link-chip:hover { background: rgba(120,170,255,0.26); }
+  .link-chip[disabled] { opacity: 0.5; cursor: default; }
+  .link-chip.flat { background: rgba(255,255,255,0.07); border-color: var(--line); color: var(--silver); cursor: default; }
+  .link-chip .lk { opacity: 0.65; font-size: 0.75rem; }
   .more-line { margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; }
   .score-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
   .score-head .sh-lab { color: var(--muted); font-size: 0.8rem; font-weight: 700;
@@ -2960,11 +2968,22 @@
     return '<span class="score-pill ' + scoreTone(n) + (big ? " big" : "") + '">' +
       Math.round(n * 100) + "%</span>";
   }
-  function cellValueHtml(f, d) {
+  function cellValueHtml(f, d, s) {
     var raw = customCellText(f, d, true);
     if (raw == null || String(raw).trim() === "") return '<span class="empty-box"></span>';
     var pc = scoreFraction(f, raw);
     if (pc !== null) return scorePillHtml(pc);
+    // A link shows what Airtable shows — the linked record's own name — and opens it.
+    // The row ids it points at are kept in extra._links, one per name, in order.
+    if (f.type === "link") {
+      var tgt = (s && s.extra && s.extra._links && s.extra._links[f.id]) || [];
+      return splitMulti(raw).map(function (part, i) {
+        return tgt[i]
+          ? '<button type="button" class="link-chip" data-open="' + esc(tgt[i]) + '">' +
+            esc(part) + ' <span class="lk">↗</span></button>'
+          : '<span class="link-chip flat">' + esc(part) + "</span>";
+      }).join(" ");
+    }
     var txt = String(raw);
     if (isChoiceField(f) || f.type === "yesno") {
       // a multi-select arrives comma-joined; show each choice as its own pill
@@ -3409,19 +3428,49 @@
         openCustomDetail(rec, flds);
       });
     }
+    // Follow a link to the record it names, wherever that record lives. The target may
+    // be in a table this user cannot open — RLS decides, and a refusal is said plainly
+    // rather than left as a modal that never fills in.
+    function wireLinkChips() {
+      [].slice.call(document.querySelectorAll(".link-chip[data-open]")).forEach(function (b) {
+        b.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var id = b.getAttribute("data-open");
+          b.disabled = true;
+          db.from("app_submissions").select("*").eq("id", id).limit(1)
+            .then(function (r) {
+              var row = r.data && r.data[0];
+              if (!row) { b.disabled = false; window.alert("That linked record is not available to you."); return; }
+              return db.from("app_fields").select("*").eq("table_id", row.table_id)
+                .order("position", { ascending: true })
+                .then(function (fr) {
+                  return db.from("app_tables").select("*").eq("id", row.table_id).limit(1)
+                    .then(function (tr) {
+                      var t = tr.data && tr.data[0];
+                      if (!t) { b.disabled = false; return; }
+                      // switch the open table context so the panel reads the right config
+                      currentCustom = { table: t, fields: fr.data || [], subs: [], branch: null };
+                      openCustomDetail(row, fr.data || []);
+                    });
+                });
+            })
+            .catch(function () { b.disabled = false; });
+        });
+      });
+    }
     if (!canEdit(currentCustom && currentCustom.table ? currentCustom.table.id : "")) {
       var grid = "";
       detailOrder(fields).forEach(function (f) {
         if (!showsOn(f, d)) return;
         if (f.type === "photo") return;   // photos get their own labelled gallery below
         grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' +
-          esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d) + "</div></div>";
+          esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d, s) + "</div></div>";
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
       body.innerHTML = scoreHead + '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
         '</div><div class="m-grid">' + grid + "</div>" + photoSectionHtml(fields, d) +
         moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
-      wireMoreLine(s, fields);
+      wireMoreLine(s, fields); wireLinkChips();
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
       document.getElementById("modal").classList.add("open");
       wireImportedFiles();   // resolves every .imp-thumb, including the photo gallery
@@ -3457,7 +3506,7 @@
       '<div class="m-grid">' + grid + "</div>" +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
-    wireMoreLine(s, fields);
+    wireMoreLine(s, fields); wireLinkChips();
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
     // show/hide the "other" free-text box as the choice changes
     fields.forEach(function (f) {
