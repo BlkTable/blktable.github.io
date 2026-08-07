@@ -479,6 +479,14 @@
   .ja-card .name .score-pill.big { margin-left: 8px; vertical-align: middle; }
   /* in the compact row layout the score sits at the right edge, aligned down the list */
   .ja-row > .score-pill.big { margin-left: auto; flex: 0 0 auto; align-self: center; }
+  /* multi-select editor in the record panel */
+  .ed-checks { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line);
+    border-radius: 9px; padding: 5px; background: rgba(255,255,255,0.03); max-height: 230px; overflow-y: auto; }
+  .ed-chk { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 7px;
+    cursor: pointer; font-size: 0.87rem; }
+  .ed-chk:hover { background: rgba(255,255,255,0.05); }
+  .ed-chk input { width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--silver); margin: 0; }
+  .ed-chk.retired { color: var(--muted); font-style: italic; }
   .score-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
   .score-head .sh-lab { color: var(--muted); font-size: 0.8rem; font-weight: 700;
     text-transform: uppercase; letter-spacing: 0.4px; }
@@ -1943,7 +1951,36 @@
   function edText(id, value, multiline) { var v = value == null ? "" : value; return multiline ? '<textarea id="' + id + '" class="ed-in">' + esc(v) + "</textarea>" : '<input id="' + id + '" class="ed-in" value="' + esc(v) + '">'; }
   function edDate(id, value) { return '<input type="date" id="' + id + '" class="ed-in" value="' + esc(value == null ? "" : value) + '">'; }
   function edNum(id, value) { return '<input type="number" id="' + id + '" class="ed-in" value="' + esc(value == null ? "" : value) + '">'; }
+  // Multi-select editor: Airtable lets several choices be picked, so a single <select>
+  // cannot represent the answer. Any recorded value that is no longer an offered choice
+  // is listed too, ticked, so editing a record never silently drops part of its answer.
+  function edChecks(id, value, choices) {
+    var picked = splitMulti(value);
+    var all = choices.slice();
+    picked.forEach(function (p) { if (all.indexOf(p) === -1) all.push(p); });
+    return '<div class="ed-checks" id="' + id + '">' + all.map(function (c, i) {
+      var on = picked.indexOf(c) !== -1;
+      var gone = choices.indexOf(c) === -1;
+      return '<label class="ed-chk' + (gone ? " retired" : "") + '">' +
+        '<input type="checkbox" value="' + esc(c) + '"' + (on ? " checked" : "") + '> ' +
+        esc(c) + (gone ? " (as recorded)" : "") + "</label>";
+    }).join("") + "</div>";
+  }
+  function edChecksValue(el) {
+    return [].slice.call(el.querySelectorAll("input:checked"))
+      .map(function (i) { return i.value; }).join(", ");
+  }
+  // A stored answer that is not one of today's choices must still be offered, or the
+  // browser silently selects the first option and saving rewrites the answer. Older
+  // records legitimately hold retired choices, and a multi-select holds several joined
+  // by commas — neither is in the option list, and neither may be destroyed by opening
+  // a record and pressing save.
   function edSelect(id, value, opts) {
+    var v = value == null ? "" : String(value);
+    var known = opts.some(function (o) {
+      return String(typeof o === "object" ? o.v : o) === v;
+    });
+    if (v !== "" && !known) opts = [{ v: v, l: v + "  (as recorded)" }].concat(opts);
     return '<select id="' + id + '" class="ed-in">' + opts.map(function (o) {
       var v = typeof o === "object" ? o.v : o, l = typeof o === "object" ? o.l : (o === "" ? "—" : o);
       return '<option value="' + esc(v) + '"' + (String(value == null ? "" : value) === String(v) ? " selected" : "") + ">" + esc(l) + "</option>";
@@ -2422,7 +2459,7 @@
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
     { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
-    { v: "dropdown", label: "Dropdown" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "email", label: "Email" }
+    { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "email", label: "Email" }
   ];
   var customTables = [];
   var currentCustom = null;
@@ -2430,9 +2467,20 @@
   // A dropdown choice flagged {other:true} opens a free-text box on the public form; that answer is
   // stored next to the choice under "<fieldId>__other". A "dob" field stores a date but reads as an age.
   function otherKeyFor(f) { return f.id + "__other"; }
-  function fieldHasOther(f) { return f.type === "dropdown" && (f.options || []).some(function (o) { return o && o.other; }); }
+  // Airtable's multi-select: same choice list, but an answer may hold several of them,
+  // stored comma-joined exactly as Airtable stores it. Everywhere a dropdown is
+  // special-cased, a multi_select behaves the same way unless stated otherwise.
+  function isChoiceField(f) { return f && (f.type === "dropdown" || f.type === "multi_select"); }
+  function choiceList(f) {
+    return (f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })
+      .filter(function (x) { return x != null && x !== ""; });
+  }
+  function splitMulti(v) {
+    return String(v == null ? "" : v).split(/\s*,\s*/).filter(Boolean);
+  }
+  function fieldHasOther(f) { return isChoiceField(f) && (f.options || []).some(function (o) { return o && o.other; }); }
   function isOtherChoice(f, v) {
-    if (!v || f.type !== "dropdown") return false;
+    if (!v || !isChoiceField(f)) return false;
     return (f.options || []).some(function (o) { return o && o.other && String(o.en != null ? o.en : o) === String(v); });
   }
   function customCellText(f, d, long) {
@@ -2917,7 +2965,7 @@
     var pc = scoreFraction(f, raw);
     if (pc !== null) return scorePillHtml(pc);
     var txt = String(raw);
-    if (f.type === "dropdown" || f.type === "yesno") {
+    if (isChoiceField(f) || f.type === "yesno") {
       // a multi-select arrives comma-joined; show each choice as its own pill
       return txt.split(/\s*,\s*/).filter(Boolean).map(function (part) {
         return '<span class="' + pillClass(part) + '" dir="auto">' + esc(part) + "</span>";
@@ -3007,7 +3055,14 @@
     var txt = customCellText(f, d);
     var pc = scoreFraction(f, txt);
     if (pc !== null) return scorePillHtml(pc);
-    return esc(txt == null || txt === "" ? "—" : txt);
+    if (txt == null || txt === "") return "—";
+    // choices read as pills in the grid, the way they do in Airtable and in the record
+    if (isChoiceField(f) || f.type === "yesno") {
+      return splitMulti(txt).map(function (part) {
+        return '<span class="' + pillClass(part) + '" dir="auto">' + esc(part) + "</span>";
+      }).join(" ");
+    }
+    return esc(txt);
   }
   function renderCustomGrid(listEl, rows, fields, t) {
     var cols = customCols(t, fields);
@@ -3076,12 +3131,12 @@
     if (type === "number") return [["eq", "="], ["neq", "≠"], ["lt", "<"], ["lte", "≤"], ["gt", ">"], ["gte", "≥"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
     if (type === "date") return [["is", "is"], ["before", "is before"], ["after", "is after"], ["onBefore", "is on or before"], ["onAfter", "is on or after"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
     if (type === "yesno") return [["is", "is"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
-    if (type === "dropdown") return [["is", "is"], ["isNot", "is not"], ["anyOf", "is any of"], ["noneOf", "is none of"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
+    if (type === "dropdown" || type === "multi_select") return [["is", "is"], ["isNot", "is not"], ["anyOf", "is any of"], ["noneOf", "is none of"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
     return [["contains", "contains"], ["notContains", "does not contain"], ["is", "is"], ["isNot", "is not"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
   }
   function valueKind(type, op) {
     if (op === "empty" || op === "notEmpty") return "none";
-    if (type === "dropdown") return (op === "anyOf" || op === "noneOf") ? "multi" : "select";
+    if (type === "dropdown" || type === "multi_select") return (op === "anyOf" || op === "noneOf") ? "multi" : "select";
     if (type === "yesno") return "yesno";
     if (type === "number") return "number";
     if (type === "date") return "date";
@@ -3321,8 +3376,9 @@
       var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
       if (f.type === "long_text") inner = edText(id, v, true);
       else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
+      else if (f.type === "multi_select") inner = edChecks(id, v, choiceList(f));
       else if (f.type === "dropdown") {
-        inner = edSelect(id, v, [""].concat((f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })));
+        inner = edSelect(id, v, [""].concat(choiceList(f)));
         if (fieldHasOther(f)) {
           var ov = d[otherKeyFor(f)];
           inner += '<input id="' + id + '__other" class="ed-in" placeholder="If other — what?" value="' + esc(ov == null ? "" : ov) +
@@ -3372,7 +3428,11 @@
       if (f.type === "photo") return;
       var v;
       if (f.type === "phone" && edPhoneReg["ed-" + f.id]) v = edPhoneReg["ed-" + f.id]();
-      else { var el = document.getElementById("ed-" + f.id); if (!el) return; v = (el.value || "").trim(); }
+      else {
+        var el = document.getElementById("ed-" + f.id); if (!el) return;
+        // a multi-select is a box of checkboxes, not an input with a value
+        v = f.type === "multi_select" ? edChecksValue(el) : (el.value || "").trim();
+      }
       if (v == null || v === "") delete nd[f.id]; else nd[f.id] = v;
     });
     // the free text behind an "other" choice — dropped when the choice moves off "other"
@@ -3711,12 +3771,12 @@
       row.querySelector(".lab-ar").value = data.labelAr || "";
       var sel = row.querySelector(".ftype"); if (data.type) sel.value = data.type;
       var optsInp = row.querySelector(".opts");
-      optsInp.style.display = sel.value === "dropdown" ? "" : "none";
+      optsInp.style.display = (sel.value === "dropdown" || sel.value === "multi_select") ? "" : "none";
       optsInp.value = data.opts || "";
       row.querySelector(".freq").checked = data.required !== false;
       row.querySelector(".fint").checked = !!data.internal;
     }
-    row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = this.value === "dropdown" ? "" : "none"; bldGrow(row.querySelector(".opts")); });
+    row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = (this.value === "dropdown" || this.value === "multi_select") ? "" : "none"; bldGrow(row.querySelector(".opts")); });
     [].slice.call(row.querySelectorAll("textarea")).forEach(wireBldGrow);
     row.querySelector(".rm").addEventListener("click", function () { row.remove(); saveDraft(); });
     var handle = row.querySelector(".bld-drag");
@@ -3970,9 +4030,9 @@
       if (!lab) { msg.textContent = "Every field needs an English label."; return; }
       var type = rows[i].querySelector(".ftype").value;
       var options = null;
-      if (type === "dropdown") {
+      if (type === "dropdown" || type === "multi_select") {
         var raw = rows[i].querySelector(".opts").value.trim();
-        if (!raw) { msg.textContent = "Dropdown fields need options."; return; }
+        if (!raw) { msg.textContent = "Choice fields need options."; return; }
         options = raw.split(/[\r\n,]+/).map(function (p) {
           var kv = p.split("|");
           var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };

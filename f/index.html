@@ -44,6 +44,14 @@
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   input.invalid, select.invalid, textarea.invalid { border-color: #ff6b6b !important; box-shadow: 0 0 0 3px rgba(255,107,107,0.16) !important; }
+  /* multi-select: tick as many as apply */
+  .checks { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line);
+    border-radius: 10px; padding: 6px; background: var(--card); }
+  .checks.invalid { border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,0.16); }
+  .chk { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px;
+    cursor: pointer; font-size: 0.95rem; line-height: 1.35; }
+  .chk:hover { background: rgba(255,255,255,0.05); }
+  .chk input { width: 17px; height: 17px; flex: 0 0 auto; accent-color: var(--silver); margin: 0; }
   /* searchable dropdown (combobox) */
   .combo { position: relative; }
   .combo-input { padding-right: 34px;
@@ -244,6 +252,32 @@
       if (isDate) inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
       if (f.type === "dob") inp.max = new Date().toISOString().slice(0, 10);   // a birth date can't be in the future
       controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; } });
+    } else if (f.type === "multi_select") {
+      // Airtable's multi-select: tick as many as apply. The answer is stored comma-
+      // joined, exactly the way Airtable stores it, so old and new records read alike.
+      var box = document.createElement("div");
+      box.className = "checks"; box.id = id;
+      (f.options || []).forEach(function (o) {
+        var v = typeof o === "string" ? o : o.en;
+        var arv = typeof o === "string" ? "" : (o.ar || "");
+        var l = document.createElement("label");
+        l.className = "chk";
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.value = v;
+        l.appendChild(cb);
+        l.appendChild(document.createTextNode(" " + v + (arv ? " / " + arv : "")));
+        box.appendChild(l);
+      });
+      wrap.appendChild(box);
+      var picked = function () {
+        return [].slice.call(box.querySelectorAll("input:checked"))
+          .map(function (i) { return i.value; });
+      };
+      controls.push({
+        f: f, el: box,
+        validate: function () { return !f.required || picked().length > 0; },
+        value: function () { return picked().join(", ") || null; }
+      });
     } else if (f.type === "dropdown") {
       var otherVals = {};
       var dopts = (f.options || []).map(function (o) {
