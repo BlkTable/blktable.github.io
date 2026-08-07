@@ -495,6 +495,12 @@
   .link-chip[disabled] { opacity: 0.5; cursor: default; }
   .link-chip.flat { background: rgba(255,255,255,0.07); border-color: var(--line); color: var(--silver); cursor: default; }
   .link-chip .lk { opacity: 0.65; font-size: 0.75rem; }
+  /* grouped rows and the summary line under the grid */
+  .grid tr.grp td { background: rgba(255,255,255,0.06); font-weight: 800; letter-spacing: 0.2px;
+    position: sticky; left: 0; padding: 9px 12px; border-top: 1px solid var(--line); }
+  .grid tr.grp .n { color: var(--muted); font-weight: 700; margin-left: 8px; font-size: 0.78rem; }
+  .grid tfoot td { position: sticky; bottom: 0; background: var(--bg-top); color: var(--muted);
+    font-size: 0.78rem; font-weight: 700; border-top: 1px solid var(--silver-lo); white-space: nowrap; }
   .more-line { margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; }
   .score-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
   .score-head .sh-lab { color: var(--muted); font-size: 0.8rem; font-weight: 700;
@@ -879,6 +885,11 @@
               <button class="linkbtn" id="cols-btn" type="button">Columns</button>
               <div class="cols-panel" id="cols-panel"></div>
             </div>
+            <div class="cols-wrap" id="group-wrap" style="display:none;">
+              <button class="linkbtn" id="group-btn" type="button">Group</button>
+              <div class="cols-panel" id="group-panel"></div>
+            </div>
+            <button class="linkbtn" id="custom-export" type="button" style="display:none;">Export CSV</button>
             <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
             <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
@@ -2891,7 +2902,20 @@
     // the Columns picker only makes sense in the grid
     var colsWrap = document.getElementById("cols-wrap");
     if (colsWrap) colsWrap.style.display = customView === "table" ? "" : "none";
+    // grouping, the summary line and CSV belong to the grid
+    var groupWrap = document.getElementById("group-wrap");
+    if (groupWrap) groupWrap.style.display = customView === "table" ? "" : "none";
+    var expBtn = document.getElementById("custom-export");
+    if (expBtn) {
+      expBtn.style.display = "";
+      expBtn.onclick = function () {
+        exportCustomCsv(rows, customCols(currentCustom.table, fields)
+          .concat([{ id: "__branch", label: "Branch" }, { id: "__created", label: "Submitted" }]),
+          currentCustom.table);
+      };
+    }
     if (customView === "table") {
+      renderGroupPanel(currentCustom.table, fields);
       renderColsPanel(currentCustom.table, fields);
       renderCustomGrid(listEl, rows, fields, currentCustom.table);
       return;
@@ -3084,6 +3108,88 @@
     }
     return esc(txt);
   }
+  // ---- Grid extras: group, summarise, export -----------------------------------
+  // What Airtable's grid does beyond showing rows. Grouping and the summary line are
+  // read-only views of the same rows, so they cost nothing but a re-render.
+  var customGroup = { id: null };
+  function groupRows(rows, col) {
+    if (!col) return [{ key: null, rows: rows }];
+    var order = [], byKey = {};
+    rows.forEach(function (s) {
+      var k = col.id === "__branch" ? (s.branch || "—")
+            : col.id === "__created" ? String(s.created_at || "").slice(0, 10)
+            : (customCellText(col, s.data || {}) || "—");
+      k = String(k);
+      if (!byKey[k]) { byKey[k] = []; order.push(k); }
+      byKey[k].push(s);
+    });
+    order.sort(function (a, b) { return byKey[b].length - byKey[a].length; });
+    return order.map(function (k) { return { key: k, rows: byKey[k] }; });
+  }
+  // A column summarises as a total when it holds numbers, otherwise as how many rows
+  // actually answered it — the two things Airtable's summary bar is used for.
+  function summarise(col, rows) {
+    if (col.id === "__created" || col.id === "__branch") return "";
+    var nums = [], filled = 0;
+    rows.forEach(function (s) {
+      var v = customCellText(col, s.data || {});
+      if (v == null || String(v).trim() === "") return;
+      filled++;
+      var n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+      if (!isNaN(n) && /\d/.test(String(v))) nums.push(n);
+    });
+    if (!filled) return "";
+    if (col.type === "number" && nums.length) {
+      var sum = nums.reduce(function (a, b) { return a + b; }, 0);
+      var isPct = (col.options && col.options.score_fmt === "percent");
+      if (isPct) return "avg " + Math.round((sum / nums.length) * 100) + "%";
+      var avg = sum / nums.length;
+      return "Σ " + (Math.round(sum * 100) / 100) + "  ·  x̄ " + (Math.round(avg * 100) / 100);
+    }
+    return filled + " filled";
+  }
+  function csvCell(v) {
+    v = v == null ? "" : String(v);
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+  function exportCustomCsv(rows, cols, t) {
+    var head = cols.map(function (c) { return csvCell(c.label); }).join(",");
+    var body = rows.map(function (s) {
+      return cols.map(function (c) {
+        if (c.id === "__created") return csvCell(fmtDate(s.created_at));
+        if (c.id === "__branch") return csvCell(s.branch || "");
+        return csvCell(customCellText(c, s.data || {}));
+      }).join(",");
+    }).join("\n");
+    // BOM so Excel opens Arabic correctly instead of as mojibake
+    var blob = new Blob(["﻿" + head + "\n" + body], { type: "text/csv;charset=utf-8;" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (t.slug || "export") + "-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function renderGroupPanel(t, fields) {
+    var panel = document.getElementById("group-panel");
+    if (!panel) return;
+    var opts = [{ id: "", label: "No grouping" }, { id: "__branch", label: "Branch" }]
+      .concat(customCols(t, fields).filter(function (c) {
+        // grouping only makes sense where values repeat
+        return c.type === "dropdown" || c.type === "yesno" || c.type === "multi_select"
+          || c.type === "link" || c.type === "short_text";
+      }));
+    panel.innerHTML = '<div class="cols-head"><b>Group by</b></div>' +
+      opts.map(function (o) {
+        return '<label><input type="radio" name="grpby" data-g="' + esc(o.id) + '"' +
+          ((customGroup.id || "") === o.id ? " checked" : "") + "> " + esc(o.label) + "</label>";
+      }).join("");
+    panel.querySelectorAll("input[data-g]").forEach(function (rb) {
+      rb.addEventListener("change", function () {
+        customGroup.id = rb.getAttribute("data-g") || null;
+        renderCustom();
+      });
+    });
+  }
   function renderCustomGrid(listEl, rows, fields, t) {
     var cols = customCols(t, fields);
     if (customSort.id) {
@@ -3099,18 +3205,34 @@
     }
     var allCols = [{ id: "__branch", label: "Branch", type: "short_text" }].concat(cols,
       [{ id: "__created", label: "Submitted", type: "date" }]);
+    var gcol = customGroup.id
+      ? allCols.filter(function (c) { return c.id === customGroup.id; })[0] : null;
+    var groups = groupRows(rows, gcol);
+    var ordered = groups.reduce(function (acc, g) { return acc.concat(g.rows); }, []);
     var html = '<div class="grid-wrap"><table class="grid"><thead><tr>' +
       allCols.map(function (c, i) {
         var arrow = customSort.id === c.id ? (customSort.dir > 0 ? "▲" : "▼") : "";
         return "<th" + (i === 0 ? ' class="pin"' : "") + ' data-c="' + esc(c.id) + '">' + esc(c.label) +
           ' <span class="sort">' + arrow + "</span></th>";
       }).join("") + "</tr></thead><tbody>" +
-      rows.map(function (s, ri) {
-        return '<tr data-i="' + ri + '">' + allCols.map(function (c, i) {
-          var numeric = c.type === "number";
-          return "<td" + (i === 0 ? ' class="pin"' : (numeric ? ' class="num"' : "")) + ">" + gridCell(c, s) + "</td>";
-        }).join("") + "</tr>";
-      }).join("") + "</tbody></table></div>";
+      groups.map(function (g) {
+        var head = g.key === null ? "" :
+          '<tr class="grp"><td class="pin" colspan="' + allCols.length + '">' +
+          esc(g.key) + ' <span class="n">' + g.rows.length + "</span></td></tr>";
+        return head + g.rows.map(function (s) {
+          // index into `ordered`, not `rows` — grouping changes the visual order and a
+          // click must open the record the user actually clicked
+          var ri = ordered.indexOf(s);
+          return '<tr data-i="' + ri + '">' + allCols.map(function (c, i) {
+            var numeric = c.type === "number";
+            return "<td" + (i === 0 ? ' class="pin"' : (numeric ? ' class="num"' : "")) + ">" + gridCell(c, s) + "</td>";
+          }).join("") + "</tr>";
+        }).join("");
+      }).join("") +
+      "</tbody><tfoot><tr>" + allCols.map(function (c, i) {
+        return "<td" + (i === 0 ? ' class="pin"' : (c.type === "number" ? ' class="num"' : "")) + ">" +
+          esc(summarise(c, rows)) + "</td>";
+      }).join("") + "</tr></tfoot></table></div>";
     listEl.innerHTML = html;
     listEl.querySelectorAll("thead th[data-c]").forEach(function (th) {
       th.addEventListener("click", function () {
@@ -3121,7 +3243,7 @@
       });
     });
     listEl.querySelectorAll("tbody tr[data-i]").forEach(function (tr) {
-      tr.addEventListener("click", function () { openCustomDetail(rows[+tr.getAttribute("data-i")], fields); });
+      tr.addEventListener("click", function () { openCustomDetail(ordered[+tr.getAttribute("data-i")], fields); });
     });
     listEl.querySelectorAll("img.cellimg[data-path]").forEach(function (im) {
       var p = im.getAttribute("data-path"); im.removeAttribute("data-path");
@@ -4407,6 +4529,14 @@
   document.getElementById("cols-btn").addEventListener("click", function (e) {
     e.stopPropagation();
     document.getElementById("cols-panel").classList.toggle("open");
+  });
+  document.getElementById("group-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("group-panel").classList.toggle("open");
+  });
+  document.addEventListener("click", function (e) {
+    var gw = document.getElementById("group-wrap");
+    if (gw && !gw.contains(e.target)) document.getElementById("group-panel").classList.remove("open");
   });
   document.addEventListener("click", function (e) {
     var w = document.getElementById("cols-wrap");
