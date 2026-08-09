@@ -479,6 +479,49 @@
   .ja-card .name .score-pill.big { margin-left: 8px; vertical-align: middle; }
   /* in the compact row layout the score sits at the right edge, aligned down the list */
   .ja-row > .score-pill.big { margin-left: auto; flex: 0 0 auto; align-self: center; }
+  /* ---- Airtable-parity redesign ---- */
+  /* labelled fields on a card */
+  .rec-fld { margin-bottom: 9px; }
+  .rec-fld .k { color: var(--muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .rec-fld .v { font-size: 0.86rem; line-height: 1.35; }
+  .rec-fld .v.rtl { direction: rtl; text-align: right; }
+  .rec-fld-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 9px; }
+  .rec-fld-row .rec-fld { margin: 0; }
+  .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  /* score chip carrying raw + percent */
+  .scorechip { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 11px; border-radius: 10px; font-weight: 800; }
+  .scorechip .pct { font-size: 1rem; } .scorechip .raw { font-size: 0.72rem; font-weight: 600; opacity: 0.85; }
+  .scorechip.good { background: #1c5b34; color: #dcffe9; } .scorechip.ok { background: #2f5b7a; color: #e2f2ff; }
+  .scorechip.warn { background: #7a5b16; color: #fff6e0; } .scorechip.bad { background: #8c2f2f; color: #ffecec; }
+  .card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .card-foot .when { color: var(--muted); font-size: 0.72rem; }
+  /* WhatsApp thread preview on complaint cards */
+  .thread { background: #0f1418; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; max-height: 132px; overflow: hidden; position: relative; }
+  .thread:after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(transparent, #0f1418); }
+  .bub { max-width: 82%; padding: 5px 9px; border-radius: 11px; font-size: 0.72rem; line-height: 1.3; direction: rtl; }
+  .bub.them { align-self: flex-start; background: #23282f; color: var(--silver); }
+  .bub.us { align-self: flex-end; background: #123047; color: #cfe9ff; }
+  /* per-answer scoring in the record */
+  .qsec-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin: 18px 0 8px; }
+  .qsec-head .sub { font-weight: 800; color: var(--silver); }
+  .q-scored { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .q-scored .ql { flex: 1; min-width: 0; }
+  .q-scored .qq { font-size: 0.8rem; color: var(--silver-lo); margin-bottom: 4px; }
+  .q-scored .qp { flex: 0 0 auto; align-self: center; font-weight: 800; font-size: 0.8rem; border-radius: 8px; padding: 3px 9px; min-width: 46px; text-align: center; }
+  .qp.plus { background: #1c5b34; color: #dcffe9; } .qp.zero { background: #2a1414; color: #ff9d9d; } .qp.na { background: #1a1d22; color: var(--muted); }
+  .score-side { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 4px 0 16px; }
+  .score-side .bignum { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+  .score-side .bignum small { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+  .score-bar { height: 10px; border-radius: 999px; background: #20242b; overflow: hidden; margin: 12px 0 6px; }
+  .score-bar > i { display: block; height: 100%; border-radius: 999px; }
+  .score-breakdown { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .score-breakdown .brow { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; }
+  .score-breakdown .brow .bl { color: var(--muted); } .score-breakdown .brow .bv { font-weight: 700; font-variant-numeric: tabular-nums; }
+  /* Airtable-style toolbar buttons */
+  .tb-btn { border: 1px solid transparent; background: none; color: var(--muted); font-size: 0.82rem; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .tb-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .tb-btn.active { color: #ffe9a6; background: rgba(234,179,8,0.12); }
   /* multi-select editor in the record panel */
   .ed-checks { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line);
     border-radius: 9px; padding: 5px; background: rgba(255,255,255,0.03); max-height: 230px; overflow-y: auto; }
