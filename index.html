@@ -3014,16 +3014,20 @@
     if (scoreId) scoreField = fields.filter(function (f) { return f.id === scoreId; })[0] || null;
     rows.forEach(function (s) {
       var d = s.data || {};
-      var title = summary.length ? customCellText(summary[0], d) : "—";
-      var parts = summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; })
-        .map(function (f) { return esc(f.label) + ": " + esc(customCellText(f, d)); });
-      parts.push(fmtDate(s.created_at));
+      // labelled fields: skip the score field (shown as a chip) and photo fields (cover)
+      var fldsHtml = summary.filter(function (f) { return !scoreField || f.id !== scoreField.id; })
+        .map(function (f) {
+          var v = cellValueHtml(f, d, s);
+          var isLong = f.type === "long_text";
+          return '<div class="rec-fld"><div class="k">' + esc(f.label) + '</div>' +
+            '<div class="v' + (isLong ? ' clamp3' : '') + (hasArabic(customCellText(f, d)) ? ' rtl' : '') + '">' + v + '</div></div>';
+        }).join("");
       var scoreHtml = "";
       if (scoreField) {
         var sn = scoreFraction(scoreField, customCellText(scoreField, d));
-        if (sn !== null) scoreHtml = scorePillHtml(sn, true);
+        if (sn !== null) scoreHtml = scoreChipHtml(sn, scoreRawText(currentCustom.table, s));
       }
-      var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
+      var initial = esc(String(summary.length ? customCellText(summary[0], d) : "?").trim().charAt(0).toUpperCase() || "?");
       var moveHtml = "";
       if (stages.length && mayEdit) {
         var cur = subStage(s, stages);
@@ -3034,9 +3038,27 @@
       var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions, mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
+      var tint = cardTint(d);
       var el = document.createElement("div");
-      if (kcards) { el.className = "ja-card" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + tag + scoreHtml + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
-      else { el.className = "ja-row" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + tag + '</div><div class="sub">' + parts.join(" · ") + "</div></div>" + scoreHtml + "<div class=\"row-actions\">" + actions + "</div>"; }
+      if (kcards) {
+        el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
+        if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
+        el.innerHTML =
+          (photoField && d[photoField.id] ? '<div class="photo"></div>' : '<div class="photo">' + initial + '</div>') +
+          '<div class="body" style="text-align:left">' +
+            '<div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
+            fldsHtml +
+            '<div class="card-foot">' + (scoreHtml || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
+            actions +
+          '</div>';
+      } else {
+        el.className = "ja-row is-rec" + (mine ? " is-mine" : "");
+        if (tint) el.style.boxShadow = "inset 3px 0 0 " + tint;
+        el.innerHTML = '<div class="ja-thumb">' + initial + '</div>' +
+          '<div class="info"><div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
+          '<div class="sub">' + summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; }).map(function (f) { return esc(customCellText(f, d)); }).join(" · ") + '</div></div>' +
+          scoreHtml + '<div class="row-actions">' + actions + '</div>';
+      }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
@@ -3074,6 +3096,29 @@
   function scorePillHtml(n, big) {
     return '<span class="score-pill ' + scoreTone(n) + (big ? " big" : "") + '">' +
       Math.round(n * 100) + "%</span>";
+  }
+  function scoreChipHtml(n, raw) {
+    return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' + Math.round(n * 100) + '%</span>' +
+      (raw ? '<span class="raw">' + esc(raw) + '</span>' : '') + '</span>';
+  }
+  // raw "63/68" from config.score_raw_field (points) + config.score_max (denominator), if set
+  function scoreRawText(t, s) {
+    var cfg = t.config || {};
+    if (!cfg.score_raw_field) return "";
+    var pts = (s.data || {})[cfg.score_raw_field];
+    if (pts == null || pts === "") return "";
+    return cfg.score_max ? (pts + "/" + cfg.score_max) : String(pts);
+  }
+  function cardTint(d) {
+    if (!customColorField) return "";
+    var val = d[customColorField];
+    return val ? choiceColor(String(val).split(/\s*,\s*/)[0]) : "";
+  }
+  var TINTS = ["#4aa3df", "#2ecc71", "#e0a53a", "#a06be0", "#3aa3a3", "#e05a5a"];
+  function choiceColor(v) {
+    var h = 0, str = String(v);
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff;
+    return TINTS[h % TINTS.length];
   }
   function cellValueHtml(f, d, s) {
     var raw = customCellText(f, d, true);
