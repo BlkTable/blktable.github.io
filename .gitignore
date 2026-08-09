@@ -5,3 +5,11 @@
 # Operate Solution export + generated import SQL: contains every internal
 # checklist question and the full branch list. Local only.
 operate-import/
+
+# Operational DB SQL and incident/outage handoffs. These name internal tables,
+# functions and server details and must never be served at blktable.blk.jo.
+# Applied SQL lives in the private ~/Documents/blktable-migration folder.
+*.sql
+INCIDENT-*.md
+*OUTAGE*.md
+HANDOFF-*.md

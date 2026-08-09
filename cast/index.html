@@ -345,7 +345,8 @@
     btn.disabled = true; btn.textContent = "Submitting…";
     storageUpload(file)
       .then(function (photoPath) {
-        return db.from("casting_applications").insert({
+        // Submit via SECURITY DEFINER RPC: anon holds no direct table write grant (see 2026-08-09 lockdown).
+        return db.rpc("submit_casting_application", { p_data: {
           full_name: val("full_name"),
           date_of_birth: val("dob") || null,
           phone: phone,
@@ -354,7 +355,7 @@
           ever_acted: val("acted") || null,
           photo_path: photoPath,
           extra: extraData
-        });
+        } });
       })
       .then(function (res) {
         if (res && res.error) throw res.error;
@@ -365,7 +366,8 @@
       })
       .catch(function (err) {
         btn.disabled = false; btn.textContent = "Submit";
-        msg.textContent = "Couldn't submit — " + ((err && (err.message || err.error_description || err.hint)) || "please try again.");
+        // Never surface the raw database error — it leaks table names and means nothing to an applicant.
+        msg.textContent = "Couldn't submit — please try again, or contact us if it keeps happening.";
         if (window.console) console.error(err);
       });
   });
