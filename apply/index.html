@@ -169,6 +169,15 @@
               <option value="Other">Other / اخرى</option>
             </select>
           </div>
+          <div class="field" id="country-field">
+            <label for="country">Country <span class="ar">/ الدولة</span> <span class="req">*</span></label>
+            <select id="country" required>
+              <option value="Jordan">Jordan / الأردن</option>
+              <option value="Lebanon">Lebanon / لبنان</option>
+              <option value="Syria">Syria / سوريا</option>
+              <option value="Iraq">Iraq / العراق</option>
+            </select>
+          </div>
           <div class="field" id="city-field">
             <label for="city">City <span class="ar">/ المدينة</span> <span class="req">*</span></label>
             <select id="city">
@@ -409,6 +418,17 @@
   phoneLocal.addEventListener("input", function () { phoneLocal.value = phoneLocal.value.replace(/\D/g, ""); });
   selectCountry(0);
 
+  var countrySel = document.getElementById("country");
+  if (countrySel) {
+    countrySel.addEventListener("change", function () {
+      var i = COUNTRIES.map(function (c) { return c.name; }).indexOf(countrySel.value);
+      if (i >= 0) selectCountry(i);
+    });
+    var origSelect = selectCountry;
+    selectCountry = function (i) { origSelect(i); if (countrySel) countrySel.value = COUNTRIES[i].name; };
+    selectCountry(0);
+  }
+
   // Date of birth: open the calendar picker on click anywhere in the field
   var dobInput = document.getElementById("dob");
   if (dobInput) dobInput.addEventListener("click", function () {
@@ -509,6 +529,7 @@
         return db.from("job_applications").insert({
           full_name: fullName,
           phone: phone,
+          country: selCountry.name,
           date_of_birth: val("dob") || null,
           how_found: val("how_found") || null,
           city: (selCountry.cc === "962" ? val("city") : "") || null,
