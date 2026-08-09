@@ -518,12 +518,9 @@ update app_tables set config = config || jsonb_build_object('card_fields', to_js
 
 - [ ] **Step 4: Verify**
 
-Reload each table in the dashboard. Expected: cards show the intended fields; QC/Mystery detail shows the per-answer breakdown with the sidebar total matching `score_field` (Task 4 Step 4 passes). Commit is not applicable (DB change) — record the executed SQL in `docs/superpowers/plans/2026-08-09-config-applied.sql` and commit that file:
+Reload each table in the dashboard. Expected: cards show the intended fields; QC/Mystery detail shows the per-answer breakdown with the sidebar total matching `score_field` (Task 4 Step 4 passes). Commit is not applicable (DB change).
 
-```bash
-git add docs/superpowers/plans/2026-08-09-config-applied.sql
-git commit -m "Docs: record the config/scorer SQL applied to the DB"
-```
+**Do NOT commit the applied SQL, the inspection output, or any field labels/options/IDs into this repo — it is PUBLIC.** Record the executed SQL and the inspection output in the private, out-of-repo `blktable-migration/` folder (the same place STATUS.md keeps the migration runbook and verification scripts). The public PR references only that this config was applied, never the contents.
 
 ---
 
@@ -633,12 +630,9 @@ where country is null and phone is not null;
 
 Open any custom table's Grid view. Confirm select/yes-no cells already render as pills (existing `gridCell`); no change expected. If a scored column shows a bare number rather than a pill, confirm `options.score_fmt = 'percent'` on the final-score column only (not the per-question scorers).
 
-- [ ] **Step 3: Record applied SQL and commit**
+- [ ] **Step 3: Record applied SQL privately (NOT in this public repo)**
 
-```bash
-git add docs/superpowers/plans/2026-08-09-config-applied.sql
-git commit -m "Docs: country backfill SQL"
-```
+Save the backfill SQL and the `SELECT COUNT(*)` preview result to the private out-of-repo `blktable-migration/` folder. Do not commit applicant data, counts, or SQL touching `job_applications` into this public repo.
 
 ---
 
