@@ -3014,6 +3014,14 @@
     if (scoreId) scoreField = fields.filter(function (f) { return f.id === scoreId; })[0] || null;
     rows.forEach(function (s) {
       var d = s.data || {};
+      var threadHtml = "";
+      var threadId = currentCustom.table.config && currentCustom.table.config.thread_field;
+      if (threadId && d[threadId]) {
+        var lines = String(d[threadId]).split(/\n+/).filter(function (x) { return x.trim(); }).slice(0, 6);
+        threadHtml = '<div class="thread">' + lines.map(function (ln, i) {
+          return '<div class="bub ' + (i % 2 ? 'us' : 'them') + '">' + esc(ln) + '</div>';
+        }).join('') + '</div>';
+      }
       // labelled fields: skip the score field (shown as a chip) and photo fields (cover)
       var fldsHtml = summary.filter(function (f) { return !scoreField || f.id !== scoreField.id; })
         .map(function (f) {
@@ -3046,6 +3054,7 @@
         el.innerHTML =
           (photoField && d[photoField.id] ? '<div class="photo"></div>' : '<div class="photo">' + initial + '</div>') +
           '<div class="body" style="text-align:left">' +
+            threadHtml +
             '<div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
             fldsHtml +
             '<div class="card-foot">' + (scoreHtml || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
