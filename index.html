@@ -2957,7 +2957,8 @@
     var summary = cardIds && cardIds.length
       ? cardIds.map(function (id) { return fields.filter(function (f) { return f.id === id; })[0]; }).filter(Boolean)
       : fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
-    var photoField = fields.filter(function (f) { return f.type === "photo"; })[0];
+    // config.card_no_cover opts a table out of the photo cover entirely (e.g. Complaints, where most records have no screenshot).
+    var photoField = (currentCustom.table.config && currentCustom.table.config.card_no_cover) ? null : fields.filter(function (f) { return f.type === "photo"; })[0];
     // pipeline tabs
     if (stages.length) {
       if (!currentCustom.stage || !stages.some(function (x) { return x.key === currentCustom.stage; })) currentCustom.stage = stages[0].key;
@@ -3052,7 +3053,7 @@
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
         if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
         el.innerHTML =
-          (photoField && d[photoField.id] ? '<div class="photo"></div>' : '<div class="photo">' + initial + '</div>') +
+          (photoField && d[photoField.id] ? '<div class="photo"></div>' : '') +
           '<div class="body" style="text-align:left">' +
             threadHtml +
             '<div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
