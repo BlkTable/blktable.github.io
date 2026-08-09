@@ -2970,7 +2970,7 @@
     } else { tabsEl.style.display = "none"; tabsEl.innerHTML = ""; }
     var base = stages.length ? pool.filter(function (s) { return subStage(s, stages) === currentCustom.stage; }) : pool;
     var rows = base.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
-    if (customSort.length) rows = rows.slice().sort(function (a, b) { return compareRows(a, b, customCols(currentCustom.table, fields).concat([{id:'__created',label:'Submitted'},{id:'__branch',label:'Branch'}])); });
+    if (customSort.length) rows = rows.slice().sort(function (a, b) { return compareRows(a, b, sortableCols(currentCustom.table, fields)); });
     if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
     if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (currentCustom.mineOnly ? "Nothing assigned to you here." : (stages.length ? "Nothing in this stage." : "No matches.")) + "</div>"; return; }
@@ -3062,7 +3062,7 @@
           '</div>';
       } else {
         el.className = "ja-row is-rec" + (mine ? " is-mine" : "");
-        if (tint) el.style.boxShadow = "inset 3px 0 0 " + tint;
+        if (tint && !mine) el.style.boxShadow = "inset 3px 0 0 " + tint;
         el.innerHTML = '<div class="ja-thumb">' + initial + '</div>' +
           '<div class="info"><div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
           '<div class="sub">' + summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; }).map(function (f) { return esc(customCellText(f, d)); }).join(" · ") + '</div></div>' +
@@ -3772,7 +3772,7 @@
       if (o.score_of && byId[o.score_of]) map[o.score_of] = f;          // scorer -> its question
       else if (o.scorer && byId[o.scorer]) map[f.id] = byId[o.scorer];  // question -> its scorer
     });
-    table.__qsMap = map;
+    if (Object.keys(map).length) table.__qsMap = map;   // don't cache the empty (dormant) map
     return map;
   }
   function isScorerField(f) { var o = f.options || {}; return !!(o.score_of); }
