@@ -935,6 +935,14 @@
               <button class="linkbtn" id="group-btn" type="button">Group</button>
               <div class="cols-panel" id="group-panel"></div>
             </div>
+            <div class="cols-wrap" id="sort-wrap" style="display:none;">
+              <button class="tb-btn" id="sort-btn" type="button">↕ <span id="sort-lab">Sort</span></button>
+              <div class="cols-panel" id="sort-panel"></div>
+            </div>
+            <div class="cols-wrap" id="color-wrap" style="display:none;">
+              <button class="tb-btn" id="color-btn" type="button">◧ <span id="color-lab">Color</span></button>
+              <div class="cols-panel" id="color-panel"></div>
+            </div>
             <button class="linkbtn" id="custom-export" type="button" style="display:none;">Export CSV</button>
             <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
             <button class="linkbtn" id="custom-refresh">Refresh</button>
@@ -2962,6 +2970,7 @@
     } else { tabsEl.style.display = "none"; tabsEl.innerHTML = ""; }
     var base = stages.length ? pool.filter(function (s) { return subStage(s, stages) === currentCustom.stage; }) : pool;
     var rows = base.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
+    if (customSort.length) rows = rows.slice().sort(function (a, b) { return compareRows(a, b, customCols(currentCustom.table, fields).concat([{id:'__created',label:'Submitted'},{id:'__branch',label:'Branch'}])); });
     if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
     if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (currentCustom.mineOnly ? "Nothing assigned to you here." : (stages.length ? "Nothing in this stage." : "No matches.")) + "</div>"; return; }
@@ -2972,6 +2981,13 @@
     // grouping, the summary line and CSV belong to the grid
     var groupWrap = document.getElementById("group-wrap");
     if (groupWrap) groupWrap.style.display = customView === "table" ? "" : "none";
+    var sortWrap = document.getElementById("sort-wrap");
+    if (sortWrap) sortWrap.style.display = "";        // sort is available in all views
+    var colorWrap = document.getElementById("color-wrap");
+    if (colorWrap) colorWrap.style.display = customView === "table" ? "none" : ""; // color tints cards/rows
+    renderSortPanel(currentCustom.table, fields);
+    if (customView !== "table") renderColorPanel(currentCustom.table, fields);
+    updateSortLabel();
     var expBtn = document.getElementById("custom-export");
     if (expBtn) {
       expBtn.style.display = "";
@@ -3281,6 +3297,60 @@
     panel.querySelectorAll("input[data-g]").forEach(function (rb) {
       rb.addEventListener("change", function () {
         customGroup.id = rb.getAttribute("data-g") || null;
+        renderCustom();
+      });
+    });
+  }
+  function sortableCols(t, fields) {
+    return fields.filter(function (f) { return !f.internal && f.type !== "photo"; })
+      .concat([{ id: "__created", label: "Submitted" }, { id: "__branch", label: "Branch" }]);
+  }
+  function renderSortPanel(t, fields) {
+    var panel = document.getElementById("sort-panel");
+    var cols = sortableCols(t, fields);
+    var rules = customSort.length ? customSort : [{ id: "", dir: -1 }];
+    panel.innerHTML = '<div class="cols-head"><b>Sort by</b>' +
+      '<button class="linkbtn" id="sort-clear" type="button">Clear</button></div>' +
+      rules.map(function (r, i) {
+        return '<div class="sort-row" data-i="' + i + '"><select class="sort-f">' +
+          '<option value="">Field…</option>' +
+          cols.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === r.id ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') +
+          '</select><select class="sort-d"><option value="1"' + (r.dir === 1 ? ' selected' : '') + '>A→Z / 1→9</option>' +
+          '<option value="-1"' + (r.dir === -1 ? ' selected' : '') + '>Z→A / 9→1</option></select></div>';
+      }).join('') +
+      '<button class="linkbtn" id="sort-add" type="button">+ Add another sort</button>';
+    panel.querySelectorAll('.sort-f, .sort-d').forEach(function (el) {
+      el.addEventListener('change', function () {
+        customSort = [].slice.call(panel.querySelectorAll('.sort-row')).map(function (row) {
+          return { id: row.querySelector('.sort-f').value, dir: parseInt(row.querySelector('.sort-d').value, 10) };
+        }).filter(function (r) { return r.id; });
+        updateSortLabel(); renderCustom();
+      });
+    });
+    var add = document.getElementById('sort-add');
+    if (add) add.addEventListener('click', function () { customSort.push({ id: '', dir: 1 }); renderSortPanel(t, fields); });
+    var clr = document.getElementById('sort-clear');
+    if (clr) clr.addEventListener('click', function () { customSort = []; updateSortLabel(); renderSortPanel(t, fields); renderCustom(); });
+  }
+  function updateSortLabel() {
+    var lab = document.getElementById('sort-lab'), btn = document.getElementById('sort-btn');
+    if (!lab) return;
+    if (customSort.length) { lab.textContent = 'Sorted by ' + customSort.length + ' field' + (customSort.length > 1 ? 's' : ''); btn.classList.add('active'); }
+    else { lab.textContent = 'Sort'; btn.classList.remove('active'); }
+  }
+  var customColorField = null;
+  function colorableCols(fields) { return fields.filter(function (f) { return isChoiceField(f) || f.type === 'yesno'; }); }
+  function renderColorPanel(t, fields) {
+    var panel = document.getElementById('color-panel');
+    var cols = colorableCols(fields);
+    panel.innerHTML = '<div class="cols-head"><b>Color by</b></div>' +
+      '<label><input type="radio" name="colf" value=""' + (customColorField ? '' : ' checked') + '> None</label>' +
+      cols.map(function (f) { return '<label><input type="radio" name="colf" value="' + f.id + '"' + (customColorField === f.id ? ' checked' : '') + '> ' + esc(f.label) + '</label>'; }).join('');
+    panel.querySelectorAll('input[name="colf"]').forEach(function (r) {
+      r.addEventListener('change', function () {
+        customColorField = r.value || null;
+        var btn = document.getElementById('color-btn');
+        if (customColorField) { btn.classList.add('active'); } else { btn.classList.remove('active'); }
         renderCustom();
       });
     });
@@ -4638,6 +4708,14 @@
     e.stopPropagation();
     document.getElementById("group-panel").classList.toggle("open");
   });
+  document.getElementById("sort-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("sort-panel").classList.toggle("open");
+  });
+  document.getElementById("color-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("color-panel").classList.toggle("open");
+  });
   document.addEventListener("click", function (e) {
     var gw = document.getElementById("group-wrap");
     if (gw && !gw.contains(e.target)) document.getElementById("group-panel").classList.remove("open");
@@ -4645,6 +4723,14 @@
   document.addEventListener("click", function (e) {
     var w = document.getElementById("cols-wrap");
     if (w && !w.contains(e.target)) document.getElementById("cols-panel").classList.remove("open");
+  });
+  document.addEventListener("click", function (e) {
+    var sw = document.getElementById("sort-wrap");
+    if (sw && !sw.contains(e.target)) document.getElementById("sort-panel").classList.remove("open");
+  });
+  document.addEventListener("click", function (e) {
+    var cw = document.getElementById("color-wrap");
+    if (cw && !cw.contains(e.target)) document.getElementById("color-panel").classList.remove("open");
   });
   wireToggle("home-viewtoggle", function (v) { homeView = v; renderHome(); });
   document.getElementById("home-filter").addEventListener("click", function (e) {
