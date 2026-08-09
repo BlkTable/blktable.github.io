@@ -479,6 +479,49 @@
   .ja-card .name .score-pill.big { margin-left: 8px; vertical-align: middle; }
   /* in the compact row layout the score sits at the right edge, aligned down the list */
   .ja-row > .score-pill.big { margin-left: auto; flex: 0 0 auto; align-self: center; }
+  /* ---- Airtable-parity redesign ---- */
+  /* labelled fields on a card */
+  .rec-fld { margin-bottom: 9px; }
+  .rec-fld .k { color: var(--muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .rec-fld .v { font-size: 0.86rem; line-height: 1.35; }
+  .rec-fld .v.rtl { direction: rtl; text-align: right; }
+  .rec-fld-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 9px; }
+  .rec-fld-row .rec-fld { margin: 0; }
+  .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  /* score chip carrying raw + percent */
+  .scorechip { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 11px; border-radius: 10px; font-weight: 800; }
+  .scorechip .pct { font-size: 1rem; } .scorechip .raw { font-size: 0.72rem; font-weight: 600; opacity: 0.85; }
+  .scorechip.good { background: #1c5b34; color: #dcffe9; } .scorechip.ok { background: #2f5b7a; color: #e2f2ff; }
+  .scorechip.warn { background: #7a5b16; color: #fff6e0; } .scorechip.bad { background: #8c2f2f; color: #ffecec; }
+  .card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .card-foot .when { color: var(--muted); font-size: 0.72rem; }
+  /* WhatsApp thread preview on complaint cards */
+  .thread { background: #0f1418; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; max-height: 132px; overflow: hidden; position: relative; }
+  .thread:after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(transparent, #0f1418); }
+  .bub { max-width: 82%; padding: 5px 9px; border-radius: 11px; font-size: 0.72rem; line-height: 1.3; direction: rtl; }
+  .bub.them { align-self: flex-start; background: #23282f; color: var(--silver); }
+  .bub.us { align-self: flex-end; background: #123047; color: #cfe9ff; }
+  /* per-answer scoring in the record */
+  .qsec-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin: 18px 0 8px; }
+  .qsec-head .sub { font-weight: 800; color: var(--silver); }
+  .q-scored { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .q-scored .ql { flex: 1; min-width: 0; }
+  .q-scored .qq { font-size: 0.8rem; color: var(--silver-lo); margin-bottom: 4px; }
+  .q-scored .qp { flex: 0 0 auto; align-self: center; font-weight: 800; font-size: 0.8rem; border-radius: 8px; padding: 3px 9px; min-width: 46px; text-align: center; }
+  .qp.plus { background: #1c5b34; color: #dcffe9; } .qp.zero { background: #2a1414; color: #ff9d9d; } .qp.na { background: #1a1d22; color: var(--muted); }
+  .score-side { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 4px 0 16px; }
+  .score-side .bignum { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+  .score-side .bignum small { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+  .score-bar { height: 10px; border-radius: 999px; background: #20242b; overflow: hidden; margin: 12px 0 6px; }
+  .score-bar > i { display: block; height: 100%; border-radius: 999px; }
+  .score-breakdown { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .score-breakdown .brow { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; }
+  .score-breakdown .brow .bl { color: var(--muted); } .score-breakdown .brow .bv { font-weight: 700; font-variant-numeric: tabular-nums; }
+  /* Airtable-style toolbar buttons */
+  .tb-btn { border: 1px solid transparent; background: none; color: var(--muted); font-size: 0.82rem; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .tb-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .tb-btn.active { color: #ffe9a6; background: rgba(234,179,8,0.12); }
   /* multi-select editor in the record panel */
   .ed-checks { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line);
     border-radius: 9px; padding: 5px; background: rgba(255,255,255,0.03); max-height: 230px; overflow-y: auto; }
@@ -891,6 +934,14 @@
             <div class="cols-wrap" id="group-wrap" style="display:none;">
               <button class="linkbtn" id="group-btn" type="button">Group</button>
               <div class="cols-panel" id="group-panel"></div>
+            </div>
+            <div class="cols-wrap" id="sort-wrap" style="display:none;">
+              <button class="tb-btn" id="sort-btn" type="button">↕ <span id="sort-lab">Sort</span></button>
+              <div class="cols-panel" id="sort-panel"></div>
+            </div>
+            <div class="cols-wrap" id="color-wrap" style="display:none;">
+              <button class="tb-btn" id="color-btn" type="button">◧ <span id="color-lab">Color</span></button>
+              <div class="cols-panel" id="color-panel"></div>
             </div>
             <button class="linkbtn" id="custom-export" type="button" style="display:none;">Export CSV</button>
             <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
@@ -2919,6 +2970,7 @@
     } else { tabsEl.style.display = "none"; tabsEl.innerHTML = ""; }
     var base = stages.length ? pool.filter(function (s) { return subStage(s, stages) === currentCustom.stage; }) : pool;
     var rows = base.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
+    if (customSort.length) rows = rows.slice().sort(function (a, b) { return compareRows(a, b, sortableCols(currentCustom.table, fields)); });
     if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
     if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (currentCustom.mineOnly ? "Nothing assigned to you here." : (stages.length ? "Nothing in this stage." : "No matches.")) + "</div>"; return; }
@@ -2929,6 +2981,13 @@
     // grouping, the summary line and CSV belong to the grid
     var groupWrap = document.getElementById("group-wrap");
     if (groupWrap) groupWrap.style.display = customView === "table" ? "" : "none";
+    var sortWrap = document.getElementById("sort-wrap");
+    if (sortWrap) sortWrap.style.display = "";        // sort is available in all views
+    var colorWrap = document.getElementById("color-wrap");
+    if (colorWrap) colorWrap.style.display = customView === "table" ? "none" : ""; // color tints cards/rows
+    renderSortPanel(currentCustom.table, fields);
+    if (customView !== "table") renderColorPanel(currentCustom.table, fields);
+    updateSortLabel();
     var expBtn = document.getElementById("custom-export");
     if (expBtn) {
       expBtn.style.display = "";
@@ -2955,16 +3014,28 @@
     if (scoreId) scoreField = fields.filter(function (f) { return f.id === scoreId; })[0] || null;
     rows.forEach(function (s) {
       var d = s.data || {};
-      var title = summary.length ? customCellText(summary[0], d) : "—";
-      var parts = summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; })
-        .map(function (f) { return esc(f.label) + ": " + esc(customCellText(f, d)); });
-      parts.push(fmtDate(s.created_at));
+      var threadHtml = "";
+      var threadId = currentCustom.table.config && currentCustom.table.config.thread_field;
+      if (threadId && d[threadId]) {
+        var lines = String(d[threadId]).split(/\n+/).filter(function (x) { return x.trim(); }).slice(0, 6);
+        threadHtml = '<div class="thread">' + lines.map(function (ln, i) {
+          return '<div class="bub ' + (i % 2 ? 'us' : 'them') + '">' + esc(ln) + '</div>';
+        }).join('') + '</div>';
+      }
+      // labelled fields: skip the score field (shown as a chip) and photo fields (cover)
+      var fldsHtml = summary.filter(function (f) { return !scoreField || f.id !== scoreField.id; })
+        .map(function (f) {
+          var v = cellValueHtml(f, d, s);
+          var isLong = f.type === "long_text";
+          return '<div class="rec-fld"><div class="k">' + esc(f.label) + '</div>' +
+            '<div class="v' + (isLong ? ' clamp3' : '') + (hasArabic(customCellText(f, d)) ? ' rtl' : '') + '">' + v + '</div></div>';
+        }).join("");
       var scoreHtml = "";
       if (scoreField) {
         var sn = scoreFraction(scoreField, customCellText(scoreField, d));
-        if (sn !== null) scoreHtml = scorePillHtml(sn, true);
+        if (sn !== null) scoreHtml = scoreChipHtml(sn, scoreRawText(currentCustom.table, s));
       }
-      var initial = esc(String(title).trim().charAt(0).toUpperCase() || "?");
+      var initial = esc(String(summary.length ? customCellText(summary[0], d) : "?").trim().charAt(0).toUpperCase() || "?");
       var moveHtml = "";
       if (stages.length && mayEdit) {
         var cur = subStage(s, stages);
@@ -2975,9 +3046,28 @@
       var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions, mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
+      var tint = cardTint(d);
       var el = document.createElement("div");
-      if (kcards) { el.className = "ja-card" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(title) + tag + scoreHtml + '</div><div class="meta">' + parts.join(" · ") + "</div>" + actions + "</div>"; }
-      else { el.className = "ja-row" + (mine ? " is-mine" : ""); el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(title) + tag + '</div><div class="sub">' + parts.join(" · ") + "</div></div>" + scoreHtml + "<div class=\"row-actions\">" + actions + "</div>"; }
+      if (kcards) {
+        el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
+        if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
+        el.innerHTML =
+          (photoField && d[photoField.id] ? '<div class="photo"></div>' : '<div class="photo">' + initial + '</div>') +
+          '<div class="body" style="text-align:left">' +
+            threadHtml +
+            '<div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
+            fldsHtml +
+            '<div class="card-foot">' + (scoreHtml || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
+            actions +
+          '</div>';
+      } else {
+        el.className = "ja-row is-rec" + (mine ? " is-mine" : "");
+        if (tint && !mine) el.style.boxShadow = "inset 3px 0 0 " + tint;
+        el.innerHTML = '<div class="ja-thumb">' + initial + '</div>' +
+          '<div class="info"><div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
+          '<div class="sub">' + summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; }).map(function (f) { return esc(customCellText(f, d)); }).join(" · ") + '</div></div>' +
+          scoreHtml + '<div class="row-actions">' + actions + '</div>';
+      }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
@@ -3015,6 +3105,29 @@
   function scorePillHtml(n, big) {
     return '<span class="score-pill ' + scoreTone(n) + (big ? " big" : "") + '">' +
       Math.round(n * 100) + "%</span>";
+  }
+  function scoreChipHtml(n, raw) {
+    return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' + Math.round(n * 100) + '%</span>' +
+      (raw ? '<span class="raw">' + esc(raw) + '</span>' : '') + '</span>';
+  }
+  // raw "63/68" from config.score_raw_field (points) + config.score_max (denominator), if set
+  function scoreRawText(t, s) {
+    var cfg = t.config || {};
+    if (!cfg.score_raw_field) return "";
+    var pts = (s.data || {})[cfg.score_raw_field];
+    if (pts == null || pts === "") return "";
+    return cfg.score_max ? (pts + "/" + cfg.score_max) : String(pts);
+  }
+  function cardTint(d) {
+    if (!customColorField) return "";
+    var val = d[customColorField];
+    return val ? choiceColor(String(val).split(/\s*,\s*/)[0]) : "";
+  }
+  var TINTS = ["#4aa3df", "#2ecc71", "#e0a53a", "#a06be0", "#3aa3a3", "#e05a5a"];
+  function choiceColor(v) {
+    var h = 0, str = String(v);
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff;
+    return TINTS[h % TINTS.length];
   }
   function cellValueHtml(f, d, s) {
     var raw = customCellText(f, d, true);
@@ -3238,6 +3351,60 @@
     panel.querySelectorAll("input[data-g]").forEach(function (rb) {
       rb.addEventListener("change", function () {
         customGroup.id = rb.getAttribute("data-g") || null;
+        renderCustom();
+      });
+    });
+  }
+  function sortableCols(t, fields) {
+    return fields.filter(function (f) { return !f.internal && f.type !== "photo"; })
+      .concat([{ id: "__created", label: "Submitted" }, { id: "__branch", label: "Branch" }]);
+  }
+  function renderSortPanel(t, fields) {
+    var panel = document.getElementById("sort-panel");
+    var cols = sortableCols(t, fields);
+    var rules = customSort.length ? customSort : [{ id: "", dir: -1 }];
+    panel.innerHTML = '<div class="cols-head"><b>Sort by</b>' +
+      '<button class="linkbtn" id="sort-clear" type="button">Clear</button></div>' +
+      rules.map(function (r, i) {
+        return '<div class="sort-row" data-i="' + i + '"><select class="sort-f">' +
+          '<option value="">Field…</option>' +
+          cols.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === r.id ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') +
+          '</select><select class="sort-d"><option value="1"' + (r.dir === 1 ? ' selected' : '') + '>A→Z / 1→9</option>' +
+          '<option value="-1"' + (r.dir === -1 ? ' selected' : '') + '>Z→A / 9→1</option></select></div>';
+      }).join('') +
+      '<button class="linkbtn" id="sort-add" type="button">+ Add another sort</button>';
+    panel.querySelectorAll('.sort-f, .sort-d').forEach(function (el) {
+      el.addEventListener('change', function () {
+        customSort = [].slice.call(panel.querySelectorAll('.sort-row')).map(function (row) {
+          return { id: row.querySelector('.sort-f').value, dir: parseInt(row.querySelector('.sort-d').value, 10) };
+        }).filter(function (r) { return r.id; });
+        updateSortLabel(); renderCustom();
+      });
+    });
+    var add = document.getElementById('sort-add');
+    if (add) add.addEventListener('click', function () { customSort.push({ id: '', dir: 1 }); renderSortPanel(t, fields); });
+    var clr = document.getElementById('sort-clear');
+    if (clr) clr.addEventListener('click', function () { customSort = []; updateSortLabel(); renderSortPanel(t, fields); renderCustom(); });
+  }
+  function updateSortLabel() {
+    var lab = document.getElementById('sort-lab'), btn = document.getElementById('sort-btn');
+    if (!lab) return;
+    if (customSort.length) { lab.textContent = 'Sorted by ' + customSort.length + ' field' + (customSort.length > 1 ? 's' : ''); btn.classList.add('active'); }
+    else { lab.textContent = 'Sort'; btn.classList.remove('active'); }
+  }
+  var customColorField = null;
+  function colorableCols(fields) { return fields.filter(function (f) { return isChoiceField(f) || f.type === 'yesno'; }); }
+  function renderColorPanel(t, fields) {
+    var panel = document.getElementById('color-panel');
+    var cols = colorableCols(fields);
+    panel.innerHTML = '<div class="cols-head"><b>Color by</b></div>' +
+      '<label><input type="radio" name="colf" value=""' + (customColorField ? '' : ' checked') + '> None</label>' +
+      cols.map(function (f) { return '<label><input type="radio" name="colf" value="' + f.id + '"' + (customColorField === f.id ? ' checked' : '') + '> ' + esc(f.label) + '</label>'; }).join('');
+    panel.querySelectorAll('input[name="colf"]').forEach(function (r) {
+      r.addEventListener('change', function () {
+        customColorField = r.value || null;
+        var btn = document.getElementById('color-btn');
+        if (customColorField) { btn.classList.add('active'); } else { btn.classList.remove('active'); }
         renderCustom();
       });
     });
@@ -3545,6 +3712,70 @@
   // "show every answer" state. Reset when a different record is opened, so each record
   // starts clean, but kept when this same record re-renders after the toggle.
   var detailShowAll = false, detailShowAllFor = null;
+  // Returns { html, earned, possible, sections:[{name,earned,possible}] } or null when the
+  // table is not scored. Renders each scored question with the points that answer earned.
+  function scoredDetail(table, fields, d) {
+    var cfg = table.config || {};
+    if (!cfg.score_field) return null;
+    var map = questionScorerMap(table, fields);      // questionFieldId -> scorerField
+    var qIds = Object.keys(map);
+    if (!qIds.length) return null;
+    var bySection = {}; var order = [];
+    fields.forEach(function (qf) {
+      if (!map[qf.id]) return;
+      var sec = (qf.options && qf.options.score_section) || "Score";
+      if (!bySection[sec]) { bySection[sec] = []; order.push(sec); }
+      bySection[sec].push(qf);
+    });
+    var earned = 0, possible = 0, sections = [], html = "";
+    order.forEach(function (sec) {
+      var se = 0, sp = 0, rows = "";
+      bySection[sec].forEach(function (qf) {
+        var sf = map[qf.id];
+        var ptsRaw = (d[sf.id] == null || d[sf.id] === "") ? null : parseFloat(d[sf.id]);
+        var answered = d[qf.id] != null && d[qf.id] !== "";
+        var na = (ptsRaw == null || isNaN(ptsRaw));
+        var pts = na ? 0 : ptsRaw;
+        var maxP = (sf.options && sf.options.score_weight) || 1;
+        if (!na) { se += pts; sp += maxP; earned += pts; possible += maxP; }
+        var cls = na ? "na" : (pts >= maxP ? "plus" : (pts > 0 ? "na" : "zero"));
+        var lbl = na ? "n/a" : (pts > 0 ? "+" + pts : "0");
+        rows += '<div class="q-scored"><div class="ql"><div class="qq">' + esc(qf.label) + '</div>' +
+          '<div class="qa">' + (answered ? cellValueHtml(qf, d, null) : '<span class="empty-box"></span>') + '</div></div>' +
+          '<div class="qp ' + cls + '">' + lbl + '</div></div>';
+      });
+      sections.push({ name: sec, earned: se, possible: sp });
+      html += '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' + rows;
+    });
+    return { html: html, earned: earned, possible: possible, sections: sections };
+  }
+  function scoreSideHtml(sd, table, d) {
+    var pct = sd.possible ? Math.round(sd.earned / sd.possible * 100) : 0;
+    var col = pct >= 90 ? "#2ecc71" : pct >= 75 ? "#4aa3df" : pct >= 50 ? "#e0a53a" : "#e05a5a";
+    return '<div class="score-side"><div style="color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Final score</div>' +
+      '<div class="bignum" style="color:' + col + '">' + pct + '% <small>' + sd.earned + '/' + sd.possible + '</small></div>' +
+      '<div class="score-bar"><i style="width:' + pct + '%;background:' + col + '"></i></div>' +
+      '<div style="color:var(--muted);font-size:.72rem">Scored by the engine — matches Airtable exactly</div>' +
+      '<div class="score-breakdown">' + sd.sections.map(function (x) {
+        return '<div class="brow"><span class="bl">' + esc(x.name) + '</span><span class="bv">' + x.earned + '/' + x.possible + '</span></div>';
+      }).join('') + '</div></div>';
+  }
+  // questionFieldId -> scorer field. Two supported shapes (populated later in the DB):
+  //   scorer field carries options.score_of = "<questionFieldId>", OR
+  //   question field carries options.scorer  = "<scorerFieldId>".
+  function questionScorerMap(table, fields) {
+    if (table.__qsMap) return table.__qsMap;
+    var byId = {}; fields.forEach(function (f) { byId[f.id] = f; });
+    var map = {};
+    fields.forEach(function (f) {
+      var o = f.options || {};
+      if (o.score_of && byId[o.score_of]) map[o.score_of] = f;          // scorer -> its question
+      else if (o.scorer && byId[o.scorer]) map[f.id] = byId[o.scorer];  // question -> its scorer
+    });
+    if (Object.keys(map).length) table.__qsMap = map;   // don't cache the empty (dormant) map
+    return map;
+  }
+  function isScorerField(f) { var o = f.options || {}; return !!(o.score_of); }
   function openCustomDetail(s, fields) {
     if (detailShowAllFor !== s.id) { detailShowAll = false; detailShowAllFor = s.id; }
     var d = s.data || {}, photoPath = null, photoFieldId = null;
@@ -3552,14 +3783,21 @@
     fields.forEach(function (f) { if (f.type === "photo") { if (photoFieldId == null) photoFieldId = f.id; if (d[f.id]) photoPath = d[f.id]; } });
     // the score belongs at the top of an inspection, not thirty questions down
     var scoreHead = "";
-    var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
-               currentCustom.table.config.score_field;
-    if (shId) {
-      var shf = fields.filter(function (f) { return f.id === shId; })[0];
-      var shn = shf ? scoreFraction(shf, customCellText(shf, d)) : null;
-      if (shn !== null) {
-        scoreHead = '<div class="score-head">' + scorePillHtml(shn, true) +
-          '<span class="sh-lab">' + esc(shf.label) + "</span></div>";
+    var scoredBlock = "";
+    var sd = (currentCustom && currentCustom.table) ? scoredDetail(currentCustom.table, fields, d) : null;
+    if (sd) {
+      scoreHead = scoreSideHtml(sd, currentCustom.table, d);
+      scoredBlock = '<div class="scored-section">' + sd.html + '</div>';
+    } else {
+      var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
+                 currentCustom.table.config.score_field;
+      if (shId) {
+        var shf = fields.filter(function (f) { return f.id === shId; })[0];
+        var shn = shf ? scoreFraction(shf, customCellText(shf, d)) : null;
+        if (shn !== null) {
+          scoreHead = '<div class="score-head">' + scorePillHtml(shn, true) +
+            '<span class="sh-lab">' + esc(shf.label) + "</span></div>";
+        }
       }
     }
     // A record shows the questions the form asks today — the same list Airtable shows.
@@ -3575,6 +3813,7 @@
                      && currentCustom.table.config.detail_fields) || null;
     var curated = !!(pickedIds && pickedIds.length) && !detailShowAll;
     function showsOn(f, d) {
+      if (sd && (questionScorerMap(currentCustom.table, fields)[f.id] || isScorerField(f))) return false;
       if (curated) return pickedIds.indexOf(f.id) !== -1;
       return !f.internal || (d[f.id] != null && d[f.id] !== "");
     }
@@ -3651,7 +3890,7 @@
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
       body.innerHTML = scoreHead + '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
-        '</div><div class="m-grid">' + grid + "</div>" + photoSectionHtml(fields, d) +
+        '</div><div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
         moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
       wireMoreLine(s, fields); wireLinkChips();
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
@@ -3686,7 +3925,7 @@
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
-      '<div class="m-grid">' + grid + "</div>" +
+      '<div class="m-grid">' + grid + "</div>" + scoredBlock +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
     wireMoreLine(s, fields); wireLinkChips();
@@ -4595,6 +4834,14 @@
     e.stopPropagation();
     document.getElementById("group-panel").classList.toggle("open");
   });
+  document.getElementById("sort-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("sort-panel").classList.toggle("open");
+  });
+  document.getElementById("color-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("color-panel").classList.toggle("open");
+  });
   document.addEventListener("click", function (e) {
     var gw = document.getElementById("group-wrap");
     if (gw && !gw.contains(e.target)) document.getElementById("group-panel").classList.remove("open");
@@ -4602,6 +4849,14 @@
   document.addEventListener("click", function (e) {
     var w = document.getElementById("cols-wrap");
     if (w && !w.contains(e.target)) document.getElementById("cols-panel").classList.remove("open");
+  });
+  document.addEventListener("click", function (e) {
+    var sw = document.getElementById("sort-wrap");
+    if (sw && !sw.contains(e.target)) document.getElementById("sort-panel").classList.remove("open");
+  });
+  document.addEventListener("click", function (e) {
+    var cw = document.getElementById("color-wrap");
+    if (cw && !cw.contains(e.target)) document.getElementById("color-panel").classList.remove("open");
   });
   wireToggle("home-viewtoggle", function (v) { homeView = v; renderHome(); });
   document.getElementById("home-filter").addEventListener("click", function (e) {
