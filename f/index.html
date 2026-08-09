@@ -411,7 +411,8 @@
       window.scrollTo({ top: 0, behavior: "smooth" });
     }).catch(function (err) {
       btn.disabled = false; btn.textContent = "Submit";
-      msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one." : ("Couldn't submit — " + ((err && (err.message || err.error_description || err.hint)) || "please try again."));
+      // Never surface the raw database error here — it leaks table names to the public and means nothing to an applicant. Detail goes to the console below.
+      msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one." : "Couldn't submit — please try again, or contact us if it keeps happening.";
       if (window.console) console.error(err);
     });
   }
