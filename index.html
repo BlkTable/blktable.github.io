@@ -3703,6 +3703,70 @@
   // "show every answer" state. Reset when a different record is opened, so each record
   // starts clean, but kept when this same record re-renders after the toggle.
   var detailShowAll = false, detailShowAllFor = null;
+  // Returns { html, earned, possible, sections:[{name,earned,possible}] } or null when the
+  // table is not scored. Renders each scored question with the points that answer earned.
+  function scoredDetail(table, fields, d) {
+    var cfg = table.config || {};
+    if (!cfg.score_field) return null;
+    var map = questionScorerMap(table, fields);      // questionFieldId -> scorerField
+    var qIds = Object.keys(map);
+    if (!qIds.length) return null;
+    var bySection = {}; var order = [];
+    fields.forEach(function (qf) {
+      if (!map[qf.id]) return;
+      var sec = (qf.options && qf.options.score_section) || "Score";
+      if (!bySection[sec]) { bySection[sec] = []; order.push(sec); }
+      bySection[sec].push(qf);
+    });
+    var earned = 0, possible = 0, sections = [], html = "";
+    order.forEach(function (sec) {
+      var se = 0, sp = 0, rows = "";
+      bySection[sec].forEach(function (qf) {
+        var sf = map[qf.id];
+        var ptsRaw = (d[sf.id] == null || d[sf.id] === "") ? null : parseFloat(d[sf.id]);
+        var answered = d[qf.id] != null && d[qf.id] !== "";
+        var na = (ptsRaw == null || isNaN(ptsRaw));
+        var pts = na ? 0 : ptsRaw;
+        var maxP = (sf.options && sf.options.score_weight) || 1;
+        if (!na) { se += pts; sp += maxP; earned += pts; possible += maxP; }
+        var cls = na ? "na" : (pts >= maxP ? "plus" : (pts > 0 ? "na" : "zero"));
+        var lbl = na ? "n/a" : (pts > 0 ? "+" + pts : "0");
+        rows += '<div class="q-scored"><div class="ql"><div class="qq">' + esc(qf.label) + '</div>' +
+          '<div class="qa">' + (answered ? cellValueHtml(qf, d, null) : '<span class="empty-box"></span>') + '</div></div>' +
+          '<div class="qp ' + cls + '">' + lbl + '</div></div>';
+      });
+      sections.push({ name: sec, earned: se, possible: sp });
+      html += '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' + rows;
+    });
+    return { html: html, earned: earned, possible: possible, sections: sections };
+  }
+  function scoreSideHtml(sd, table, d) {
+    var pct = sd.possible ? Math.round(sd.earned / sd.possible * 100) : 0;
+    var col = pct >= 90 ? "#2ecc71" : pct >= 75 ? "#4aa3df" : pct >= 50 ? "#e0a53a" : "#e05a5a";
+    return '<div class="score-side"><div style="color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Final score</div>' +
+      '<div class="bignum" style="color:' + col + '">' + pct + '% <small>' + sd.earned + '/' + sd.possible + '</small></div>' +
+      '<div class="score-bar"><i style="width:' + pct + '%;background:' + col + '"></i></div>' +
+      '<div style="color:var(--muted);font-size:.72rem">Scored by the engine — matches Airtable exactly</div>' +
+      '<div class="score-breakdown">' + sd.sections.map(function (x) {
+        return '<div class="brow"><span class="bl">' + esc(x.name) + '</span><span class="bv">' + x.earned + '/' + x.possible + '</span></div>';
+      }).join('') + '</div></div>';
+  }
+  // questionFieldId -> scorer field. Two supported shapes (populated later in the DB):
+  //   scorer field carries options.score_of = "<questionFieldId>", OR
+  //   question field carries options.scorer  = "<scorerFieldId>".
+  function questionScorerMap(table, fields) {
+    if (table.__qsMap) return table.__qsMap;
+    var byId = {}; fields.forEach(function (f) { byId[f.id] = f; });
+    var map = {};
+    fields.forEach(function (f) {
+      var o = f.options || {};
+      if (o.score_of && byId[o.score_of]) map[o.score_of] = f;          // scorer -> its question
+      else if (o.scorer && byId[o.scorer]) map[f.id] = byId[o.scorer];  // question -> its scorer
+    });
+    table.__qsMap = map;
+    return map;
+  }
+  function isScorerField(f) { var o = f.options || {}; return !!(o.score_of); }
   function openCustomDetail(s, fields) {
     if (detailShowAllFor !== s.id) { detailShowAll = false; detailShowAllFor = s.id; }
     var d = s.data || {}, photoPath = null, photoFieldId = null;
@@ -3710,14 +3774,21 @@
     fields.forEach(function (f) { if (f.type === "photo") { if (photoFieldId == null) photoFieldId = f.id; if (d[f.id]) photoPath = d[f.id]; } });
     // the score belongs at the top of an inspection, not thirty questions down
     var scoreHead = "";
-    var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
-               currentCustom.table.config.score_field;
-    if (shId) {
-      var shf = fields.filter(function (f) { return f.id === shId; })[0];
-      var shn = shf ? scoreFraction(shf, customCellText(shf, d)) : null;
-      if (shn !== null) {
-        scoreHead = '<div class="score-head">' + scorePillHtml(shn, true) +
-          '<span class="sh-lab">' + esc(shf.label) + "</span></div>";
+    var scoredBlock = "";
+    var sd = (currentCustom && currentCustom.table) ? scoredDetail(currentCustom.table, fields, d) : null;
+    if (sd) {
+      scoreHead = scoreSideHtml(sd, currentCustom.table, d);
+      scoredBlock = '<div class="scored-section">' + sd.html + '</div>';
+    } else {
+      var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
+                 currentCustom.table.config.score_field;
+      if (shId) {
+        var shf = fields.filter(function (f) { return f.id === shId; })[0];
+        var shn = shf ? scoreFraction(shf, customCellText(shf, d)) : null;
+        if (shn !== null) {
+          scoreHead = '<div class="score-head">' + scorePillHtml(shn, true) +
+            '<span class="sh-lab">' + esc(shf.label) + "</span></div>";
+        }
       }
     }
     // A record shows the questions the form asks today — the same list Airtable shows.
@@ -3733,6 +3804,7 @@
                      && currentCustom.table.config.detail_fields) || null;
     var curated = !!(pickedIds && pickedIds.length) && !detailShowAll;
     function showsOn(f, d) {
+      if (sd && (questionScorerMap(currentCustom.table, fields)[f.id] || isScorerField(f))) return false;
       if (curated) return pickedIds.indexOf(f.id) !== -1;
       return !f.internal || (d[f.id] != null && d[f.id] !== "");
     }
@@ -3809,7 +3881,7 @@
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
       body.innerHTML = scoreHead + '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
-        '</div><div class="m-grid">' + grid + "</div>" + photoSectionHtml(fields, d) +
+        '</div><div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
         moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
       wireMoreLine(s, fields); wireLinkChips();
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
@@ -3844,7 +3916,7 @@
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
-      '<div class="m-grid">' + grid + "</div>" +
+      '<div class="m-grid">' + grid + "</div>" + scoredBlock +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
     wireMoreLine(s, fields); wireLinkChips();
