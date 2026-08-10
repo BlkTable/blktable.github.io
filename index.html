@@ -14,17 +14,29 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <style>
   :root {
-    --bg: #0a0b0d;
-    --bg-top: #16181c;
-    --card: #131519;
+    /* Airtable's shell is near-black and flat: a handful of greys separated by
+       low-contrast lines rather than by drop shadows or gradients. */
+    --bg: #000000;          /* page ground */
+    --bg-2: #0d0d0f;        /* sidebar and popovers */
+    --bg-top: #1a1a1a;      /* header, sticky rows, raised strips */
+    --card: #141416;
     --text: #f2f3f5;
     --muted: #8b9198;
     --silver: #d6dade;
     --silver-hi: #eef0f2;
     --silver-lo: #b4b9c0;
-    --line: rgba(255,255,255,0.08);
-    --field-bg: #0e1013;
-    --field-border: #2a2e34;
+    --line: rgba(255,255,255,0.07);
+    --line-2: rgba(255,255,255,0.14);
+    --field-bg: #0d0d0f;
+    --field-border: #2a2a2d;
+    /* Two accents, each with one job. Blue = the primary action on the screen.
+       Pink = sharing, and the underline under whichever tab you are on. */
+    --accent: #2d7ff9;
+    --accent-hi: #4f97ff;
+    --accent-ink: #ffffff;
+    --pink: #f82b60;
+    --pink-hi: #ff5177;
+    --pink-soft: rgba(248,43,96,0.14);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -47,11 +59,11 @@
     display: block; width: 240px; max-width: 82%; height: auto;
     margin: 0 auto 24px;
   }
+  /* Flat: a border does the separating, not a drop shadow. */
   .login-card {
-    background: linear-gradient(180deg, #16181d 0%, var(--card) 100%);
-    border: 1px solid var(--line); border-radius: 18px;
+    background: var(--card);
+    border: 1px solid var(--line-2); border-radius: 12px;
     padding: 26px 24px 24px;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04);
   }
   .brand-sub { text-align: center; color: var(--muted); font-size: 0.82rem; margin: 0 0 20px; }
   .field-group { display: flex; flex-direction: column; gap: 12px; }
@@ -60,14 +72,15 @@
     background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; width: 100%;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  input:focus { border-color: var(--silver); box-shadow: 0 0 0 3px rgba(214,218,222,0.12); }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(45,127,249,0.25); }
+  /* The one vivid blue on the screen: whatever the primary action is. */
   button.primary {
-    padding: 13px 16px; border-radius: 12px; border: none;
-    background: linear-gradient(180deg, var(--silver-hi) 0%, var(--silver-lo) 100%);
-    color: #14161a; font-weight: 700; font-size: 1rem; cursor: pointer;
-    transition: filter 0.15s ease, transform 0.05s ease;
+    padding: 13px 16px; border-radius: 8px; border: none;
+    background: var(--accent);
+    color: var(--accent-ink); font-weight: 600; font-size: 1rem; cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
   }
-  button.primary:hover { filter: brightness(1.05); }
+  button.primary:hover { background: var(--accent-hi); }
   button.primary:active { transform: translateY(1px); }
   button.primary:disabled { opacity: 0.55; cursor: default; filter: none; }
   .msg { font-size: 0.85rem; text-align: center; min-height: 1.2em; margin-top: 4px; }
@@ -75,15 +88,20 @@
   .msg.ok { color: #7ed08a; }
 
   /* ---------- App shell ---------- */
-  .app { display: none; min-height: 100vh; flex-direction: column; }
+  /* Airtable's shell is the viewport: the header and the sidebar stay put and the
+     records pane is what scrolls. That is also what pins Create to the bottom of
+     the rail instead of letting it drift down a long page. */
+  .app { display: none; height: 100vh; flex-direction: column; }
+  /* Slim global header: menu + logo on the left, one search box in the middle,
+     help / notifications / avatar on the right. Same three zones on every screen. */
   .topbar {
-    position: sticky; top: 0; z-index: 10;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 13px 22px; border-bottom: 1px solid var(--line);
-    background: rgba(14,16,19,0.82); backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 60;
+    display: grid; grid-template-columns: 1fr minmax(0, 460px) 1fr; align-items: center;
+    gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line);
+    background: var(--bg-top);
   }
-  .topbar .logo-img { height: 38px; width: auto; display: block; }
-  .topbar .right { display: flex; align-items: center; gap: 16px; }
+  .topbar .logo-img { height: 28px; width: auto; display: block; }
+  .topbar .right { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
   .who { text-align: right; line-height: 1.25; }
   .who .email { font-size: 0.85rem; color: var(--text); }
   .badge {
@@ -100,16 +118,16 @@
 
   /* ---------- Workspace: Tables sidebar + main pane ---------- */
   .workspace { display: flex; flex: 1; min-height: 0; }
-  .sidebar { width: 232px; flex: 0 0 auto; border-right: 1px solid var(--line); background: #0e1013;
-    padding: 22px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .sidebar { width: 244px; flex: 0 0 auto; border-right: 1px solid var(--line); background: var(--bg-2);
+    padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; }
   .side-bottom { margin-top: auto; }
   .side-label { font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); padding: 0 10px; margin-bottom: 6px; }
-  .side-list { display: flex; flex-direction: column; gap: 4px; }
+  .side-list { display: flex; flex-direction: column; gap: 2px; }
   .side-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-    padding: 10px 12px; border-radius: 10px; background: none; border: none; color: var(--text);
-    font-size: 0.9rem; cursor: pointer; font-family: inherit; }
+    padding: 8px 10px; border-radius: 6px; background: none; border: none; color: var(--text);
+    font-size: 0.875rem; cursor: pointer; font-family: inherit; }
   .side-item:hover { background: rgba(255,255,255,0.05); }
-  .side-item.active { background: rgba(214,218,222,0.12); color: var(--silver); font-weight: 600; }
+  .side-item.active { background: rgba(255,255,255,0.09); color: var(--silver-hi); font-weight: 600; }
   .side-item .ico { width: 8px; height: 8px; border-radius: 2px; background: currentColor; opacity: 0.7; flex: 0 0 auto; }
   .side-item .side-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .side-gear { display: none; margin-left: auto; flex: 0 0 auto; font-size: 0.95rem; line-height: 1; color: var(--muted);
@@ -117,12 +135,16 @@
   #side-tables.show-gears .side-gear { display: inline-flex; }
   .side-item:hover .side-gear, .side-item.active .side-gear { opacity: 0.75; }
   .side-gear:hover { color: var(--silver); background: rgba(255,255,255,0.1); opacity: 1; }
-  .main { flex: 1; min-width: 0; padding: 30px 26px 48px; max-width: 920px; }
+  /* The grid needs the whole width, so the pane itself carries no padding: the
+     base bar and the toolbar run edge to edge and .view-body holds the padding. */
+  .main { flex: 1; min-width: 0; padding: 0; max-width: none; overflow-y: auto; }
+  .view-body { padding: 16px 20px 44px; }
+  .view-body.narrow { max-width: 900px; }
   .view.hidden { display: none; }
-  .topbar-left { display: flex; align-items: center; gap: 12px; }
-  .nav-toggle { background: none; border: 1px solid var(--field-border); color: var(--text); border-radius: 9px;
-    width: 38px; height: 38px; cursor: pointer; font-size: 1.05rem; line-height: 1; display: flex; align-items: center; justify-content: center; }
-  .nav-toggle:hover { border-color: var(--silver); }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .nav-toggle { background: none; border: none; color: var(--silver-lo); border-radius: 6px;
+    width: 32px; height: 32px; cursor: pointer; font-size: 1.05rem; line-height: 1; display: flex; align-items: center; justify-content: center; }
+  .nav-toggle:hover { background: rgba(255,255,255,0.07); color: var(--text); }
   /* auto-hiding sidebar: collapses to a thin rail, expands on hover */
   .workspace.collapsed { position: relative; }
   .workspace.collapsed .sidebar {
@@ -131,21 +153,26 @@
     background: var(--field-border); border-right: none; transition: width 0.15s ease;
   }
   .workspace.collapsed .sidebar:hover {
-    width: 232px; min-width: 232px; padding: 22px 14px; overflow: auto;
-    background: #0e1013; border-right: 1px solid var(--line); box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    width: 244px; min-width: 244px; padding: 12px 10px; overflow: auto;
+    background: var(--bg-2); border-right: 1px solid var(--line-2);
   }
   .workspace.collapsed .main { margin: 0 auto; max-width: 1200px; padding-left: 40px; padding-right: 40px; }
-  @media (max-width: 720px) { .workspace.collapsed .sidebar { position: static; width: auto; min-width: 0; padding: 12px 14px; overflow: visible; background: #0e1013; } .workspace.collapsed .main { margin-left: 0; } }
+  @media (max-width: 720px) { .workspace.collapsed .sidebar { position: static; width: auto; min-width: 0; padding: 12px 14px; overflow: visible; background: var(--bg-2); } .workspace.collapsed .main { margin-left: 0; } }
   @media (max-width: 720px) {
     .workspace { flex-direction: column; }
     .sidebar { width: auto; border-right: none; border-bottom: 1px solid var(--line);
       flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; }
+    .topbar { grid-template-columns: auto 1fr auto; padding: 8px 10px; }
     .side-group { display: flex; align-items: center; gap: 8px; }
     .side-bottom { margin-top: 0; margin-left: auto; }
     .side-label { display: none; }
     .side-list { flex-direction: row; flex-wrap: wrap; }
     .side-item { padding: 8px 12px; border: 1px solid var(--field-border); border-radius: 999px; }
-    .main { padding: 22px 16px 40px; max-width: none; }
+    .side-scroll { overflow: visible; flex-direction: row; flex-wrap: wrap; }
+    .side-foot { margin-top: 0; margin-left: auto; padding-top: 0; border-top: none;
+      flex-direction: row; align-items: center; }
+    .side-create { width: auto; margin-top: 0; }
+    .view-body { padding: 16px 14px 40px; }
   }
   .section-title { font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
   .empty {
@@ -184,7 +211,7 @@
     border: 1px solid var(--line); border-radius: 14px; cursor: pointer; transition: border-color 0.15s ease; }
   .ja-row:hover { border-color: var(--silver); }
   .ja-thumb { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: 0 0 auto;
-    background: #20242b; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 1.1rem; }
+    background: #232326; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 1.1rem; }
   .ja-row .info { flex: 1; min-width: 0; }
   .ja-row .name { font-weight: 600; font-size: 0.95rem; }
   .ja-row .sub { color: var(--muted); font-size: 0.8rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -206,8 +233,8 @@
   .filter-btn:hover { border-color: var(--silver); color: var(--text); }
   .filter-btn.active { border-color: var(--silver); color: var(--silver); }
   .filter-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 244px;
-    background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; padding: 14px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+    background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px; padding: 14px;
+     display: none; }
   .filter-panel.open { display: block; }
   .fp-group { margin-bottom: 14px; }
   .fp-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
@@ -231,7 +258,7 @@
     background: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; }
   .fp-clear:hover { color: var(--text); border-color: var(--silver); }
   /* Airtable-style condition builder (standard filter on every table) */
-  .filter-panel.fp-cond { width: min(92vw, 500px); max-height: 68vh; overflow-y: auto; }
+  .filter-panel.fp-cond { width: min(94vw, 580px); max-height: 68vh; overflow-y: auto; }
   .fp-head { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 10px; }
   .fc-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
   .fc-conj { flex: 0 0 56px; height: 38px; display: flex; align-items: center; color: var(--muted); font-size: 0.82rem; }
@@ -262,19 +289,19 @@
     cursor: pointer; transition: border-color 0.15s ease;
     display: flex; flex-direction: column; height: 100%; overflow: hidden; }
   .ja-card:hover { border-color: var(--silver); }
-  .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: #20242b center/cover no-repeat; border-radius: 16px 16px 0 0;
+  .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: #232326 center/cover no-repeat; border-radius: 16px 16px 0 0;
     display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 2rem; font-weight: 700; }
   /* per-record ⋯ actions menu */
   .rec-menu { position: relative; flex: 0 0 auto; }
   .ja-card .card-actions { justify-content: center; }
   .rec-kebab { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1.05rem; line-height: 1; cursor: pointer; flex: 0 0 auto !important; }
   .rec-kebab:hover { border-color: var(--silver); }
-  .rec-actions { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: #1a1d22; border: 1px solid var(--field-border); border-radius: 10px; box-shadow: 0 14px 34px rgba(0,0,0,0.5); display: none; }
+  .rec-actions { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
   .rec-menu.open .rec-actions { display: block; }
   .rec-actions li { padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 0.85rem; color: var(--text); font-weight: 500; }
   .rec-actions li:hover { background: rgba(255,255,255,0.06); }
   .rec-actions li.danger { color: #ff6b6b; }
-  .u-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #20242b; flex: 0 0 auto; }
+  .u-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #232326; flex: 0 0 auto; }
   /* builder: workflow stages */
   .bld-stage { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .bld-stage input.st-label { flex: 1; min-width: 0; min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
@@ -419,7 +446,7 @@
   .cc-btn:hover { border-color: var(--silver); }
   .cc-flag, .cc-menu li img { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
   .cc-caret { color: var(--muted); font-size: 0.65rem; }
-  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;  display: none; }
   .cc-menu.open { display: block; }
   .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 8px; cursor: pointer; color: var(--text); font-size: 0.85rem; }
   .cc-menu li:hover { background: rgba(255,255,255,0.06); }
@@ -444,7 +471,7 @@
     border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 30px 70px rgba(0,0,0,0.55); }
   .modal-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 1.15rem; cursor: pointer; }
   .modal-close:hover { color: var(--text); }
-  .m-photo { width: 96px; height: 96px; border-radius: 14px; object-fit: cover; background: #20242b; margin-bottom: 14px; cursor: zoom-in; }
+  .m-photo { width: 96px; height: 96px; border-radius: 14px; object-fit: cover; background: #232326; margin-bottom: 14px; cursor: zoom-in; }
   .m-photo-actions { margin: -8px 0 14px; }
   .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.86); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
   .lightbox.open { display: flex; }
@@ -509,11 +536,11 @@
   .q-scored .ql { flex: 1; min-width: 0; }
   .q-scored .qq { font-size: 0.8rem; color: var(--silver-lo); margin-bottom: 4px; }
   .q-scored .qp { flex: 0 0 auto; align-self: center; font-weight: 800; font-size: 0.8rem; border-radius: 8px; padding: 3px 9px; min-width: 46px; text-align: center; }
-  .qp.plus { background: #1c5b34; color: #dcffe9; } .qp.zero { background: #2a1414; color: #ff9d9d; } .qp.na { background: #1a1d22; color: var(--muted); }
+  .qp.plus { background: #1c5b34; color: #dcffe9; } .qp.zero { background: #2a1414; color: #ff9d9d; } .qp.na { background: var(--bg-2); color: var(--muted); }
   .score-side { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 4px 0 16px; }
   .score-side .bignum { font-size: 2.2rem; font-weight: 800; line-height: 1; }
   .score-side .bignum small { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
-  .score-bar { height: 10px; border-radius: 999px; background: #20242b; overflow: hidden; margin: 12px 0 6px; }
+  .score-bar { height: 10px; border-radius: 999px; background: #232326; overflow: hidden; margin: 12px 0 6px; }
   .score-bar > i { display: block; height: 100%; border-radius: 999px; }
   .score-breakdown { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
   .score-breakdown .brow { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; }
@@ -560,32 +587,251 @@
   .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
   .photo-cell { display: flex; flex-direction: column; gap: 4px; }
   .photo-cell img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 10px;
-    background: #20242b; border: 1px solid var(--field-border); cursor: zoom-in; }
+    background: #232326; border: 1px solid var(--field-border); cursor: zoom-in; }
   .photo-cell img:hover { border-color: var(--silver); }
   .photo-cell .pc-lab { color: var(--muted); font-size: 0.68rem; line-height: 1.3;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* ================================================================
+     Airtable shell: global header, sidebar, base bar, grid toolbar.
+     Everything here is flat — borders and low-contrast lines separate
+     the surfaces, and the only saturated colours are the two accents.
+     ================================================================ */
+
+  /* ---- global header: search, help, notifications, avatar ---- */
+  .gsearch { position: relative; display: flex; align-items: center; }
+  .gsearch input {
+    height: 32px; padding: 0 62px 0 34px; border-radius: 6px; font-size: 0.84rem;
+    background: var(--field-bg); border: 1px solid var(--field-border); color: var(--text);
+  }
+  .gsearch .gs-ico { position: absolute; left: 11px; color: var(--muted); display: flex; pointer-events: none; }
+  .gsearch .gs-kbd { position: absolute; right: 8px; color: var(--muted); font-size: 0.66rem;
+    border: 1px solid var(--field-border); border-radius: 4px; padding: 2px 6px; pointer-events: none;
+    letter-spacing: 0.04em; white-space: nowrap; }
+  .hd-btn { position: relative; background: none; border: none; color: var(--silver-lo); cursor: pointer;
+    width: 32px; height: 32px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
+  .hd-btn:hover { background: rgba(255,255,255,0.07); color: var(--text); }
+  /* the count sits on the bell, the way an unread badge does */
+  .hd-badge { position: absolute; top: 1px; right: 0; min-width: 15px; height: 15px; padding: 0 4px;
+    border-radius: 999px; background: var(--pink); color: #fff; font-size: 0.6rem; font-weight: 800;
+    display: none; align-items: center; justify-content: center; line-height: 1; }
+  .hd-badge.on { display: inline-flex; }
+
+  /* ---- command palette (Ctrl K) ---- */
+  .palette-back { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 400; display: none; }
+  .palette-back.open { display: block; }
+  .palette { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 401;
+    width: min(560px, 94vw); background: var(--bg-2); border: 1px solid var(--line-2);
+    border-radius: 10px; overflow: hidden; display: none; }
+  .palette.open { display: block; }
+  .palette input { border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+    background: transparent; height: 48px; font-size: 0.95rem; }
+  .palette input:focus { box-shadow: none; border-color: var(--line); }
+  .pal-list { max-height: min(52vh, 420px); overflow: auto; padding: 6px; }
+  .pal-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: none; border: none; color: var(--text); font: inherit; font-size: 0.86rem;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .pal-row.on, .pal-row:hover { background: rgba(255,255,255,0.08); }
+  .pal-row .pal-sub { margin-left: auto; color: var(--muted); font-size: 0.72rem; }
+  .pal-empty { color: var(--muted); font-size: 0.84rem; padding: 16px 12px; text-align: center; }
+
+  /* ---- per-table colour + glyph: the square that identifies a table everywhere ---- */
+  .tmark { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 5px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; color: #fff;
+    line-height: 1; text-transform: uppercase; }
+  .tmark.lg { width: 28px; height: 28px; border-radius: 6px; font-size: 0.92rem; }
+  .side-item .tmark { margin-right: 0; }
+
+  /* ---- sidebar: nav group, footer group, pinned Create button ---- */
+  .side-nav-item { display: flex; align-items: center; gap: 10px; }
+  .side-nav-item svg { flex: 0 0 auto; opacity: 0.8; }
+  .side-foot { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 2px; }
+  .side-foot .side-item { color: var(--silver-lo); font-size: 0.82rem; }
+  .side-create { width: 100%; margin-top: 8px; padding: 10px 12px; border: none; border-radius: 6px;
+    background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 0.875rem;
+    font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .side-create:hover { background: var(--accent-hi); }
+  .side-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+
+  /* ---- base bar: table identity, its tabs, and Share ---- */
+  /* both strips stay on screen while the records scroll under them */
+  .base-bar { position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 44px;
+    border-bottom: 1px solid var(--line); background: var(--bg-top); }
+  .base-name { display: inline-flex; align-items: center; gap: 6px; background: none; border: none;
+    color: var(--text); font: inherit; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+    padding: 5px 8px; border-radius: 6px; max-width: 34vw; }
+  .base-name:hover { background: rgba(255,255,255,0.07); }
+  .base-name .bn-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .base-name .bn-ar { color: var(--muted); font-weight: 600; font-size: 0.84rem; }
+  .base-name .bn-caret { color: var(--muted); font-size: 0.62rem; }
+  /* the active tab is marked by a thin accent underline, nothing else */
+  .base-tabs { display: flex; align-items: stretch; gap: 2px; height: 100%; margin-left: 6px; }
+  .base-tabs button { position: relative; background: none; border: none; color: var(--muted);
+    font: inherit; font-size: 0.84rem; font-weight: 600; padding: 0 12px; cursor: pointer; }
+  .base-tabs button:hover { color: var(--text); }
+  .base-tabs button.active { color: var(--text); }
+  .base-tabs button.active:after { content: ""; position: absolute; left: 8px; right: 8px; bottom: 0;
+    height: 2px; border-radius: 2px 2px 0 0; background: var(--pink); }
+  .base-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .btn-share { background: var(--pink); border: none; color: #fff; font: inherit; font-size: 0.8rem;
+    font-weight: 600; padding: 6px 13px; border-radius: 6px; cursor: pointer; }
+  .btn-share:hover { background: var(--pink-hi); }
+  .base-count { color: var(--muted); font-size: 0.76rem; padding-right: 4px; }
+
+  /* ---- the toolbar above the records ---- */
+  .at-toolbar { position: sticky; top: 44px; z-index: 29;
+    display: flex; align-items: center; gap: 2px; padding: 5px 10px;
+    border-bottom: 1px solid var(--line); background: var(--bg); flex-wrap: wrap; }
+  .at-toolbar .tb-sep { width: 1px; height: 18px; background: var(--line-2); margin: 0 6px; }
+  .at-toolbar .tb-right { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+  .tb-btn svg { flex: 0 0 auto; opacity: 0.85; }
+  .tb-btn.on { color: #cfe0ff; background: rgba(45,127,249,0.16); }
+  /* the search collapses to its icon until you want it, as Airtable's does */
+  .tb-search { display: flex; align-items: center; }
+  .tb-search input { width: 0; padding: 0; border: none; background: transparent; height: 28px;
+    font-size: 0.82rem; transition: width 0.14s ease, padding 0.14s ease; }
+  .tb-search.open input { width: 210px; padding: 0 10px; border: 1px solid var(--field-border);
+    border-radius: 6px; background: var(--field-bg); }
+  .tb-search input:focus { box-shadow: none; border-color: var(--accent); }
+  @media (max-width: 720px) { .tb-search input, .tb-search.open input { width: 100%; padding: 0 10px;
+    border: 1px solid var(--field-border); border-radius: 6px; background: var(--field-bg); } }
+
+  /* ---- view rail inside the sidebar: view types carry their own colour ---- */
+  .vk-ico { flex: 0 0 auto; width: 15px; height: 15px; border-radius: 4px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 0.6rem; color: #fff; font-weight: 800; line-height: 1; }
+  .vk-ico.v-grid { background: #2d7ff9; }
+  .vk-ico.v-cards { background: #8b46ff; }
+  .vk-ico.v-list { background: #20c933; }
+  .vk-ico.v-form { background: #ff6f2c; }
+  .vk-find { margin: 4px 0 2px 22px; }
+  .vk-find input { height: 26px; padding: 0 8px; font-size: 0.76rem; border-radius: 5px; }
+  .vk-new { color: var(--accent) !important; font-weight: 600; }
+  .vk-new:hover { color: var(--accent-hi) !important; }
+  .side-kid-branches { display: flex; flex-direction: column; gap: 2px; }
+
+  /* ---- menus: create, view types, row height, base name ---- */
+  .at-menu { position: fixed; z-index: 320; min-width: 210px; margin: 0; padding: 6px; list-style: none;
+    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px; display: none; }
+  .at-menu.open { display: block; }
+  .at-menu li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 0.86rem; color: var(--text); }
+  .at-menu li:hover { background: rgba(255,255,255,0.08); }
+  .at-menu li.head { color: var(--muted); font-size: 0.66rem; letter-spacing: 0.1em;
+    text-transform: uppercase; cursor: default; padding: 8px 10px 4px; }
+  .at-menu li.head:hover { background: none; }
+  .at-menu li.sep { border-top: 1px solid var(--line); margin: 4px 0; padding: 0; height: 0; cursor: default; }
+  .at-menu li.sep:hover { background: none; }
+  .at-menu li .mk { margin-left: auto; color: var(--muted); font-size: 0.72rem; }
+
+  /* ---- field-type icons in a column header ---- */
+  .fico { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px;
+    margin-right: 6px; color: var(--muted); vertical-align: -2px; }
+  .grid thead th .fico { opacity: 0.9; }
+
+  /* ---- row furniture: number that becomes a checkbox, and an expand button ---- */
+  .grid th.rowno, .grid td.rowno { width: 62px; min-width: 62px; padding: 0 6px; text-align: left;
+    color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.74rem; }
+  .grid td.rowno .rn { display: inline-block; width: 20px; }
+  .grid td.rowno .rchk { display: none; width: 13px; height: 13px; margin: 0; accent-color: var(--accent); vertical-align: -2px; }
+  .grid tbody tr:hover td.rowno .rn, .grid tr.sel td.rowno .rn { display: none; }
+  .grid tbody tr:hover td.rowno .rchk, .grid tr.sel td.rowno .rchk { display: inline-block; }
+  .grid td.rowno .rexp { visibility: hidden; background: none; border: 1px solid var(--field-border);
+    color: var(--silver-lo); border-radius: 4px; cursor: pointer; font-size: 0.66rem; padding: 1px 4px; margin-left: 6px; }
+  .grid tbody tr:hover td.rowno .rexp { visibility: visible; }
+  .grid td.rowno .rexp:hover { color: var(--text); border-color: var(--silver); }
+  .grid tr.sel td { background: rgba(45,127,249,0.10) !important; }
+  .grid th.addcol, .grid td.addcol { width: 40px; min-width: 40px; text-align: center; color: var(--muted); }
+  .grid th.addcol { cursor: pointer; }
+  .grid th.addcol:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+  /* row height, the way Airtable's height control works */
+  .grid-wrap.rh-short table.grid th, .grid-wrap.rh-short table.grid td { padding-top: 4px; padding-bottom: 4px; }
+  .grid-wrap.rh-tall table.grid th, .grid-wrap.rh-tall table.grid td { padding-top: 14px; padding-bottom: 14px; }
+  .grid-wrap.rh-xtall table.grid th, .grid-wrap.rh-xtall table.grid td { padding-top: 22px; padding-bottom: 22px; }
+  /* the count line under the records */
+  .rec-count { display: flex; align-items: center; gap: 10px; padding: 9px 4px 0; color: var(--muted); font-size: 0.76rem; }
+  .rec-count .rc-add { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .selbar { display: none; align-items: center; gap: 10px; margin: 10px 0 0; padding: 8px 12px;
+    border: 1px solid rgba(45,127,249,0.4); background: rgba(45,127,249,0.10); border-radius: 8px; font-size: 0.82rem; }
+  .selbar.on { display: flex; }
+  .selbar b { font-variant-numeric: tabular-nums; }
+  .selbar .sb-sp { margin-left: auto; }
+
+  /* ---- Home: recently-opened rows grouped by period ---- */
+  .home-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .home-bar select { height: 32px; min-width: 0; width: auto; padding: 0 30px 0 10px; font-size: 0.82rem; border-radius: 6px; }
+  .home-period { color: var(--muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em;
+    margin: 18px 0 8px; }
+  .home-groups > .home-period:first-child { margin-top: 0; }
+  .hl-head { display: grid; grid-template-columns: 1fr 130px 150px 34px; gap: 12px; align-items: center;
+    padding: 0 16px 8px; color: var(--muted); font-size: 0.68rem; text-transform: uppercase;
+    letter-spacing: 0.08em; border-bottom: 1px solid var(--line); }
+  @media (max-width: 720px) { .hl-head { display: none; } }
+  .home-list .home-card.row { display: grid; grid-template-columns: 1fr 130px 150px 34px; gap: 12px;
+    align-items: center; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+    padding: 11px 16px; background: none; }
+  .home-list .home-card.row:hover { background: rgba(255,255,255,0.04); }
+  .home-card.row .hr-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .home-card.row .hr-name .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-card.row .hr-when, .home-card.row .hr-ws { color: var(--muted); font-size: 0.8rem; }
+  @media (max-width: 720px) {
+    .home-list .home-card.row { grid-template-columns: 1fr 34px; }
+    .home-card.row .hr-when, .home-card.row .hr-ws { display: none; }
+  }
+  /* the star is the row's last cell, so it must not inherit the flex layout's order:-1 */
+  .home-card.row .hc-star { position: static; order: 0; }
+  .hc-name { display: flex; align-items: center; gap: 9px; }
+
+  /* ---- filter popover: Airtable's empty state and its condition groups ---- */
+  .fp-empty { color: var(--muted); font-size: 0.82rem; padding: 4px 2px 10px; }
+  .fc-addrow { display: flex; align-items: center; gap: 14px; padding-top: 4px; }
+  .fc-addrow button { background: none; border: none; color: var(--accent); font: inherit;
+    font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 4px 0; }
+  .fc-addrow button:hover { color: var(--accent-hi); }
+  .fc-addrow button.ghost { color: var(--muted); margin-left: auto; }
+  .fc-addrow button.ghost:hover { color: var(--text); }
+  .fc-group { border: 1px solid var(--line-2); border-radius: 8px; padding: 8px;
+    margin: 4px 0; background: rgba(255,255,255,0.02); }
+  .fc-group > .fg-head { display: flex; align-items: center; gap: 8px; color: var(--muted);
+    font-size: 0.72rem; margin-bottom: 4px; }
+  .fc-group > .fg-head .fg-rm { margin-left: auto; }
+  .fc-grouprow { display: flex; align-items: flex-start; gap: 8px; }
+  .fc-grouprow > .fc-conj { flex: 0 0 62px; padding-top: 8px; }
+  .fc-grouprow > .fc-group { flex: 1; min-width: 0; }
+
   /* ---- Table (grid) view: for wide forms, closer to a spreadsheet ---- */
-  .grid-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .grid-wrap { overflow: auto; max-height: 74vh; border: 1px solid var(--line-2); border-radius: 6px; background: var(--card); }
   table.grid { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 0.84rem; }
-  table.grid th, table.grid td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left;
+  table.grid th, table.grid td { padding: 8px 12px; border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line); text-align: left;
     white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-  table.grid thead th { position: sticky; top: 0; z-index: 2; background: #1a1d22; color: var(--silver);
-    font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer;
-    border-bottom: 1px solid var(--field-border); }
+  /* Airtable's header reads as a field name with its type icon, not as a shouty label. */
+  table.grid thead th { position: sticky; top: 0; z-index: 2; background: var(--bg-top); color: var(--silver);
+    font-weight: 600; font-size: 0.78rem; letter-spacing: 0; cursor: pointer;
+    border-bottom: 1px solid var(--line-2); }
   table.grid thead th:hover { color: var(--silver-hi); }
   table.grid thead th .sort { color: var(--muted); font-weight: 400; margin-left: 4px; }
   /* first column stays put while scrolling sideways */
   table.grid th.pin, table.grid td.pin { position: sticky; left: 0; z-index: 1; background: var(--card); }
-  table.grid thead th.pin { z-index: 3; background: #1a1d22; }
+  table.grid thead th.pin { z-index: 3; background: var(--bg-top); }
   table.grid tbody tr { cursor: pointer; }
   table.grid tbody tr:hover td { background: rgba(255,255,255,0.04); }
-  table.grid tbody tr:hover td.pin { background: #1d2127; }
+  table.grid tbody tr:hover td.pin { background: #202024; }
   table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
   table.grid img.cellimg { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; display: block; cursor: zoom-in; }
+  /* The row-number column is now the leftmost thing, so it takes the sticky edge and
+     the first data column moves over by its width — otherwise they overlap on scroll. */
+  table.grid th.rowno, table.grid td.rowno { position: sticky; left: 0; z-index: 1;
+    background: var(--card); border-right: 1px solid var(--line); }
+  table.grid thead th.rowno { z-index: 3; background: var(--bg-top); }
+  table.grid tbody tr:hover td.rowno { background: #202024; }
+  table.grid th.pin, table.grid td.pin { left: 62px; }
+  /* a group heading spans the whole row, so it sticks at the very edge */
+  table.grid tr.grp td.pin { left: 0; }
   .cols-wrap { position: relative; }
   .cols-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 300px; max-height: 60vh;
-    overflow: auto; background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.5); padding: 10px; display: none; }
+    overflow: auto; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;
+     padding: 10px; display: none; }
   .cols-panel.open { display: block; }
   .cols-panel label { display: flex; gap: 8px; align-items: center; padding: 5px 4px; font-weight: 400;
     font-size: 0.84rem; cursor: pointer; margin: 0; }
@@ -594,8 +840,8 @@
     margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
   /* per-form ⋯ menu (sidebar) */
   #form-menu { position: fixed; z-index: 300; min-width: 190px; margin: 0; padding: 6px; list-style: none;
-    background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px;
-    box-shadow: 0 18px 40px rgba(0,0,0,0.55); display: none; }
+    background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;
+     display: none; }
   #form-menu.open { display: block; }
   #form-menu li { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text); }
   #form-menu li:hover { background: rgba(255,255,255,0.07); }
@@ -621,7 +867,15 @@
   .view-kid .vk-del:hover { color: #ff6b6b; opacity: 1; }
   /* year + country scope bar */
   .ja-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-  .ja-scope .scope-lab { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .scope-lab { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .at-toolbar select { height: 28px; min-width: 0; width: auto; padding: 0 26px 0 8px;
+    font-size: 0.8rem; border-radius: 6px; }
+  /* the toolbar is a strip, so everything in it is strip-height */
+  .at-toolbar .seg { height: 28px; border-radius: 6px; padding: 2px; }
+  .at-toolbar .seg button { font-size: 0.78rem; padding: 0 10px; border-radius: 4px; }
+  .at-toolbar .mine-chip { padding: 4px 11px; font-size: 0.76rem; }
+  /* these popovers hang off buttons on the LEFT of the strip, so they open rightwards */
+  .at-toolbar .filter-panel, .at-toolbar .cols-panel { left: 0; right: auto; }
   .ja-scope select { height: 34px; padding: 0 10px; }
   .ja-scope .scope-sep { width: 1px; height: 20px; background: var(--line); }
   .ja-scope .seg button img { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
@@ -634,7 +888,7 @@
   /* imported photos shown as photos, not links */
   .imp-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
   .imp-thumb { width: 104px; height: 104px; object-fit: cover; border-radius: 10px; cursor: zoom-in;
-    background: #20242b; border: 1px solid var(--field-border); }
+    background: #232326; border: 1px solid var(--field-border); }
   .imp-thumb:hover { border-color: var(--silver); }
   .imp-thumb.dead { opacity: 0.35; cursor: default; }
   .imp-docs { margin-top: 8px; }
@@ -690,12 +944,12 @@
   .profile-menu { position: relative; }
   .profile-btn { display: flex; align-items: center; gap: 9px; background: var(--card); border: 1px solid var(--field-border); border-radius: 999px; padding: 5px 12px 5px 6px; color: var(--text); cursor: pointer; font-family: inherit; }
   .profile-btn:hover { border-color: var(--silver); }
-  .pf-avatar { width: 30px; height: 30px; border-radius: 50%; background: #20242b center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 0.82rem; flex: 0 0 auto; }
+  .pf-avatar { width: 30px; height: 30px; border-radius: 50%; background: #232326 center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 0.82rem; flex: 0 0 auto; }
   .pf-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
   .pf-name { font-size: 0.85rem; font-weight: 600; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pf-role { font-size: 0.64rem; color: var(--muted); text-transform: capitalize; letter-spacing: 0.02em; }
   .profile-btn .cc-caret { color: var(--muted); font-size: 0.62rem; }
-  .profile-dd { position: absolute; right: 0; top: calc(100% + 8px); z-index: 80; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: #1a1d22; border: 1px solid var(--field-border); border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
+  .profile-dd { position: absolute; right: 0; top: calc(100% + 8px); z-index: 80; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;  display: none; }
   .profile-menu.open .profile-dd { display: block; }
   .profile-dd li { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text); }
   .profile-dd li:hover { background: rgba(255,255,255,0.06); }
@@ -721,7 +975,7 @@
   .mine-chip { border: 1px solid var(--field-border); background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
   .mine-chip.on { background: #eab308; color: #1a1400; border-color: #eab308; }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
-  .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: #20242b center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
+  .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: #232326 center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
 </style>
 </head>
 <body>
@@ -748,7 +1002,21 @@
         <button class="nav-toggle" id="nav-toggle" aria-label="Hide / show menu" title="Hide / show menu">☰</button>
         <img class="logo-img" src="assets/blk-logo.svg" alt="BLK">
       </div>
+      <!-- One search box for the whole app: it jumps to a table or a saved view, and
+           Ctrl K opens it from anywhere. The shortcut is printed so it's discoverable. -->
+      <div class="gsearch">
+        <span class="gs-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></span>
+        <input type="search" id="gsearch-input" placeholder="Search tables and views" aria-label="Search tables and views">
+        <span class="gs-kbd" id="gs-kbd">ctrl K</span>
+      </div>
       <div class="right">
+        <button class="hd-btn" id="hd-help" title="Help and keyboard shortcuts" aria-label="Help">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.6v.4"></path><circle cx="12" cy="17" r="0.6" fill="currentColor"></circle></svg>
+        </button>
+        <button class="hd-btn" id="hd-bell" title="Records waiting on you" aria-label="Notifications">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15V10a6 6 0 1 0-12 0v5l-1.5 2.5h15L18 15z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg>
+          <span class="hd-badge" id="hd-bell-n">0</span>
+        </button>
         <div class="profile-menu">
           <button class="profile-btn" id="profile-btn" aria-haspopup="true" aria-expanded="false">
             <span class="pf-avatar" id="pf-avatar" aria-hidden="true">?</span>
@@ -764,213 +1032,318 @@
       </div>
     </div>
 
+    <!-- Ctrl K palette -->
+    <div class="palette-back" id="palette-back"></div>
+    <div class="palette" id="palette" role="dialog" aria-label="Search tables and views">
+      <input type="text" id="pal-input" placeholder="Search tables and views" autocomplete="off">
+      <div class="pal-list" id="pal-list"></div>
+    </div>
+    <ul class="at-menu" id="at-menu" role="menu"></ul>
+
     <div class="workspace">
       <aside class="sidebar">
-        <div class="side-group">
-          <nav class="side-list">
-            <button class="side-item home-item" data-view="home"><span class="side-label">⌂&nbsp;&nbsp;Home</span></button>
-          </nav>
+        <div class="side-scroll">
+          <div class="side-group">
+            <nav class="side-list">
+              <button class="side-item home-item side-nav-item" data-view="home"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7"></path><path d="M6 10v9h12v-9"></path></svg><span class="side-label">Home</span></button>
+              <button class="side-item side-nav-item" id="side-starred-nav" data-view="home" data-starred="1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l2.4 5 5.6.8-4 3.9 1 5.5-5-2.7-5 2.7 1-5.5-4-3.9 5.6-.8z"></path></svg><span class="side-label">Starred</span></button>
+              <button class="side-item side-nav-item" id="side-shared-nav"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"></circle><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6S14 16 14.6 19"></path><circle cx="17" cy="10" r="2.4"></circle><path d="M15.4 14.8c2 .3 3.5 1.8 4 4.2"></path></svg><span class="side-label">Shared</span><span class="side-cat-n" id="side-shared-n"></span></button>
+            </nav>
+          </div>
+          <div class="side-group" id="starred-group" style="display:none;">
+            <div class="side-label">Starred</div>
+            <nav class="side-list" id="side-starred"></nav>
+          </div>
+          <div class="side-group">
+            <div class="side-label">Workspace</div>
+            <nav class="side-list" id="side-tables">
+              <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="tmark" data-tmark="job_applications"></span><span class="side-label">Job Applications</span><span class="side-caret" id="ja-caret">▸</span><span class="side-gear" title="Options">⋯</span></button>
+              <div class="side-kids" id="ja-kids" style="display:none;"></div>
+              <div class="side-kids" id="custom-kids" style="display:none;"></div>
+              <button class="side-item" data-view="casting" title="BLK Casting"><span class="tmark" data-tmark="casting"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Options">⋯</span></button>
+              <span id="custom-tables-slot"></span>
+            </nav>
+          </div>
         </div>
-        <div class="side-group" id="starred-group" style="display:none;">
-          <div class="side-label">Starred</div>
-          <nav class="side-list" id="side-starred"></nav>
-        </div>
-        <div class="side-group">
-          <div class="side-label">Tables</div>
-          <nav class="side-list" id="side-tables">
-            <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="ico"></span><span class="side-label">Job Applications</span><span class="side-caret" id="ja-caret">▸</span><span class="side-gear" title="Options">⋯</span></button>
-            <div class="side-kids" id="ja-kids" style="display:none;"></div>
-            <div class="side-kids" id="custom-kids" style="display:none;"></div>
-            <button class="side-item" data-view="casting" title="BLK Casting"><span class="ico"></span><span class="side-label">BLK Casting</span><span class="side-gear" title="Options">⋯</span></button>
-            <span id="custom-tables-slot"></span>
-            <button class="side-item" id="new-table-btn" style="display:none; color:var(--silver);"><span class="ico"></span>＋ New table</button>
-          </nav>
+        <!-- Footer + the one blue button, pinned to the bottom of the rail -->
+        <div class="side-foot">
+          <button class="side-item side-nav-item" id="side-forms"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg><span class="side-label">Public forms</span></button>
+          <button class="side-item side-nav-item" id="side-help"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.6v.4"></path><circle cx="12" cy="17" r="0.6" fill="currentColor"></circle></svg><span class="side-label">Help &amp; shortcuts</span></button>
+          <span id="side-archive-slot"></span>
+          <button class="side-create" id="side-create" style="display:none;">＋ Create</button>
         </div>
       </aside>
 
       <main class="main">
         <section class="view" id="view-home">
-          <div class="ja-head">
-            <div><div class="section-title">Workspace</div><h2 class="ja-title">Your tables</h2></div>
-            <div class="seg viewtoggle" id="home-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
+          <div class="view-body">
+            <div class="ja-head">
+              <div><div class="section-title">Workspace</div><h2 class="ja-title">Your tables</h2></div>
+              <div class="seg viewtoggle" id="home-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
+            </div>
+            <div class="home-bar">
+              <div class="seg viewtoggle" id="home-filter"><button type="button" data-f="all" class="active">All forms</button><button type="button" data-f="mine">Assigned to me</button></div>
+              <select id="home-sort" aria-label="How to order and group the tables">
+                <option value="recent">Recently opened</option>
+                <option value="name">Name A→Z</option>
+                <option value="starred">Starred first</option>
+              </select>
+            </div>
+            <div id="home-grid" class="home-cards"></div>
+            <div id="home-empty" class="empty" style="display:none;"><h2>No tables yet</h2><p>Tables shared with you will appear here.</p></div>
           </div>
-          <div class="seg viewtoggle" id="home-filter" style="margin-bottom:16px;"><button type="button" data-f="all" class="active">All forms</button><button type="button" data-f="mine">Assigned to me</button></div>
-          <div id="home-grid" class="home-cards"></div>
-          <div id="home-empty" class="empty" style="display:none;"><h2>No tables yet</h2><p>Tables shared with you will appear here.</p></div>
         </section>
         <section class="view hidden" id="view-job_applications">
-          <div class="ja-head">
-            <div>
-              <div class="section-title">Table</div>
-              <h2 class="ja-title">Job Applications</h2>
+          <!-- Base bar: which table you're in, its Data / Form tabs, and Share. -->
+          <div class="base-bar">
+            <span class="tmark lg" data-tmark="job_applications"></span>
+            <button class="base-name" data-basemenu="job_applications"><span class="bn-txt">Job Applications</span><span class="bn-caret">▾</span></button>
+            <nav class="base-tabs" data-tabs="job_applications">
+              <button type="button" data-t="data" class="active">Data</button>
+              <button type="button" data-t="form">Form</button>
+            </nav>
+            <div class="base-right">
+              <span class="base-count" id="ja-count">—</span>
+              <button class="hd-btn" id="ja-refresh" title="Reload from the database" aria-label="Refresh"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v4h-4"></path></svg></button>
+              <button class="btn-share" data-shareof="job_applications">Share</button>
             </div>
-            <div class="ja-count" id="ja-count">—</div>
           </div>
 
-          <div class="qr-bar">
-            <img class="qr-img" id="ja-qr" alt="QR code for the public form">
-            <div class="qr-side">
-              <div class="qr-cap">Scan to open the public form</div>
-              <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-              <a id="ja-link" href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
-              <div class="qr-btns">
-                <button class="linkbtn" id="ja-qr-dl" type="button">Download QR</button>
-                <button class="linkbtn" id="ja-qr-share" type="button">Share QR</button>
-                <button class="linkbtn qr-regen" id="ja-qr-regen" type="button" style="display:none;">Regenerate</button>
+          <div class="at-toolbar">
+            <div class="filter-wrap" id="filter-wrap">
+              <button class="tb-btn" id="filter-btn" title="Filter records">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>Filter
+              </button>
+              <div class="filter-panel" id="filter-panel"></div>
+            </div>
+            <div class="tb-sep"></div>
+            <div class="seg viewtoggle" id="ja-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
+            <div class="tb-sep"></div>
+            <label class="scope-lab" for="ja-year">Year</label>
+            <select id="ja-year"></select>
+            <div class="tb-right">
+              <div class="tb-search" id="ja-searchwrap">
+                <button class="tb-btn tb-searchtoggle" title="Search" aria-label="Search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></button>
+                <input type="search" id="ja-search" placeholder="Search name, phone, area…">
               </div>
             </div>
           </div>
 
-          <!-- Country grouping lives in the sidebar only — it doesn't fit here.
-               The year is a filter, not grouping, so it stays. -->
-          <div class="ja-scope" id="ja-scope">
-            <label class="scope-lab">Year</label>
-            <select id="ja-year"></select>
-          </div>
-
-          <div class="seg tabs" id="ja-tabs">
-            <button type="button" data-s="new" class="active">New <span class="tab-count" id="cnt-new"></span></button>
-            <button type="button" data-s="approved">Approved <span class="tab-count" id="cnt-approved"></span></button>
-            <button type="button" data-s="rejected">Rejected <span class="tab-count" id="cnt-rejected"></span></button>
-          </div>
-
-          <div class="toolbar">
-            <input type="search" id="ja-search" placeholder="Search name, phone, area…">
-            <div class="filter-wrap" id="filter-wrap">
-              <button class="filter-btn" id="filter-btn" aria-label="Filters" title="Filters">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-              </button>
-              <div class="filter-panel" id="filter-panel"></div>
+          <div class="view-body">
+            <!-- The Form tab: everything about the public form for this table. -->
+            <div class="base-pane" data-pane="job_applications:form" style="display:none;">
+              <div class="qr-bar">
+                <img class="qr-img" id="ja-qr" alt="QR code for the public form">
+                <div class="qr-side">
+                  <div class="qr-cap">Scan to open the public form</div>
+                  <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+                  <a id="ja-link" href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
+                  <div class="qr-btns">
+                    <button class="linkbtn" id="ja-qr-dl" type="button">Download QR</button>
+                    <button class="linkbtn" id="ja-qr-share" type="button">Share QR</button>
+                    <button class="linkbtn qr-regen" id="ja-qr-regen" type="button" style="display:none;">Regenerate</button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="seg viewtoggle" id="ja-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
-            <button class="linkbtn" id="ja-refresh">Refresh</button>
-          </div>
 
-          <div id="ja-bulk" class="ja-bulk" style="display:none;">
-            <button class="btn-wa" id="send-all">Send WhatsApp to all unsent</button>
-          </div>
+            <div class="base-pane" data-pane="job_applications:data">
+              <!-- Country grouping lives in the sidebar only — it doesn't fit here. -->
+              <div class="seg tabs" id="ja-tabs">
+                <button type="button" data-s="new" class="active">New <span class="tab-count" id="cnt-new"></span></button>
+                <button type="button" data-s="approved">Approved <span class="tab-count" id="cnt-approved"></span></button>
+                <button type="button" data-s="rejected">Rejected <span class="tab-count" id="cnt-rejected"></span></button>
+              </div>
 
-          <div id="ja-list" class="ja-list"></div>
-          <div class="ja-more" id="ja-more" style="display:none;">
-            <button class="linkbtn" id="ja-more-btn" type="button">Show more</button>
-            <span class="ja-more-note" id="ja-more-note"></span>
-          </div>
-          <div id="ja-empty" class="empty" style="display:none;">
-            <h2>No applications yet</h2>
-            <p>Submissions from the public form will show up here.</p>
+              <div id="ja-bulk" class="ja-bulk" style="display:none;">
+                <button class="btn-wa" id="send-all">Send WhatsApp to all unsent</button>
+              </div>
+
+              <div id="ja-list" class="ja-list"></div>
+              <div class="ja-more" id="ja-more" style="display:none;">
+                <button class="linkbtn" id="ja-more-btn" type="button">Show more</button>
+                <span class="ja-more-note" id="ja-more-note"></span>
+              </div>
+              <div id="ja-empty" class="empty" style="display:none;">
+                <h2>No applications yet</h2>
+                <p>Submissions from the public form will show up here.</p>
+              </div>
+            </div>
           </div>
         </section>
 
         <section class="view hidden" id="view-casting">
-          <div class="ja-head">
-            <div>
-              <div class="section-title">Table</div>
-              <h2 class="ja-title">BLK Casting</h2>
-            </div>
-            <div class="ja-count" id="casting-count">—</div>
-          </div>
-          <div class="qr-bar">
-            <img class="qr-img" id="cast-qr" alt="QR code for the public form">
-            <div class="qr-side">
-              <div class="qr-cap">Scan to open the public form</div>
-              <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-              <a id="cast-link" href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
-              <div class="qr-btns">
-                <button class="linkbtn" id="cast-qr-dl" type="button">Download QR</button>
-                <button class="linkbtn" id="cast-qr-share" type="button">Share QR</button>
-                <button class="linkbtn qr-regen" id="cast-qr-regen" type="button" style="display:none;">Regenerate</button>
-              </div>
+          <div class="base-bar">
+            <span class="tmark lg" data-tmark="casting"></span>
+            <button class="base-name" data-basemenu="casting"><span class="bn-txt">BLK Casting</span><span class="bn-caret">▾</span></button>
+            <nav class="base-tabs" data-tabs="casting">
+              <button type="button" data-t="data" class="active">Data</button>
+              <button type="button" data-t="form">Form</button>
+            </nav>
+            <div class="base-right">
+              <span class="base-count" id="casting-count">—</span>
+              <button class="hd-btn" id="casting-refresh" title="Reload from the database" aria-label="Refresh"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v4h-4"></path></svg></button>
+              <button class="btn-share" data-shareof="casting">Share</button>
             </div>
           </div>
-          <div class="toolbar">
-            <input type="search" id="casting-search" placeholder="Search name…">
+
+          <div class="at-toolbar">
             <div class="filter-wrap" id="casting-filter-wrap" style="display:none;">
-              <button type="button" class="filter-btn" id="casting-filter-btn" aria-label="Filters" title="Filter by field">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              <button type="button" class="tb-btn" id="casting-filter-btn" title="Filter records">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>Filter
               </button>
               <div class="filter-panel" id="casting-filter-panel"></div>
             </div>
+            <div class="tb-sep"></div>
             <div class="seg viewtoggle" id="casting-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
-            <button class="linkbtn" id="casting-refresh">Refresh</button>
+            <div class="tb-right">
+              <div class="tb-search" id="casting-searchwrap">
+                <button class="tb-btn tb-searchtoggle" title="Search" aria-label="Search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></button>
+                <input type="search" id="casting-search" placeholder="Search name…">
+              </div>
+            </div>
           </div>
-          <div id="casting-list" class="ja-list"></div>
-          <div id="casting-empty" class="empty" style="display:none;">
-            <h2>No entries yet</h2>
-            <p>Submissions from the casting form will show up here.</p>
+
+          <div class="view-body">
+            <div class="base-pane" data-pane="casting:form" style="display:none;">
+              <div class="qr-bar">
+                <img class="qr-img" id="cast-qr" alt="QR code for the public form">
+                <div class="qr-side">
+                  <div class="qr-cap">Scan to open the public form</div>
+                  <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+                  <a id="cast-link" href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
+                  <div class="qr-btns">
+                    <button class="linkbtn" id="cast-qr-dl" type="button">Download QR</button>
+                    <button class="linkbtn" id="cast-qr-share" type="button">Share QR</button>
+                    <button class="linkbtn qr-regen" id="cast-qr-regen" type="button" style="display:none;">Regenerate</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="base-pane" data-pane="casting:data">
+              <div id="casting-list" class="ja-list"></div>
+              <div id="casting-empty" class="empty" style="display:none;">
+                <h2>No entries yet</h2>
+                <p>Submissions from the casting form will show up here.</p>
+              </div>
+            </div>
           </div>
         </section>
 
         <section class="view hidden" id="view-custom">
-          <div class="ja-head">
-            <div><div class="section-title">Table</div><h2 class="ja-title" id="custom-title">—</h2></div>
-            <div class="ja-count" id="custom-count">—</div>
-          </div>
-          <div class="qr-bar" id="custom-qr-bar">
-            <img class="qr-img" id="custom-qr" alt="QR code for the public form">
-            <div class="qr-side">
-              <div class="qr-cap">Scan to open the public form</div>
-              <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-              <a id="custom-link-a" target="_blank" rel="noopener">—</a>
-              <div class="qr-btns">
-                <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
-                <button class="linkbtn" id="custom-qr-share" type="button">Share QR</button>
-                <button class="linkbtn qr-regen" id="custom-qr-regen" type="button" style="display:none;">Regenerate</button>
-              </div>
+          <div class="base-bar">
+            <span class="tmark lg" id="custom-tmark"></span>
+            <button class="base-name" id="custom-basemenu"><span class="bn-txt" id="custom-title">—</span><span class="bn-caret">▾</span></button>
+            <nav class="base-tabs" data-tabs="custom">
+              <button type="button" data-t="data" class="active">Data</button>
+              <button type="button" data-t="form" id="custom-tab-form">Form</button>
+            </nav>
+            <div class="base-right">
+              <span class="base-count" id="custom-count">—</span>
+              <button class="hd-btn" id="custom-refresh" title="Reload from the database" aria-label="Refresh"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v4h-4"></path></svg></button>
+              <button class="btn-share" id="custom-share">Share</button>
             </div>
           </div>
-          <div class="toolbar">
-            <input type="search" id="custom-search" placeholder="Search…">
+          <div class="at-toolbar">
+            <div class="cols-wrap" id="cols-wrap" style="display:none;">
+              <button class="tb-btn" id="cols-btn" type="button" title="Show or hide fields">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.5"></circle><path d="M4 20L20 4"></path></svg>Hide fields
+              </button>
+              <div class="cols-panel" id="cols-panel"></div>
+            </div>
             <div class="filter-wrap" id="custom-filter-wrap" style="display:none;">
-              <button type="button" class="filter-btn" id="custom-filter-btn" aria-label="Filters" title="Filter by field">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              <button type="button" class="tb-btn" id="custom-filter-btn" title="Filter records">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>Filter
               </button>
               <div class="filter-panel" id="custom-filter-panel"></div>
             </div>
-            <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button><button type="button" data-v="table">Table</button></div>
-            <div class="cols-wrap" id="cols-wrap" style="display:none;">
-              <button class="linkbtn" id="cols-btn" type="button">Columns</button>
-              <div class="cols-panel" id="cols-panel"></div>
-            </div>
             <div class="cols-wrap" id="group-wrap" style="display:none;">
-              <button class="linkbtn" id="group-btn" type="button">Group</button>
+              <button class="tb-btn" id="group-btn" type="button" title="Group records by a field">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h13M10 18h10"></path></svg>Group
+              </button>
               <div class="cols-panel" id="group-panel"></div>
             </div>
             <div class="cols-wrap" id="sort-wrap" style="display:none;">
-              <button class="tb-btn" id="sort-btn" type="button">↕ <span id="sort-lab">Sort</span></button>
+              <button class="tb-btn" id="sort-btn" type="button" title="Sort records">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 20l-3-3M7 20l3-3"></path><path d="M17 20V4M17 4l-3 3M17 4l3 3"></path></svg><span id="sort-lab">Sort</span>
+              </button>
               <div class="cols-panel" id="sort-panel"></div>
             </div>
             <div class="cols-wrap" id="color-wrap" style="display:none;">
-              <button class="tb-btn" id="color-btn" type="button">◧ <span id="color-lab">Color</span></button>
+              <button class="tb-btn" id="color-btn" type="button" title="Colour records by a field">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"></path></svg><span id="color-lab">Color</span>
+              </button>
               <div class="cols-panel" id="color-panel"></div>
             </div>
-            <button class="linkbtn" id="custom-export" type="button" style="display:none;">Export CSV</button>
+            <button class="tb-btn" id="rowh-btn" type="button" title="Row height" style="display:none;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
+            </button>
+            <button class="tb-btn" id="custom-export" type="button" style="display:none;" title="Download these records as CSV">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M4 19h16"></path></svg>CSV
+            </button>
             <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
-            <button class="linkbtn" id="custom-refresh">Refresh</button>
-            <button class="linkbtn" id="custom-edit" style="display:none;">⚙ Edit table</button>
+            <div class="tb-right">
+              <button class="tb-btn" id="custom-edit" style="display:none;" title="Edit this table and its questions">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"></path></svg>Edit table
+              </button>
+              <div class="tb-search" id="custom-searchwrap">
+                <button class="tb-btn tb-searchtoggle" title="Search" aria-label="Search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></button>
+                <input type="search" id="custom-search" placeholder="Search…">
+              </div>
+            </div>
           </div>
-          <!-- branch grouping is in the sidebar only, by design -->
-          <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
-          <div id="custom-list" class="ja-list"></div>
-          <div id="custom-empty" class="empty" style="display:none;"><h2>No submissions yet</h2><p>Submissions from the form link will show up here.</p></div>
+
+          <div class="view-body">
+            <div class="base-pane" data-pane="custom:form" style="display:none;">
+              <div class="qr-bar" id="custom-qr-bar">
+                <img class="qr-img" id="custom-qr" alt="QR code for the public form">
+                <div class="qr-side">
+                  <div class="qr-cap">Scan to open the public form</div>
+                  <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+                  <a id="custom-link-a" target="_blank" rel="noopener">—</a>
+                  <div class="qr-btns">
+                    <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
+                    <button class="linkbtn" id="custom-qr-share" type="button">Share QR</button>
+                    <button class="linkbtn qr-regen" id="custom-qr-regen" type="button" style="display:none;">Regenerate</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="base-pane" data-pane="custom:data">
+              <!-- branch grouping is in the sidebar only, by design -->
+              <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
+              <div class="selbar" id="custom-selbar">
+                <b id="sel-n">0</b><span>selected</span>
+                <button class="linkbtn sb-sp" id="sel-export" type="button">Export selected as CSV</button>
+                <button class="linkbtn" id="sel-clear" type="button">Clear</button>
+              </div>
+              <div id="custom-list" class="ja-list"></div>
+              <div id="custom-empty" class="empty" style="display:none;"><h2>No submissions yet</h2><p>Submissions from the form link will show up here.</p></div>
+            </div>
+          </div>
         </section>
 
         <section class="view hidden" id="view-users">
-          <div class="ja-head">
-            <div><div class="section-title">Admin</div><h2 class="ja-title">Users</h2></div>
-            <button class="linkbtn" id="users-new">＋ New user</button>
+          <div class="view-body narrow">
+            <div class="ja-head">
+              <div><div class="section-title">Admin</div><h2 class="ja-title">Users</h2></div>
+              <button class="linkbtn" id="users-new">＋ New user</button>
+            </div>
+            <div id="users-list" class="ja-list"></div>
+            <div id="users-empty" class="empty" style="display:none;"><h2>No users yet</h2></div>
           </div>
-          <div id="users-list" class="ja-list"></div>
-          <div id="users-empty" class="empty" style="display:none;"><h2>No users yet</h2></div>
         </section>
 
         <section class="view hidden" id="view-account">
-          <div class="section-title">Account</div>
-          <h2 class="ja-title" style="margin-bottom: 18px;">Change password</h2>
-          <div class="card" style="margin-top: 0; max-width: 380px;">
-            <div class="field-group">
-              <input type="password" id="new-pw" placeholder="New password (min 8 characters)" autocomplete="new-password">
-              <button class="primary" id="pw-btn">Update password</button>
-              <div class="msg" id="pw-msg"></div>
+          <div class="view-body narrow">
+            <div class="section-title">Account</div>
+            <h2 class="ja-title" style="margin-bottom: 18px;">Change password</h2>
+            <div class="card" style="margin-top: 0; max-width: 380px;">
+              <div class="field-group">
+                <input type="password" id="new-pw" placeholder="New password (min 8 characters)" autocomplete="new-password">
+                <button class="primary" id="pw-btn">Update password</button>
+                <div class="msg" id="pw-msg"></div>
+              </div>
             </div>
           </div>
         </section>
@@ -1235,6 +1608,7 @@
     loadStars();
     loadAssignUsers();
     loadMyAssigned();
+    paintSharedCount();
     showView("home");
   }
   var assignUsers = [];
@@ -1243,11 +1617,23 @@
   }
   var myAssigned = {}; // table_id -> count of records currently waiting on me
   var homeFilter = "all";
+  var homeStarredOnly = false;   // set by the sidebar's Starred entry
   function loadMyAssigned() {
     db.from("app_submissions").select("table_id").eq("current_assignee", myUserId).then(function (res) {
       myAssigned = {}; ((res && res.data) || []).forEach(function (r) { myAssigned[r.table_id] = (myAssigned[r.table_id] || 0) + 1; });
-      renderHome();
+      renderHome(); paintBell();
     });
+  }
+  // The bell carries the same number Home's "N for you" badges add up to: how many
+  // records are sitting on this person's desk right now.
+  function paintBell() {
+    var b = document.getElementById("hd-bell-n"); if (!b) return;
+    var n = 0;
+    Object.keys(myAssigned).forEach(function (k) { n += myAssigned[k] || 0; });
+    b.textContent = n > 99 ? "99+" : String(n);
+    b.classList.toggle("on", n > 0);
+    var btn = document.getElementById("hd-bell");
+    if (btn) btn.title = n ? n + (n === 1 ? " record is waiting on you" : " records are waiting on you") : "Nothing is waiting on you";
   }
   function showLogin() {
     app.style.display = "none";
@@ -1265,10 +1651,12 @@
         var av = document.getElementById("pf-avatar"); av.textContent = (nm || "?").charAt(0).toUpperCase();
         if (res.data && res.data.avatar_path) getThumbUrl(res.data.avatar_path).then(function (u) { if (u) { av.style.background = "url(" + u + ") center/cover"; av.textContent = ""; } });
         isAdmin = role === "admin";
-        document.getElementById("new-table-btn").style.display = isAdmin ? "flex" : "none";
+        document.getElementById("side-create").style.display = isAdmin ? "flex" : "none";
         document.getElementById("pf-users").style.display = isAdmin ? "block" : "none";
         if (isAdmin) loadBuilderUsers();
         ["ja-qr-regen", "cast-qr-regen", "custom-qr-regen"].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = isAdmin ? "inline-block" : "none"; });
+        // Sharing a table out is an admin act, so the pink button is admin-only.
+        [].slice.call(document.querySelectorAll(".btn-share")).forEach(function (b) { b.style.display = isAdmin ? "" : "none"; });
         document.getElementById("side-tables").classList.toggle("show-gears", isAdmin);
         applyBuiltinAccess();
       });
@@ -1320,14 +1708,15 @@
   // ---- Home / Starred / Share ----
   function allAccessibleTables() {
     var list = [];
-    if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: "Job Applications", category: "", kind: "form" });
-    if (accessKeys["casting"]) list.push({ key: "casting", name: "BLK Casting", category: "", kind: "form" });
+    if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: "Job Applications", category: "", kind: "form", config: null });
+    if (accessKeys["casting"]) list.push({ key: "casting", name: "BLK Casting", category: "", kind: "form", config: null });
     (customTables || []).forEach(function (t) {
-      list.push({ key: t.id, name: t.name, category: t.category || "", kind: t.kind || "form" });
+      list.push({ key: t.id, name: t.name, category: t.category || "", kind: t.kind || "form", config: t.config || null });
     });
     return list;
   }
   function openTableByKey(key, mineOnly) {
+    markOpened(key);
     if (key === "job_applications" || key === "casting") showView(key);
     else { var t = (customTables || []).filter(function (x) { return x.id === key; })[0]; if (t) openCustomTable(t, mineOnly); }
   }
@@ -1348,55 +1737,97 @@
     host.innerHTML = "";
     items.forEach(function (t) {
       var b = document.createElement("button"); b.className = "side-item"; b.title = t.name;
-      b.innerHTML = '<span class="side-label">★&nbsp;&nbsp;' + esc(t.name) + "</span>";
+      b.innerHTML = tmarkHtml(t.key, t.name, t.config) + '<span class="side-label">' + esc(t.name) + "</span>";
       b.addEventListener("click", function () { openTableByKey(t.key); });
       host.appendChild(b);
     });
     document.getElementById("starred-group").style.display = items.length ? "" : "none";
   }
+  // Home orders itself the way you last asked: by when you were last in a table
+  // (grouped by period, like Airtable's recents), by name, or starred-first.
+  var homeSort = "recent";
+  try { homeSort = localStorage.getItem("blk_home_sort") || "recent"; } catch (e) {}
   function renderHome() {
     var grid = document.getElementById("home-grid"); if (!grid) return;
     var items = allAccessibleTables();
     if (homeFilter === "mine") items = items.filter(function (t) { return (myAssigned[t.key] || 0) > 0; });
+    if (homeStarredOnly) items = items.filter(function (t) { return !!stars[t.key]; });
     var empty = document.getElementById("home-empty");
-    if (!items.length) { grid.innerHTML = ""; empty.style.display = "block"; empty.querySelector("h2").textContent = homeFilter === "mine" ? "Nothing assigned to you" : "No tables yet"; return; }
+    if (!items.length) {
+      grid.innerHTML = ""; empty.style.display = "block";
+      empty.querySelector("h2").textContent = homeStarredOnly ? "Nothing starred yet"
+        : homeFilter === "mine" ? "Nothing assigned to you" : "No tables yet";
+      return;
+    }
     empty.style.display = "none";
-    function homeCard(t) {
+    function homeCard(t, asRow) {
       var on = !!stars[t.key];
       var n = myAssigned[t.key] || 0;
       var badge = n > 0 ? '<span class="hc-badge" title="Records waiting on you">' + n + " for you</span>" : "";
       var kind = t.kind === "task" ? '<span class="hc-kind" title="Scheduled task, not a public form">Task</span>' : "";
-      var el = document.createElement("div"); el.className = "home-card";
-      el.innerHTML = '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>" +
-        '<div class="hc-body"><div class="hc-name">' + esc(t.name) + kind + "</div>" + badge + "</div>" +
-        '<div class="hc-actions">' + (isAdmin ? '<button class="linkbtn hc-share">Share</button>' : "") + '<button class="linkbtn hc-open">Open</button></div>';
+      var mark = tmarkHtml(t.key, t.name, t.config, !asRow);
+      var el = document.createElement("div");
+      var openMine = homeFilter === "mine" || n > 0;
+      if (asRow) {
+        // The recents row: icon, name, star, when you last opened it, its workspace.
+        el.className = "home-card row";
+        el.innerHTML = '<div class="hr-name">' + mark + '<span class="nm">' + esc(t.name) + "</span>" + kind + badge + "</div>" +
+          '<div class="hr-when">' + esc(agoText(lastOpened[t.key])) + "</div>" +
+          '<div class="hr-ws">' + esc(t.category || "BLK workspace") + "</div>" +
+          '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>";
+      } else {
+        el.className = "home-card";
+        el.innerHTML = '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>" +
+          '<div class="hc-body"><div class="hc-name">' + mark + "<span>" + esc(t.name) + "</span>" + kind + "</div>" + badge + "</div>" +
+          '<div class="hc-actions">' + (isAdmin ? '<button class="linkbtn hc-share">Share</button>' : "") + '<button class="linkbtn hc-open">Open</button></div>';
+      }
       el.querySelector(".hc-star").addEventListener("click", function (e) { e.stopPropagation(); toggleStar(t.key); });
       var sh = el.querySelector(".hc-share"); if (sh) sh.addEventListener("click", function (e) { e.stopPropagation(); openShare(t.key, t.name); });
-      var openMine = homeFilter === "mine" || n > 0;
-      el.querySelector(".hc-open").addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key, openMine); });
+      var op = el.querySelector(".hc-open");
+      if (op) op.addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key, openMine); });
       el.addEventListener("click", function () { openTableByKey(t.key, openMine); });
       return el;
     }
-    var groups = groupByCategory(items);
+    var asRow = homeView === "list";
+    var groups;
+    if (homeSort === "recent") {
+      groups = groupByPeriod(items, lastOpened);
+    } else {
+      var sorted = items.slice().sort(function (a, b) {
+        if (homeSort === "starred") {
+          var sa = stars[a.key] ? 0 : 1, sb = stars[b.key] ? 0 : 1;
+          if (sa !== sb) return sa - sb;
+        }
+        return String(a.name).localeCompare(String(b.name));
+      });
+      groups = homeSort === "name" ? groupByCategory(sorted) : [{ name: "", items: sorted }];
+    }
     grid.innerHTML = "";
     if (groups.length === 1 && !groups[0].name) {
-      // No categories in play — keep the original flat layout exactly as before.
-      grid.className = homeView === "list" ? "home-list" : "home-cards";
-      groups[0].items.forEach(function (t) { grid.appendChild(homeCard(t)); });
+      grid.className = asRow ? "home-list" : "home-cards";
+      if (asRow) grid.appendChild(homeListHead());
+      groups[0].items.forEach(function (t) { grid.appendChild(homeCard(t, asRow)); });
       return;
     }
     grid.className = "home-groups";
     groups.forEach(function (g) {
       if (g.name) {
-        var h = document.createElement("div"); h.className = "home-group-title";
+        var h = document.createElement("div");
+        h.className = homeSort === "recent" ? "home-period" : "home-group-title";
         h.textContent = g.name + " (" + g.items.length + ")";
         grid.appendChild(h);
       }
       var box = document.createElement("div");
-      box.className = homeView === "list" ? "home-list" : "home-cards";
-      g.items.forEach(function (t) { box.appendChild(homeCard(t)); });
+      box.className = asRow ? "home-list" : "home-cards";
+      if (asRow) box.appendChild(homeListHead());
+      g.items.forEach(function (t) { box.appendChild(homeCard(t, asRow)); });
       grid.appendChild(box);
     });
+  }
+  function homeListHead() {
+    var h = document.createElement("div"); h.className = "hl-head";
+    h.innerHTML = "<div>Name</div><div>Last opened</div><div>Workspace</div><div></div>";
+    return h;
   }
   function openShare(key, name) {
     shareKey = key;
@@ -1598,6 +2029,168 @@
   function fmtDate(iso) {
     var d = new Date(iso);
     return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  /* ================================================================
+     Airtable shell: identity marks, field icons, menus, palette.
+     All of it is table-agnostic — a table added tomorrow gets its own
+     colour, its own glyph, and a row in the palette without any code.
+     ================================================================ */
+
+  // ---- A table's colour and glyph -----------------------------------------
+  // Airtable gives every base its own accent so you recognise it at a glance
+  // without reading the name. Ours is derived from the table's key, so it is
+  // stable for the life of the table and needs no column; `config.color` and
+  // `config.icon` override it when someone wants to pick.
+  var TINTS = ["#2d7ff9", "#18bfff", "#20c933", "#fcb400", "#ff6f2c",
+               "#f82b60", "#ff08c2", "#8b46ff", "#666eff", "#00a39c"];
+  function keyHash(key) {
+    var h = 0, s = String(key || "");
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return Math.abs(h);
+  }
+  function tableTint(key, cfg) {
+    if (cfg && cfg.color) return cfg.color;
+    return TINTS[keyHash(key) % TINTS.length];
+  }
+  function tableGlyph(name, cfg) {
+    if (cfg && cfg.icon) return String(cfg.icon);
+    // First letter of the first word that has one; Arabic-only names keep their own letter.
+    var m = String(name || "?").match(/[\p{L}\p{N}]/u);
+    return m ? m[0].toUpperCase() : "?";
+  }
+  function tmarkHtml(key, name, cfg, big) {
+    return '<span class="tmark' + (big ? " lg" : "") + '" style="background:' +
+      esc(tableTint(key, cfg)) + '">' + esc(tableGlyph(name, cfg)) + "</span>";
+  }
+  function paintTmark(el, key, name, cfg, big) {
+    if (!el) return;
+    el.className = "tmark" + (big ? " lg" : "");
+    el.style.background = tableTint(key, cfg);
+    el.textContent = tableGlyph(name, cfg);
+  }
+  // the two built-in tables have fixed names, so their marks can be painted once
+  function paintBuiltinTmarks() {
+    [].slice.call(document.querySelectorAll("[data-tmark]")).forEach(function (el) {
+      var k = el.getAttribute("data-tmark");
+      paintTmark(el, k, k === "casting" ? "BLK Casting" : "Job Applications", null, el.classList.contains("lg"));
+    });
+  }
+
+  // ---- Field-type icons ----------------------------------------------------
+  // A column header reads as "icon + name", the way Airtable's does, so the
+  // type of a field is visible without opening anything.
+  var FICONS = {
+    short_text: '<path d="M4 7h16M4 12h11M4 17h7"/>',
+    long_text: '<path d="M4 6h16M4 10h16M4 14h16M4 18h10"/>',
+    number: '<path d="M6 4l-1 16M14 4l-1 16M4 9h16M3 15h16"/>',
+    date: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+    dob: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="M12 13v3l2 1"/>',
+    dropdown: '<path d="M5 9l7 7 7-7"/>',
+    multi_select: '<path d="M4 7h9M4 12h9M4 17h9"/><path d="M17 6l2 2 3-3"/><path d="M17 16l2 2 3-3"/>',
+    yesno: '<path d="M4 12l5 5L20 6"/>',
+    photo: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-5 4 4 3-3 4 4"/>',
+    phone: '<path d="M6 3h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 4 5a2 2 0 0 1 2-2z"/>',
+    email: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/>',
+    person: '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c.7-4 3.6-6 7-6s6.3 2 7 6"/>',
+    score: '<path d="M12 3l2.6 5.6 6 .8-4.4 4.3 1.1 6-5.3-3-5.3 3 1.1-6L3.4 9.4l6-.8z"/>'
+  };
+  function fieldIcon(type, name) {
+    var t = type || "short_text";
+    if (!FICONS[t]) {
+      // a synthetic column (Branch, Submitted, a score) still deserves the right glyph
+      var n = String(name || "").toLowerCase();
+      if (n.indexOf("submitted") !== -1 || n.indexOf("date") !== -1) t = "date";
+      else if (n.indexOf("score") !== -1) t = "score";
+      else if (n.indexOf("branch") !== -1) t = "dropdown";
+      else t = "short_text";
+    }
+    return '<span class="fico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      FICONS[t] + "</svg></span>";
+  }
+
+  // ---- One floating menu, reused by everything that needs one -------------
+  var atMenuEl = document.getElementById("at-menu");
+  function closeAtMenu() { if (atMenuEl) atMenuEl.classList.remove("open"); }
+  // items: [{label, icon?, hint?, head?, sep?, on?}]
+  function openAtMenu(anchor, items) {
+    if (!atMenuEl) return;
+    atMenuEl.innerHTML = "";
+    items.forEach(function (it) {
+      var li = document.createElement("li");
+      if (it.sep) { li.className = "sep"; atMenuEl.appendChild(li); return; }
+      if (it.head) { li.className = "head"; li.textContent = it.label; atMenuEl.appendChild(li); return; }
+      li.innerHTML = (it.icon || "") + "<span>" + esc(it.label) + "</span>" +
+        (it.hint ? '<span class="mk">' + esc(it.hint) + "</span>" : "");
+      // The menu is a sibling of whatever opened it, so without this a click on an
+      // item reaches the document handlers that close the filter/columns popovers —
+      // and the panel you were editing would vanish as your choice landed in it.
+      li.addEventListener("click", function (ev) { ev.stopPropagation(); closeAtMenu(); if (it.on) it.on(); });
+      atMenuEl.appendChild(li);
+    });
+    atMenuEl.classList.add("open");
+    var r = anchor.getBoundingClientRect();
+    var w = atMenuEl.offsetWidth, h = atMenuEl.offsetHeight;
+    atMenuEl.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
+    atMenuEl.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + "px";
+  }
+  document.addEventListener("click", function (e) {
+    if (atMenuEl && !atMenuEl.contains(e.target)) closeAtMenu();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeAtMenu(); });
+
+  // ---- "How long ago", for the recently-opened list -----------------------
+  function agoText(iso) {
+    if (!iso) return "—";
+    var ms = Date.now() - new Date(iso).getTime();
+    if (!isFinite(ms) || ms < 0) return "just now";
+    var mins = Math.floor(ms / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + (mins === 1 ? " minute ago" : " minutes ago");
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + (hrs === 1 ? " hour ago" : " hours ago");
+    var days = Math.floor(hrs / 24);
+    if (days < 31) return days + (days === 1 ? " day ago" : " days ago");
+    var mos = Math.floor(days / 30);
+    if (mos < 12) return mos + (mos === 1 ? " month ago" : " months ago");
+    return Math.floor(days / 365) + " years ago";
+  }
+  // Which heading a table falls under on Home. Airtable groups the recents list
+  // by period rather than listing 40 undifferentiated rows.
+  function periodOf(iso) {
+    if (!iso) return "Not opened yet";
+    var days = (Date.now() - new Date(iso).getTime()) / 86400000;
+    if (!isFinite(days) || days < 0) return "Today";
+    if (days < 1) return "Today";
+    if (days < 7) return "Past 7 days";
+    if (days < 30) return "Past 30 days";
+    return "Older";
+  }
+  var PERIOD_ORDER = ["Today", "Past 7 days", "Past 30 days", "Older", "Not opened yet"];
+  function groupByPeriod(items, lastOpened) {
+    var by = {};
+    (items || []).forEach(function (t) {
+      var p = periodOf(lastOpened[t.key]);
+      (by[p] = by[p] || []).push(t);
+    });
+    return PERIOD_ORDER.filter(function (p) { return by[p]; }).map(function (p) {
+      by[p].sort(function (a, b) {
+        var av = lastOpened[a.key] || "", bv = lastOpened[b.key] || "";
+        if (av === bv) return String(a.name).localeCompare(String(b.name));
+        return av < bv ? 1 : -1;                       // most recent first inside a period
+      });
+      return { name: p, items: by[p] };
+    });
+  }
+  // Last-opened is a per-person habit, not shared state, so it lives in this browser.
+  var lastOpened = {};
+  try { lastOpened = JSON.parse(localStorage.getItem("blk_last_opened") || "{}") || {}; } catch (e) { lastOpened = {}; }
+  function markOpened(key) {
+    if (!key) return;
+    lastOpened[key] = new Date().toISOString();
+    try { localStorage.setItem("blk_last_opened", JSON.stringify(lastOpened)); } catch (e) {}
   }
 
   // ---- Migrated records: surface everything that came across from Airtable ----
@@ -2686,7 +3279,7 @@
       function sideItem(t) {
         var b = document.createElement("button");
         b.className = "side-item"; b.setAttribute("data-custom", t.id); b.title = t.name;
-        b.innerHTML = '<span class="ico"></span><span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Options">⋯</span>';
+        b.innerHTML = tmarkHtml(t.id, t.name, t.config) + '<span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Options">⋯</span>';
         b.addEventListener("click", function () { openCustomTable(t); });
         return b;
       }
@@ -2710,14 +3303,19 @@
         g.items.forEach(function (t) { wrap.appendChild(sideItem(t)); });
         slot.appendChild(head); slot.appendChild(wrap);
       });
-      // one quiet line at the foot of the list, only when something is actually archived
-      if (hiddenCount || showArchived) {
-        var tog = document.createElement("button");
-        tog.className = "side-item side-archive";
-        tog.innerHTML = '<span class="side-label">' + (showArchived ? "Hide archived" : "Archived") +
-          '</span><span class="side-cat-n">' + hiddenCount + "</span>";
-        tog.addEventListener("click", function () { showArchived = !showArchived; loadCustomTables(); });
-        slot.appendChild(tog);
+      // One quiet line in the sidebar footer, only when something is actually archived.
+      var archSlot = document.getElementById("side-archive-slot");
+      if (archSlot) {
+        archSlot.innerHTML = "";
+        if (hiddenCount || showArchived) {
+          var tog = document.createElement("button");
+          tog.className = "side-item side-nav-item side-archive";
+          tog.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="4" rx="1"></rect><path d="M5 8v11h14V8"></path><path d="M10 12h4"></path></svg>' +
+            '<span class="side-label">' + (showArchived ? "Hide archived" : "Archived") +
+            '</span><span class="side-cat-n">' + hiddenCount + "</span>";
+          tog.addEventListener("click", function () { showArchived = !showArchived; loadCustomTables(); });
+          archSlot.appendChild(tog);
+        }
       }
       ensureDefaultView();
     });
@@ -2732,14 +3330,20 @@
     for (var i = 0; i < views.length; i++) views[i].classList.add("hidden");
     document.getElementById("view-custom").classList.remove("hidden");
     setActiveSide(document.querySelector('.side-item[data-custom="' + t.id + '"]'));
-    document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span style="color:var(--muted);font-weight:600;font-size:0.9rem;">· ' + esc(t.name_ar) + "</span>" : "");
-    // Task tables are not public forms — no shareable link or QR for them.
+    markOpened(t.id);
+    document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span class="bn-ar">· ' + esc(t.name_ar) + "</span>" : "");
+    document.getElementById("custom-basemenu").title = t.name + (t.name_ar ? " · " + t.name_ar : "");
+    paintTmark(document.getElementById("custom-tmark"), t.id, t.name, t.config, true);
+    // Task tables are not public forms — no shareable link or QR for them, so the
+    // Form tab has nothing to show and is taken away rather than left empty.
     var isTask = (t.kind === "task");
-    var qrBar = document.getElementById("custom-qr-bar");
-    if (qrBar) qrBar.style.display = isTask ? "none" : "";
+    document.getElementById("custom-tab-form").style.display = isTask ? "none" : "";
+    setBasePane("custom", "data");
     var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
     if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
-    document.getElementById("custom-edit").style.display = isAdmin ? "inline-block" : "none";
+    document.getElementById("custom-edit").style.display = isAdmin ? "inline-flex" : "none";
+    document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
+    customSel = {}; paintSelBar();
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
@@ -2824,28 +3428,28 @@
     var br = customFacets.branches || {};
     var names = Object.keys(br).sort(function (a, b) { return br[b] - br[a]; });
     var kids = document.getElementById("custom-kids");
+    if (!kids || !currentCustom || !currentCustom.table) return;
     var meaningful = names.filter(function (n) { return n !== "__none"; }).length > 1;
-    if (!meaningful) { // no branches to group by — still offer saved views
-      if (kids) {
-        kids.innerHTML = viewsHtml();
-        kids.style.display = (customKidsOpen && customViews.length) ? "flex" : "none";
-      }
-      return;
-    }
-    var label = function (n) { return n === "__none" ? "No branch" : n; };
-    if (kids) {
+    // The view rail belongs to whichever table is open, so it is always visible;
+    // the branch list can be long (32 shops), so that half stays behind the caret.
+    var branchHtml = "";
+    if (meaningful) {
+      var label = function (n) { return n === "__none" ? "No branch" : n; };
       // "All" first, so a branch choice can be cleared from the sidebar
-      var allBtn = '<button class="side-kid' + (currentCustom.branch ? "" : " active") +
+      branchHtml = '<div class="kid-head">Branches</div>' +
+        '<button class="side-kid' + (currentCustom.branch ? "" : " active") +
         '" data-b=""><span>All branches</span><span class="kid-n">' +
-        (customFacets.all_total || 0) + "</span></button>";
-      var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
-      if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
-      kids.innerHTML = viewsHtml() + '<div class="kid-head">Branches</div>' + allBtn + names.map(function (n) {
-        return '<button class="side-kid' + (currentCustom.branch === n ? " active" : "") +
-          '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
-      }).join("");
-      kids.style.display = customKidsOpen ? "flex" : "none";
+        (customFacets.all_total || 0) + "</span></button>" +
+        names.map(function (n) {
+          return '<button class="side-kid' + (currentCustom.branch === n ? " active" : "") +
+            '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
+        }).join("");
     }
+    var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
+    if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
+    kids.innerHTML = viewsHtml() +
+      (branchHtml ? '<div class="side-kid-branches"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + branchHtml + "</div>" : "");
+    kids.style.display = "flex";
   }
   var customKidsOpen = false;
   try { customKidsOpen = localStorage.getItem("blk_custom_kids") === "1"; } catch (e) {}
@@ -2861,22 +3465,56 @@
       .then(function (r) { customViews = (r.error ? [] : (r.data || [])); return customViews; })
       .catch(function () { customViews = []; return customViews; });
   }
+  // Airtable's view rail: each view carries the colour of its type, there is a
+  // "find a view" box once the list is long enough to need one, and "Create new…"
+  // offers the view types the app actually has.
+  var viewFind = "";
   function viewsHtml() {
-    if (!customViews.length) return "";
-    var mine = customViews.filter(function (v) { return !v.is_shared; });
-    var shared = customViews.filter(function (v) { return v.is_shared; });
+    var q = viewFind.trim().toLowerCase();
+    var visible = customViews.filter(function (v) {
+      return !q || String(v.name).toLowerCase().indexOf(q) !== -1;
+    });
+    var mine = visible.filter(function (v) { return !v.is_shared; });
+    var shared = visible.filter(function (v) { return v.is_shared; });
     function row(v) {
-      var icon = v.view_type === "table" ? "▦" : v.view_type === "list" ? "☰" : "▤";
       return '<button class="side-kid view-kid" data-view-id="' + v.id + '" title="' + esc(v.name) + '">' +
-        '<span class="vk-ico">' + icon + '</span><span>' + esc(v.name) + "</span>" +
+        viewTypeIcon(v.view_type) + "<span>" + esc(v.name) + "</span>" +
         (v.owner === myUserId || isAdmin ? '<span class="vk-del" title="Delete this view">×</span>' : "") +
         "</button>";
     }
     var h = "";
+    if (customViews.length > 5) {
+      h += '<div class="vk-find"><input type="search" id="vk-find" placeholder="Find a view" value="' + esc(viewFind) + '"></div>';
+    }
     if (mine.length) h += '<div class="kid-head">My views</div>' + mine.map(row).join("");
     if (shared.length) h += '<div class="kid-head">Shared views</div>' + shared.map(row).join("");
+    if (q && !visible.length) h += '<div class="kid-head">No view matches</div>';
+    h += '<button class="side-kid vk-new" id="vk-new">＋ Create new…</button>';
     return h;
   }
+  // Delegated on the sidebar so it keeps working every time the rail is redrawn.
+  document.querySelector(".sidebar").addEventListener("input", function (e) {
+    if (!e.target || e.target.id !== "vk-find") return;
+    viewFind = e.target.value;
+    var host = document.getElementById("custom-kids");
+    if (!host) return;
+    // redraw only the view part, then put the caret back where the person was typing
+    renderCustomScope();
+    var again = document.getElementById("vk-find");
+    if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+  });
+  document.querySelector(".sidebar").addEventListener("click", function (e) {
+    var b = e.target && e.target.closest ? e.target.closest("#vk-new") : null;
+    if (!b) return;
+    e.stopPropagation();
+    if (!currentCustom || !currentCustom.table) return;
+    openAtMenu(b, [{ head: true, label: "Save this table as a view" }].concat(
+      VIEW_TYPES.map(function (vt) {
+        return { label: vt.label, icon: viewTypeIcon(vt.v), hint: vt.note,
+                 on: function () { setCustomViewType(vt.v); saveCurrentView(); } };
+      })
+    ));
+  });
   function applyView(v) {
     if (!v || !currentCustom) return;
     var c = v.config || {};
@@ -2986,6 +3624,8 @@
     if (sortWrap) sortWrap.style.display = "";        // sort is available in all views
     var colorWrap = document.getElementById("color-wrap");
     if (colorWrap) colorWrap.style.display = customView === "table" ? "none" : ""; // color tints cards/rows
+    var rowhBtn = document.getElementById("rowh-btn");
+    if (rowhBtn) rowhBtn.style.display = customView === "table" ? "" : "none"; // row height is a grid idea
     renderSortPanel(currentCustom.table, fields);
     if (customView !== "table") renderColorPanel(currentCustom.table, fields);
     updateSortLabel();
@@ -3410,6 +4050,27 @@
       });
     });
   }
+  // ---- Selecting rows in the grid ----------------------------------------
+  // Ticking rows is how Airtable's grid lets you act on a handful of records. Here
+  // the one action is exporting them, which is what the tick boxes are actually for:
+  // pulling a specific set of records out without filtering the whole table down to it.
+  var customSel = {};
+  function selectedIds() { return Object.keys(customSel); }
+  function paintSelBar() {
+    var bar = document.getElementById("custom-selbar"); if (!bar) return;
+    var n = selectedIds().length;
+    document.getElementById("sel-n").textContent = String(n);
+    bar.classList.toggle("on", n > 0);
+  }
+  document.getElementById("sel-clear").addEventListener("click", function () {
+    customSel = {}; paintSelBar(); renderCustom();
+  });
+  document.getElementById("sel-export").addEventListener("click", function () {
+    if (!currentCustom) return;
+    var picked = customSel, fields = currentCustom.fields || [], t = currentCustom.table;
+    exportCustomCsv((currentCustom.subs || []).filter(function (s) { return picked[s.id]; }),
+      customCols(t, fields).concat([{ id: "__branch", label: "Branch" }, { id: "__created", label: "Submitted" }]), t);
+  });
   function renderCustomGrid(listEl, rows, fields, t) {
     var cols = customCols(t, fields);
     var allCols = [{ id: "__branch", label: "Branch", type: "short_text" }].concat(cols,
@@ -3421,7 +4082,10 @@
       ? allCols.filter(function (c) { return c.id === customGroup.id; })[0] : null;
     var groups = groupRows(rows, gcol);
     var ordered = groups.reduce(function (acc, g) { return acc.concat(g.rows); }, []);
-    var html = '<div class="grid-wrap"><table class="grid"><thead><tr>' +
+    // Airtable's grid carries furniture as well as data: a row number that becomes a
+    // tick box, an expand button, and a "+" at the end of the header row for a new field.
+    var span = allCols.length + 1 + (isAdmin ? 1 : 0);
+    var html = '<div class="grid-wrap"><table class="grid"><thead><tr><th class="rowno"></th>' +
       allCols.map(function (c, i) {
         var si = -1;
         for (var k = 0; k < customSort.length; k++) if (customSort[k].id === c.id) si = k;
@@ -3430,28 +4094,64 @@
         var arrow = si === -1 ? "" : ((customSort[si].dir > 0 ? "▲" : "▼") +
           (customSort.length > 1 ? '<sup>' + (si + 1) + '</sup>' : ""));
         return "<th" + (i === 0 ? ' class="pin"' : "") + ' data-c="' + esc(c.id) + '"' +
-          ' title="Click to sort · Shift-click to sort by this as well">' + esc(c.label) +
+          ' title="Click to sort · Shift-click to sort by this as well">' +
+          fieldIcon(c.type, c.label) + esc(c.label) +
           ' <span class="sort">' + arrow + "</span></th>";
-      }).join("") + "</tr></thead><tbody>" +
+      }).join("") +
+      (isAdmin ? '<th class="addcol" id="grid-addcol" title="Add a question to this table">＋</th>' : "") +
+      "</tr></thead><tbody>" +
       groups.map(function (g) {
         var head = g.key === null ? "" :
-          '<tr class="grp"><td class="pin" colspan="' + allCols.length + '">' +
+          '<tr class="grp"><td class="pin" colspan="' + span + '">' +
           esc(g.key) + ' <span class="n">' + g.rows.length + "</span></td></tr>";
         return head + g.rows.map(function (s) {
           // index into `ordered`, not `rows` — grouping changes the visual order and a
           // click must open the record the user actually clicked
           var ri = ordered.indexOf(s);
-          return '<tr data-i="' + ri + '">' + allCols.map(function (c, i) {
-            var numeric = c.type === "number";
-            return "<td" + (i === 0 ? ' class="pin"' : (numeric ? ' class="num"' : "")) + ">" + gridCell(c, s) + "</td>";
-          }).join("") + "</tr>";
+          var on = !!customSel[s.id];
+          return '<tr data-i="' + ri + '" data-id="' + esc(s.id) + '"' + (on ? ' class="sel"' : "") + ">" +
+            '<td class="rowno"><span class="rn">' + (ri + 1) + "</span>" +
+            '<input type="checkbox" class="rchk"' + (on ? " checked" : "") + ' aria-label="Select this record">' +
+            '<button type="button" class="rexp" title="Open this record">⤢</button></td>' +
+            allCols.map(function (c, i) {
+              var numeric = c.type === "number";
+              return "<td" + (i === 0 ? ' class="pin"' : (numeric ? ' class="num"' : "")) + ">" + gridCell(c, s) + "</td>";
+            }).join("") + (isAdmin ? '<td class="addcol"></td>' : "") + "</tr>";
         }).join("");
       }).join("") +
-      "</tbody><tfoot><tr>" + allCols.map(function (c, i) {
+      '</tbody><tfoot><tr><td class="rowno"></td>' + allCols.map(function (c, i) {
         return "<td" + (i === 0 ? ' class="pin"' : (c.type === "number" ? ' class="num"' : "")) + ">" +
           esc(summarise(c, rows)) + "</td>";
-      }).join("") + "</tr></tfoot></table></div>";
+      }).join("") + (isAdmin ? '<td class="addcol"></td>' : "") + "</tr></tfoot></table></div>" +
+      '<div class="rec-count"><span>' + rows.length + (rows.length === 1 ? " record" : " records") + "</span>" +
+      ((t.kind === "task") ? "" : '<a class="rc-add" href="' + esc(publicFormLink(t.slug)) +
+        '" target="_blank" rel="noopener">＋ Add a record through the form</a>') + "</div>";
     listEl.innerHTML = html;
+    applyRowHeight();
+    var addcol = listEl.querySelector("#grid-addcol");
+    if (addcol) addcol.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      openAtMenu(addcol, [{ head: true, label: "Add a field" }].concat(FIELD_TYPES.map(function (ft) {
+        return { label: ft.label, icon: fieldIcon(ft.v, ft.label),
+                 on: function () { openBuilderEdit(t, ft.v); } };
+      })));
+    });
+    // hovering a row offers the tick box and the expand button; both must not open the record
+    listEl.querySelectorAll("tbody tr[data-id] .rchk").forEach(function (cb) {
+      cb.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var tr = cb.closest("tr"), id = tr.getAttribute("data-id");
+        if (cb.checked) customSel[id] = true; else delete customSel[id];
+        tr.classList.toggle("sel", cb.checked);
+        paintSelBar();
+      });
+    });
+    listEl.querySelectorAll("tbody tr[data-i] .rexp").forEach(function (b) {
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        openCustomDetail(ordered[+b.closest("tr").getAttribute("data-i")], fields);
+      });
+    });
     listEl.querySelectorAll("thead th[data-c]").forEach(function (th) {
       th.addEventListener("click", function (ev) {
         var id = th.getAttribute("data-c");
@@ -3521,25 +4221,70 @@
     (fv.records() || []).forEach(function (rec) { var v = fv.getVal(rec, fld.id); if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
     return vals;
   }
+  // A condition group is a nested set of conditions with its own And/Or — the
+  // "+ Add condition group" Airtable offers. A group is just another entry in
+  // `conds`, so saved views written before groups existed still load unchanged.
+  function isGroup(c) { return !!(c && c.group); }
+  function pruneConds(fv, list) {
+    return (list || []).filter(function (c) {
+      if (isGroup(c)) { c.conds = pruneConds(fv, c.conds); return c.conds.length > 0; }
+      return !!fvFieldById(fv, c.fieldId);
+    });
+  }
+  function newCond(fv) {
+    var flds = fvFields(fv); if (!flds.length) return null;
+    var f0 = flds[0], op0 = opsFor(f0.type)[0][0];
+    return { fieldId: f0.id, op: op0, val: defaultValFor(f0.type, op0) };
+  }
   function buildFilterPanel(fv) {
     var wrap = document.getElementById(fv.wrapId), panel = document.getElementById(fv.panelId);
     if (!wrap || !panel) return;
     panel.classList.remove("open");
     panel.classList.add("fp-cond");
     // drop conditions whose field no longer exists (e.g. an admin removed that question)
-    fv.state.conds = fv.state.conds.filter(function (c) { return fvFieldById(fv, c.fieldId); });
+    fv.state.conds = pruneConds(fv, fv.state.conds);
     if (!fvFields(fv).length) { wrap.style.display = "none"; panel.innerHTML = ""; return; }
     wrap.style.display = "";
-    panel.innerHTML = '<div class="fp-head">Show records where</div><div class="fp-conds"></div><button type="button" class="fc-add">＋ Add condition</button>';
+    panel.innerHTML = '<div class="fp-head">In this view, show records where</div><div class="fp-conds"></div>' +
+      '<div class="fc-addrow"><button type="button" class="fc-add">＋ Add condition</button>' +
+      '<button type="button" class="fc-addg">＋ Add condition group</button>' +
+      '<button type="button" class="ghost fc-copy">Copy from a view</button></div>';
     panel.querySelector(".fc-add").addEventListener("click", function () { addFilterCond(fv); });
+    panel.querySelector(".fc-addg").addEventListener("click", function () { addFilterGroup(fv); });
+    panel.querySelector(".fc-copy").addEventListener("click", function (e) { e.stopPropagation(); copyFilterFromView(fv, e.currentTarget); });
     renderConds(fv);
     updateFilterActive(fv);
   }
-  function addFilterCond(fv) {
-    var flds = fvFields(fv); if (!flds.length) return;
-    var f0 = flds[0], op0 = opsFor(f0.type)[0][0];
-    fv.state.conds.push({ fieldId: f0.id, op: op0, val: defaultValFor(f0.type, op0) });
+  function addFilterCond(fv, into) {
+    var c = newCond(fv); if (!c) return;
+    (into || fv.state.conds).push(c);
     renderConds(fv); fv.rerender(); updateFilterActive(fv);
+  }
+  function addFilterGroup(fv) {
+    var c = newCond(fv); if (!c) return;
+    fv.state.conds.push({ group: true, conj: "and", conds: [c] });
+    renderConds(fv); fv.rerender(); updateFilterActive(fv);
+  }
+  // Filters are the bulk of what a saved view remembers, so lifting one off another
+  // view beats retyping it — and it only offers views that actually carry conditions.
+  function copyFilterFromView(fv, anchor) {
+    var src = (customViews || []).filter(function (v) {
+      var f = v.config && v.config.filter;
+      return f && f.conds && f.conds.length;
+    });
+    if (!src.length) {
+      openAtMenu(anchor, [{ head: true, label: "No saved view has a filter yet" }]);
+      return;
+    }
+    openAtMenu(anchor, [{ head: true, label: "Copy conditions from" }].concat(src.map(function (v) {
+      return { label: v.name, icon: viewTypeIcon(v.view_type), hint: v.is_shared ? "shared" : "mine",
+        on: function () {
+          var f = v.config.filter;
+          fv.state = { conj: f.conj || "and", conds: JSON.parse(JSON.stringify(f.conds || [])) };
+          fv.state.conds = pruneConds(fv, fv.state.conds);
+          renderConds(fv); fv.rerender(); updateFilterActive(fv);
+        } };
+    })));
   }
   function valControlHtml(fv, c, fld) {
     var kind = valueKind(fld ? fld.type : "short_text", c.op);
@@ -3565,12 +4310,32 @@
   function renderConds(fv) {
     var panel = document.getElementById(fv.panelId); if (!panel) return;
     var host = panel.querySelector(".fp-conds"); if (!host) return;
-    var conds = fv.state.conds, conj = fv.state.conj, flds = fvFields(fv);
-    if (!conds.length) { host.innerHTML = '<div class="fc-empty">No conditions yet — showing all records.</div>'; return; }
-    host.innerHTML = conds.map(function (c, i) {
-      var conjCell = i === 0 ? '<span>Where</span>'
+    if (!fv.state.conds.length) {
+      host.innerHTML = '<div class="fp-empty">No filter conditions are applied</div>';
+      return;
+    }
+    host.innerHTML = condListHtml(fv, fv.state.conds, fv.state.conj, "");
+    wireConds(fv, host);
+  }
+  // One renderer for the top level and for the inside of a group. `path` addresses a
+  // condition ("0" at the top, "2.1" for the second condition of the third group), so
+  // wiring can find its condition again without keeping a parallel structure.
+  function condListHtml(fv, conds, conj, prefix) {
+    var flds = fvFields(fv);
+    return conds.map(function (c, i) {
+      var path = prefix === "" ? String(i) : prefix + "." + i;
+      var conjCell = i === 0 ? "<span>Where</span>"
         : i === 1 ? '<select class="fc-conjsel"><option value="and"' + (conj === "and" ? " selected" : "") + '>And</option><option value="or"' + (conj === "or" ? " selected" : "") + ">Or</option></select>"
           : "<span>" + (conj === "and" ? "And" : "Or") + "</span>";
+      if (isGroup(c)) {
+        return '<div class="fc-grouprow" data-g="' + path + '"><div class="fc-conj">' + conjCell + "</div>" +
+          '<div class="fc-group"><div class="fg-head"><span>' +
+          (c.conds.length > 1 ? (c.conj === "or" ? "Any of these" : "All of these") : "This") +
+          ", as one group</span>" +
+          '<button type="button" class="fc-rm fg-rm" title="Remove this group">×</button></div>' +
+          condListHtml(fv, c.conds, c.conj, path) +
+          '<div class="fc-addrow"><button type="button" class="fc-add-in">＋ Add condition</button></div></div></div>';
+      }
       var fieldSel = '<select class="fc-field">' + flds.map(function (f) {
         return '<option value="' + esc(f.id) + '"' + (f.id === c.fieldId ? " selected" : "") + ">" + esc(f.label || f.label_ar || "Field") + "</option>";
       }).join("") + "</select>";
@@ -3578,13 +4343,42 @@
       var opSel = '<select class="fc-op">' + opsFor(fld ? fld.type : "short_text").map(function (o) {
         return '<option value="' + o[0] + '"' + (o[0] === c.op ? " selected" : "") + ">" + esc(o[1]) + "</option>";
       }).join("") + "</select>";
-      return '<div class="fc-row" data-i="' + i + '"><div class="fc-conj">' + conjCell + "</div>" + fieldSel + opSel + '<div class="fc-val">' + valControlHtml(fv, c, fld) + '</div><button type="button" class="fc-rm" title="Remove condition">×</button></div>';
+      return '<div class="fc-row" data-p="' + path + '"><div class="fc-conj">' + conjCell + "</div>" + fieldSel + opSel + '<div class="fc-val">' + valControlHtml(fv, c, fld) + '</div><button type="button" class="fc-rm" title="Remove condition">×</button></div>';
     }).join("");
-    wireConds(fv, host);
+  }
+  // "2.1" -> the list holding it, and its index in that list.
+  function condSlot(fv, path) {
+    var parts = String(path).split("."), list = fv.state.conds, owner = fv.state;
+    for (var i = 0; i < parts.length - 1; i++) {
+      var g = list[parseInt(parts[i], 10)];
+      if (!isGroup(g)) return null;
+      owner = g; list = g.conds;
+    }
+    return { list: list, i: parseInt(parts[parts.length - 1], 10), owner: owner };
   }
   function wireConds(fv, host) {
+    // Groups: their own And/Or, their own remove, their own "add condition".
+    [].slice.call(host.querySelectorAll(".fc-grouprow")).forEach(function (row) {
+      var slot = condSlot(fv, row.getAttribute("data-g")); if (!slot) return;
+      var g = slot.list[slot.i]; if (!isGroup(g)) return;
+      var rm = row.querySelector(":scope > .fc-group > .fg-head > .fg-rm");
+      if (rm) rm.addEventListener("click", function (e) {
+        e.stopPropagation(); slot.list.splice(slot.i, 1);
+        renderConds(fv); fv.rerender(); updateFilterActive(fv);
+      });
+      var add = row.querySelector(":scope > .fc-group > .fc-addrow > .fc-add-in");
+      if (add) add.addEventListener("click", function (e) {
+        e.stopPropagation(); addFilterCond(fv, g.conds);
+      });
+      var cj = row.querySelector(":scope > .fc-conj > .fc-conjsel");
+      if (cj) cj.addEventListener("change", function () {
+        (slot.owner === fv.state ? fv.state : slot.owner).conj = cj.value;
+        renderConds(fv); fv.rerender();
+      });
+    });
     [].slice.call(host.querySelectorAll(".fc-row")).forEach(function (row) {
-      var i = parseInt(row.getAttribute("data-i"), 10), c = fv.state.conds[i]; if (!c) return;
+      var slot = condSlot(fv, row.getAttribute("data-p")); if (!slot) return;
+      var c = slot.list[slot.i]; if (!c || isGroup(c)) return;
       var fieldSel = row.querySelector(".fc-field");
       if (fieldSel) fieldSel.addEventListener("change", function () {
         c.fieldId = fieldSel.value; var nf = fvFieldById(fv, c.fieldId), t = nf ? nf.type : "short_text";
@@ -3598,10 +4392,17 @@
         if (valueKind(t, c.op) !== oldKind) c.val = defaultValFor(t, c.op);
         renderConds(fv); fv.rerender(); updateFilterActive(fv);
       });
+      // the And/Or belongs to whichever list this row sits in — the view, or its group
       var conjSel = row.querySelector(".fc-conjsel");
-      if (conjSel) conjSel.addEventListener("change", function () { fv.state.conj = conjSel.value; renderConds(fv); fv.rerender(); });
+      if (conjSel) conjSel.addEventListener("change", function () {
+        slot.owner.conj = conjSel.value; renderConds(fv); fv.rerender();
+      });
       var rm = row.querySelector(".fc-rm");
-      if (rm) rm.addEventListener("click", function () { fv.state.conds.splice(i, 1); renderConds(fv); fv.rerender(); updateFilterActive(fv); });
+      if (rm) rm.addEventListener("click", function () {
+        slot.list.splice(slot.i, 1);
+        fv.state.conds = pruneConds(fv, fv.state.conds);   // a group emptied this way goes too
+        renderConds(fv); fv.rerender(); updateFilterActive(fv);
+      });
       var inp = row.querySelector(".fc-val .fc-input");
       if (inp) {
         var upd = function () { c.val = inp.value; fv.rerender(); updateFilterActive(fv); };
@@ -3618,12 +4419,26 @@
     });
   }
   function isCondActive(fv, c) {
+    if (isGroup(c)) return activeConds(fv, c.conds).length > 0;
     if (c.op === "empty" || c.op === "notEmpty") return true;
     var fld = fvFieldById(fv, c.fieldId);
     if (valueKind(fld ? fld.type : "short_text", c.op) === "multi") return Array.isArray(c.val) && c.val.length > 0;
     return c.val != null && String(c.val) !== "";
   }
-  function filterCount(fv) { return fv && fv.state ? fv.state.conds.filter(function (c) { return isCondActive(fv, c); }).length : 0; }
+  function activeConds(fv, list) {
+    return (list || []).filter(function (c) { return isCondActive(fv, c); });
+  }
+  // Counting for the button's "on" state: a group counts as the leaves inside it, so
+  // the badge says how many conditions are really doing something.
+  function filterCount(fv) {
+    if (!fv || !fv.state) return 0;
+    function walk(list) {
+      var n = 0;
+      activeConds(fv, list).forEach(function (c) { n += isGroup(c) ? walk(c.conds) : 1; });
+      return n;
+    }
+    return walk(fv.state.conds);
+  }
   function updateFilterActive(fv) { var btn = document.getElementById(fv.btnId); if (btn) btn.classList.toggle("active", filterCount(fv) > 0); }
   function evalCond(c, raw) {
     var has = raw != null && String(raw).trim() !== "";
@@ -3652,10 +4467,15 @@
   }
   function passesFilters(fv, rec) {
     if (!fv || !fv.state) return true;
-    var active = fv.state.conds.filter(function (c) { return isCondActive(fv, c); });
+    return passesList(fv, rec, fv.state.conds, fv.state.conj);
+  }
+  function passesList(fv, rec, list, conj) {
+    var active = activeConds(fv, list);
     if (!active.length) return true;
-    var test = function (c) { return evalCond(c, fv.getVal(rec, c.fieldId)); };
-    return fv.state.conj === "or" ? active.some(test) : active.every(test);
+    var test = function (c) {
+      return isGroup(c) ? passesList(fv, rec, c.conds, c.conj) : evalCond(c, fv.getVal(rec, c.fieldId));
+    };
+    return conj === "or" ? active.some(test) : active.every(test);
   }
   function passesCustomFilters(s) { return currentCustom && currentCustom.fv ? passesFilters(currentCustom.fv, s) : true; }
   function wireFilterToggle(fv) {
@@ -4102,8 +4922,9 @@
     if (currentCustom && currentCustom.table.id === item.getAttribute("data-custom")) {
       customKidsOpen = !customKidsOpen;
       try { localStorage.setItem("blk_custom_kids", customKidsOpen ? "1" : "0"); } catch (err) {}
-      var k = document.getElementById("custom-kids");
-      if (k) k.style.display = customKidsOpen ? "flex" : "none";
+      // only the branch half folds away — the view rail belongs to the open table
+      var br = document.querySelector("#custom-kids .side-kid-branches");
+      if (br) br.style.display = customKidsOpen ? "" : "none";
     } else {
       customKidsOpen = true;   // opening a different table shows its branches
     }
@@ -4472,7 +5293,9 @@
       return en + (ar ? "|" + ar : "") + other;
     }).join(", ");
   }
-  function openBuilderEdit(table) {
+  // presetType comes from the grid's "+" field-type picker: the editor opens with a
+  // fresh question of that type already waiting at the bottom, so the pick isn't lost.
+  function openBuilderEdit(table, presetType) {
     if (!table) return;
     editingTableId = table.id; editingFieldIds = [];
     setBuilderChrome("edit");
@@ -4496,11 +5319,19 @@
         editingFieldIds.push(f.id);
         addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal });
       });
+      if (presetType) {
+        addBuilderField({ type: presetType });
+        var rows = document.querySelectorAll("#bld-fields .bld-field");
+        var last = rows[rows.length - 1];
+        if (last) {
+          if (last.scrollIntoView) last.scrollIntoView({ block: "center" });
+          var lab = last.querySelector("textarea"); if (lab) lab.focus();
+        }
+      }
       requestAnimationFrame(growAllBld);
     });
   }
   function closeBuilder() { builder.classList.remove("open"); }
-  document.getElementById("new-table-btn").addEventListener("click", openBuilder);
   document.getElementById("builder-close").addEventListener("click", closeBuilder);
   builder.addEventListener("click", function (e) { if (e.target === this) closeBuilder(); });
   builder.addEventListener("input", saveDraft);
@@ -4827,6 +5658,15 @@
   wireToggle("ja-viewtoggle", function (v) { jaView = v; renderApps(); });
   wireToggle("casting-viewtoggle", function (v) { castingView = v; renderCasting(); });
   wireToggle("custom-viewtoggle", function (v) { customView = v; renderCustom(); });
+  // Switching type from somewhere other than the segmented control (the Create menu,
+  // a saved view) has to move the control too, or the two disagree.
+  function setCustomViewType(v) {
+    customView = v;
+    [].slice.call(document.querySelectorAll("#custom-viewtoggle button")).forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-v") === v);
+    });
+    renderCustom();
+  }
   document.getElementById("cols-btn").addEventListener("click", function (e) {
     e.stopPropagation();
     document.getElementById("cols-panel").classList.toggle("open");
@@ -4866,6 +5706,15 @@
     [].slice.call(this.querySelectorAll("button")).forEach(function (x) { x.classList.toggle("active", x === b); });
     if (homeFilter === "mine") loadMyAssigned(); else renderHome();
   });
+  (function () {
+    var sel = document.getElementById("home-sort"); if (!sel) return;
+    sel.value = homeSort;
+    sel.addEventListener("change", function () {
+      homeSort = sel.value;
+      try { localStorage.setItem("blk_home_sort", homeSort); } catch (e) {}
+      renderHome();
+    });
+  })();
 
   // ---- Sidebar: switch which table/view is open in the main pane ----
   function showView(id) {
@@ -4878,14 +5727,25 @@
       items[j].classList.toggle("active", items[j].getAttribute("data-view") === id);
     }
     if (id === "home") renderHome();
-    if (id === "job_applications") buildFilterPanel(jobFV);
-    if (id === "casting") { if (!castingLoaded) loadCasting(); else buildFilterPanel(castingFV); }
+    if (id === "job_applications") { markOpened(id); setBasePane("job_applications", "data"); buildFilterPanel(jobFV); }
+    if (id === "casting") { markOpened(id); setBasePane("casting", "data"); if (!castingLoaded) loadCasting(); else buildFilterPanel(castingFV); }
     if (id === "users") loadUsers();
+    // the Starred entry is a filter on Home, so it lights up only while that filter is on
+    var st = document.getElementById("side-starred-nav");
+    if (st) st.classList.toggle("active", id === "home" && homeStarredOnly);
+    var hm = document.querySelector(".side-item.home-item");
+    if (hm) hm.classList.toggle("active", id === "home" && !homeStarredOnly);
   }
   var sideItems = document.querySelectorAll(".side-item");
   for (var si = 0; si < sideItems.length; si++) {
-    if (!sideItems[si].getAttribute("data-view")) continue; // custom tables + New-table have their own handlers
-    sideItems[si].addEventListener("click", function () { showView(this.getAttribute("data-view")); });
+    if (!sideItems[si].getAttribute("data-view")) continue; // custom tables have their own handlers
+    sideItems[si].addEventListener("click", function () {
+      var v = this.getAttribute("data-view");
+      // Home and Starred are the same screen; Starred just narrows it, the way
+      // Airtable's Starred entry does, so the flag is set before the render.
+      if (v === "home") homeStarredOnly = this.hasAttribute("data-starred");
+      showView(v);
+    });
   }
   // Sidebar gear ⚙ (settings/edit) on every table — capture phase so it wins over the item's open-click.
   // Works for current AND future custom tables because it's delegated on the container.
@@ -4976,6 +5836,307 @@
     navCollapsed = !navCollapsed;
     try { localStorage.setItem("blk_nav_collapsed", navCollapsed ? "1" : "0"); } catch (e) {}
     applyNav();
+  });
+
+  /* ================================================================
+     Airtable shell wiring: header, palette, sidebar footer, base tabs.
+     ================================================================ */
+
+  paintBuiltinTmarks();
+
+  // ---- Ctrl K palette: one way in to every table and saved view ----------
+  // The header box and the palette are the same thing: typing in the header
+  // opens it, and the shortcut opens it from wherever you are.
+  var palBack = document.getElementById("palette-back");
+  var palEl = document.getElementById("palette");
+  var palInput = document.getElementById("pal-input");
+  var palList = document.getElementById("pal-list");
+  var palRows = [], palAt = 0;
+  var IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+  (function () { var k = document.getElementById("gs-kbd"); if (k && IS_MAC) k.textContent = "⌘ K"; })();
+  function palCandidates() {
+    var out = allAccessibleTables().map(function (t) {
+      return { label: t.name, sub: t.category || "Table", key: t.key, kind: "table", config: t.config };
+    });
+    // saved views of the table you're in, so "the Irbid view" is one keystroke away
+    if (currentCustom && currentCustom.table) {
+      (customViews || []).forEach(function (v) {
+        out.push({ label: v.name, sub: (v.is_shared ? "Shared view" : "My view") + " · " + currentCustom.table.name,
+                   viewId: v.id, kind: "view" });
+      });
+    }
+    return out;
+  }
+  function palRender(q) {
+    var needle = String(q || "").trim().toLowerCase();
+    palRows = palCandidates().filter(function (c) {
+      return !needle || c.label.toLowerCase().indexOf(needle) !== -1 || String(c.sub).toLowerCase().indexOf(needle) !== -1;
+    }).slice(0, 40);
+    palAt = 0;
+    if (!palRows.length) { palList.innerHTML = '<div class="pal-empty">Nothing matches “' + esc(q) + '”.</div>'; return; }
+    palList.innerHTML = palRows.map(function (c, i) {
+      var mark = c.kind === "table" ? tmarkHtml(c.key, c.label, c.config)
+        : '<span class="vk-ico v-grid">▦</span>';
+      return '<button class="pal-row' + (i === 0 ? " on" : "") + '" data-i="' + i + '">' + mark +
+        "<span>" + esc(c.label) + '</span><span class="pal-sub">' + esc(c.sub) + "</span></button>";
+    }).join("");
+    [].slice.call(palList.querySelectorAll(".pal-row")).forEach(function (b) {
+      b.addEventListener("click", function () { palChoose(+b.getAttribute("data-i")); });
+    });
+  }
+  function palMove(d) {
+    if (!palRows.length) return;
+    palAt = (palAt + d + palRows.length) % palRows.length;
+    [].slice.call(palList.querySelectorAll(".pal-row")).forEach(function (b, i) { b.classList.toggle("on", i === palAt); });
+    var on = palList.querySelector(".pal-row.on"); if (on && on.scrollIntoView) on.scrollIntoView({ block: "nearest" });
+  }
+  function palChoose(i) {
+    var c = palRows[i]; if (!c) return;
+    palClose();
+    if (c.kind === "table") openTableByKey(c.key);
+    else {
+      var v = (customViews || []).filter(function (x) { return x.id === c.viewId; })[0];
+      if (v) applyView(v);
+    }
+  }
+  function palOpen(seed) {
+    palBack.classList.add("open"); palEl.classList.add("open");
+    palInput.value = seed || ""; palRender(palInput.value); palInput.focus(); palInput.select();
+  }
+  function palClose() { palBack.classList.remove("open"); palEl.classList.remove("open"); }
+  palBack.addEventListener("click", palClose);
+  palInput.addEventListener("input", function () { palRender(palInput.value); });
+  palInput.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); palMove(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); palMove(-1); }
+    else if (e.key === "Enter") { e.preventDefault(); palChoose(palAt); }
+    else if (e.key === "Escape") palClose();
+  });
+  var gsInput = document.getElementById("gsearch-input");
+  gsInput.addEventListener("focus", function () { palOpen(gsInput.value); gsInput.value = ""; });
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); palOpen(""); }
+  });
+
+  // ---- Help ---------------------------------------------------------------
+  function openHelp() {
+    var mod = IS_MAC ? "⌘" : "Ctrl";
+    document.getElementById("modal-body").innerHTML =
+      '<div class="m-name">Help &amp; shortcuts</div>' +
+      '<div class="m-sub" style="margin-top:6px;">BLKTable is our own app, not Airtable — but it works the same way.</div>' +
+      '<div class="m-field full" style="margin-top:14px;"><div class="k">Getting around</div><div class="v" style="line-height:1.8;">' +
+      '<b>' + mod + ' K</b> — jump to any table or saved view<br>' +
+      '<b>☰</b> — collapse the sidebar to a rail (it reopens on hover)<br>' +
+      '<b>Data / Form tabs</b> — the records, and the public form link + QR for that table' +
+      "</div></div>" +
+      '<div class="m-field full"><div class="k">In a table</div><div class="v" style="line-height:1.8;">' +
+      "<b>Hide fields</b> — choose which columns show<br>" +
+      "<b>Filter</b> — “where field is value”, joined with And / Or, and nestable in groups<br>" +
+      "<b>Group</b> — break the rows into headed groups with counts<br>" +
+      "<b>Sort</b> — click a column to sort; <b>shift-click</b> another to break ties<br>" +
+      "<b>Color</b> — tint records by a choice field<br>" +
+      "<b>Row height</b> — short, medium, tall<br>" +
+      "<b>Hover a row</b> — tick it to select, or press ⤢ to open the record" +
+      "</div></div>" +
+      '<div class="m-field full"><div class="k">Saving how you look at a table</div><div class="v" style="line-height:1.8;">' +
+      'Set up a filter, sort and columns, then <b>Create new…</b> under the table in the sidebar saves it as a view. ' +
+      "Personal views are yours alone; only admins can share one with everyone." +
+      "</div></div>";
+    document.getElementById("modal").classList.add("open");
+  }
+  document.getElementById("hd-help").addEventListener("click", openHelp);
+  document.getElementById("side-help").addEventListener("click", openHelp);
+
+  // ---- The bell: go to what is waiting on you -----------------------------
+  document.getElementById("hd-bell").addEventListener("click", function () {
+    homeFilter = "mine"; homeStarredOnly = false;
+    [].slice.call(document.querySelectorAll("#home-filter button")).forEach(function (x) {
+      x.classList.toggle("active", x.getAttribute("data-f") === "mine");
+    });
+    showView("home"); loadMyAssigned();
+  });
+
+  // ---- Sidebar nav: Shared, Public forms ----------------------------------
+  // (Home and Starred go through the shared data-view handler above.)
+  document.getElementById("side-shared-nav").addEventListener("click", function () {
+    openSharedList();
+  });
+  // Who can see what. Admins get every grant; a reviewer's own rows are all RLS
+  // lets them read, which is exactly the list of tables shared with them.
+  function openSharedList() {
+    var body = document.getElementById("modal-body");
+    body.innerHTML = '<div class="m-name">Shared</div><div class="m-sub">Loading…</div>';
+    document.getElementById("modal").classList.add("open");
+    Promise.all([
+      db.from("table_access").select("table_key,user_id,can_edit,can_manage"),
+      db.from("profiles").select("id,email,full_name")
+    ]).then(function (r) {
+      var acc = (r[0] && r[0].data) || [], profs = (r[1] && r[1].data) || [];
+      var nameOf = {}; profs.forEach(function (p) { nameOf[p.id] = p.full_name || p.email; });
+      var tables = allAccessibleTables(), labelOf = {};
+      tables.forEach(function (t) { labelOf[t.key] = t; });
+      var by = {};
+      acc.forEach(function (a) { (by[a.table_key] = by[a.table_key] || []).push(a); });
+      var keys = Object.keys(by).filter(function (k) { return labelOf[k]; });
+      if (!keys.length) {
+        body.innerHTML = '<div class="m-name">Shared</div><div class="m-sub">No table has been shared with anyone yet. Use a table\'s <b>Share</b> button to give someone access.</div>';
+        return;
+      }
+      body.innerHTML = '<div class="m-name">Shared</div><div class="m-sub">Who can see which table.</div>' +
+        keys.map(function (k) {
+          var t = labelOf[k];
+          var who = by[k].map(function (a) {
+            var lvl = a.can_manage ? "manager" : a.can_edit ? "editor" : "viewer";
+            return esc(nameOf[a.user_id] || "someone") + " (" + lvl + ")";
+          }).join(", ");
+          return '<div class="m-field full"><div class="k">' + esc(t.name) + '</div><div class="v">' + who + "</div></div>";
+        }).join("");
+    }).catch(function () {
+      body.innerHTML = '<div class="m-name">Shared</div><div class="m-sub">Could not read the access list.</div>';
+    });
+  }
+  function paintSharedCount() {
+    db.from("table_access").select("table_key").then(function (r) {
+      var keys = {}; ((r && r.data) || []).forEach(function (a) { keys[a.table_key] = 1; });
+      var n = Object.keys(keys).length, el = document.getElementById("side-shared-n");
+      if (el) el.textContent = n ? String(n) : "";
+    }).catch(function () {});
+  }
+  // Every public form in one place, so a link can be found without opening its table.
+  document.getElementById("side-forms").addEventListener("click", function () {
+    var rows = (customTables || []).filter(function (t) { return (t.kind || "form") !== "task"; })
+      .map(function (t) { return { name: t.name, link: publicFormLink(t.slug) }; });
+    if (accessKeys["job_applications"]) rows.unshift({ name: "Job Applications", link: "https://blktable.blk.jo/apply/" });
+    if (accessKeys["casting"]) rows.unshift({ name: "BLK Casting", link: "https://blktable.blk.jo/cast/" });
+    document.getElementById("modal-body").innerHTML =
+      '<div class="m-name">Public forms</div><div class="m-sub">Anyone with the link can submit; nobody needs a login.</div>' +
+      (rows.length ? rows.map(function (r) {
+        return '<div class="m-field full"><div class="k">' + esc(r.name) + '</div><div class="v"><a href="' +
+          esc(r.link) + '" target="_blank" rel="noopener">' + esc(r.link) + "</a></div></div>";
+      }).join("") : '<div class="m-sub">No forms yet.</div>');
+    document.getElementById("modal").classList.add("open");
+  });
+
+  // ---- The blue Create button ---------------------------------------------
+  var VIEW_TYPES = [
+    { v: "table", label: "Grid", cls: "v-grid", glyph: "▦", note: "Spreadsheet of every field" },
+    { v: "cards", label: "Cards", cls: "v-cards", glyph: "▤", note: "One card per record, with its photo" },
+    { v: "list", label: "List", cls: "v-list", glyph: "☰", note: "One line per record" }
+  ];
+  function viewTypeIcon(t) {
+    var m = VIEW_TYPES.filter(function (x) { return x.v === t; })[0] || VIEW_TYPES[0];
+    return '<span class="vk-ico ' + m.cls + '">' + m.glyph + "</span>";
+  }
+  document.getElementById("side-create").addEventListener("click", function (e) {
+    e.stopPropagation();
+    var items = [{ head: true, label: "Create" },
+      { label: "Table", icon: '<span class="vk-ico v-form">＋</span>', hint: "with a public form", on: openBuilder }];
+    if (currentCustom && currentCustom.table && !document.getElementById("view-custom").classList.contains("hidden")) {
+      items.push({ sep: true });
+      items.push({ head: true, label: "View of " + currentCustom.table.name });
+      VIEW_TYPES.forEach(function (vt) {
+        items.push({
+          label: vt.label, icon: viewTypeIcon(vt.v), hint: vt.note,
+          on: function () { setCustomViewType(vt.v); saveCurrentView(); }
+        });
+      });
+    }
+    openAtMenu(this, items);
+  });
+
+  // ---- Base bar: Data / Form tabs, the name menu, Share -------------------
+  function setBasePane(scope, tab) {
+    [].slice.call(document.querySelectorAll('[data-pane^="' + scope + ':"]')).forEach(function (p) {
+      p.style.display = p.getAttribute("data-pane") === scope + ":" + tab ? "" : "none";
+    });
+    var tabs = document.querySelector('[data-tabs="' + scope + '"]');
+    if (tabs) [].slice.call(tabs.querySelectorAll("button")).forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-t") === tab);
+    });
+    // the toolbar belongs to the records, so it goes away on the Form tab
+    var view = document.getElementById("view-" + (scope === "custom" ? "custom" : scope));
+    var tb = view && view.querySelector(".at-toolbar");
+    if (tb) tb.style.display = tab === "data" ? "" : "none";
+  }
+  [].slice.call(document.querySelectorAll("[data-tabs]")).forEach(function (tabs) {
+    var scope = tabs.getAttribute("data-tabs");
+    tabs.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("button") : null; if (!b) return;
+      setBasePane(scope, b.getAttribute("data-t"));
+    });
+  });
+  [].slice.call(document.querySelectorAll("[data-shareof]")).forEach(function (b) {
+    var key = b.getAttribute("data-shareof");
+    b.addEventListener("click", function () {
+      openShare(key, key === "casting" ? "BLK Casting" : "Job Applications");
+    });
+  });
+  document.getElementById("custom-share").addEventListener("click", function () {
+    if (currentCustom && currentCustom.table) openShare(currentCustom.table.id, currentCustom.table.name);
+  });
+  [].slice.call(document.querySelectorAll("[data-basemenu]")).forEach(function (b) {
+    var key = b.getAttribute("data-basemenu");
+    b.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var name = key === "casting" ? "BLK Casting" : "Job Applications";
+      openAtMenu(this, [
+        { head: true, label: name },
+        { label: stars[key] ? "Remove from starred" : "Add to starred", on: function () { toggleStar(key); } },
+        { label: "Open the public form", on: function () { window.open(key === "casting" ? "https://blktable.blk.jo/cast/" : "https://blktable.blk.jo/apply/", "_blank"); } },
+        { sep: true },
+        { label: "Share…", on: function () { openShare(key, name); } }
+      ]);
+    });
+  });
+  document.getElementById("custom-basemenu").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (!currentCustom || !currentCustom.table) return;
+    var t = currentCustom.table, isTask = (t.kind === "task");
+    var items = [{ head: true, label: t.name },
+      { label: stars[t.id] ? "Remove from starred" : "Add to starred", on: function () { toggleStar(t.id); } }];
+    if (!isTask) items.push({ label: "Open the public form", on: function () { window.open(publicFormLink(t.slug), "_blank"); } });
+    items.push({ sep: true });
+    if (isAdmin) {
+      items.push({ label: "Edit table and questions", on: function () { openBuilderEdit(t); } });
+      items.push({ label: "Share…", on: function () { openShare(t.id, t.name); } });
+      items.push({ label: "Delete table…", on: function () { openDeleteTable(t.id, t.name); } });
+    } else {
+      items.push({ label: "Share…", on: function () { openShare(t.id, t.name); } });
+    }
+    openAtMenu(this, items);
+  });
+
+  // ---- Row height ---------------------------------------------------------
+  var ROW_HEIGHTS = [["rh-short", "Short"], ["", "Medium"], ["rh-tall", "Tall"], ["rh-xtall", "Extra tall"]];
+  var rowHeight = "";
+  try { rowHeight = localStorage.getItem("blk_row_height") || ""; } catch (e) {}
+  function applyRowHeight() {
+    [].slice.call(document.querySelectorAll(".grid-wrap")).forEach(function (w) {
+      ROW_HEIGHTS.forEach(function (r) { if (r[0]) w.classList.remove(r[0]); });
+      if (rowHeight) w.classList.add(rowHeight);
+    });
+  }
+  document.getElementById("rowh-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    openAtMenu(this, [{ head: true, label: "Row height" }].concat(ROW_HEIGHTS.map(function (r) {
+      return { label: r[1], hint: rowHeight === r[0] ? "✓" : "", on: function () {
+        rowHeight = r[0];
+        try { localStorage.setItem("blk_row_height", rowHeight); } catch (err) {}
+        applyRowHeight();
+      } };
+    })));
+  });
+
+  // ---- The toolbar search opens from its icon ------------------------------
+  [].slice.call(document.querySelectorAll(".tb-search")).forEach(function (w) {
+    var btn = w.querySelector(".tb-searchtoggle"), inp = w.querySelector("input");
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var open = w.classList.toggle("open");
+      if (open) inp.focus();
+      else if (inp.value) { inp.value = ""; inp.dispatchEvent(new Event("input", { bubbles: true })); }
+    });
+    inp.addEventListener("blur", function () { if (!inp.value) w.classList.remove("open"); });
   });
 
   // ---- On load: restore session if present ----
