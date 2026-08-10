@@ -467,6 +467,17 @@
   .fprev.empty { color: var(--muted); text-align: center; padding: 40px 20px; font-size: 0.88rem; }
   .fprev .pv-staff { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line);
     color: var(--muted); font-size: 0.78rem; }
+  /* the question editor, shown in place of the preview */
+  .fform-names { margin-bottom: 14px; }
+  .fform-lab { display: block; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 6px; }
+  .fform-lab span { text-transform: none; letter-spacing: 0; }
+  .fform-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px;
+    padding-top: 14px; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
+  .fform-actions .primary { margin-left: auto; padding: 9px 18px; font-size: 0.88rem; }
+  .fform-msg { color: var(--muted); font-size: 0.82rem; }
+  .fform-msg.err { color: var(--danger); }
+  .fform-msg.ok { color: var(--ok); }
   .builtin-note { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px;
     padding: 13px 15px; margin-bottom: 16px; color: var(--silver-lo); font-size: 0.86rem; line-height: 1.6; max-width: 720px; }
   .qr-regen { color: #ff9b9b !important; border-color: rgba(255,107,107,0.4) !important; }
@@ -1424,10 +1435,26 @@
               <div class="form-pane">
                 <div>
                   <div class="fp-title">
-                    <span class="lab">What the applicant sees</span>
-                    <button class="linkbtn" id="fprev-edit" type="button" style="display:none;">Edit form</button>
+                    <span class="lab" id="fform-heading">What the applicant sees</span>
+                    <div class="seg viewtoggle" id="fform-mode" style="display:none;">
+                      <button type="button" data-m="preview" class="active">Preview</button>
+                      <button type="button" data-m="edit">Edit questions</button>
+                    </div>
                   </div>
                   <div class="fprev" id="custom-fprev"></div>
+                  <!-- The question editor, in the Form tab where the form lives. Same
+                       widget as the builder's, so saving goes through the same code. -->
+                  <div id="fform-edit" style="display:none;">
+                    <div class="fform-names">
+                      <label class="fform-lab">Questions <span id="fform-title-note"></span></label>
+                    </div>
+                    <div class="bld-fields" id="fform-fields"></div>
+                    <div class="fform-actions">
+                      <button type="button" class="linkbtn" id="fform-add">＋ Add question</button>
+                      <span class="fform-msg" id="fform-msg"></span>
+                      <button type="button" class="primary" id="fform-save">Save form</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="fp-side">
                   <div class="qr-bar" id="custom-qr-bar">
@@ -1840,6 +1867,125 @@
     order.sort(function (a, b) { if (!a) return -1; if (!b) return 1; return a.localeCompare(b); });
     return order.map(function (c) { return byName[c]; });
   }
+  // ---- Workspaces: OLD (Airtable) and New ---------------------------------
+  // Everything migrated from Airtable lives in OLD as history. Everything in live use
+  // lives in New. A table is moved between them from its ⋯ menu, and restarting a form
+  // freezes the old table in OLD while a fresh copy of its structure starts collecting
+  // in New. Airtable's own workspaces hold bases; ours hold the same tables and exist
+  // to separate "what we still use" from "what we keep".
+  var WS_OLD = "OLD (Airtable)", WS_NEW = "New";
+  function tableWorkspace(t) {
+    var w = t && t.workspace;
+    return (typeof w === "string" && w.trim()) ? w.trim() : null;
+  }
+  // Returns null when no table carries a workspace — i.e. the column has not been added
+  // yet — so the sidebar keeps its previous behaviour instead of inventing one group.
+  function groupByWorkspace(list) {
+    var any = (list || []).some(function (t) { return !!tableWorkspace(t); });
+    if (!any) return null;
+    var by = {}, order = [];
+    (list || []).forEach(function (t) {
+      var w = tableWorkspace(t) || WS_OLD;
+      if (!by[w]) { by[w] = { name: w, items: [] }; order.push(w); }
+      by[w].items.push(t);
+    });
+    // New first — it is the working set. Everything else alphabetically, OLD last.
+    order.sort(function (a, b) {
+      if (a === b) return 0;
+      if (a === WS_NEW) return -1;
+      if (b === WS_NEW) return 1;
+      if (a === WS_OLD) return 1;
+      if (b === WS_OLD) return -1;
+      return a.localeCompare(b);
+    });
+    return order.map(function (w) { return by[w]; });
+  }
+  function wsCollapsedMap() {
+    try { return JSON.parse(localStorage.getItem("blk_ws_collapsed") || "{}") || {}; } catch (e) { return {}; }
+  }
+  function wsCollapsed(name) {
+    var m = wsCollapsedMap();
+    // New open, OLD folded away: history should not be the first thing in the way
+    return Object.prototype.hasOwnProperty.call(m, name) ? !!m[name] : (name !== WS_NEW);
+  }
+  function setWsCollapsed(name, v) {
+    var m = wsCollapsedMap(); m[name] = !!v;
+    try { localStorage.setItem("blk_ws_collapsed", JSON.stringify(m)); } catch (e) {}
+  }
+
+  function moveTableToWorkspace(t, ws) {
+    if (!t || !isAdmin) return;
+    db.from("app_tables").update({ workspace: ws }).eq("id", t.id).then(function (r) {
+      if (r && r.error) {
+        // the likeliest cause is the column not being there yet, and saying so beats
+        // a silent no-op that looks like the app ignoring the click
+        window.alert("Could not move the table.\n\nIf workspaces have not been switched on yet, run workspaces/01-add-workspace.sql on the database first.");
+        if (window.console) console.error(r.error);
+        return;
+      }
+      t.workspace = ws;
+      if (currentCustom && currentCustom.table.id === t.id) currentCustom.table.workspace = ws;
+      loadCustomTables();
+    });
+  }
+  // Restarting a form: the table you have keeps every record it ever collected and moves
+  // to OLD, frozen so nothing new can land in it; a fresh table with the same questions
+  // starts collecting in New under its own link. Nothing is copied except the structure,
+  // which is the point — the new year starts empty.
+  function restartFormInNew(t) {
+    if (!t || !isAdmin) return;
+    var msg = "Restart “" + t.name + "”?\n\n" +
+      "· This table keeps all its records and moves to " + WS_OLD + ", frozen — its public form stops accepting submissions.\n" +
+      "· A new empty table with the same questions starts collecting in " + WS_NEW + ", with a NEW form link.\n\n" +
+      "The old link stops working, so anything printed or shared has to be replaced.";
+    if (!window.confirm(msg)) return;
+    var newSlug = slugify(t.name) + "-" + Math.random().toString(36).slice(2, 6);
+    var cfg = JSON.parse(JSON.stringify(t.config || {}));
+    delete cfg.archived;
+    db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true })
+      .then(function (fr) {
+        if (fr.error) throw fr.error;
+        var src = fr.data || [];
+        return db.from("app_tables").insert({
+          slug: newSlug, name: t.name, name_ar: t.name_ar || null,
+          category: t.category || null, kind: t.kind || "form",
+          config: cfg, is_active: true, workspace: WS_NEW
+        }).select().single().then(function (tr) {
+          if (tr.error) throw tr.error;
+          var nid = tr.data.id;
+          // after_field points at the old table's field ids, so it cannot come across
+          var copies = src.map(function (f) {
+            return { table_id: nid, position: f.position, label: f.label, label_ar: f.label_ar,
+                     type: f.type, required: f.required, internal: f.internal, options: f.options };
+          });
+          if (!copies.length) return tr.data;
+          return db.from("app_fields").insert(copies).then(function (ir) {
+            if (ir.error) throw ir.error;
+            return tr.data;
+          });
+        });
+      })
+      .then(function (nt) {
+        // freeze the original only once the copy exists, so a failure never leaves the
+        // old form switched off with no replacement
+        return db.from("app_tables").update({ workspace: WS_OLD, is_active: false }).eq("id", t.id)
+          .then(function (ur) { if (ur.error) throw ur.error; return nt; });
+      })
+      .then(function (nt) {
+        loadCustomTables();
+        setTimeout(function () {
+          openCustomTable(nt);
+          window.prompt("Restarted. The new form's link (share this — the old one no longer works):",
+            publicFormLink(nt.slug));
+        }, 500);
+      })
+      .catch(function (err) {
+        window.alert("Could not restart the form. Nothing was changed.\n\n" +
+          "If workspaces have not been switched on yet, run workspaces/01-add-workspace.sql on the database first.");
+        if (window.console) console.error(err);
+      });
+  }
+
   function collapsedMap() {
     try { return JSON.parse(localStorage.getItem("blk_cat_collapsed") || "{}") || {}; } catch (e) { return {}; }
   }
@@ -3431,25 +3577,53 @@
         return b;
       }
       // Uncategorised tables stay flat (unchanged); categorised ones get a collapsible group.
-      groupByCategory(customTables).forEach(function (g) {
-        if (!g.name) { g.items.forEach(function (t) { slot.appendChild(sideItem(t)); }); return; }
-        var collapsed = catCollapsed(g.name);
-        var head = document.createElement("button");
-        head.className = "side-item side-cat"; head.title = g.name;
-        var wrap = document.createElement("span");
-        wrap.className = "side-cat-items"; wrap.style.display = collapsed ? "none" : "block";
-        function paint() {
-          head.innerHTML = '<span class="side-label">' + (collapsed ? "▸" : "▾") + "&nbsp;&nbsp;" + esc(g.name) +
-            '</span><span class="side-cat-n">' + g.items.length + "</span>";
-        }
-        paint();
-        head.addEventListener("click", function () {
-          collapsed = !collapsed; setCatCollapsed(g.name, collapsed);
-          wrap.style.display = collapsed ? "none" : "block"; paint();
+      function renderCategories(host, list) {
+        groupByCategory(list).forEach(function (g) {
+          if (!g.name) { g.items.forEach(function (t) { host.appendChild(sideItem(t)); }); return; }
+          var collapsed = catCollapsed(g.name);
+          var head = document.createElement("button");
+          head.className = "side-item side-cat"; head.title = g.name;
+          var wrap = document.createElement("span");
+          wrap.className = "side-cat-items"; wrap.style.display = collapsed ? "none" : "block";
+          function paint() {
+            head.innerHTML = '<span class="side-label">' + (collapsed ? "▸" : "▾") + "&nbsp;&nbsp;" + esc(g.name) +
+              '</span><span class="side-cat-n">' + g.items.length + "</span>";
+          }
+          paint();
+          head.addEventListener("click", function () {
+            collapsed = !collapsed; setCatCollapsed(g.name, collapsed);
+            wrap.style.display = collapsed ? "none" : "block"; paint();
+          });
+          g.items.forEach(function (t) { wrap.appendChild(sideItem(t)); });
+          host.appendChild(head); host.appendChild(wrap);
         });
-        g.items.forEach(function (t) { wrap.appendChild(sideItem(t)); });
-        slot.appendChild(head); slot.appendChild(wrap);
-      });
+      }
+      // Workspaces sit above categories: New is the working set, OLD (Airtable) is the
+      // migrated history and stays folded away. Until app_tables.workspace exists in the
+      // database no table reports one, and the sidebar renders exactly as it did before.
+      var wsGroups = groupByWorkspace(customTables);
+      if (!wsGroups) {
+        renderCategories(slot, customTables);
+      } else {
+        wsGroups.forEach(function (ws) {
+          var collapsed = wsCollapsed(ws.name);
+          var head = document.createElement("button");
+          head.className = "side-item side-ws"; head.title = ws.name;
+          var wrap = document.createElement("span");
+          wrap.className = "side-cat-items"; wrap.style.display = collapsed ? "none" : "block";
+          function paintWs() {
+            head.innerHTML = '<span class="side-label">' + (collapsed ? "▸" : "▾") + "&nbsp;&nbsp;" +
+              esc(ws.name) + '</span><span class="side-cat-n">' + ws.items.length + "</span>";
+          }
+          paintWs();
+          head.addEventListener("click", function () {
+            collapsed = !collapsed; setWsCollapsed(ws.name, collapsed);
+            wrap.style.display = collapsed ? "none" : "block"; paintWs();
+          });
+          renderCategories(wrap, ws.items);
+          slot.appendChild(head); slot.appendChild(wrap);
+        });
+      }
       // One quiet line in the sidebar footer, only when something is actually archived.
       var archSlot = document.getElementById("side-archive-slot");
       if (archSlot) {
@@ -3485,6 +3659,7 @@
     // Form tab has nothing to show and is taken away rather than left empty.
     var isTask = (t.kind === "task");
     document.getElementById("custom-tab-form").style.display = isTask ? "none" : "";
+    formEditFor = null;                    // a different table needs its own questions loaded
     setBasePane("custom", "data");
     var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
     if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
@@ -4383,8 +4558,8 @@
   };
   function renderFormPreview(t, fields) {
     var host = document.getElementById("custom-fprev"); if (!host) return;
-    var editBtn = document.getElementById("fprev-edit");
-    if (editBtn) editBtn.style.display = isAdmin ? "" : "none";
+    var modeSeg = document.getElementById("fform-mode");
+    if (modeSeg) modeSeg.style.display = isAdmin ? "" : "none";
     var pub = (fields || []).filter(function (f) { return !f.internal; });
     var staff = (fields || []).length - pub.length;
     if (!pub.length) {
@@ -4519,7 +4694,7 @@
       ev.stopPropagation();
       openAtMenu(addcol, [{ head: true, label: "Add a field" }].concat(FIELD_TYPES.map(function (ft) {
         return { label: ft.label, icon: fieldIcon(ft.v, ft.label),
-                 on: function () { openBuilderEdit(t, ft.v); } };
+                 on: function () { useBuilderHost(); openBuilderEdit(t, ft.v); } };
       })));
     });
     // hovering a row offers the tick box and the expand button; both must not open the record
@@ -5334,7 +5509,7 @@
     if (currentCustom) { currentCustom.mineOnly = false; renderCustom(); }
   });
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table, currentCustom.mineOnly); });
-  document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
+  document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) { useBuilderHost(); openBuilderEdit(currentCustom.table); } });
   // branch scope: chips on the page and the children in the sidebar do the same thing
   document.getElementById("custom-kids").addEventListener("click", function (e) {
     var del = e.target.closest(".vk-del");
@@ -5509,6 +5684,13 @@
   var builderMode = "create";   // "create" | "edit"
   var editingTableId = null;
   var editingFieldIds = [];      // field ids that existed when the editor opened
+  // The question editor is one widget with two homes: the builder modal (creating a
+  // table, or its settings) and a table's Form tab (editing the form itself). This says
+  // which home it is in right now, so every read and write goes to the same rows.
+  var bldFieldsHostId = "bld-fields";
+  function bldHost() { return document.getElementById(bldFieldsHostId) || document.getElementById("bld-fields"); }
+  function useBuilderHost() { bldFieldsHostId = "bld-fields"; }
+  function useFormTabHost() { bldFieldsHostId = "fform-fields"; }
   function bldGrow(el) { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
   function wireBldGrow(el, multiline) {
     if (!el) return;
@@ -5519,7 +5701,7 @@
   function growAllBld() {
     bldGrow(document.getElementById("bld-name")); bldGrow(document.getElementById("bld-name-ar"));
     bldGrow(document.getElementById("bld-intro")); bldGrow(document.getElementById("bld-intro-ar"));
-    [].slice.call(document.querySelectorAll("#bld-fields textarea")).forEach(bldGrow);
+    [].slice.call(bldHost().querySelectorAll("textarea")).forEach(bldGrow);
   }
   wireBldGrow(document.getElementById("bld-name"));
   wireBldGrow(document.getElementById("bld-name-ar"));
@@ -5546,7 +5728,7 @@
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
       afterFieldSelectHtml() +
       '<button type="button" class="rm">Remove</button></div>';
-    document.getElementById("bld-fields").appendChild(row);
+    bldHost().appendChild(row);
     if (data) {
       if (data.id) row.setAttribute("data-field-id", data.id);
       var af = row.querySelector(".fafter"); if (af && data.afterField) af.value = data.afterField;
@@ -5576,14 +5758,20 @@
     els.forEach(function (c) { var box = c.getBoundingClientRect(); var off = y - box.top - box.height / 2; if (off < 0 && off > closest.offset) closest = { offset: off, el: c }; });
     return closest.el;
   }
-  document.getElementById("bld-fields").addEventListener("dragover", function (e) {
-    if (!bldDragEl) return; e.preventDefault();
-    var after = bldDragAfter(this, e.clientY);
-    if (after == null) this.appendChild(bldDragEl); else this.insertBefore(bldDragEl, after);
+  // Drag-to-reorder is wired on both hosts, because the field editor can be shown in the
+  // builder modal or inside a table's Form tab and reordering must work in either.
+  ["bld-fields", "fform-fields"].forEach(function (id) {
+    var host = document.getElementById(id);
+    if (!host) return;
+    host.addEventListener("dragover", function (e) {
+      if (!bldDragEl) return; e.preventDefault();
+      var after = bldDragAfter(this, e.clientY);
+      if (after == null) this.appendChild(bldDragEl); else this.insertBefore(bldDragEl, after);
+    });
   });
   // ---- Auto-save draft so an in-progress table survives closing/reloading ----
   function serializeBuilder() {
-    var rows = [].slice.call(document.querySelectorAll("#bld-fields .bld-field"));
+    var rows = [].slice.call(bldHost().querySelectorAll(".bld-field"));
     return {
       name: document.getElementById("bld-name").value,
       nameAr: document.getElementById("bld-name-ar").value,
@@ -5614,7 +5802,7 @@
   function resetBuilder() {
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
     setIntroInputs(null);
-    document.getElementById("bld-fields").innerHTML = ""; document.getElementById("bld-msg").textContent = "";
+    bldHost().innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     document.getElementById("bld-stages").innerHTML = "";
     document.getElementById("bld-actions").innerHTML = "";
     document.getElementById("bld-layers").innerHTML = "";
@@ -5683,7 +5871,7 @@
     document.getElementById("bld-name").value = name; document.getElementById("bld-name-ar").value = "";
     setIntroInputs(null);
     document.getElementById("bld-msg").textContent = "Loading…";
-    document.getElementById("bld-fields").innerHTML = "";
+    bldHost().innerHTML = "";
     builder.classList.add("open");
     db.from("app_tables").select("config").eq("id", editingTableId).single().then(function (cRes) {
       var cfg = (cRes && cRes.data && cRes.data.config) || {};
@@ -5699,6 +5887,7 @@
     }).catch(function () { document.getElementById("bld-msg").textContent = ""; });
   }
   function openBuilder() {
+    useBuilderHost();               // claim the question editor back from any Form tab
     editingTableId = null; editingFieldIds = [];
     setBuilderChrome("create");
     document.getElementById("bld-msg").textContent = "";
@@ -5707,7 +5896,7 @@
       document.getElementById("bld-name").value = d.name || "";
       document.getElementById("bld-name-ar").value = d.nameAr || "";
       setIntroInputs({ en: d.intro, ar: d.introAr });
-      document.getElementById("bld-fields").innerHTML = "";
+      bldHost().innerHTML = "";
       (d.fields && d.fields.length ? d.fields : [null]).forEach(function (f) { addBuilderField(f); });
       var note = document.getElementById("bld-draft-note"); if (note) note.textContent = "Restored your unsaved draft";
     } else {
@@ -5734,7 +5923,7 @@
     document.getElementById("bld-name").value = table.name || "";
     document.getElementById("bld-name-ar").value = table.name_ar || "";
     setIntroInputs(table.config && table.config.intro);
-    document.getElementById("bld-fields").innerHTML = "";
+    bldHost().innerHTML = "";
     document.getElementById("bld-stages").innerHTML = "";
     ((table.config && table.config.statuses) || []).forEach(function (st) { addStageRow(st); });
     document.getElementById("bld-actions").innerHTML = "";
@@ -5742,7 +5931,8 @@
     document.getElementById("bld-layers").innerHTML = "";
     ((table.config && table.config.layers) || []).forEach(function (l) { addLayerRow(l); });
     builder.classList.add("open");
-    db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
+    // returns the load, so the Form tab can wait for the rows before showing them
+    return db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
       document.getElementById("bld-msg").textContent = "";
       var fields = (res && res.data) || [];
       if (!fields.length) { addBuilderField(); }
@@ -5752,7 +5942,7 @@
       });
       if (presetType) {
         addBuilderField({ type: presetType });
-        var rows = document.querySelectorAll("#bld-fields .bld-field");
+        var rows = bldHost().querySelectorAll(".bld-field");
         var last = rows[rows.length - 1];
         if (last) {
           if (last.scrollIntoView) last.scrollIntoView({ block: "center" });
@@ -5816,7 +6006,7 @@
     var name = document.getElementById("bld-name").value.trim();
     var nameAr = document.getElementById("bld-name-ar").value.trim();
     if (!name) { msg.textContent = "Please enter a table name."; return; }
-    var rows = [].slice.call(document.querySelectorAll("#bld-fields .bld-field"));
+    var rows = [].slice.call(bldHost().querySelectorAll(".bld-field"));
     var fields = [];
     for (var i = 0; i < rows.length; i++) {
       var lab = rows[i].querySelector(".lab").value.trim();
@@ -6237,6 +6427,7 @@
     } else if (act === "open") {
       if (ctx.table) openCustomTable(ctx.table); else showView(ctx.view);
     } else if (act === "edit") {
+      useBuilderHost();
       if (ctx.table) openBuilderEdit(ctx.table); else openBuiltinEdit(ctx.view);
     } else if (act === "share") {
       openShare(ctx.key, ctx.table ? ctx.table.name : (ctx.view === "casting" ? "BLK Casting" : "Job Applications"));
@@ -6526,10 +6717,76 @@
     // questions as they are now rather than as they were when the table loaded
     if (scope === "custom" && tab === "form" && currentCustom && currentCustom.table) {
       renderFormPreview(currentCustom.table, currentCustom.fields || []);
+      var modeSeg = document.getElementById("fform-mode");
+      // only an admin can change the questions, so only an admin is offered the switch
+      if (modeSeg) modeSeg.style.display = isAdmin ? "" : "none";
+      setFormMode("preview");
     }
   }
-  document.getElementById("fprev-edit").addEventListener("click", function () {
-    if (currentCustom && currentCustom.table) openBuilderEdit(currentCustom.table);
+  // ---- Editing the form, in the Form tab ----------------------------------
+  // "Edit questions" is not the table builder: it edits the form and nothing else. The
+  // table's stages, record actions and review chain stay in Table settings, because they
+  // are not part of what an applicant fills in.
+  //
+  // It reuses the builder's question rows and the builder's save, rather than a second
+  // implementation that would drift from it. The builder's own state is loaded for this
+  // table (so saving cannot wipe the stages and actions it also writes) while its overlay
+  // stays shut, and the rows are built into the Form tab's host instead of the modal's.
+  var formEditFor = null;
+  function mountFormEditor(t) {
+    if (!t || !isAdmin) return;
+    var msg = document.getElementById("fform-msg");
+    if (msg) { msg.className = "fform-msg"; msg.textContent = "Loading the questions…"; }
+    useFormTabHost();
+    openBuilderEdit(t).then(function () {
+      closeBuilder();                     // its state is what we want, not its overlay
+      formEditFor = t.id;
+      // The title is not a question, so it is not edited here — but it must be visible,
+      // because it is the heading an applicant reads above these questions.
+      var note = document.getElementById("fform-title-note");
+      if (note) note.textContent = "— “" + t.name + (t.name_ar ? " · " + t.name_ar : "") +
+        "”, changed in Table settings";
+      if (msg) msg.textContent = "";
+    }).catch(function () {
+      if (msg) { msg.className = "fform-msg err"; msg.textContent = "Could not load the questions."; }
+    });
+  }
+  function setFormMode(mode) {
+    var edit = mode === "edit";
+    var heading = document.getElementById("fform-heading");
+    if (heading) heading.textContent = edit ? "Editing the form" : "What the applicant sees";
+    document.getElementById("custom-fprev").style.display = edit ? "none" : "";
+    document.getElementById("fform-edit").style.display = edit ? "" : "none";
+    [].slice.call(document.querySelectorAll("#fform-mode button")).forEach(function (b) {
+      b.classList.toggle("active", (b.getAttribute("data-m") === "edit") === edit);
+    });
+    if (edit && currentCustom && currentCustom.table && formEditFor !== currentCustom.table.id) {
+      mountFormEditor(currentCustom.table);
+    }
+    if (!edit && currentCustom && currentCustom.table) {
+      // redraw the preview from what is on screen now, so a save shows up immediately
+      renderFormPreview(currentCustom.table, currentCustom.fields || []);
+    }
+  }
+  document.getElementById("fform-mode").addEventListener("click", function (e) {
+    var b = e.target.closest ? e.target.closest("button") : null; if (!b) return;
+    setFormMode(b.getAttribute("data-m"));
+  });
+  document.getElementById("fform-add").addEventListener("click", function () {
+    useFormTabHost(); addBuilderField(); requestAnimationFrame(growAllBld);
+  });
+  document.getElementById("fform-save").addEventListener("click", function () {
+    var msg = document.getElementById("fform-msg");
+    msg.className = "fform-msg"; msg.textContent = "Saving…";
+    useFormTabHost();
+    // the builder's save reads the active host, validates, and writes fields + config
+    document.getElementById("bld-save").click();
+    // its own message element carries the outcome; mirror it here
+    setTimeout(function () {
+      var bm = document.getElementById("bld-msg").textContent;
+      if (bm) { msg.className = "fform-msg err"; msg.textContent = bm; }
+      else { msg.className = "fform-msg ok"; msg.textContent = "Saved."; }
+    }, 900);
   });
   [].slice.call(document.querySelectorAll("[data-tabs]")).forEach(function (tabs) {
     var scope = tabs.getAttribute("data-tabs");
@@ -6570,7 +6827,16 @@
     if (!isTask) items.push({ label: "Open the public form", on: function () { window.open(publicFormLink(t.slug), "_blank"); } });
     items.push({ sep: true });
     if (isAdmin) {
-      items.push({ label: "Edit table and questions", on: function () { openBuilderEdit(t); } });
+      var ws = tableWorkspace(t);
+      if (ws) {
+        items.push({ head: true, label: "Workspace · " + ws });
+        if (ws !== WS_NEW) items.push({ label: "Move to " + WS_NEW, on: function () { moveTableToWorkspace(t, WS_NEW); } });
+        if (ws !== WS_OLD) items.push({ label: "Move to " + WS_OLD, on: function () { moveTableToWorkspace(t, WS_OLD); } });
+        if (!isTask) items.push({ label: "Restart form…", hint: "freeze + fresh copy", on: function () { restartFormInNew(t); } });
+        items.push({ sep: true });
+      }
+      items.push({ label: "Edit the form", on: function () { setBasePane("custom", "form"); } });
+      items.push({ label: "Table settings", hint: "stages, actions, chain", on: function () { useBuilderHost(); openBuilderEdit(t); } });
       items.push({ label: "Share…", on: function () { openShare(t.id, t.name); } });
       items.push({ label: "Delete table…", on: function () { openDeleteTable(t.id, t.name); } });
     } else {
