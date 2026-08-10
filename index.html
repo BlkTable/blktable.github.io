@@ -491,6 +491,30 @@
   .pill.good { background: #1e7f4a; color: #eafff2; }
   .pill.bad  { background: #8c2f2f; color: #ffecec; }
   .pill.warn { background: #7a5b16; color: #fff6e0; }
+  /* Airtable gives every choice its own colour, which is what lets you pick one branch
+     out of a wall of cards without reading a word. Twenty tints, assigned from the text
+     of the value itself (see tintClass) so the same branch is the same colour on the
+     card, in the grid, in a group header and in the record — with no palette to keep. */
+  .pill.t0  { background: #1e3a5f; color: #a8cdf5; }
+  .pill.t1  { background: #12463f; color: #8fdcc9; }
+  .pill.t2  { background: #1c4a2b; color: #a3e0b0; }
+  .pill.t3  { background: #33421a; color: #cbe38a; }
+  .pill.t4  { background: #4a3d12; color: #ecd48a; }
+  .pill.t5  { background: #4d3117; color: #f0b98a; }
+  .pill.t6  { background: #4f2222; color: #f3a3a3; }
+  .pill.t7  { background: #4a1f3a; color: #f0a6d4; }
+  .pill.t8  { background: #3a2360; color: #c4a9f5; }
+  .pill.t9  { background: #2b2470; color: #b0b0f7; }
+  .pill.t10 { background: #0f3f4a; color: #93d8e8; }
+  .pill.t11 { background: #16344d; color: #9dc9ea; }
+  .pill.t12 { background: #14432f; color: #96e0bd; }
+  .pill.t13 { background: #3c4218; color: #d3dd8e; }
+  .pill.t14 { background: #4a3618; color: #eec38c; }
+  .pill.t15 { background: #4d2a1c; color: #efae90; }
+  .pill.t16 { background: #4a1f2c; color: #f2a5b6; }
+  .pill.t17 { background: #431f47; color: #e3a8ef; }
+  .pill.t18 { background: #232c63; color: #a9b6f2; }
+  .pill.t19 { background: #2b3440; color: #b6c3d1; }
   .empty-box { display: inline-block; width: 26px; height: 14px; border-radius: 4px;
     background: rgba(255,255,255,0.07); }
   /* Scores. A percentage reads as a number you can judge at a glance, so it carries
@@ -1602,6 +1626,7 @@
     document.getElementById("pf-name").textContent = session.user.email;
     loadRole(session.user.id);
     loadApps();
+    loadBranchTints();
     loadCustomTables();
     loadBuiltinTokens();
     loadBuiltinExtra();
@@ -3591,9 +3616,17 @@
     // A table can name which fields belong on the card (config.card_fields), so the
     // number that matters — a Mystery Shopper's Final Score, say — is visible without
     // opening the record. Otherwise fall back to the first few answers as before.
+    // A form's own "Branch" question holds whatever the shop typed that year, so the
+    // same shop appears under several spellings. The record's branch column is the
+    // reconciled one, and it is what the sidebar, grouping and CSV already use — so a
+    // card may name "__branch" to show that instead of the raw answer.
     var cardIds = (currentCustom.table.config && currentCustom.table.config.card_fields) || null;
     var summary = cardIds && cardIds.length
-      ? cardIds.map(function (id) { return fields.filter(function (f) { return f.id === id; })[0]; }).filter(Boolean)
+      ? cardIds.map(function (id) {
+          if (id === "__branch") return { id: "__branch", label: "Branch" };
+          if (id === "__created") return { id: "__created", label: "Submitted" };
+          return fields.filter(function (f) { return f.id === id; })[0];
+        }).filter(Boolean)
       : fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
     // config.card_no_cover opts a table out of the photo cover entirely (e.g. Complaints, where most records have no screenshot).
     var photoField = (currentCustom.table.config && currentCustom.table.config.card_no_cover) ? null : fields.filter(function (f) { return f.type === "photo"; })[0];
@@ -3666,6 +3699,11 @@
       // labelled fields: skip the score field (shown as a chip) and photo fields (cover)
       var fldsHtml = summary.filter(function (f) { return !scoreField || f.id !== scoreField.id; })
         .map(function (f) {
+          if (f.id === "__branch" || f.id === "__created") {
+            var pv = f.id === "__branch" ? branchPillHtml(s.branch) : esc(fmtDate(s.created_at));
+            return '<div class="rec-fld"><div class="k">' + esc(f.label) + '</div>' +
+              '<div class="v">' + pv + '</div></div>';
+          }
           var v = cellValueHtml(f, d, s);
           var isLong = f.type === "long_text";
           return '<div class="rec-fld"><div class="k">' + esc(f.label) + '</div>' +
@@ -3676,7 +3714,7 @@
         var sn = scoreFraction(scoreField, customCellText(scoreField, d));
         if (sn !== null) scoreHtml = scoreChipHtml(sn, scoreRawText(currentCustom.table, s));
       }
-      var initial = esc(String(summary.length ? customCellText(summary[0], d) : "?").trim().charAt(0).toUpperCase() || "?");
+      var initial = esc(String(summary.length ? cardText(summary[0], d, s) : "?").trim().charAt(0).toUpperCase() || "?");
       var moveHtml = "";
       if (stages.length && mayEdit) {
         var cur = subStage(s, stages);
@@ -3687,7 +3725,7 @@
       var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions, mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
-      var tint = cardTint(d);
+      var tint = cardTint(d, fields);
       var el = document.createElement("div");
       if (kcards) {
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
@@ -3696,7 +3734,7 @@
           (photoField && d[photoField.id] ? '<div class="photo"></div>' : '') +
           '<div class="body" style="text-align:left">' +
             threadHtml +
-            '<div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
+            '<div class="name">' + esc(summary.length ? cardText(summary[0], d, s) : "—") + tag + '</div>' +
             fldsHtml +
             '<div class="card-foot">' + (scoreHtml || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
             actions +
@@ -3705,8 +3743,8 @@
         el.className = "ja-row is-rec" + (mine ? " is-mine" : "");
         if (tint && !mine) el.style.boxShadow = "inset 3px 0 0 " + tint;
         el.innerHTML = '<div class="ja-thumb">' + initial + '</div>' +
-          '<div class="info"><div class="name">' + esc(summary.length ? customCellText(summary[0], d) : "—") + tag + '</div>' +
-          '<div class="sub">' + summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; }).map(function (f) { return esc(customCellText(f, d)); }).join(" · ") + '</div></div>' +
+          '<div class="info"><div class="name">' + esc(summary.length ? cardText(summary[0], d, s) : "—") + tag + '</div>' +
+          '<div class="sub">' + summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; }).map(function (f) { return esc(cardText(f, d, s)); }).join(" · ") + '</div></div>' +
           scoreHtml + '<div class="row-actions">' + actions + '</div>';
       }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
@@ -3722,12 +3760,78 @@
   // so a 112-field record is scannable instead of a wall of text.
   var YES_WORDS = /^(yes|نعم|✓|true|ok|good|clean|available|done)/i;
   var NO_WORDS = /^(no|لا|✗|false|missing|dirty|not )/i;
-  function pillClass(v) {
+  function pillClass(v, f) {
     var t = String(v || "").trim();
     if (YES_WORDS.test(t)) return "pill good";
     if (NO_WORDS.test(t)) return "pill bad";
     if (/^(half|partial|sometimes|maybe)/i.test(t)) return "pill warn";
-    return "pill";
+    return "pill " + tintClass(t, f);
+  }
+  // Airtable colours a choice by its place in the field's own option list, which is why
+  // its branches never collide. We do the same: a dropdown's choices are stored as an
+  // array on the field, so choice number N takes tint N and a field with 20 or fewer
+  // choices gets 20 different colours. Values with no field to place them in (the
+  // record's own branch column, a free-text answer) fall back to a hash of the text, so
+  // they are at least stable everywhere they appear. Yes/no keep their green/red above,
+  // because there the colour carries meaning rather than identity.
+  var TINT_N = 20;
+  var branchTint = {};       // canonical branch name (lowercased) -> tint, from `branches`
+  function hashTint(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h % TINT_N;
+  }
+  function choiceLabels(f) {
+    // a dropdown/multi-select stores options as [{en, ar}, …]; every other field type
+    // stores an object, so anything that is not an array has no choice list to index
+    if (!f || !f.options || !Array.isArray(f.options)) return null;
+    return f.options.map(function (o) {
+      return o && typeof o === "object" ? String(o.en || o.ar || "") : String(o == null ? "" : o);
+    });
+  }
+  function tintIndex(v, f) {
+    var s = String(v == null ? "" : v).trim();
+    if (!s) return TINT_N - 1;
+    var labels = choiceLabels(f);
+    if (labels) {
+      for (var i = 0; i < labels.length; i++) {
+        if (labels[i].trim() === s) return i % TINT_N;
+      }
+    }
+    var key = s.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(branchTint, key)) return branchTint[key];
+    return hashTint(key);
+  }
+  function tintClass(v, f) { return "t" + tintIndex(v, f); }
+  function branchPillHtml(name) {
+    var t = String(name || "").trim();
+    if (!t) return "—";
+    return '<span class="pill ' + tintClass(t) + '" dir="auto">' + esc(t) + "</span>";
+  }
+  // the plain text behind a card field, including the two that are columns on the
+  // record rather than answers in it
+  function cardText(f, d, s) {
+    if (!f) return "";
+    if (f.id === "__branch") return (s && s.branch) || "";
+    if (f.id === "__created") return s ? fmtDate(s.created_at) : "";
+    return customCellText(f, d);
+  }
+  // The branch column is not a field, so it has no option list to index. Spreading the
+  // real branch list across the palette by position beats hashing 38 names into 20 slots,
+  // where luck decides how many collide.
+  function loadBranchTints() {
+    db.from("branches").select("name,position").order("position", { ascending: true })
+      .then(function (res) {
+        if (!res || res.error || !res.data) return;
+        var map = {};
+        res.data.forEach(function (b, i) {
+          if (b && b.name) map[String(b.name).trim().toLowerCase()] = i % TINT_N;
+        });
+        branchTint = map;
+        // repaint whatever is already on screen, since colours arrived after the render
+        if (currentCustom) renderCustom();
+      })
+      .catch(function () {});
   }
   function hasArabic(s) { return /[؀-ۿ]/.test(String(s || "")); }
   // ---- Scores ------------------------------------------------------------------
@@ -3759,17 +3863,19 @@
     if (pts == null || pts === "") return "";
     return cfg.score_max ? (pts + "/" + cfg.score_max) : String(pts);
   }
-  function cardTint(d) {
+  function cardTint(d, fields) {
     if (!customColorField) return "";
     var val = d[customColorField];
-    return val ? choiceColor(String(val).split(/\s*,\s*/)[0]) : "";
+    if (!val) return "";
+    var f = (fields || []).filter(function (x) { return x.id === customColorField; })[0];
+    return choiceColor(String(val).split(/\s*,\s*/)[0], f);
   }
-  var TINTS = ["#4aa3df", "#2ecc71", "#e0a53a", "#a06be0", "#3aa3a3", "#e05a5a"];
-  function choiceColor(v) {
-    var h = 0, str = String(v);
-    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffff;
-    return TINTS[h % TINTS.length];
-  }
+  // the accent that matches each .pill.tN, in the same order, so a card coloured by
+  // Branch gets the border colour of the branch pill printed on it
+  var TINTS = ["#a8cdf5", "#8fdcc9", "#a3e0b0", "#cbe38a", "#ecd48a", "#f0b98a", "#f3a3a3",
+               "#f0a6d4", "#c4a9f5", "#b0b0f7", "#93d8e8", "#9dc9ea", "#96e0bd", "#d3dd8e",
+               "#eec38c", "#efae90", "#f2a5b6", "#e3a8ef", "#a9b6f2", "#b6c3d1"];
+  function choiceColor(v, f) { return TINTS[tintIndex(v, f)]; }
   function cellValueHtml(f, d, s) {
     var raw = customCellText(f, d, true);
     if (raw == null || String(raw).trim() === "") return '<span class="empty-box"></span>';
@@ -3790,7 +3896,7 @@
     if (isChoiceField(f) || f.type === "yesno") {
       // a multi-select arrives comma-joined; show each choice as its own pill
       return txt.split(/\s*,\s*/).filter(Boolean).map(function (part) {
-        return '<span class="' + pillClass(part) + '" dir="auto">' + esc(part) + "</span>";
+        return '<span class="' + pillClass(part, f) + '" dir="auto">' + esc(part) + "</span>";
       }).join(" ");
     }
     var cls = (f.type === "long_text" ? "wrap " : "") + (hasArabic(txt) ? "rtl" : "");
@@ -3897,7 +4003,7 @@
   function gridCell(f, s) {
     var d = s.data || {};
     if (f.id === "__created") return esc(fmtDate(s.created_at));
-    if (f.id === "__branch") return esc(s.branch || "—");
+    if (f.id === "__branch") return branchPillHtml(s.branch);
     if (f.type === "photo") {
       var p = d[f.id];
       return p ? '<img class="cellimg" data-path="' + esc(p) + '" alt="">' : "";
@@ -3909,7 +4015,7 @@
     // choices read as pills in the grid, the way they do in Airtable and in the record
     if (isChoiceField(f) || f.type === "yesno") {
       return splitMulti(txt).map(function (part) {
-        return '<span class="' + pillClass(part) + '" dir="auto">' + esc(part) + "</span>";
+        return '<span class="' + pillClass(part, f) + '" dir="auto">' + esc(part) + "</span>";
       }).join(" ");
     }
     return esc(txt);
@@ -4101,9 +4207,17 @@
       (isAdmin ? '<th class="addcol" id="grid-addcol" title="Add a question to this table">＋</th>' : "") +
       "</tr></thead><tbody>" +
       groups.map(function (g) {
+        // the group header carries the same colour the value has in the rows below it,
+        // so scrolling a grouped grid reads as bands rather than a list of headings
+        var gLab = gcol && gcol.id === "__branch" ? branchPillHtml(g.key)
+                 : gcol && (isChoiceField(gcol) || gcol.type === "yesno")
+                   ? '<span class="' + pillClass(g.key, gcol) + '" dir="auto">' + esc(g.key) + "</span>"
+                   : esc(g.key);
         var head = g.key === null ? "" :
+          // `span` (not allCols.length) because the grid now also carries a row-number
+          // column and, for admins, the add-field column — the heading spans all of them.
           '<tr class="grp"><td class="pin" colspan="' + span + '">' +
-          esc(g.key) + ' <span class="n">' + g.rows.length + "</span></td></tr>";
+          gLab + ' <span class="n">' + g.rows.length + "</span></td></tr>";
         return head + g.rows.map(function (s) {
           // index into `ordered`, not `rows` — grouping changes the visual order and a
           // click must open the record the user actually clicked
