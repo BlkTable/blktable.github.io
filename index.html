@@ -35,6 +35,12 @@
     --accent-hi: #4f97ff;
     --accent-ink: #ffffff;
     --pink: #f82b60;
+    /* state colours, named where they used to be raw hex */
+    --danger: #ff6b6b;
+    --gold: #eab308;
+    --ok: #7ed08a;
+    --wa: #25d366;
+    --bg-3: #232326;
     --pink-hi: #ff5177;
     --pink-soft: rgba(248,43,96,0.14);
   }
@@ -52,7 +58,7 @@
   .login-wrap {
     display: flex; align-items: center; justify-content: center;
     min-height: 100vh; padding: 24px;
-    background: radial-gradient(1200px 600px at 50% -10%, var(--bg-top) 0%, var(--bg) 55%);
+    background: var(--bg);
   }
   .login { width: 100%; max-width: 372px; }
   .brand-logo {
@@ -62,13 +68,13 @@
   /* Flat: a border does the separating, not a drop shadow. */
   .login-card {
     background: var(--card);
-    border: 1px solid var(--line-2); border-radius: 12px;
+    border: 1px solid var(--line-2); border-radius: 10px;
     padding: 26px 24px 24px;
   }
   .brand-sub { text-align: center; color: var(--muted); font-size: 0.82rem; margin: 0 0 20px; }
   .field-group { display: flex; flex-direction: column; gap: 12px; }
   input {
-    padding: 13px 15px; border-radius: 12px; border: 1px solid var(--field-border);
+    padding: 13px 15px; border-radius: 10px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; width: 100%;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
@@ -84,8 +90,8 @@
   button.primary:active { transform: translateY(1px); }
   button.primary:disabled { opacity: 0.55; cursor: default; filter: none; }
   .msg { font-size: 0.85rem; text-align: center; min-height: 1.2em; margin-top: 4px; }
-  .msg.err { color: #ff6b6b; }
-  .msg.ok { color: #7ed08a; }
+  .msg.err { color: var(--danger); }
+  .msg.ok { color: var(--ok); }
 
   /* ---------- App shell ---------- */
   /* Airtable's shell is the viewport: the header and the sidebar stay put and the
@@ -111,7 +117,7 @@
   }
   .linkbtn {
     background: none; border: 1px solid var(--field-border); color: var(--muted); font-size: 0.8rem;
-    cursor: pointer; padding: 7px 12px; border-radius: 9px; transition: color 0.15s, border-color 0.15s;
+    cursor: pointer; padding: 7px 12px; border-radius: 8px; transition: color 0.15s, border-color 0.15s;
   }
   .linkbtn:hover { color: var(--text); border-color: var(--silver); }
   .content { flex: 1; padding: 34px 22px 48px; max-width: 900px; width: 100%; margin: 0 auto; }
@@ -131,7 +137,7 @@
   .side-item .ico { width: 8px; height: 8px; border-radius: 2px; background: currentColor; opacity: 0.7; flex: 0 0 auto; }
   .side-item .side-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .side-gear { display: none; margin-left: auto; flex: 0 0 auto; font-size: 0.95rem; line-height: 1; color: var(--muted);
-    padding: 3px 5px; border-radius: 7px; opacity: 0; transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease; }
+    padding: 3px 5px; border-radius: 6px; opacity: 0; transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease; }
   #side-tables.show-gears .side-gear { display: inline-flex; }
   .side-item:hover .side-gear, .side-item.active .side-gear { opacity: 0.75; }
   .side-gear:hover { color: var(--silver); background: rgba(255,255,255,0.1); opacity: 1; }
@@ -177,15 +183,14 @@
   .section-title { font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
   .empty {
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.02), transparent),
       var(--card);
-    border: 1px dashed var(--field-border); border-radius: 16px;
+    border: 1px dashed var(--field-border); border-radius: 10px;
     padding: 48px 24px; text-align: center; color: var(--muted);
   }
   .empty h2 { color: var(--text); font-size: 1.05rem; margin: 0 0 8px; }
   .empty p { margin: 0; font-size: 0.9rem; }
   .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
     padding: 22px; margin-top: 26px;
   }
   .card h3 { margin: 0 0 14px; font-size: 0.95rem; }
@@ -197,10 +202,10 @@
   .ja-title { margin: 2px 0 0; font-size: 1.3rem; font-weight: 800; }
   .ja-count { color: var(--muted); font-size: 0.82rem; }
   .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-  .toolbar input[type="search"] { flex: 1; min-width: 150px; height: 44px; padding: 0 14px; border-radius: 11px;
+  .toolbar input[type="search"] { flex: 1; min-width: 150px; height: 44px; padding: 0 14px; border-radius: 8px;
     border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; color-scheme: dark; }
   .toolbar input[type="search"]:focus { border-color: var(--silver); }
-  .toolbar select { width: auto; min-width: 150px; height: 44px; padding: 0 34px 0 14px; border-radius: 11px;
+  .toolbar select { width: auto; min-width: 150px; height: 44px; padding: 0 34px 0 14px; border-radius: 8px;
     border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none;
     appearance: none; -webkit-appearance: none; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
@@ -208,10 +213,10 @@
   .toolbar .linkbtn { height: 44px; }
   .ja-list { display: flex; flex-direction: column; gap: 10px; }
   .ja-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--card);
-    border: 1px solid var(--line); border-radius: 14px; cursor: pointer; transition: border-color 0.15s ease; }
+    border: 1px solid var(--line); border-radius: 10px; cursor: pointer; transition: border-color 0.15s ease; }
   .ja-row:hover { border-color: var(--silver); }
   .ja-thumb { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: 0 0 auto;
-    background: #232326; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 1.1rem; }
+    background: var(--bg-3); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 1.1rem; }
   .ja-row .info { flex: 1; min-width: 0; }
   .ja-row .name { font-weight: 600; font-size: 0.95rem; }
   .ja-row .sub { color: var(--muted); font-size: 0.8rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -222,18 +227,18 @@
   .stars .star.on { color: var(--silver); }
 
   .seg { display: inline-flex; background: var(--field-bg); border: 1px solid var(--field-border);
-    border-radius: 11px; padding: 3px; height: 44px; }
+    border-radius: 8px; padding: 3px; height: 44px; }
   .seg button { border: none; background: none; color: var(--muted); font-weight: 600; font-size: 0.85rem;
     padding: 0 14px; border-radius: 8px; cursor: pointer; font-family: inherit; }
   .seg button.active { background: rgba(214,218,222,0.14); color: var(--silver); }
 
   .filter-wrap { position: relative; }
   .filter-btn { height: 44px; width: 44px; display: inline-flex; align-items: center; justify-content: center;
-    border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--muted); cursor: pointer; }
+    border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--muted); cursor: pointer; }
   .filter-btn:hover { border-color: var(--silver); color: var(--text); }
   .filter-btn.active { border-color: var(--silver); color: var(--silver); }
   .filter-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 244px;
-    background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px; padding: 14px;
+    background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px; padding: 14px;
      display: none; }
   .filter-panel.open { display: block; }
   .fp-group { margin-bottom: 14px; }
@@ -243,18 +248,18 @@
   #fp-country { display: flex; width: 100%; height: 40px; }
   #fp-country button { flex: 1; padding: 0; font-size: 0.78rem; }
   .mini-flag { width: 16px; height: 11px; object-fit: cover; border-radius: 2px; display: inline-block; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); }
-  .fp-select { width: 100%; height: 40px; padding: 0 34px 0 12px; border-radius: 9px; border: 1px solid var(--field-border);
+  .fp-select { width: 100%; height: 40px; padding: 0 34px 0 12px; border-radius: 8px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; appearance: none; -webkit-appearance: none;
     cursor: pointer; color-scheme: dark; font-family: inherit;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   .fp-select:focus { border-color: var(--silver); }
   .fp-age { display: flex; align-items: center; gap: 8px; }
-  .fp-age input { width: 100%; height: 40px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border);
+  .fp-age input { width: 100%; height: 40px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; color-scheme: dark; font-family: inherit; }
   .fp-age input:focus { border-color: var(--silver); }
   .fp-age span { color: var(--muted); }
-  .fp-clear { width: 100%; padding: 9px; border-radius: 9px; border: 1px solid var(--field-border);
+  .fp-clear { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid var(--field-border);
     background: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; }
   .fp-clear:hover { color: var(--text); border-color: var(--silver); }
   /* Airtable-style condition builder (standard filter on every table) */
@@ -271,7 +276,7 @@
   .fc-row select:focus, .fc-input:focus { border-color: var(--silver); }
   .fc-rm { flex: 0 0 auto; width: 34px; height: 38px; border-radius: 8px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--muted); cursor: pointer; font-size: 1.05rem; line-height: 1; }
-  .fc-rm:hover { border-color: #ff6b6b; color: #ff6b6b; }
+  .fc-rm:hover { border-color: var(--danger); color: var(--danger); }
   .fc-multi { border: 1px solid var(--field-border); border-radius: 8px; background: var(--field-bg);
     max-height: 148px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
   .fc-multi label { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; color: var(--text); cursor: pointer; }
@@ -285,46 +290,46 @@
   /* equal-height cards: rows size to the tallest card, and each card fills its cell */
   .ja-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     gap: 14px; align-items: stretch; }
-  .ja-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  .ja-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
     cursor: pointer; transition: border-color 0.15s ease;
     display: flex; flex-direction: column; height: 100%; overflow: hidden; }
   .ja-card:hover { border-color: var(--silver); }
-  .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: #232326 center/cover no-repeat; border-radius: 16px 16px 0 0;
+  .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: var(--bg-3) center/cover no-repeat; border-radius: 10px 10px 0 0;
     display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 2rem; font-weight: 700; }
   /* per-record ⋯ actions menu */
   .rec-menu { position: relative; flex: 0 0 auto; }
   .ja-card .card-actions { justify-content: center; }
-  .rec-kebab { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1.05rem; line-height: 1; cursor: pointer; flex: 0 0 auto !important; }
+  .rec-kebab { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1.05rem; line-height: 1; cursor: pointer; flex: 0 0 auto !important; }
   .rec-kebab:hover { border-color: var(--silver); }
   .rec-actions { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
   .rec-menu.open .rec-actions { display: block; }
-  .rec-actions li { padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 0.85rem; color: var(--text); font-weight: 500; }
+  .rec-actions li { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; color: var(--text); font-weight: 500; }
   .rec-actions li:hover { background: rgba(255,255,255,0.06); }
-  .rec-actions li.danger { color: #ff6b6b; }
-  .u-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: #232326; flex: 0 0 auto; }
+  .rec-actions li.danger { color: var(--danger); }
+  .u-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--bg-3); flex: 0 0 auto; }
   /* builder: workflow stages */
   .bld-stage { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .bld-stage input.st-label { flex: 1; min-width: 0; min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
-  .bld-stage select.st-color { height: 38px; padding: 0 26px 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; appearance: none; -webkit-appearance: none; }
-  .bld-stage .rm { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; flex: 0 0 auto; }
+  .bld-stage input.st-label { flex: 1; min-width: 0; min-height: 38px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
+  .bld-stage select.st-color { height: 38px; padding: 0 26px 0 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; appearance: none; -webkit-appearance: none; }
+  .bld-stage .rm { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.85rem; flex: 0 0 auto; }
   .bld-drag { cursor: grab; color: var(--muted); font-size: 1rem; padding: 0 2px; align-self: center; flex: 0 0 auto; user-select: none; }
   .bld-drag:active { cursor: grabbing; }
   .bld-field.dragging { opacity: 0.45; }
   /* builder: actions editor */
   .bld-action { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-  .bld-action select.act-type, .bld-action input.act-label { min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
+  .bld-action select.act-type, .bld-action input.act-label { min-height: 38px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
   .bld-action input.act-label { flex: 1; min-width: 120px; }
-  .bld-action textarea.act-tpl { flex-basis: 100%; min-height: 60px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.88rem; outline: none; box-sizing: border-box; font-family: inherit; resize: vertical; }
-  .bld-action .rm { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
-  .act-wa { background: #25d366 !important; color: #062916 !important; }
+  .bld-action textarea.act-tpl { flex-basis: 100%; min-height: 60px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.88rem; outline: none; box-sizing: border-box; font-family: inherit; resize: vertical; }
+  .bld-action .rm { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.85rem; }
+  .act-wa { background: var(--wa) !important; color: #062916 !important; }
   .act-call { background: #4a9eff !important; color: #fff !important; }
-  .act-email { background: #eab308 !important; color: #0a0b0d !important; }
+  .act-email { background: var(--gold) !important; color: #0d0d0f !important; }
   /* builder: review-chain layers */
   .bld-layer { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-  .bld-layer select, .bld-layer input.ly-label { min-height: 38px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
+  .bld-layer select, .bld-layer input.ly-label { min-height: 38px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; outline: none; box-sizing: border-box; }
   .bld-layer input.ly-label { flex: 1; min-width: 110px; }
   .bld-layer .ly-num { width: 22px; height: 22px; border-radius: 50%; background: rgba(214,218,222,0.12); color: var(--silver); font: 700 0.72rem/22px var(--font-mono, monospace); text-align: center; flex: 0 0 auto; }
-  .bld-layer .rm { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
+  .bld-layer .rm { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.85rem; }
   /* record: review chain timeline */
   .chain { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
   .chain-h { font: 600 0.72rem/1 var(--font-mono, monospace); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
@@ -333,7 +338,7 @@
   .layer .dot { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
     font-size: 0.8rem; font-weight: 800; border: 2px solid var(--line); background: var(--card); color: var(--muted); z-index: 1; }
   .layer.done .dot { background: #2fbf6b; border-color: #2fbf6b; color: #062916; }
-  .layer.rejected .dot { background: #ff6b6b; border-color: #ff6b6b; color: #2a0808; }
+  .layer.rejected .dot { background: var(--danger); border-color: var(--danger); color: #2a0808; }
   .layer.current .dot { border-color: var(--silver); color: var(--silver); }
   .layer .lbody { flex: 1; min-width: 0; }
   .layer .l-top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
@@ -343,23 +348,23 @@
   .layer .l-meta { color: var(--muted); font-size: 0.8rem; margin-top: 3px; }
   .layer .l-note { margin-top: 6px; background: var(--field-bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 0.88rem; white-space: pre-wrap; }
   .layer .l-act { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
-  .layer .l-act textarea { width: 100%; min-height: 54px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; resize: vertical; box-sizing: border-box; }
+  .layer .l-act textarea { width: 100%; min-height: 54px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; resize: vertical; box-sizing: border-box; }
   .layer .l-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-  .layer .l-btns button { padding: 8px 14px; border-radius: 9px; border: none; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
-  .l-turn { font: 600 0.64rem/1 var(--font-mono, monospace); letter-spacing: 0.08em; text-transform: uppercase; color: #eab308; }
+  .layer .l-btns button { padding: 8px 14px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+  .l-turn { font: 600 0.64rem/1 var(--font-mono, monospace); letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); }
   /* pipeline tabs + stage pills/buttons (generic, used by any table) */
   .pipe-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .pipe-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--field-border); background: var(--card); color: var(--muted); font-size: 0.85rem; cursor: pointer; font-family: inherit; }
-  .pipe-tab.active { color: var(--text); border-color: var(--silver); background: rgba(214,218,222,0.12); font-weight: 600; }
+  .pipe-tab.active { color: #cfe0ff; border-color: rgba(45,127,249,0.5); background: rgba(45,127,249,0.16); font-weight: 600; }
   .pipe-tab .n { opacity: 0.7; margin-left: 4px; }
   .stage-pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
   .move-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-  .move-btns button { flex: 1 1 auto; padding: 7px 10px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.76rem; cursor: pointer; color: #0a0b0d; }
+  .move-btns button { flex: 1 1 auto; padding: 7px 10px; border-radius: 8px; border: none; font-weight: 700; font-size: 0.76rem; cursor: pointer; color: #0d0d0f; }
   .sc-gray { background: #6b7280; color: #fff; }
   .sc-green { background: #2fbf6b; }
-  .sc-red { background: #ff6b6b; }
+  .sc-red { background: var(--danger); }
   .sc-blue { background: #4a9eff; color: #fff; }
-  .sc-amber { background: #eab308; }
+  .sc-amber { background: var(--gold); }
   .sc-purple { background: #a855f7; color: #fff; }
   /* body grows to fill, so the action row always sits on the card's bottom edge */
   .ja-card .body { padding: 12px; text-align: center; display: flex; flex-direction: column; flex: 1 1 auto; }
@@ -374,14 +379,14 @@
      kept so View never shifts between cards. */
   .card-actions { display: grid; grid-template-columns: 34px 1fr 34px; align-items: center;
     gap: 8px; margin-top: auto; padding-top: 10px; }
-  .card-actions .btn-view { padding: 8px 0; border-radius: 9px; font-weight: 700; font-size: 0.8rem;
+  .card-actions .btn-view { padding: 8px 0; border-radius: 8px; font-weight: 700; font-size: 0.8rem;
     cursor: pointer; background: var(--field-bg); color: var(--text); border: 1px solid var(--field-border); }
   .card-actions .btn-view:hover { border-color: var(--silver); }
   .card-actions .slot { width: 34px; height: 34px; }
   .btn-circle { width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 800;
     line-height: 1; padding: 0; flex: 0 0 auto; }
-  .btn-circle.good { background: #25d366; color: #07301a; }
+  .btn-circle.good { background: var(--wa); color: #07301a; }
   .btn-circle.bad  { background: #ff5c5c; color: #3a0b0b; }
   .btn-circle:hover { filter: brightness(1.08); }
   .btn-circle:active { transform: translateY(1px); }
@@ -391,7 +396,7 @@
   .btn-approve:hover { filter: brightness(1.07); }
   .btn-reject { background: #ff5a5a; color: #3a0808; }
   .btn-reject:hover { filter: brightness(1.07); }
-  .btn-send { background: #25d366; color: #0a2e17; }
+  .btn-send { background: var(--wa); color: #0a2e17; }
   .btn-send:hover { filter: brightness(1.07); }
   .btn-del { background: #ff5a5a; color: #3a0808; }
   .btn-del:hover { filter: brightness(1.07); }
@@ -411,30 +416,68 @@
   .hc-kind { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
     font-size: 0.7rem; letter-spacing: .04em; color: var(--muted); border: 1px solid var(--line); vertical-align: middle; }
   .link-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--card);
-    border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.85rem; }
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.85rem; }
   .link-bar .lbl { color: var(--muted); }
   .link-bar a { color: var(--silver); word-break: break-all; text-decoration: none; }
   .link-bar a:hover { text-decoration: underline; }
   .link-bar .copy { margin-left: auto; }
   .qr-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; background: var(--card);
-    border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .qr-bar .qr-img { width: 148px; height: 148px; border-radius: 10px; background: #fff; padding: 8px;
+    border: 1px solid var(--line-2); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .qr-bar .qr-img { width: 132px; height: 132px; border-radius: 6px; background: #fff; padding: 8px;
     box-sizing: border-box; flex: 0 0 auto; image-rendering: pixelated; }
   .qr-bar .qr-side { display: flex; flex-direction: column; gap: 8px; min-width: 200px; flex: 1; }
   .qr-bar .qr-cap { color: var(--text); font-weight: 600; font-size: 0.92rem; }
   .qr-bar .qr-sub { color: var(--muted); font-size: 0.8rem; margin-top: -4px; }
-  .qr-bar a { color: var(--silver); word-break: break-all; text-decoration: none; font-size: 0.82rem; }
+  .qr-bar a { color: var(--accent); word-break: break-all; text-decoration: none; font-size: 0.82rem; }
   .qr-bar a:hover { text-decoration: underline; }
   .qr-bar .qr-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+
+  /* ---- Form tab: the share panel on one side, what the applicant sees on the other ---- */
+  .form-pane { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .form-pane { grid-template-columns: minmax(0, 1fr); } }
+  .form-pane .qr-bar { margin-bottom: 0; }
+  .fp-side { display: flex; flex-direction: column; gap: 14px; }
+  .fp-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .fp-title .lab { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  /* A read-only rendering of the live form, built from the same questions the public
+     page reads, so it is a preview rather than a mock-up that can drift. */
+  .fprev { background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; padding: 22px 20px; }
+  .fprev .pv-logo { display: block; width: 150px; max-width: 60%; margin: 0 auto 16px; opacity: 0.9; }
+  .fprev .pv-h1 { text-align: center; font-size: 1.1rem; font-weight: 800; margin: 0 0 4px; }
+  .fprev .pv-ar { text-align: center; color: var(--muted); font-size: 0.86rem; margin: 0 0 16px; direction: rtl; }
+  .fprev .pv-intro { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; color: var(--silver-lo); font-size: 0.84rem; line-height: 1.6;
+    white-space: pre-wrap; margin-bottom: 16px; }
+  .fprev .pv-intro .ar { direction: rtl; text-align: right; display: block; margin-top: 8px;
+    padding-top: 8px; border-top: 1px solid var(--line); }
+  .fprev .pv-f { margin-bottom: 14px; }
+  .fprev .pv-lab { font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+  .fprev .pv-lab .ar { color: var(--muted); font-weight: 400; }
+  .fprev .pv-lab .req { color: var(--pink); }
+  .fprev .pv-lab .staff { color: var(--muted); font-size: 0.66rem; text-transform: uppercase;
+    letter-spacing: 0.06em; border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; }
+  /* the box is inert on purpose: this is a preview, and the editor is one click away */
+  .fprev .pv-box { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px;
+    border: 1px solid var(--field-border); border-radius: 8px; background: var(--field-bg);
+    color: #5f656d; font-size: 0.88rem; }
+  .fprev .pv-box.tall { height: 74px; align-items: flex-start; padding-top: 11px; }
+  .fprev .pv-box .fico { margin: 0 0 0 auto; color: var(--muted); }
+  .fprev .pv-submit { width: 100%; margin-top: 18px; padding: 13px; border-radius: 8px; border: none;
+    background: var(--accent); color: #fff; font: inherit; font-weight: 600; text-align: center; }
+  .fprev.empty { color: var(--muted); text-align: center; padding: 40px 20px; font-size: 0.88rem; }
+  .fprev .pv-staff { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 0.78rem; }
+  .builtin-note { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px;
+    padding: 13px 15px; margin-bottom: 16px; color: var(--silver-lo); font-size: 0.86rem; line-height: 1.6; max-width: 720px; }
   .qr-regen { color: #ff9b9b !important; border-color: rgba(255,107,107,0.4) !important; }
-  .qr-regen:hover { color: #ff6b6b !important; border-color: #ff6b6b !important; }
+  .qr-regen:hover { color: var(--danger) !important; border-color: var(--danger) !important; }
   .regen-math { margin-top: 8px; }
   .regen-math label { display: block; color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; }
   .regen-q { color: var(--text); font-weight: 700; font-size: 1.05rem; letter-spacing: 0.03em; }
   .regen-math input { width: 130px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; }
   .regen-math input:focus { border-color: var(--silver); }
-  .regen-danger { background: linear-gradient(180deg, #e05555, #c0392b) !important; color: #fff !important; }
-  .ed-in { width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.92rem; font-family: inherit; outline: none; box-sizing: border-box; margin-top: 4px; }
+  .regen-danger { background: #c0392b !important; color: #fff !important; border-color: #c0392b !important; }
+  .ed-in { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.92rem; font-family: inherit; outline: none; box-sizing: border-box; margin-top: 4px; }
   .ed-in:focus { border-color: var(--silver); }
   textarea.ed-in { min-height: 70px; resize: vertical; }
   .m-editbtn { margin: 0 0 14px auto; display: block; }
@@ -442,16 +485,16 @@
   .phone-row { display: flex; gap: 8px; align-items: stretch; margin-top: 4px; }
   .phone-row .ed-in { margin-top: 0; }
   .cc-picker { position: relative; flex: 0 0 auto; }
-  .cc-btn { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; font-family: inherit; }
+  .cc-btn { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; font-family: inherit; }
   .cc-btn:hover { border-color: var(--silver); }
   .cc-flag, .cc-menu li img { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
   .cc-caret { color: var(--muted); font-size: 0.65rem; }
-  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;  display: none; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
   .cc-menu.open { display: block; }
   .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 8px; cursor: pointer; color: var(--text); font-size: 0.85rem; }
   .cc-menu li:hover { background: rgba(255,255,255,0.06); }
   .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
-  .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 11px; }
+  .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 8px; }
   .card-when { font-size: 0.74rem; color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: 0.72rem; color: #58c98a; margin-top: 4px; }
   .card-note { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
@@ -468,20 +511,20 @@
     display: none; align-items: flex-start; justify-content: center; padding: 24px 16px; z-index: 50; overflow-y: auto; }
   .modal-overlay.open { display: flex; }
   .modal { position: relative; width: 100%; max-width: 520px; background: var(--card);
-    border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: 0 30px 70px rgba(0,0,0,0.55); }
+    border: 1px solid var(--line-2); border-radius: 10px; padding: 24px; }
   .modal-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 1.15rem; cursor: pointer; }
   .modal-close:hover { color: var(--text); }
-  .m-photo { width: 96px; height: 96px; border-radius: 14px; object-fit: cover; background: #232326; margin-bottom: 14px; cursor: zoom-in; }
+  .m-photo { width: 96px; height: 96px; border-radius: 10px; object-fit: cover; background: var(--bg-3); margin-bottom: 14px; cursor: zoom-in; }
   .m-photo-actions { margin: -8px 0 14px; }
   .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.86); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
   .lightbox.open { display: flex; }
-  .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: 12px; box-shadow: 0 12px 48px rgba(0,0,0,0.55); cursor: zoom-out; }
+  .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: 10px; cursor: zoom-out; }
   .lightbox .lb-close { position: absolute; top: 16px; right: 20px; background: rgba(255,255,255,0.14); color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.05rem; cursor: pointer; }
   .lightbox .lb-close:hover { background: rgba(255,255,255,0.26); }
   .m-name { font-size: 1.25rem; font-weight: 800; margin: 0; }
   .m-sub { color: var(--muted); font-size: 0.8rem; margin: 2px 0 16px; }
   .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 4px; }
-  .m-field .k { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .m-field .k { color: var(--muted); font-size: 0.74rem; letter-spacing: 0; }
   .m-field .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
   /* ---- record panel: label above, value below, choices as pills ---- */
@@ -526,14 +569,25 @@
   .score-pill.ok   { background: #2f5b7a; color: #e2f2ff; }
   .score-pill.warn { background: #7a5b16; color: #fff6e0; }
   .score-pill.bad  { background: #8c2f2f; color: #ffecec; }
-  .score-pill.big { padding: 5px 14px; font-size: 1.02rem; border-radius: 12px; }
+  .score-pill.big { padding: 5px 14px; font-size: 1.02rem; border-radius: 10px; }
   .ja-card .name .score-pill.big { margin-left: 8px; vertical-align: middle; }
   /* in the compact row layout the score sits at the right edge, aligned down the list */
   .ja-row > .score-pill.big { margin-left: auto; flex: 0 0 auto; align-self: center; }
   /* ---- Airtable-parity redesign ---- */
   /* labelled fields on a card */
   .rec-fld { margin-bottom: 9px; }
-  .rec-fld .k { color: var(--muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  /* Field names on a card read as questions, so they are sentence case. In capitals a
+     long question ("WAS THE BARISTA WEARING A CLEAN APRON?") is a wall, not a label. */
+  .rec-fld .k { color: var(--muted); font-size: 0.72rem; letter-spacing: 0; margin-bottom: 3px; }
+  /* one header shape on every card: name, then shop + record number */
+  .card-head { margin-bottom: 12px; }
+  .card-head .name { min-height: 0 !important; margin-bottom: 5px; }
+  .card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card-meta .pill { font-size: 0.74rem; padding: 2px 9px; }
+  .rec-id { color: var(--muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums; }
+  .ja-row .rec-id { margin-left: 8px; font-weight: 600; }
+  .pill.flat { background: rgba(255,255,255,0.08); color: var(--silver); }
   .rec-fld .v { font-size: 0.86rem; line-height: 1.35; }
   .rec-fld .v.rtl { direction: rtl; text-align: right; }
   .rec-fld-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 9px; }
@@ -552,7 +606,7 @@
   /* WhatsApp thread preview on complaint cards */
   .thread { background: #0f1418; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; max-height: 132px; overflow: hidden; position: relative; }
   .thread:after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(transparent, #0f1418); }
-  .bub { max-width: 82%; padding: 5px 9px; border-radius: 11px; font-size: 0.72rem; line-height: 1.3; direction: rtl; }
+  .bub { max-width: 82%; padding: 5px 9px; border-radius: 8px; font-size: 0.72rem; line-height: 1.3; direction: rtl; }
   .bub.them { align-self: flex-start; background: #23282f; color: var(--silver); }
   .bub.us { align-self: flex-end; background: #123047; color: #cfe9ff; }
   /* per-answer scoring in the record */
@@ -563,22 +617,46 @@
   .q-scored .qq { font-size: 0.8rem; color: var(--silver-lo); margin-bottom: 4px; }
   .q-scored .qp { flex: 0 0 auto; align-self: center; font-weight: 800; font-size: 0.8rem; border-radius: 8px; padding: 3px 9px; min-width: 46px; text-align: center; }
   .qp.plus { background: #1c5b34; color: #dcffe9; } .qp.zero { background: #2a1414; color: #ff9d9d; } .qp.na { background: var(--bg-2); color: var(--muted); }
-  .score-side { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 4px 0 16px; }
-  .score-side .bignum { font-size: 2.2rem; font-weight: 800; line-height: 1; }
-  .score-side .bignum small { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
-  .score-bar { height: 10px; border-radius: 999px; background: #232326; overflow: hidden; margin: 12px 0 6px; }
+  /* ---- the record's header: identity on the left, score on the right ---- */
+  /* Sticky: a QC record is 171 questions long, and the score is the thing you keep
+     wanting to see while you scroll through them. */
+  .rec-head { position: sticky; top: 0; z-index: 5; background: var(--card);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+    padding: 4px 0 14px; margin-bottom: 16px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap; }
+  .rec-head .rh-main { min-width: 0; flex: 1 1 240px; }
+  .rec-head .rh-title { font-size: 1.15rem; font-weight: 800; line-height: 1.25; }
+  .rec-head .rh-meta { color: var(--muted); font-size: 0.78rem; margin-top: 4px; }
+  /* fixed width so the number sits in the same place on every record of a table */
+  .rh-score { flex: 0 0 auto; width: 190px; }
+  .rh-score .rs-top { display: flex; align-items: baseline; gap: 8px; }
+  .rh-score .rs-pct { font-size: 1.7rem; font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums; }
+  .rh-score .rs-raw { color: var(--muted); font-size: 0.74rem; }
+  .rh-score .score-bar { margin: 8px 0 0; height: 6px; }
+  @media (max-width: 560px) { .rh-score { width: 100%; } }
+  .qsec-title { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.1em;
+    text-transform: uppercase; font-weight: 700; margin: 22px 0 10px; }
+  .score-bar { height: 10px; border-radius: 999px; background: var(--bg-3); overflow: hidden; margin: 12px 0 6px; }
   .score-bar > i { display: block; height: 100%; border-radius: 999px; }
-  .score-breakdown { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .score-breakdown .brow { display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; }
-  .score-breakdown .brow .bl { color: var(--muted); } .score-breakdown .brow .bv { font-weight: 700; font-variant-numeric: tabular-nums; }
+  /* section subtotals, each with its own small bar so a weak section is findable */
+  .score-breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 18px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 16px; }
+  .score-breakdown .brow { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.8rem; }
+  .score-breakdown .brow .bl { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .score-breakdown .brow .bv { display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+    font-weight: 700; font-variant-numeric: tabular-nums; }
+  .score-breakdown .bmini { display: block; width: 44px; height: 5px; border-radius: 999px;
+    background: rgba(255,255,255,0.1); overflow: hidden; }
+  .score-breakdown .bmini b { display: block; height: 100%; border-radius: 999px; }
   /* Airtable-style toolbar buttons */
   .tb-btn { border: 1px solid transparent; background: none; color: var(--muted); font-size: 0.82rem; font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
   .tb-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
   .tb-btn.active { color: #ffe9a6; background: rgba(234,179,8,0.12); }
   /* multi-select editor in the record panel */
   .ed-checks { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line);
-    border-radius: 9px; padding: 5px; background: rgba(255,255,255,0.03); max-height: 230px; overflow-y: auto; }
-  .ed-chk { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 7px;
+    border-radius: 8px; padding: 5px; background: rgba(255,255,255,0.03); max-height: 230px; overflow-y: auto; }
+  .ed-chk { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 6px;
     cursor: pointer; font-size: 0.87rem; }
   .ed-chk:hover { background: rgba(255,255,255,0.05); }
   .ed-chk input { width: 15px; height: 15px; flex: 0 0 auto; accent-color: var(--silver); margin: 0; }
@@ -601,9 +679,6 @@
   .grid tfoot td { position: sticky; bottom: 0; background: var(--bg-top); color: var(--muted);
     font-size: 0.78rem; font-weight: 700; border-top: 1px solid var(--silver-lo); white-space: nowrap; }
   .more-line { margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--line); text-align: center; }
-  .score-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-  .score-head .sh-lab { color: var(--muted); font-size: 0.8rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.4px; }
   .m-field .v.rtl { direction: rtl; text-align: right; }
   .m-field .v.wrap { white-space: pre-wrap; line-height: 1.6; }
   /* every photo question, each labelled — QC records carry up to 51 */
@@ -613,7 +688,7 @@
   .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
   .photo-cell { display: flex; flex-direction: column; gap: 4px; }
   .photo-cell img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 10px;
-    background: #232326; border: 1px solid var(--field-border); cursor: zoom-in; }
+    background: var(--bg-3); border: 1px solid var(--field-border); cursor: zoom-in; }
   .photo-cell img:hover { border-color: var(--silver); }
   .photo-cell .pc-lab { color: var(--muted); font-size: 0.68rem; line-height: 1.3;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -782,6 +857,31 @@
   .selbar.on { display: flex; }
   .selbar b { font-variant-numeric: tabular-nums; }
   .selbar .sb-sp { margin-left: auto; }
+  /* the assignment filter, as a removable bar rather than a permanent button */
+  .minebar { display: none; align-items: center; gap: 9px; margin: 0 0 14px; padding: 8px 12px;
+    border: 1px solid rgba(248,43,96,0.35); background: var(--pink-soft); border-radius: 8px;
+    font-size: 0.82rem; color: var(--silver); }
+  .minebar.on { display: flex; }
+  .minebar svg { flex: 0 0 auto; color: var(--pink-hi); }
+  .minebar b { font-variant-numeric: tabular-nums; }
+  .minebar .sb-sp { margin-left: auto; }
+
+  /* ---- the bell's notification panel ---- */
+  .notif { position: fixed; z-index: 320; width: min(340px, 94vw); max-height: 60vh; overflow: auto;
+    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px; display: none; }
+  .notif.open { display: block; }
+  .notif .nf-head { color: var(--muted); font-size: 0.66rem; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 8px 10px 6px; }
+  .notif .nf-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    background: none; border: none; color: var(--text); font: inherit; font-size: 0.86rem;
+    padding: 9px 10px; border-radius: 6px; cursor: pointer; }
+  .notif .nf-row:hover { background: rgba(255,255,255,0.08); }
+  .notif .nf-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .notif .nf-row .nf-n { flex: 0 0 auto; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px;
+    background: var(--pink); color: #fff; font-size: 0.68rem; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center; }
+  .notif .nf-empty { color: var(--muted); font-size: 0.84rem; padding: 18px 12px 20px; text-align: center; line-height: 1.6; }
+  .notif .nf-empty .tick { display: block; font-size: 1.4rem; margin-bottom: 6px; color: var(--ok); }
 
   /* ---- Home: recently-opened rows grouped by period ---- */
   .home-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -856,7 +956,7 @@
   table.grid tr.grp td.pin { left: 0; }
   .cols-wrap { position: relative; }
   .cols-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 300px; max-height: 60vh;
-    overflow: auto; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;
+    overflow: auto; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;
      padding: 10px; display: none; }
   .cols-panel.open { display: block; }
   .cols-panel label { display: flex; gap: 8px; align-items: center; padding: 5px 4px; font-weight: 400;
@@ -866,12 +966,12 @@
     margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
   /* per-form ⋯ menu (sidebar) */
   #form-menu { position: fixed; z-index: 300; min-width: 190px; margin: 0; padding: 6px; list-style: none;
-    background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;
+    background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;
      display: none; }
   #form-menu.open { display: block; }
   #form-menu li { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text); }
   #form-menu li:hover { background: rgba(255,255,255,0.07); }
-  #form-menu li.danger { color: #ff6b6b; }
+  #form-menu li.danger { color: var(--danger); }
   #form-menu li.sep { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 10px; border-radius: 0; }
   /* country sub-groups under a table in the sidebar — collapsed until the parent is pressed */
   .side-caret { margin-left: auto; color: var(--muted); font-size: 0.7rem; flex: 0 0 auto; padding-right: 2px; }
@@ -890,7 +990,7 @@
   .view-kid .vk-ico { color: var(--muted); font-size: 0.8rem; }
   .view-kid .vk-del { margin-left: auto; color: var(--muted); opacity: 0; padding: 0 4px; font-size: 1rem; }
   .view-kid:hover .vk-del { opacity: 0.7; }
-  .view-kid .vk-del:hover { color: #ff6b6b; opacity: 1; }
+  .view-kid .vk-del:hover { color: var(--danger); opacity: 1; }
   /* year + country scope bar */
   .ja-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
   .scope-lab { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -899,7 +999,6 @@
   /* the toolbar is a strip, so everything in it is strip-height */
   .at-toolbar .seg { height: 28px; border-radius: 6px; padding: 2px; }
   .at-toolbar .seg button { font-size: 0.78rem; padding: 0 10px; border-radius: 4px; }
-  .at-toolbar .mine-chip { padding: 4px 11px; font-size: 0.76rem; }
   /* these popovers hang off buttons on the LEFT of the strip, so they open rightwards */
   .at-toolbar .filter-panel, .at-toolbar .cols-panel { left: 0; right: auto; }
   .ja-scope select { height: 34px; padding: 0 10px; }
@@ -914,7 +1013,7 @@
   /* imported photos shown as photos, not links */
   .imp-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
   .imp-thumb { width: 104px; height: 104px; object-fit: cover; border-radius: 10px; cursor: zoom-in;
-    background: #232326; border: 1px solid var(--field-border); }
+    background: var(--bg-3); border: 1px solid var(--field-border); }
   .imp-thumb:hover { border-color: var(--silver); }
   .imp-thumb.dead { opacity: 0.35; cursor: default; }
   .imp-docs { margin-top: 8px; }
@@ -928,26 +1027,26 @@
     background: var(--field-bg); color: var(--text); font-size: 0.92rem; outline: none; font-family: inherit; color-scheme: dark; }
   .m-row select:focus, .m-row textarea:focus { border-color: var(--silver); }
   .m-actions { display: flex; gap: 10px; margin-top: 4px; }
-  .btn-wa { flex: 1; padding: 12px; border-radius: 11px; border: none; background: #25d366; color: #0a2e17; font-weight: 700; cursor: pointer; font-size: 0.95rem; }
+  .btn-wa { flex: 1; padding: 12px; border-radius: 8px; border: none; background: var(--wa); color: #0a2e17; font-weight: 700; cursor: pointer; font-size: 0.95rem; }
   .btn-wa:hover { filter: brightness(1.06); }
-  .btn-save { padding: 12px 18px; border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); cursor: pointer; font-weight: 600; }
+  .btn-save { padding: 12px 18px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); cursor: pointer; font-weight: 600; }
   .btn-save:hover { border-color: var(--silver); }
   .m-msg { font-size: 0.8rem; color: var(--muted); margin-top: 10px; text-align: center; min-height: 1em; }
   .bld-two { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
   .bld-two textarea { flex: 1; min-height: 44px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem; outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
   .bld-two textarea:focus { border-color: var(--silver); }
-  .bld-field { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.02); }
+  .bld-field { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.02); }
   .bld-field .r1 { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
-  .bld-field .r1 textarea { flex: 1; min-width: 0; min-height: 40px; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); outline: none; font-size: 0.9rem; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
+  .bld-field .r1 textarea { flex: 1; min-width: 0; min-height: 40px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); outline: none; font-size: 0.9rem; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
   .bld-field .r1 textarea:focus { border-color: var(--silver); }
   .bld-field .r2 { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
-  .bld-field select { height: 40px; padding: 0 28px 0 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; appearance: none; -webkit-appearance: none;
+  .bld-field select { height: 40px; padding: 0 28px 0 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; appearance: none; -webkit-appearance: none;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   .bld-field .req-lbl { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
-  .bld-field .opts { flex: 1; min-width: 120px; min-height: 40px; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
+  .bld-field .opts { flex: 1; min-width: 120px; min-height: 40px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.85rem; outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
   .bld-field .req-lbl { margin-top: 8px; }
-  .bld-field .rm { margin-left: auto; background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.85rem; }
-  .bld-fixed { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+  .bld-field .rm { margin-left: auto; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 0.85rem; }
+  .bld-fixed { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
   .bld-fixed-h { color: var(--muted); font-size: 0.8rem; margin-bottom: 8px; }
   .bld-chip { display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px; border-radius: 999px; background: rgba(214,218,222,0.1); color: var(--silver); font-size: 0.8rem; }
   .bl-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid rgba(255,255,255,0.05); }
@@ -964,26 +1063,26 @@
   .u-trow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 6px; }
   .u-editopt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 0.78rem; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
   .u-editopt input { width: auto; height: auto; }
-  .u-trow .u-scope { height: 30px; border-radius: 7px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.76rem; padding: 0 6px; color-scheme: dark; font-family: inherit; }
+  .u-trow .u-scope { height: 30px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.76rem; padding: 0 6px; color-scheme: dark; font-family: inherit; }
   .u-trow .u-scope:disabled { opacity: 0.5; }
   /* top-right profile menu */
   .profile-menu { position: relative; }
   .profile-btn { display: flex; align-items: center; gap: 9px; background: var(--card); border: 1px solid var(--field-border); border-radius: 999px; padding: 5px 12px 5px 6px; color: var(--text); cursor: pointer; font-family: inherit; }
   .profile-btn:hover { border-color: var(--silver); }
-  .pf-avatar { width: 30px; height: 30px; border-radius: 50%; background: #232326 center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 0.82rem; flex: 0 0 auto; }
+  .pf-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--bg-3) center/cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; font-size: 0.82rem; flex: 0 0 auto; }
   .pf-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
   .pf-name { font-size: 0.85rem; font-weight: 600; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pf-role { font-size: 0.64rem; color: var(--muted); text-transform: capitalize; letter-spacing: 0.02em; }
   .profile-btn .cc-caret { color: var(--muted); font-size: 0.62rem; }
-  .profile-dd { position: absolute; right: 0; top: calc(100% + 8px); z-index: 80; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 12px;  display: none; }
+  .profile-dd { position: absolute; right: 0; top: calc(100% + 8px); z-index: 80; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
   .profile-menu.open .profile-dd { display: block; }
   .profile-dd li { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text); }
   .profile-dd li:hover { background: rgba(255,255,255,0.06); }
-  .profile-dd li.danger { color: #ff6b6b; }
+  .profile-dd li.danger { color: var(--danger); }
   /* home / workspace */
   .home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
   .home-list { display: flex; flex-direction: column; gap: 8px; }
-  .home-card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; cursor: pointer; transition: border-color 0.15s ease; }
+  .home-card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; cursor: pointer; transition: border-color 0.15s ease; }
   .home-card:hover { border-color: var(--silver); }
   .home-list .home-card { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
   .hc-name { font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; }
@@ -992,16 +1091,12 @@
   .hc-actions { display: flex; gap: 8px; }
   .home-list .hc-actions { margin-left: auto; }
   .hc-star { position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--muted); font-size: 1.15rem; cursor: pointer; line-height: 1; padding: 2px; }
-  .hc-star.on { color: #eab308; }
+  .hc-star.on { color: var(--gold); }
   .home-list .hc-star { position: static; order: -1; }
-  .hc-badge { display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px; background: #eab308; color: #1a1400; font-size: 0.72rem; font-weight: 800; }
-  .home-list .hc-badge { margin: 0 8px 0 0; }
-  .mine-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #eab308; color: #1a1400; font-size: 0.66rem; font-weight: 800; vertical-align: middle; }
-  .ja-card.is-mine, .ja-row.is-mine { box-shadow: inset 3px 0 0 #eab308; }
-  .mine-chip { border: 1px solid var(--field-border); background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
-  .mine-chip.on { background: #eab308; color: #1a1400; border-color: #eab308; }
+  .mine-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--gold); color: #1a1400; font-size: 0.66rem; font-weight: 800; vertical-align: middle; }
+  .ja-card.is-mine, .ja-row.is-mine { box-shadow: inset 3px 0 0 var(--gold); }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
-  .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: #232326 center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
+  .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: var(--bg-3) center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.3rem; }
 </style>
 </head>
 <body>
@@ -1065,6 +1160,7 @@
       <div class="pal-list" id="pal-list"></div>
     </div>
     <ul class="at-menu" id="at-menu" role="menu"></ul>
+    <div class="notif" id="notif" role="dialog" aria-label="Records waiting on you"></div>
 
     <div class="workspace">
       <aside class="sidebar">
@@ -1108,7 +1204,6 @@
               <div class="seg viewtoggle" id="home-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button></div>
             </div>
             <div class="home-bar">
-              <div class="seg viewtoggle" id="home-filter"><button type="button" data-f="all" class="active">All forms</button><button type="button" data-f="mine">Assigned to me</button></div>
               <select id="home-sort" aria-label="How to order and group the tables">
                 <option value="recent">Recently opened</option>
                 <option value="name">Name A→Z</option>
@@ -1158,6 +1253,7 @@
           <div class="view-body">
             <!-- The Form tab: everything about the public form for this table. -->
             <div class="base-pane" data-pane="job_applications:form" style="display:none;">
+              <div class="builtin-note">This form is <b>hand-coded in the app</b>, so its questions aren't generated from a field list and can't be previewed here. Extra questions an admin adds do appear on it. Open it to see exactly what an applicant sees.</div>
               <div class="qr-bar">
                 <img class="qr-img" id="ja-qr" alt="QR code for the public form">
                 <div class="qr-side">
@@ -1232,6 +1328,7 @@
 
           <div class="view-body">
             <div class="base-pane" data-pane="casting:form" style="display:none;">
+              <div class="builtin-note">This form is <b>hand-coded in the app</b>, so its questions aren't generated from a field list and can't be previewed here. Extra questions an admin adds do appear on it. Open it to see exactly what an applicant sees.</div>
               <div class="qr-bar">
                 <img class="qr-img" id="cast-qr" alt="QR code for the public form">
                 <div class="qr-side">
@@ -1271,6 +1368,10 @@
             </div>
           </div>
           <div class="at-toolbar">
+            <!-- How the records are drawn. This belongs first and always visible: it was
+                 dropped in the toolbar rewrite, which lost Cards and List entirely. -->
+            <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button><button type="button" data-v="table">Grid</button></div>
+            <div class="tb-sep"></div>
             <div class="cols-wrap" id="cols-wrap" style="display:none;">
               <button class="tb-btn" id="cols-btn" type="button" title="Show or hide fields">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.5"></circle><path d="M4 20L20 4"></path></svg>Hide fields
@@ -1307,7 +1408,6 @@
             <button class="tb-btn" id="custom-export" type="button" style="display:none;" title="Download these records as CSV">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M4 19h16"></path></svg>CSV
             </button>
-            <button type="button" class="mine-chip" id="custom-mine" style="display:none;">Assigned to me</button>
             <div class="tb-right">
               <button class="tb-btn" id="custom-edit" style="display:none;" title="Edit this table and its questions">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"></path></svg>Edit table
@@ -1321,16 +1421,27 @@
 
           <div class="view-body">
             <div class="base-pane" data-pane="custom:form" style="display:none;">
-              <div class="qr-bar" id="custom-qr-bar">
-                <img class="qr-img" id="custom-qr" alt="QR code for the public form">
-                <div class="qr-side">
-                  <div class="qr-cap">Scan to open the public form</div>
-                  <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-                  <a id="custom-link-a" target="_blank" rel="noopener">—</a>
-                  <div class="qr-btns">
-                    <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
-                    <button class="linkbtn" id="custom-qr-share" type="button">Share QR</button>
-                    <button class="linkbtn qr-regen" id="custom-qr-regen" type="button" style="display:none;">Regenerate</button>
+              <div class="form-pane">
+                <div>
+                  <div class="fp-title">
+                    <span class="lab">What the applicant sees</span>
+                    <button class="linkbtn" id="fprev-edit" type="button" style="display:none;">Edit form</button>
+                  </div>
+                  <div class="fprev" id="custom-fprev"></div>
+                </div>
+                <div class="fp-side">
+                  <div class="qr-bar" id="custom-qr-bar">
+                    <img class="qr-img" id="custom-qr" alt="QR code for the public form">
+                    <div class="qr-side">
+                      <div class="qr-cap">Scan to open the form</div>
+                      <div class="qr-sub">Point a phone camera at the code.</div>
+                      <a id="custom-link-a" target="_blank" rel="noopener">—</a>
+                      <div class="qr-btns">
+                        <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
+                        <button class="linkbtn" id="custom-qr-share" type="button">Share QR</button>
+                        <button class="linkbtn qr-regen" id="custom-qr-regen" type="button" style="display:none;">Regenerate</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1338,6 +1449,13 @@
             <div class="base-pane" data-pane="custom:data">
               <!-- branch grouping is in the sidebar only, by design -->
               <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
+              <!-- Only shown when you arrived from the notification bell, so the filter
+                   is visible and removable without living in the toolbar as a button. -->
+              <div class="minebar" id="custom-minebar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15V10a6 6 0 1 0-12 0v5l-1.5 2.5h15L18 15z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg>
+                <span>Showing only the <b id="mine-n">0</b> waiting on you</span>
+                <button class="linkbtn sb-sp" id="mine-clear" type="button">Show all records</button>
+              </div>
               <div class="selbar" id="custom-selbar">
                 <b id="sel-n">0</b><span>selected</span>
                 <button class="linkbtn sb-sp" id="sel-export" type="button">Export selected as CSV</button>
@@ -1643,16 +1761,18 @@
     db.rpc("list_users").then(function (res) { if (res && !res.error) assignUsers = res.data || []; });
   }
   var myAssigned = {}; // table_id -> count of records currently waiting on me
-  var homeFilter = "all";
   var homeStarredOnly = false;   // set by the sidebar's Starred entry
   function loadMyAssigned() {
-    db.from("app_submissions").select("table_id").eq("current_assignee", myUserId).then(function (res) {
+    return db.from("app_submissions").select("table_id").eq("current_assignee", myUserId).then(function (res) {
       myAssigned = {}; ((res && res.data) || []).forEach(function (r) { myAssigned[r.table_id] = (myAssigned[r.table_id] || 0) + 1; });
-      renderHome(); paintBell();
+      paintBell();
+      // The panel opens instantly on what we already know and corrects itself here,
+      // rather than making you wait on a query before anything appears.
+      if (typeof refreshNotif === "function") refreshNotif();
     });
   }
-  // The bell carries the same number Home's "N for you" badges add up to: how many
-  // records are sitting on this person's desk right now.
+  // The bell is where assignment lives now, so this is the only count of it on
+  // screen: how many records are sitting on this person's desk right now.
   function paintBell() {
     var b = document.getElementById("hd-bell-n"); if (!b) return;
     var n = 0;
@@ -1777,35 +1897,35 @@
   function renderHome() {
     var grid = document.getElementById("home-grid"); if (!grid) return;
     var items = allAccessibleTables();
-    if (homeFilter === "mine") items = items.filter(function (t) { return (myAssigned[t.key] || 0) > 0; });
     if (homeStarredOnly) items = items.filter(function (t) { return !!stars[t.key]; });
     var empty = document.getElementById("home-empty");
     if (!items.length) {
       grid.innerHTML = ""; empty.style.display = "block";
-      empty.querySelector("h2").textContent = homeStarredOnly ? "Nothing starred yet"
-        : homeFilter === "mine" ? "Nothing assigned to you" : "No tables yet";
+      empty.querySelector("h2").textContent = homeStarredOnly ? "Nothing starred yet" : "No tables yet";
       return;
     }
     empty.style.display = "none";
     function homeCard(t, asRow) {
       var on = !!stars[t.key];
-      var n = myAssigned[t.key] || 0;
-      var badge = n > 0 ? '<span class="hc-badge" title="Records waiting on you">' + n + " for you</span>" : "";
+      // No per-card assignment badge any more: the bell already says how many and in
+      // which tables, and two places saying the same thing is what made Home busy.
       var kind = t.kind === "task" ? '<span class="hc-kind" title="Scheduled task, not a public form">Task</span>' : "";
       var mark = tmarkHtml(t.key, t.name, t.config, !asRow);
       var el = document.createElement("div");
-      var openMine = homeFilter === "mine" || n > 0;
+      // Opening a table from Home always shows all of it. Narrowing to your own
+      // records is what the bell's panel is for, so the two never disagree.
+      var openMine = false;
       if (asRow) {
         // The recents row: icon, name, star, when you last opened it, its workspace.
         el.className = "home-card row";
-        el.innerHTML = '<div class="hr-name">' + mark + '<span class="nm">' + esc(t.name) + "</span>" + kind + badge + "</div>" +
+        el.innerHTML = '<div class="hr-name">' + mark + '<span class="nm">' + esc(t.name) + "</span>" + kind + "</div>" +
           '<div class="hr-when">' + esc(agoText(lastOpened[t.key])) + "</div>" +
           '<div class="hr-ws">' + esc(t.category || "BLK workspace") + "</div>" +
           '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>";
       } else {
         el.className = "home-card";
         el.innerHTML = '<button class="hc-star' + (on ? " on" : "") + '" title="Star">' + (on ? "★" : "☆") + "</button>" +
-          '<div class="hc-body"><div class="hc-name">' + mark + "<span>" + esc(t.name) + "</span>" + kind + "</div>" + badge + "</div>" +
+          '<div class="hc-body"><div class="hc-name">' + mark + "<span>" + esc(t.name) + "</span>" + kind + "</div></div>" +
           '<div class="hc-actions">' + (isAdmin ? '<button class="linkbtn hc-share">Share</button>' : "") + '<button class="linkbtn hc-open">Open</button></div>';
       }
       el.querySelector(".hc-star").addEventListener("click", function (e) { e.stopPropagation(); toggleStar(t.key); });
@@ -3600,13 +3720,14 @@
     var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty"), tabsEl = document.getElementById("custom-tabs");
     var isMine = function (s) { return s.current_assignee && s.current_assignee === myUserId; };
     var mineCount = subs.filter(isMine).length;
-    // "Assigned to me" chip: only offer it when something is actually assigned to this user
-    var mineChip = document.getElementById("custom-mine");
-    if (mineCount > 0) {
-      mineChip.style.display = "";
-      mineChip.textContent = "Assigned to me (" + mineCount + ")";
-      mineChip.classList.toggle("on", !!currentCustom.mineOnly);
-    } else { mineChip.style.display = "none"; currentCustom.mineOnly = false; }
+    // Nothing assigned here means the filter cannot be on — otherwise you would be
+    // looking at an empty table with no visible reason why.
+    if (!mineCount) currentCustom.mineOnly = false;
+    var mineBar = document.getElementById("custom-minebar");
+    if (mineBar) {
+      mineBar.classList.toggle("on", !!currentCustom.mineOnly);
+      document.getElementById("mine-n").textContent = String(mineCount);
+    }
     var pool = currentCustom.mineOnly ? subs.filter(isMine) : subs;
     pool = pool.filter(passesCustomFilters);
     // the loaded slice may be a page of a much larger branch/table
@@ -3615,21 +3736,7 @@
     document.getElementById("custom-count").textContent =
       partial ? ("showing " + pool.length + " of " + scopeTotal)
               : (pool.length + (pool.length === 1 ? " entry" : " entries"));
-    // A table can name which fields belong on the card (config.card_fields), so the
-    // number that matters — a Mystery Shopper's Final Score, say — is visible without
-    // opening the record. Otherwise fall back to the first few answers as before.
-    // A form's own "Branch" question holds whatever the shop typed that year, so the
-    // same shop appears under several spellings. The record's branch column is the
-    // reconciled one, and it is what the sidebar, grouping and CSV already use — so a
-    // card may name "__branch" to show that instead of the raw answer.
-    var cardIds = (currentCustom.table.config && currentCustom.table.config.card_fields) || null;
-    var summary = cardIds && cardIds.length
-      ? cardIds.map(function (id) {
-          if (id === "__branch") return { id: "__branch", label: "Branch" };
-          if (id === "__created") return { id: "__created", label: "Submitted" };
-          return fields.filter(function (f) { return f.id === id; })[0];
-        }).filter(Boolean)
-      : fields.filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
+    var summary = summaryFields(currentCustom.table, fields);
     // config.card_no_cover opts a table out of the photo cover entirely (e.g. Complaints, where most records have no screenshot).
     var photoField = (currentCustom.table.config && currentCustom.table.config.card_no_cover) ? null : fields.filter(function (f) { return f.type === "photo"; })[0];
     // pipeline tabs
@@ -3698,8 +3805,18 @@
           return '<div class="bub ' + (i % 2 ? 'us' : 'them') + '">' + esc(ln) + '</div>';
         }).join('') + '</div>';
       }
-      // labelled fields: skip the score field (shown as a chip) and photo fields (cover)
-      var fldsHtml = summary.filter(function (f) { return !scoreField || f.id !== scoreField.id; })
+      // Labelled fields, minus three that are already on the card: the first summary
+      // field IS the card's title (it was being printed twice), the score is the chip,
+      // and photos are the cover. The branch is handled by the header line below.
+      var branchTxt = recordBranch(s, fields);
+      var titleF = summary[0] || null;
+      var fldsHtml = summary.filter(function (f) {
+          if (titleF && f.id === titleF.id) return false;
+          if (scoreField && f.id === scoreField.id) return false;
+          // don't repeat the shop under the header that already names it
+          if (branchTxt && String(cardText(f, d, s)).trim() === String(branchTxt).trim()) return false;
+          return true;
+        })
         .map(function (f) {
           if (f.id === "__branch" || f.id === "__created") {
             var pv = f.id === "__branch" ? branchPillHtml(s.branch) : esc(fmtDate(s.created_at));
@@ -3729,15 +3846,24 @@
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       var tint = cardTint(d, fields);
       var el = document.createElement("div");
+      // The title is the record's own name; the shop and the record number sit under it
+      // on one meta line, so every card in every table has the same three-line header.
+      var titleTxt = titleF ? cardText(titleF, d, s) : "";
+      if (!String(titleTxt).trim()) titleTxt = branchTxt || "—";
+      var sameAsBranch = branchTxt && String(titleTxt).trim() === String(branchTxt).trim();
+      var metaBits = [];
+      if (branchTxt && !sameAsBranch) metaBits.push('<span class="pill flat">' + esc(branchTxt) + "</span>");
+      metaBits.push('<span class="rec-id" title="Record number">' + esc(recordCode(s)) + "</span>");
+      var headHtml = '<div class="card-head">' +
+        '<div class="name">' + esc(titleTxt) + tag + "</div>" +
+        '<div class="card-meta">' + metaBits.join("") + "</div></div>";
       if (kcards) {
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
         if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
         el.innerHTML =
           (photoField && d[photoField.id] ? '<div class="photo"></div>' : '') +
           '<div class="body" style="text-align:left">' +
-            threadHtml +
-            '<div class="name">' + esc(summary.length ? cardText(summary[0], d, s) : "—") + tag + '</div>' +
-            fldsHtml +
+            threadHtml + headHtml + fldsHtml +
             '<div class="card-foot">' + (scoreHtml || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
             actions +
           '</div>';
@@ -3745,8 +3871,15 @@
         el.className = "ja-row is-rec" + (mine ? " is-mine" : "");
         if (tint && !mine) el.style.boxShadow = "inset 3px 0 0 " + tint;
         el.innerHTML = '<div class="ja-thumb">' + initial + '</div>' +
-          '<div class="info"><div class="name">' + esc(summary.length ? cardText(summary[0], d, s) : "—") + tag + '</div>' +
-          '<div class="sub">' + summary.slice(1).filter(function (f) { return !scoreField || f.id !== scoreField.id; }).map(function (f) { return esc(cardText(f, d, s)); }).join(" · ") + '</div></div>' +
+          '<div class="info"><div class="name">' + esc(titleTxt) + tag +
+            '<span class="rec-id">' + esc(recordCode(s)) + "</span></div>" +
+          '<div class="sub">' + (branchTxt && !sameAsBranch ? esc(branchTxt) + " · " : "") +
+            summary.slice(1).filter(function (f) {
+              if (scoreField && f.id === scoreField.id) return false;
+              if (branchTxt && String(cardText(f, d, s)).trim() === String(branchTxt).trim()) return false;
+              return true;
+            }).map(function (f) { return esc(cardText(f, d, s)); }).filter(function (x) { return x && x !== "—"; }).join(" · ") +
+          '</div></div>' +
           scoreHtml + '<div class="row-actions">' + actions + '</div>';
       }
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
@@ -4181,6 +4314,120 @@
       });
     });
   }
+  // Which fields stand for a record at a glance. A table can name them
+  // (config.card_fields) so the number that matters — a Mystery Shopper's Final Score,
+  // say — is visible without opening the record; otherwise the first few answers do.
+  // Shared by the cards, the list rows and the record header so all three agree on
+  // what a record is called.
+  // A form's own "Branch" question holds whatever the shop typed that year, so the same
+  // shop appears under several spellings. The record's branch column is the reconciled
+  // one, and it is what the sidebar, grouping and CSV already use — so a card may name
+  // "__branch" (or "__created") to show the column instead of the raw answer.
+  function summaryFields(table, fields) {
+    var cardIds = (table && table.config && table.config.card_fields) || null;
+    if (cardIds && cardIds.length) {
+      return cardIds.map(function (id) {
+        if (id === "__branch") return { id: "__branch", label: "Branch" };
+        if (id === "__created") return { id: "__created", label: "Submitted" };
+        return (fields || []).filter(function (f) { return f.id === id; })[0];
+      }).filter(Boolean);
+    }
+    return (fields || []).filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
+  }
+
+  // ---- Which shop a record belongs to -------------------------------------
+  // Prefer the normalised `branch` column. Fall back to the question that asks for it,
+  // because the tables that kept the branch as an ordinary question (QC, Complaints)
+  // showed no shop on their cards at all. Table-agnostic: any table whose question is
+  // recognisably "branch" gets it, with no per-table configuration.
+  var BRANCH_RE = /branch|الفرع|فرع|الفروع/i;
+  function recordBranch(s, fields) {
+    if (s && s.branch) return String(s.branch);
+    var d = (s && s.data) || {};
+    var f = (fields || []).filter(function (x) {
+      return BRANCH_RE.test(String(x.label || "")) && d[x.id] != null && d[x.id] !== "";
+    })[0];
+    return f ? String(d[f.id]) : "";
+  }
+
+  // ---- A record's number --------------------------------------------------
+  // Airtable gives every record a number you can quote and search. Ours have uuids,
+  // which nobody can read out loud, so this derives a short stable code from the uuid:
+  // same record, same code, forever, and no column or backfill needed. Search matches
+  // it, so "8F3K2A" finds the record. (A truly sequential number needs a DB column —
+  // see the note in STATUS; this is the readable handle available without one.)
+  var CODE_ALPHABET = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";  // no I/O to misread as 1/0
+  function recordCode(s) {
+    var id = String((s && s.id) || "");
+    if (!id) return "—";
+    var h1 = 0, h2 = 0;
+    for (var i = 0; i < id.length; i++) {
+      h1 = (h1 * 31 + id.charCodeAt(i)) >>> 0;
+      h2 = (h2 * 131 + id.charCodeAt(i)) >>> 0;
+    }
+    var n = (h1 ^ (h2 >>> 3)) >>> 0, out = "";
+    for (var k = 0; k < 6; k++) { out = CODE_ALPHABET[n % 34] + out; n = Math.floor(n / 34); }
+    return "#" + out;
+  }
+
+  // ---- Form tab: a preview of the live public form ------------------------
+  // Built from the same `app_fields` rows the public page reads, so it cannot drift
+  // from what an applicant actually gets. Inert on purpose — the editor is one click
+  // away, and a live form embedded in the dashboard invites accidental submissions.
+  var PV_PLACEHOLDER = {
+    short_text: "Short answer", long_text: "Longer answer", number: "Number",
+    date: "dd / mm / yyyy", dob: "dd / mm / yyyy", yesno: "Yes  /  No",
+    dropdown: "Choose one", multi_select: "Tick all that apply",
+    phone: "+962 7X XXX XXXX", email: "name@example.com", photo: "Choose photo",
+    link: "Pick a record"
+  };
+  function renderFormPreview(t, fields) {
+    var host = document.getElementById("custom-fprev"); if (!host) return;
+    var editBtn = document.getElementById("fprev-edit");
+    if (editBtn) editBtn.style.display = isAdmin ? "" : "none";
+    var pub = (fields || []).filter(function (f) { return !f.internal; });
+    var staff = (fields || []).length - pub.length;
+    if (!pub.length) {
+      host.className = "fprev empty";
+      host.textContent = (fields || []).length
+        ? "Every question on this table is staff-only, so the public form has nothing to ask."
+        : "This table has no questions yet.";
+      return;
+    }
+    host.className = "fprev";
+    var cfg = t.config || {}, intro = cfg.intro || {};
+    var h = '<img class="pv-logo" src="assets/blk-logo.svg" alt="BLK">' +
+      '<div class="pv-h1">' + esc(t.name) + "</div>" +
+      (t.name_ar ? '<div class="pv-ar">' + esc(t.name_ar) + "</div>" : "");
+    if (intro.en || intro.ar) {
+      h += '<div class="pv-intro">' + esc(intro.en || "") +
+        (intro.ar ? '<span class="ar">' + esc(intro.ar) + "</span>" : "") + "</div>";
+    }
+    h += pub.map(function (f) {
+      var ph = PV_PLACEHOLDER[f.type] || "Answer";
+      // a choice question shows its first options, which is the thing most worth
+      // checking on a preview — that the list is the list you meant
+      if ((f.type === "dropdown" || f.type === "multi_select") && f.options && f.options.length) {
+        var names = f.options.map(function (o) { return (o && o.en != null) ? o.en : o; })
+          .filter(function (x) { return x != null && x !== ""; });
+        if (names.length) {
+          ph = names.slice(0, 2).join(" · ") + (names.length > 2 ? "  +" + (names.length - 2) + " more" : "");
+        }
+      }
+      return '<div class="pv-f"><div class="pv-lab">' + esc(f.label) +
+        (f.label_ar ? '<span class="ar">' + esc(f.label_ar) + "</span>" : "") +
+        (f.required ? '<span class="req">*</span>' : "") + "</div>" +
+        '<div class="pv-box' + (f.type === "long_text" ? " tall" : "") + '"><span>' + esc(ph) + "</span>" +
+        fieldIcon(f.type, f.label) + "</div></div>";
+    }).join("");
+    h += '<div class="pv-submit">Submit</div>';
+    if (staff) {
+      h += '<div class="pv-staff">' + staff + (staff === 1 ? " staff-only question is" : " staff-only questions are") +
+        " not on the public form — they are filled in during review.</div>";
+    }
+    host.innerHTML = h;
+  }
+
   // ---- Selecting rows in the grid ----------------------------------------
   // Ticking rows is how Airtable's grid lets you act on a handful of records. Here
   // the one action is exporting them, which is what the tick boxes are actually for:
@@ -4683,7 +4930,10 @@
     var bySection = {}; var order = [];
     fields.forEach(function (qf) {
       if (!map[qf.id]) return;
-      var sec = (qf.options && qf.options.score_section) || "Score";
+      // the section can be named on the question or on its scorer; either is honoured
+      var sf0 = map[qf.id];
+      var sec = (qf.options && qf.options.score_section) ||
+                (sf0 && sf0.options && sf0.options.score_section) || "Score";
       if (!bySection[sec]) { bySection[sec] = []; order.push(sec); }
       bySection[sec].push(qf);
     });
@@ -4705,20 +4955,38 @@
           '<div class="qp ' + cls + '">' + lbl + '</div></div>';
       });
       sections.push({ name: sec, earned: se, possible: sp });
-      html += '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' + rows;
+      // a lone default section needs no heading — "Scored answers" already said it
+      var showHead = !(order.length === 1 && sec === "Score");
+      html += (showHead ? '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' : "") + rows;
     });
     return { html: html, earned: earned, possible: possible, sections: sections };
   }
-  function scoreSideHtml(sd, table, d) {
+  function scoreTint(pct) {
+    return pct >= 90 ? "#2fbf6b" : pct >= 75 ? "#4a9eff" : pct >= 50 ? "#eab308" : "#ff6b6b";
+  }
+  // The score used to open the record as a big standalone card above everything, before
+  // you even knew which record you were looking at. It now sits in the record's header
+  // as one compact block on the right, in the same place on every scored table.
+  function scoreHeadHtml(sd) {
     var pct = sd.possible ? Math.round(sd.earned / sd.possible * 100) : 0;
-    var col = pct >= 90 ? "#2ecc71" : pct >= 75 ? "#4aa3df" : pct >= 50 ? "#e0a53a" : "#e05a5a";
-    return '<div class="score-side"><div style="color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Final score</div>' +
-      '<div class="bignum" style="color:' + col + '">' + pct + '% <small>' + sd.earned + '/' + sd.possible + '</small></div>' +
+    var col = scoreTint(pct);
+    return '<div class="rh-score">' +
+      '<div class="rs-top"><span class="rs-pct" style="color:' + col + '">' + pct + '%</span>' +
+      '<span class="rs-raw">' + sd.earned + " / " + sd.possible + " points</span></div>" +
       '<div class="score-bar"><i style="width:' + pct + '%;background:' + col + '"></i></div>' +
-      '<div style="color:var(--muted);font-size:.72rem">Scored by the engine — matches Airtable exactly</div>' +
-      '<div class="score-breakdown">' + sd.sections.map(function (x) {
-        return '<div class="brow"><span class="bl">' + esc(x.name) + '</span><span class="bv">' + x.earned + '/' + x.possible + '</span></div>';
-      }).join('') + '</div></div>';
+      "</div>";
+  }
+  // The per-section totals belong with the per-question breakdown they explain, not
+  // stacked under the headline where they read as a second, competing score.
+  function scoreBreakdownHtml(sd) {
+    // With one unnamed section the breakdown is the headline again, printed twice.
+    if (sd.sections.length < 2) return "";
+    return '<div class="score-breakdown">' + sd.sections.map(function (x) {
+      var p = x.possible ? Math.round(x.earned / x.possible * 100) : 0;
+      return '<div class="brow"><span class="bl">' + esc(x.name) + '</span>' +
+        '<span class="bv">' + x.earned + "/" + x.possible +
+        '<i class="bmini"><b style="width:' + p + '%;background:' + scoreTint(p) + '"></b></i></span></div>';
+    }).join("") + "</div>";
   }
   // questionFieldId -> scorer field. Two supported shapes (populated later in the DB):
   //   scorer field carries options.score_of = "<questionFieldId>", OR
@@ -4741,13 +5009,14 @@
     var d = s.data || {}, photoPath = null, photoFieldId = null;
     var body = document.getElementById("modal-body");
     fields.forEach(function (f) { if (f.type === "photo") { if (photoFieldId == null) photoFieldId = f.id; if (d[f.id]) photoPath = d[f.id]; } });
-    // the score belongs at the top of an inspection, not thirty questions down
-    var scoreHead = "";
+    // The score lives in the record's header, on the right of the record's own identity.
+    var scoreSlot = "";
     var scoredBlock = "";
     var sd = (currentCustom && currentCustom.table) ? scoredDetail(currentCustom.table, fields, d) : null;
     if (sd) {
-      scoreHead = scoreSideHtml(sd, currentCustom.table, d);
-      scoredBlock = '<div class="scored-section">' + sd.html + '</div>';
+      scoreSlot = scoreHeadHtml(sd);
+      scoredBlock = '<div class="scored-section"><div class="qsec-title">Scored answers</div>' +
+        scoreBreakdownHtml(sd) + sd.html + "</div>";
     } else {
       var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
                  currentCustom.table.config.score_field;
@@ -4755,11 +5024,27 @@
         var shf = fields.filter(function (f) { return f.id === shId; })[0];
         var shn = shf ? scoreFraction(shf, customCellText(shf, d)) : null;
         if (shn !== null) {
-          scoreHead = '<div class="score-head">' + scorePillHtml(shn, true) +
-            '<span class="sh-lab">' + esc(shf.label) + "</span></div>";
+          // a table with a stored score but no per-question rules still gets the same slot
+          var pc = Math.round(shn * 100);
+          scoreSlot = '<div class="rh-score"><div class="rs-top">' +
+            '<span class="rs-pct" style="color:' + scoreTint(pc) + '">' + pc + '%</span>' +
+            '<span class="rs-raw">' + esc(shf.label) + "</span></div>" +
+            '<div class="score-bar"><i style="width:' + pc + '%;background:' + scoreTint(pc) + '"></i></div></div>';
         }
       }
     }
+    // One header on every record, scored or not: what it is, then when and where, then
+    // its number — and the score block on the right when the table has one.
+    var recTitle = "";
+    var sumF = summaryFields(currentCustom ? currentCustom.table : null, fields);
+    if (sumF.length) recTitle = cardText(sumF[0], d, s);   // resolves __branch / __created too
+    var recBranch = recordBranch(s, fields);
+    if (!String(recTitle).trim()) recTitle = recBranch || "Record";
+    var scoreHead = '<div class="rec-head">' +
+      '<div class="rh-main"><div class="rh-title">' + esc(recTitle) + "</div>" +
+      '<div class="rh-meta">' + esc(recordCode(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
+      (recBranch && String(recBranch).trim() !== String(recTitle).trim() ? " · " + esc(recBranch) : "") +
+      "</div></div>" + scoreSlot + "</div>";
     // A record shows the questions the form asks today — the same list Airtable shows.
     // Retired questions from older versions of the form are kept (their answers are
     // real history) but only appear on the records that actually answered them;
@@ -4773,6 +5058,10 @@
                      && currentCustom.table.config.detail_fields) || null;
     var curated = !!(pickedIds && pickedIds.length) && !detailShowAll;
     function showsOn(f, d) {
+      // the headline score is in the header, so it must not also appear as a field —
+      // and as a computed value it should never have been an editable box
+      if (scoreSlot && currentCustom && currentCustom.table.config &&
+          f.id === currentCustom.table.config.score_field) return false;
       if (sd && (questionScorerMap(currentCustom.table, fields)[f.id] || isScorerField(f))) return false;
       if (curated) return pickedIds.indexOf(f.id) !== -1;
       return !f.internal || (d[f.id] != null && d[f.id] !== "");
@@ -4849,8 +5138,9 @@
           esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d, s) + "</div></div>";
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
-      body.innerHTML = scoreHead + '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + (s.branch ? " · " + esc(s.branch) : "") +
-        '</div><div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
+      // the header already carries the number, the date and the shop
+      body.innerHTML = scoreHead +
+        '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
         moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
       wireMoreLine(s, fields); wireLinkChips();
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
@@ -4884,7 +5174,7 @@
     body.innerHTML = scoreHead +
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
-      '<div class="m-sub">Submitted ' + fmtDate(s.created_at) + ' <span id="ed-status" class="ed-status"></span></div>' +
+      '<div class="m-sub"><span id="ed-status" class="ed-status"></span></div>' +
       '<div class="m-grid">' + grid + "</div>" + scoredBlock +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
@@ -5040,7 +5330,9 @@
     if (b) b.addEventListener("click", function (e) { e.stopPropagation(); p.classList.toggle("open"); });
     document.addEventListener("click", function (e) { if (w && !w.contains(e.target)) p.classList.remove("open"); });
   })();
-  document.getElementById("custom-mine").addEventListener("click", function () { if (currentCustom) { currentCustom.mineOnly = !currentCustom.mineOnly; renderCustom(); } });
+  document.getElementById("mine-clear").addEventListener("click", function () {
+    if (currentCustom) { currentCustom.mineOnly = false; renderCustom(); }
+  });
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table, currentCustom.mineOnly); });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openBuilderEdit(currentCustom.table); });
   // branch scope: chips on the page and the children in the sidebar do the same thing
@@ -5839,12 +6131,6 @@
     if (cw && !cw.contains(e.target)) document.getElementById("color-panel").classList.remove("open");
   });
   wireToggle("home-viewtoggle", function (v) { homeView = v; renderHome(); });
-  document.getElementById("home-filter").addEventListener("click", function (e) {
-    var b = e.target.closest ? e.target.closest("button") : null; if (!b) return;
-    homeFilter = b.getAttribute("data-f");
-    [].slice.call(this.querySelectorAll("button")).forEach(function (x) { x.classList.toggle("active", x === b); });
-    if (homeFilter === "mine") loadMyAssigned(); else renderHome();
-  });
   (function () {
     var sel = document.getElementById("home-sort"); if (!sel) return;
     sel.value = homeSort;
@@ -6086,14 +6372,54 @@
   document.getElementById("hd-help").addEventListener("click", openHelp);
   document.getElementById("side-help").addEventListener("click", openHelp);
 
-  // ---- The bell: go to what is waiting on you -----------------------------
-  document.getElementById("hd-bell").addEventListener("click", function () {
-    homeFilter = "mine"; homeStarredOnly = false;
-    [].slice.call(document.querySelectorAll("#home-filter button")).forEach(function (x) {
-      x.classList.toggle("active", x.getAttribute("data-f") === "mine");
-    });
-    showView("home"); loadMyAssigned();
+  // ---- The bell is the only place assignment appears ----------------------
+  // There used to be an "Assigned to me" button on Home and another in every
+  // table's toolbar. Both were permanent furniture for something that is only
+  // sometimes true, so they are gone: the bell carries the count, its panel says
+  // which tables, and opening one from there filters that table to your records.
+  var notifEl = document.getElementById("notif");
+  var notifAnchor = null;
+  function closeNotif() { notifEl.classList.remove("open"); notifAnchor = null; }
+  function refreshNotif() { if (notifAnchor && notifEl.classList.contains("open")) openNotif(notifAnchor); }
+  function openNotif(anchor) {
+    notifAnchor = anchor;
+    var keys = Object.keys(myAssigned).filter(function (k) { return (myAssigned[k] || 0) > 0; });
+    var known = {}; allAccessibleTables().forEach(function (t) { known[t.key] = t; });
+    var rows = keys.filter(function (k) { return known[k]; })
+      .sort(function (a, b) { return myAssigned[b] - myAssigned[a]; });
+    if (!rows.length) {
+      notifEl.innerHTML = '<div class="nf-empty"><span class="tick">✓</span>Nothing is waiting on you.<br>' +
+        "Records assigned to you will show up here.</div>";
+    } else {
+      notifEl.innerHTML = '<div class="nf-head">Waiting on you</div>' + rows.map(function (k) {
+        var t = known[k];
+        return '<button class="nf-row" data-k="' + esc(k) + '">' + tmarkHtml(k, t.name, t.config) +
+          '<span class="nm">' + esc(t.name) + '</span><span class="nf-n">' + myAssigned[k] + "</span></button>";
+      }).join("");
+      [].slice.call(notifEl.querySelectorAll(".nf-row")).forEach(function (b) {
+        b.addEventListener("click", function (ev) {
+          ev.stopPropagation(); closeNotif();
+          openTableByKey(b.getAttribute("data-k"), true);   // true = only your records
+        });
+      });
+    }
+    notifEl.classList.add("open");
+    var r = anchor.getBoundingClientRect();
+    var w = notifEl.offsetWidth;
+    notifEl.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + "px";
+    notifEl.style.top = (r.bottom + 6) + "px";
+  }
+  document.getElementById("hd-bell").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (notifEl.classList.contains("open")) { closeNotif(); return; }
+    // read the count fresh, so the panel is never stale by a whole session
+    loadMyAssigned();
+    openNotif(this);
   });
+  document.addEventListener("click", function (e) {
+    if (notifEl && !notifEl.contains(e.target)) closeNotif();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeNotif(); });
 
   // ---- Sidebar nav: Shared, Public forms ----------------------------------
   // (Home and Starred go through the shared data-view handler above.)
@@ -6196,7 +6522,15 @@
     var view = document.getElementById("view-" + (scope === "custom" ? "custom" : scope));
     var tb = view && view.querySelector(".at-toolbar");
     if (tb) tb.style.display = tab === "data" ? "" : "none";
+    // the preview is drawn when the tab is opened, so it always reflects the
+    // questions as they are now rather than as they were when the table loaded
+    if (scope === "custom" && tab === "form" && currentCustom && currentCustom.table) {
+      renderFormPreview(currentCustom.table, currentCustom.fields || []);
+    }
   }
+  document.getElementById("fprev-edit").addEventListener("click", function () {
+    if (currentCustom && currentCustom.table) openBuilderEdit(currentCustom.table);
+  });
   [].slice.call(document.querySelectorAll("[data-tabs]")).forEach(function (tabs) {
     var scope = tabs.getAttribute("data-tabs");
     tabs.addEventListener("click", function (e) {
