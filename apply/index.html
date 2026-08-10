@@ -74,21 +74,13 @@
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
   .phone-row { display: flex; gap: 10px; align-items: stretch; }
   .phone-row input { flex: 1; }
-  .cc-picker { position: relative; flex: 0 0 auto; }
-  .cc-btn { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 12px;
-    border-radius: 11px; border: 1px solid var(--field-border); background: var(--field-bg);
-    color: var(--text); font-size: 1rem; cursor: pointer; font-family: inherit; }
-  .cc-btn:hover { border-color: var(--silver); }
-  .cc-flag, .cc-menu li img { width: 22px; height: 15px; object-fit: cover; border-radius: 2px;
+  /* The dial code is not a question: it follows the Country answer asked just above, so it
+     shows as a read-only prefix instead of a picker the applicant can contradict. */
+  .cc-fixed { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; padding: 0 13px;
+    border-radius: 11px; border: 1px solid var(--field-border); background: rgba(255,255,255,0.03);
+    color: var(--silver-lo); font-size: 1rem; }
+  .cc-flag { width: 22px; height: 15px; object-fit: cover; border-radius: 2px;
     display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
-  .cc-caret { color: var(--muted); font-size: 0.7rem; }
-  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; margin: 0; padding: 6px;
-    list-style: none; min-width: 190px; background: #1a1d22; border: 1px solid var(--field-border);
-    border-radius: 12px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); display: none; }
-  .cc-menu.open { display: block; }
-  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
-  .cc-menu li:hover { background: rgba(255,255,255,0.06); }
-  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
   .file-row { display: flex; align-items: center; gap: 12px; }
   .file-btn {
     padding: 11px 16px; border-radius: 11px; border: 1px solid var(--field-border);
@@ -144,20 +136,23 @@
             <label for="dob">Date of birth <span class="ar">/ تاريخ الميلاد</span> <span class="req">*</span></label>
             <input type="date" id="dob" required>
           </div>
+          <div class="field" id="country-field">
+            <label for="country">Country <span class="ar">/ الدولة</span> <span class="req">*</span></label>
+            <select id="country" required>
+              <option value="Jordan">Jordan / الأردن</option>
+              <option value="Lebanon">Lebanon / لبنان</option>
+            </select>
+          </div>
           <div class="field">
             <label for="phone_local">Phone number <span class="ar">/ رقم التلفون</span> <span class="req">*</span></label>
             <div class="phone-row">
-              <div class="cc-picker" id="cc-picker">
-                <button type="button" class="cc-btn" id="cc-btn" aria-haspopup="listbox" aria-expanded="false">
-                  <img class="cc-flag" id="cc-flag" alt="">
-                  <span id="cc-dial">+962</span>
-                  <span class="cc-caret">▾</span>
-                </button>
-                <ul class="cc-menu" id="cc-menu" role="listbox"></ul>
+              <div class="cc-fixed" id="cc-fixed">
+                <img class="cc-flag" id="cc-flag" alt="">
+                <span id="cc-dial">+962</span>
               </div>
               <input type="tel" id="phone_local" inputmode="numeric" autocomplete="tel-national" required>
             </div>
-            <div class="hint">We may contact you on WhatsApp.</div>
+            <div class="hint">The country code follows the country you chose above. We may contact you on WhatsApp.</div>
           </div>
           <div class="field">
             <label for="how_found">How did you find about the work opportunity? <span class="ar">/ كيف عرفتوا عن فرصة العمل؟</span> <span class="req">*</span></label>
@@ -167,15 +162,6 @@
               <option value="Employee at BLK">An Employee at BLK / موظف في بلاك</option>
               <option value="LinkedIn">LinkedIn</option>
               <option value="Other">Other / اخرى</option>
-            </select>
-          </div>
-          <div class="field" id="country-field">
-            <label for="country">Country <span class="ar">/ الدولة</span> <span class="req">*</span></label>
-            <select id="country" required>
-              <option value="Jordan">Jordan / الأردن</option>
-              <option value="Lebanon">Lebanon / لبنان</option>
-              <option value="Syria">Syria / سوريا</option>
-              <option value="Iraq">Iraq / العراق</option>
             </select>
           </div>
           <div class="field" id="city-field">
@@ -354,22 +340,19 @@
     if (has) document.getElementById("file-row").classList.remove("invalid");
   });
 
-  // ---- Phone: custom country picker (real flag images) + digit-limited local number ----
+  // ---- Phone: dial code, flag, format and length all follow the Country answer ----
+  // One country list, indexed by the name the Country question offers, so the two can't
+  // disagree: an applicant who picks Lebanon cannot then type a +962 number.
   var COUNTRIES = [
     { cc: "962", len: [9],    ph: "7X XXX XXXX",  flag: "jo", name: "Jordan" },
-    { cc: "961", len: [7, 8], ph: "XX XXX XXX",   flag: "lb", name: "Lebanon" },
-    { cc: "963", len: [9],    ph: "9XX XXX XXX",  flag: "sy", name: "Syria" },
-    { cc: "964", len: [10],   ph: "7XX XXX XXXX", flag: "iq", name: "Iraq" }
+    { cc: "961", len: [7, 8], ph: "XX XXX XXX",   flag: "lb", name: "Lebanon" }
   ];
   var FLAG_BASE = "https://flagcdn.com/";
   function flagUrl(code) { return FLAG_BASE + code + ".svg"; }
 
   var selCountry = COUNTRIES[0];
-  var ccBtn = document.getElementById("cc-btn");
-  var ccMenu = document.getElementById("cc-menu");
   var ccFlag = document.getElementById("cc-flag");
   var ccDial = document.getElementById("cc-dial");
-  var ccPicker = document.getElementById("cc-picker");
   var phoneLocal = document.getElementById("phone_local");
 
   function selectCountry(i) {
@@ -378,7 +361,7 @@
     ccDial.textContent = "+" + selCountry.cc;
     phoneLocal.placeholder = selCountry.ph;
     phoneLocal.maxLength = Math.max.apply(null, selCountry.len) + 1; // +1 tolerates a leading 0
-    // City list is Jordan-only — show it only for Jordanian numbers
+    // City list is Jordan-only — show it only when Jordan is the chosen country
     var cityField = document.getElementById("city-field");
     if (cityField) {
       if (hiddenCols.city) { cityField.style.display = "none"; document.getElementById("city").value = ""; }
@@ -388,7 +371,7 @@
         if (!isJordan) { document.getElementById("city").value = ""; document.getElementById("city").classList.remove("invalid"); }
       }
     }
-    // "Are you Lebanese?" only makes sense for Lebanese numbers
+    // "Are you Lebanese?" only makes sense when Lebanon is the chosen country
     var lebField = document.getElementById("leb-field");
     if (lebField) {
       var lebSel = document.getElementById("is_lebanese");
@@ -400,34 +383,16 @@
       }
     }
   }
-  function closeMenu() { ccMenu.classList.remove("open"); ccBtn.setAttribute("aria-expanded", "false"); }
-
-  COUNTRIES.forEach(function (c, i) {
-    var li = document.createElement("li");
-    li.setAttribute("role", "option");
-    li.innerHTML = '<img src="' + flagUrl(c.flag) + '" alt=""> <span>' + c.name + '</span> <b>+' + c.cc + '</b>';
-    li.addEventListener("click", function () { selectCountry(i); closeMenu(); });
-    ccMenu.appendChild(li);
-  });
-  ccBtn.addEventListener("click", function (e) {
-    e.stopPropagation();
-    if (ccMenu.classList.contains("open")) { closeMenu(); }
-    else { ccMenu.classList.add("open"); ccBtn.setAttribute("aria-expanded", "true"); }
-  });
-  document.addEventListener("click", function (e) { if (!ccPicker.contains(e.target)) closeMenu(); });
   phoneLocal.addEventListener("input", function () { phoneLocal.value = phoneLocal.value.replace(/\D/g, ""); });
-  selectCountry(0);
 
+  // The Country question is the only input; the prefix is read-only output of it.
   var countrySel = document.getElementById("country");
-  if (countrySel) {
-    countrySel.addEventListener("change", function () {
-      var i = COUNTRIES.map(function (c) { return c.name; }).indexOf(countrySel.value);
-      if (i >= 0) selectCountry(i);
-    });
-    var origSelect = selectCountry;
-    selectCountry = function (i) { origSelect(i); if (countrySel) countrySel.value = COUNTRIES[i].name; };
-    selectCountry(0);
+  function syncCountry() {
+    var i = countrySel ? COUNTRIES.map(function (c) { return c.name; }).indexOf(countrySel.value) : -1;
+    selectCountry(i >= 0 ? i : 0);
   }
+  if (countrySel) countrySel.addEventListener("change", syncCountry);
+  syncCountry();
 
   // Date of birth: open the calendar picker on click anywhere in the field
   var dobInput = document.getElementById("dob");
@@ -462,10 +427,10 @@
     var missing = [];
     REQUIRED.forEach(function (id) { if (!val(id)) { markInvalid(id, true); missing.push(id); } });
 
-    // City is required only for Jordanian numbers (the list is Jordan-only)
+    // City is required only when the country is Jordan (the list is Jordan-only)
     if (!hiddenCols.city && selCountry.cc === "962" && !val("city")) { markInvalid("city", true); missing.push("city"); }
 
-    // "Are you Lebanese?" is asked (and required) only for Lebanese numbers
+    // "Are you Lebanese?" is asked (and required) only when the country is Lebanon
     if (!hiddenCols.is_lebanese && selCountry.cc === "961" && !val("is_lebanese")) { markInvalid("is_lebanese", true); missing.push("is_lebanese"); }
 
     // Phone: strip non-digits + any leading zero, then length-check for the selected country.
