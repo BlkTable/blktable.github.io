@@ -540,13 +540,15 @@
   .rec-fld-row .rec-fld { margin: 0; }
   .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  /* score chip carrying raw + percent */
-  .scorechip { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 11px; border-radius: 10px; font-weight: 800; }
-  .scorechip .pct { font-size: 1rem; } .scorechip .raw { font-size: 0.72rem; font-weight: 600; opacity: 0.85; }
+  /* score chip: the percentage, on its colour band */
+  .scorechip { display: inline-flex; align-items: baseline; padding: 5px 11px; border-radius: 10px; font-weight: 800; }
+  .scorechip .pct { font-size: 1rem; }
   .scorechip.good { background: #1c5b34; color: #dcffe9; } .scorechip.ok { background: #2f5b7a; color: #e2f2ff; }
   .scorechip.warn { background: #7a5b16; color: #fff6e0; } .scorechip.bad { background: #8c2f2f; color: #ffecec; }
-  .card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
-  .card-foot .when { color: var(--muted); font-size: 0.72rem; }
+  /* the timestamp keeps its own line rather than being squeezed against the chip */
+  .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .card-foot .when { color: var(--muted); font-size: 0.72rem; white-space: nowrap; flex: 0 0 auto; }
   /* WhatsApp thread preview on complaint cards */
   .thread { background: #0f1418; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; max-height: 132px; overflow: hidden; position: relative; }
   .thread:after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(transparent, #0f1418); }
@@ -3712,7 +3714,7 @@
       var scoreHtml = "";
       if (scoreField) {
         var sn = scoreFraction(scoreField, customCellText(scoreField, d));
-        if (sn !== null) scoreHtml = scoreChipHtml(sn, scoreRawText(currentCustom.table, s));
+        if (sn !== null) scoreHtml = scoreChipHtml(sn);
       }
       var initial = esc(String(summary.length ? cardText(summary[0], d, s) : "?").trim().charAt(0).toUpperCase() || "?");
       var moveHtml = "";
@@ -3851,17 +3853,18 @@
     return '<span class="score-pill ' + scoreTone(n) + (big ? " big" : "") + '">' +
       Math.round(n * 100) + "%</span>";
   }
-  function scoreChipHtml(n, raw) {
-    return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' + Math.round(n * 100) + '%</span>' +
-      (raw ? '<span class="raw">' + esc(raw) + '</span>' : '') + '</span>';
-  }
-  // raw "63/68" from config.score_raw_field (points) + config.score_max (denominator), if set
-  function scoreRawText(t, s) {
-    var cfg = t.config || {};
-    if (!cfg.score_raw_field) return "";
-    var pts = (s.data || {})[cfg.score_raw_field];
-    if (pts == null || pts === "") return "";
-    return cfg.score_max ? (pts + "/" + cfg.score_max) : String(pts);
+  // The chip carries the percentage alone, deliberately.
+  //
+  // Airtable computes a QC record's points total over 68 questions and its percentage
+  // over 67 of them, still divided by 68 — so the two figures disagree by design and
+  // always will: 55 points is stored alongside 79.41%, not the 80.88% that 55/68 gives.
+  // Printing "79%  55/68" in one chip invites the reader to check arithmetic that was
+  // never true and to conclude the app is broken. Both numbers are real and both are
+  // still shown; the points total is a labelled field on the card, the way Airtable
+  // shows it, where nothing implies one divides into the other.
+  function scoreChipHtml(n) {
+    return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' +
+      Math.round(n * 100) + "%</span></span>";
   }
   function cardTint(d, fields) {
     if (!customColorField) return "";
@@ -3876,6 +3879,26 @@
                "#f0a6d4", "#c4a9f5", "#b0b0f7", "#93d8e8", "#9dc9ea", "#96e0bd", "#d3dd8e",
                "#eec38c", "#efae90", "#f2a5b6", "#e3a8ef", "#a9b6f2", "#b6c3d1"];
   function choiceColor(v, f) { return TINTS[tintIndex(v, f)]; }
+  // A date question stores either a plain "2026-08-22" or a full timestamp, depending on
+  // whether the Airtable field it came from carried a time. Shown raw, the second kind
+  // prints as "2026-08-04T15:11:00.000Z" in the middle of a card.
+  //
+  // It is built from the string's own parts rather than parsed as a Date, deliberately.
+  // Those timestamps carry a "Z" they did not earn: across 1,400 QC visits the hour
+  // peaks over shop hours and falls to two records at 03:00, with twenty-seven at
+  // midnight — that is an Amman wall clock, not UTC. Handing it to `new Date` would
+  // move every visit three hours. Show the clock that was written down.
+  function fmtFieldDate(v) {
+    var s = String(v == null ? "" : v).trim();
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+    if (!m) return s;
+    var day = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (isNaN(day.getTime())) return s;
+    var out = day.toLocaleDateString();
+    if (m[4] == null) return out;
+    var h = +m[4], h12 = (h % 12) === 0 ? 12 : (h % 12);
+    return out + " " + h12 + ":" + m[5] + " " + (h >= 12 ? "PM" : "AM");
+  }
   function cellValueHtml(f, d, s) {
     var raw = customCellText(f, d, true);
     if (raw == null || String(raw).trim() === "") return '<span class="empty-box"></span>';
@@ -3899,6 +3922,7 @@
         return '<span class="' + pillClass(part, f) + '" dir="auto">' + esc(part) + "</span>";
       }).join(" ");
     }
+    if (f.type === "date") return '<span dir="auto">' + esc(fmtFieldDate(txt)) + "</span>";
     var cls = (f.type === "long_text" ? "wrap " : "") + (hasArabic(txt) ? "rtl" : "");
     return '<span class="' + cls.trim() + '" dir="auto">' + esc(txt) + "</span>";
   }
@@ -4018,6 +4042,7 @@
         return '<span class="' + pillClass(part, f) + '" dir="auto">' + esc(part) + "</span>";
       }).join(" ");
     }
+    if (f.type === "date") return esc(fmtFieldDate(txt));
     return esc(txt);
   }
   // ---- Grid extras: group, summarise, export -----------------------------------
