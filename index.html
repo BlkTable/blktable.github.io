@@ -699,13 +699,25 @@
   .rec-head .rh-main { min-width: 0; flex: 1 1 240px; }
   .rec-head .rh-title { font-size: var(--fs-6); font-weight: 800; line-height: 1.25; }
   .rec-head .rh-meta { color: var(--muted); font-size: var(--fs-2); margin-top: 4px; }
-  /* fixed width so the number sits in the same place on every record of a table */
-  .rh-score { flex: 0 0 auto; width: 190px; }
-  .rh-score .rs-top { display: flex; align-items: baseline; gap: 8px; }
-  .rh-score .rs-pct { font-size: var(--fs-8); font-weight: 800; line-height: 1;
-    font-variant-numeric: tabular-nums; }
-  .rh-score .rs-raw { color: var(--muted); font-size: var(--fs-2); }
-  .rh-score .score-bar { margin: 8px 0 0; height: 6px; }
+  /* The score, as a stat: its name, then the figure, then what the figure is out of.
+     Fixed width and its own panel so it lands in the same place on every record of a
+     table instead of floating wherever the header text happens to end. */
+  .rh-score { flex: 0 0 auto; width: 168px; padding: 10px 12px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--bg-2); align-self: flex-start; }
+  .rh-score .stat-k { margin-bottom: 5px; }
+  .rh-score .rs-pct { font-family: var(--font-mono); font-size: var(--fs-8); font-weight: 500;
+    line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .rh-score .rs-raw { color: var(--muted); font-size: var(--fs-2); margin-top: 5px;
+    font-family: var(--font-mono); }
+  .rh-score .score-bar { margin: 10px 0 0; height: 4px; }
+  /* A figure with its name under it — used on cards and anywhere a single number is the
+     point. Deliberately not a coloured pill: the colour is on the number itself. */
+  .stat { min-width: 0; }
+  .stat .stat-n { font-family: var(--font-mono); font-size: var(--fs-7); font-weight: 500;
+    line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .stat-k { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.1em;
+    font-weight: 600; color: var(--muted); }
+  .stat .stat-k { margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (max-width: 560px) { .rh-score { width: 100%; } }
   .qsec-title { color: var(--muted); font-size: var(--fs-1); letter-spacing: 0.1em;
     text-transform: uppercase; font-weight: 700; margin: 22px 0 10px; }
@@ -4167,10 +4179,17 @@
           return '<div class="rec-fld"><div class="k">' + esc(f.label) + '</div>' +
             '<div class="v' + (isLong ? ' clamp3' : '') + (hasArabic(customCellText(f, d)) ? ' rtl' : '') + '">' + v + '</div></div>';
         }).join("");
-      var scoreHtml = "";
+      // Cards get the score as a labelled figure, rows keep the compact chip: a 34px
+      // number inside a list row would fight the row it sits in.
+      var scoreHtml = "", scoreStat = "";
       if (scoreField) {
         var sn = scoreFraction(scoreField, customCellText(scoreField, d));
-        if (sn !== null) scoreHtml = scoreChipHtml(sn);
+        if (sn !== null) {
+          scoreHtml = scoreChipHtml(sn);
+          // "Score", not the field name: "Final Score %" truncates to "FINAL SCORE …" beside
+          // the date, and a clipped caps label looks worse than no label at all.
+          scoreStat = scoreStatHtml(sn, "Score");
+        }
       }
       var initial = esc(String(summary.length ? cardText(summary[0], d, s) : "?").trim().charAt(0).toUpperCase() || "?");
       var moveHtml = "";
@@ -4206,7 +4225,7 @@
           (photoField && d[photoField.id] ? '<div class="photo"></div>' : '') +
           '<div class="body" style="text-align:left">' +
             threadHtml + headHtml + fldsHtml +
-            '<div class="card-foot">' + (scoreHtml || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
+            '<div class="card-foot">' + (scoreStat || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
             actions +
           '</div>';
       } else {
@@ -4341,6 +4360,26 @@
   function scoreChipHtml(n) {
     return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' +
       Math.round(n * 100) + "%</span></span>";
+  }
+  // A score is the one figure on an inspection card that people actually read, so it is
+  // printed as a figure with its name under it — not as a coloured pill parked beside the
+  // date, which is what made it read as decoration rather than as the result.
+  function scoreStatHtml(n, label) {
+    var pct = Math.round(n * 100);
+    return '<div class="stat"><div class="stat-n" style="color:' + scoreTint(pct) + '">' + pct + '%</div>' +
+      '<div class="stat-k">' + esc(label || "Score") + "</div></div>";
+  }
+  // One score block for the record header, whether the points come from the per-question
+  // engine or from a single stored field. Both used to build their own slightly different
+  // markup, which is how the same score ended up looking like two different things.
+  function scoreStatBlock(pct, sub) {
+    var col = scoreTint(pct);
+    return '<div class="rh-score">' +
+      '<div class="stat-k">' + esc(sub ? "Final score" : "Score") + "</div>" +
+      '<div class="rs-pct" style="color:' + col + '">' + pct + "%</div>" +
+      (sub ? '<div class="rs-raw">' + esc(sub) + "</div>" : "") +
+      '<div class="score-bar"><i style="width:' + pct + '%;background:' + col + '"></i></div>' +
+      "</div>";
   }
   function cardTint(d, fields) {
     if (!customColorField) return "";
@@ -5321,12 +5360,7 @@
   // as one compact block on the right, in the same place on every scored table.
   function scoreHeadHtml(sd) {
     var pct = sd.possible ? Math.round(sd.earned / sd.possible * 100) : 0;
-    var col = scoreTint(pct);
-    return '<div class="rh-score">' +
-      '<div class="rs-top"><span class="rs-pct" style="color:' + col + '">' + pct + '%</span>' +
-      '<span class="rs-raw">' + sd.earned + " / " + sd.possible + " points</span></div>" +
-      '<div class="score-bar"><i style="width:' + pct + '%;background:' + col + '"></i></div>' +
-      "</div>";
+    return scoreStatBlock(pct, sd.earned + " / " + sd.possible + " points");
   }
   // The per-section totals belong with the per-question breakdown they explain, not
   // stacked under the headline where they read as a second, competing score.
@@ -5376,12 +5410,9 @@
         var shf = fields.filter(function (f) { return f.id === shId; })[0];
         var shn = shf ? scoreFraction(shf, customCellText(shf, d)) : null;
         if (shn !== null) {
-          // a table with a stored score but no per-question rules still gets the same slot
-          var pc = Math.round(shn * 100);
-          scoreSlot = '<div class="rh-score"><div class="rs-top">' +
-            '<span class="rs-pct" style="color:' + scoreTint(pc) + '">' + pc + '%</span>' +
-            '<span class="rs-raw">' + esc(shf.label) + "</span></div>" +
-            '<div class="score-bar"><i style="width:' + pc + '%;background:' + scoreTint(pc) + '"></i></div></div>';
+          // a table with a stored score but no per-question rules gets the same block, so
+          // the score is in the same place whether or not the breakdown exists
+          scoreSlot = scoreStatBlock(Math.round(shn * 100), shf.label);
         }
       }
     }
