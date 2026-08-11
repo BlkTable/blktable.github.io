@@ -1915,60 +1915,40 @@
   }
   // Restarting a form: the table you have keeps every record it ever collected and moves
   // to OLD, frozen so nothing new can land in it; a fresh table with the same questions
-  // starts collecting in New under its own link. Nothing is copied except the structure,
-  // which is the point — the new year starts empty.
+  // starts collecting in New. Nothing is copied except the structure, which is the point
+  // — the new year starts empty.
+  //
+  // The copy INHERITS the public link. QR codes are printed and stuck to walls in 30-odd
+  // branches, so a restart that mints a new slug quietly breaks every one of them; the
+  // frozen table takes a -vN slug instead.
+  //
+  // The work is one call, not four: freeing the slug, creating the copy with it, carrying
+  // the access grants and freezing the original have to happen together. Done here as
+  // separate requests, a failure after the first would leave the live form link pointing
+  // at a table that no longer answers to it. restart_form() does the lot in one
+  // transaction (workspaces/02-restart-form-keep-link.sql).
   function restartFormInNew(t) {
     if (!t || !isAdmin) return;
     var msg = "Restart “" + t.name + "”?\n\n" +
-      "· This table keeps all its records and moves to " + WS_OLD + ", frozen — its public form stops accepting submissions.\n" +
-      "· A new empty table with the same questions starts collecting in " + WS_NEW + ", with a NEW form link.\n\n" +
-      "The old link stops working, so anything printed or shared has to be replaced.";
+      "· This table keeps all its records and moves to " + WS_OLD + ", frozen — it stops accepting submissions.\n" +
+      "· A new empty table with the same questions starts collecting in " + WS_NEW + ".\n" +
+      "· The form link and any printed QR codes keep working — they now point at the new table.\n\n" +
+      "Records already collected stay where they are and are not copied.";
     if (!window.confirm(msg)) return;
-    var newSlug = slugify(t.name) + "-" + Math.random().toString(36).slice(2, 6);
-    var cfg = JSON.parse(JSON.stringify(t.config || {}));
-    delete cfg.archived;
-    db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true })
-      .then(function (fr) {
-        if (fr.error) throw fr.error;
-        var src = fr.data || [];
-        return db.from("app_tables").insert({
-          slug: newSlug, name: t.name, name_ar: t.name_ar || null,
-          category: t.category || null, kind: t.kind || "form",
-          config: cfg, is_active: true, workspace: WS_NEW
-        }).select().single().then(function (tr) {
-          if (tr.error) throw tr.error;
-          var nid = tr.data.id;
-          // after_field points at the old table's field ids, so it cannot come across
-          var copies = src.map(function (f) {
-            return { table_id: nid, position: f.position, label: f.label, label_ar: f.label_ar,
-                     type: f.type, required: f.required, internal: f.internal, options: f.options };
-          });
-          if (!copies.length) return tr.data;
-          return db.from("app_fields").insert(copies).then(function (ir) {
-            if (ir.error) throw ir.error;
-            return tr.data;
-          });
-        });
-      })
-      .then(function (nt) {
-        // freeze the original only once the copy exists, so a failure never leaves the
-        // old form switched off with no replacement
-        return db.from("app_tables").update({ workspace: WS_OLD, is_active: false }).eq("id", t.id)
-          .then(function (ur) { if (ur.error) throw ur.error; return nt; });
-      })
-      .then(function (nt) {
-        loadCustomTables();
-        setTimeout(function () {
-          openCustomTable(nt);
-          window.prompt("Restarted. The new form's link (share this — the old one no longer works):",
-            publicFormLink(nt.slug));
-        }, 500);
-      })
-      .catch(function (err) {
-        window.alert("Could not restart the form. Nothing was changed.\n\n" +
-          "If workspaces have not been switched on yet, run workspaces/01-add-workspace.sql on the database first.");
-        if (window.console) console.error(err);
-      });
+    db.rpc("restart_form", { p_table: t.id }).then(function (r) {
+      if (r.error) throw r.error;
+      return loadCustomTables().then(function () { return r.data; });
+    }).then(function (newId) {
+      var nt = (customTables || []).filter(function (x) { return x.id === newId; })[0];
+      if (nt) openCustomTable(nt);
+      window.alert("Restarted. The form link is unchanged, so printed QR codes keep working:\n\n" +
+        publicFormLink(t.slug) + "\n\nThe records collected so far are in " + WS_OLD + ".");
+    }).catch(function (err) {
+      window.alert("Could not restart the form. Nothing was changed.\n\n" +
+        "If this is a fresh database, run workspaces/01-add-workspace.sql and " +
+        "workspaces/02-restart-form-keep-link.sql on it first.");
+      if (window.console) console.error(err);
+    });
   }
 
   function collapsedMap() {
@@ -3535,8 +3515,11 @@
   function slugify(s) { var x = (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""); return x || "t"; }
   function publicFormLink(slug) { return "https://blktable.blk.jo/f/?t=" + encodeURIComponent(slug); }
 
+  // Returns its promise so a caller that must act on the RELOADED list (restarting a
+  // form, which then opens the new table) can wait for it instead of guessing with a
+  // timeout. Callers that don't care can carry on ignoring it.
   function loadCustomTables() {
-    db.from("app_tables").select("*").order("created_at", { ascending: true }).then(function (res) {
+    return db.from("app_tables").select("*").order("created_at", { ascending: true }).then(function (res) {
       if (res.error) return;
       // Archived tables are imported history nobody needs in front of them every day —
       // dead Airtable bases, handover sheets, wastage. They keep their data, stay
