@@ -598,6 +598,14 @@
   .rec-id { color: var(--muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em;
     font-variant-numeric: tabular-nums; }
   .ja-row .rec-id { margin-left: 8px; font-weight: 600; }
+  /* Starring a record: quiet until it means something, gold once it does — the same
+     language as a starred table, so a star reads the same wherever it appears. */
+  .rec-star { margin-left: 8px; padding: 0 2px; border: none; background: none; cursor: pointer;
+    color: var(--muted); font-size: 0.95rem; line-height: 1; vertical-align: middle; font-family: inherit; }
+  .rec-star:hover { color: var(--silver-hi); }
+  .rec-star.on { color: var(--gold); }
+  .tb-btn.on { background: rgba(255,255,255,0.10); color: var(--silver-hi); }
+  .tb-btn .star-glyph { margin-right: 6px; font-size: 0.95rem; line-height: 1; }
   .pill.flat { background: rgba(255,255,255,0.08); color: var(--silver); }
   .rec-fld .v { font-size: 0.86rem; line-height: 1.35; }
   .rec-fld .v.rtl { direction: rtl; text-align: right; }
@@ -1415,9 +1423,12 @@
               <button class="tb-btn" id="custom-edit" style="display:none;" title="Edit this table and its questions">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"></path></svg>Edit table
               </button>
+              <button class="tb-btn" id="custom-starred" type="button" title="Show only records you starred">
+                <span class="star-glyph">☆</span>Starred
+              </button>
               <div class="tb-search" id="custom-searchwrap">
                 <button class="tb-btn tb-searchtoggle" title="Search" aria-label="Search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></button>
-                <input type="search" id="custom-search" placeholder="Search…">
+                <input type="search" id="custom-search" placeholder="Search #123 or any answer…">
               </div>
             </div>
           </div>
@@ -1763,6 +1774,9 @@
     loadBuiltinTokens();
     loadBuiltinExtra();
     loadStars();
+    // your record stars, once, for every table — the built-in tables render before any
+    // custom table is opened, so this cannot wait for applyCustomSubs
+    loadRecordStars();
     loadAssignUsers();
     loadMyAssigned();
     paintSharedCount();
@@ -1978,6 +1992,61 @@
     if (key === "job_applications" || key === "casting") showView(key);
     else { var t = (customTables || []).filter(function (x) { return x.id === key; })[0]; if (t) openCustomTable(t); }
   }
+  // ---- Starring a RECORD ---------------------------------------------------
+  // Same idea as starring a table, one level down: a flag on the record you need to come
+  // back to. Yours alone, like table stars — one reviewer clearing their list must not
+  // wipe another's. Loaded once for the open table rather than per row.
+  var recStars = {};                                  // submission id -> true
+  // Every star of yours, not just this page's: RLS already limits the table to your own
+  // rows, so this is a short list, and asking by id would put 500 uuids — 18 KB — into a
+  // request URL. Keys are submission ids, so stars from other tables sit harmlessly by.
+  function loadRecordStars() {
+    return db.from("record_stars").select("record_id")
+      .then(function (res) {
+        if (res.error) return;                        // table not created yet: no stars, no noise
+        recStars = {};
+        (res.data || []).forEach(function (r) { recStars[r.record_id] = true; });
+      });
+  }
+  function toggleRecordStar(tableKey, id, btn) {
+    if (recStars[id]) {
+      delete recStars[id];
+      db.from("record_stars").delete().eq("record_id", id).then(function () {});
+    } else {
+      recStars[id] = true;
+      db.from("record_stars").insert({ user_id: myUserId, table_key: tableKey, record_id: id })
+        .then(function (r) {
+          // put the star back the way it was rather than showing a state the database
+          // does not agree with
+          if (r && r.error) { delete recStars[id]; if (btn) paintRecStar(btn, id); }
+        });
+    }
+    if (btn) paintRecStar(btn, id);
+    if (currentCustom && currentCustom.starredOnly) renderCustom();
+  }
+  // One star, three renderers. Job Applications, Casting and every custom table print
+  // the same markup and wire it the same way, so a star cannot come to mean or look like
+  // different things depending on which table you are in.
+  function starHtmlFor(id) {
+    var on = !!recStars[id];
+    return '<button type="button" class="rec-star' + (on ? " on" : "") + '" title="' +
+      (on ? "Starred — click to unstar" : "Star this record") + '">' + (on ? "★" : "☆") + "</button>";
+  }
+  function wireStar(el, tableKey, id) {
+    var b = el.querySelector(".rec-star");
+    if (!b) return;
+    b.addEventListener("click", function (e) {
+      e.stopPropagation();                       // starring must not open the record
+      toggleRecordStar(tableKey, id, b);
+    });
+  }
+  function paintRecStar(btn, id) {
+    var on = !!recStars[id];
+    btn.textContent = on ? "★" : "☆";
+    btn.classList.toggle("on", on);
+    btn.title = on ? "Starred — click to unstar" : "Star this record";
+  }
+
   function loadStars() {
     db.from("table_stars").select("table_key").then(function (res) {
       stars = {}; ((res && res.data) || []).forEach(function (r) { stars[r.table_key] = true; });
@@ -2632,8 +2701,14 @@
     var listEl = document.getElementById("ja-list");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Searching…</div>';
     var safe = term.replace(/[,()*%]/g, " ").trim();
+    // "#1234" or "1234" finds record 1234 by its number as well as by its answers, so the
+    // number is worth quoting to someone. Only added when the term IS a number, because
+    // seq.eq needs an integer and a phone search is not one.
+    var num = safe.replace(/^#/, "");
+    var ors = "full_name.ilike.%" + safe + "%,phone.ilike.%" + safe + "%,living_area.ilike.%" + safe + "%";
+    if (/^\d+$/.test(num)) ors += ",seq.eq." + num;
     var q = jaScoped(db.from("job_applications").select("*"))
-      .or("full_name.ilike.%" + safe + "%,phone.ilike.%" + safe + "%,living_area.ilike.%" + safe + "%")
+      .or(ors)
       .order("created_at", { ascending: false }).limit(JA_PAGE);
     return q.then(function (res) {
       if (res.error) { if (window.console) console.error(res.error); return; }
@@ -2846,14 +2921,18 @@
         '<button class="btn-view">View</button>' + slotR + "</div>";
 
       var el = document.createElement("div");
+      // Same number and star as every other table: an applicant is a record like any
+      // other, and this is the table people spend the most time in.
+      var numHtml = '<span class="rec-id" title="Record number">' + esc(recordNumber(a)) + "</span>";
       if (cards) {
         el.className = "ja-card";
-        el.innerHTML = '<div class="photo">' + esc(initial) + '</div><div class="body"><div class="name">' + esc(a.full_name) + '</div><div class="meta">' + metaHtml + "</div>" + extraHtml + actionsHtml + "</div>";
+        el.innerHTML = '<div class="photo">' + esc(initial) + '</div><div class="body"><div class="name">' + esc(a.full_name) + starHtmlFor(a.id) + '</div><div class="meta">' + numHtml + " · " + metaHtml + "</div>" + extraHtml + actionsHtml + "</div>";
       } else {
         var rowExtra = section === "approved" ? ((a.interview_at ? " · 📅 " + esc(fmtInterview(a.interview_at)) : "") + (a.message_sent ? " · ✓ sent" : "") + (waEligible(a) ? "" : " · WhatsApp: Jordan only")) : "";
         el.className = "ja-row";
-        el.innerHTML = '<div class="ja-thumb">' + esc(initial) + '</div><div class="info"><div class="name">' + esc(a.full_name) + '</div><div class="sub">' + metaHtml + rowExtra + '</div></div><div class="row-actions">' + actionsHtml + "</div>";
+        el.innerHTML = '<div class="ja-thumb">' + esc(initial) + '</div><div class="info"><div class="name">' + esc(a.full_name) + numHtml + starHtmlFor(a.id) + '</div><div class="sub">' + metaHtml + rowExtra + '</div></div><div class="row-actions">' + actionsHtml + "</div>";
       }
+      wireStar(el, "job_applications", a.id);
       el.addEventListener("click", function () { openDetail(a); });
       var bv = el.querySelector(".btn-view"); if (bv) bv.addEventListener("click", function (e) { e.stopPropagation(); openDetail(a); });
       var b1 = el.querySelector(".btn-approve"); if (b1) b1.addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
@@ -3253,8 +3332,10 @@
       var sub = (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") + " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—");
       var viewBtn = '<div class="card-actions">' + recMenuHtml(null, canManage("casting")) + "</div>";
       var el = document.createElement("div");
-      if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + '</div><div class="meta">' + sub + "</div>" + viewBtn + "</div>"; }
-      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + '</div><div class="sub">' + sub + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
+      var cNum = '<span class="rec-id" title="Record number">' + esc(recordNumber(c)) + "</span>";
+      if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + starHtmlFor(c.id) + '</div><div class="meta">' + cNum + " · " + sub + "</div>" + viewBtn + "</div>"; }
+      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + cNum + starHtmlFor(c.id) + '</div><div class="sub">' + sub + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
+      wireStar(el, "casting", c.id);
       el.addEventListener("click", function () { openCastingDetail(c); });
       wireRecMenu(el, function () { openCastingDetail(c); }, function () { deleteCasting(c); });
       ccont.appendChild(el);
@@ -3633,7 +3714,10 @@
     customSel = {}; paintSelBar();
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-    currentCustom = { table: t, fields: [], subs: [] };
+    // starredOnly starts off on every open: a filter that survives navigation is how you
+    // end up staring at an almost-empty table wondering where the records went
+    currentCustom = { table: t, fields: [], subs: [], starredOnly: false };
+    paintStarredBtn();
     currentCustom.fv = makeFilterView({
       key: "custom:" + t.id,
       // A date-of-birth field filters as its computed Age, the same way the built-in tables do.
@@ -3679,6 +3763,8 @@
   }
   function applyCustomSubs(rows, rebuildFilter) {
     currentCustom.subs = rows;
+    // which of these you have starred, in one query rather than one per row
+    loadRecordStars().then(function () { renderCustom(); });
     renderCustomScope();
     // only on the first paint: rebuilding the panel underneath a filter the user has
     // just set would throw their selection away
@@ -3884,7 +3970,16 @@
       [].slice.call(tabsEl.querySelectorAll(".pipe-tab")).forEach(function (b) { b.addEventListener("click", function () { currentCustom.stage = b.getAttribute("data-key"); renderCustom(); }); });
     } else { tabsEl.style.display = "none"; tabsEl.innerHTML = ""; }
     var base = stages.length ? pool.filter(function (s) { return subStage(s, stages) === currentCustom.stage; }) : pool;
-    var rows = base.filter(function (s) { return !q || JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1; });
+    // Search matches any answer OR the record's own number, with or without the hash, so
+    // "1945" and "#1945" both find record 1945. The number is matched exactly rather than
+    // as a substring — searching 45 should not return every record containing 45.
+    var qNum = q.replace(/^#/, "");
+    var rows = base.filter(function (s) {
+      if (!q) return true;
+      if (qNum && String(s.seq) === qNum) return true;
+      return JSON.stringify(s.data || {}).toLowerCase().indexOf(q) !== -1;
+    });
+    if (currentCustom.starredOnly) rows = rows.filter(function (s) { return !!recStars[s.id]; });
     if (customSort.length) rows = rows.slice().sort(function (a, b) { return compareRows(a, b, sortableCols(currentCustom.table, fields)); });
     if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
@@ -3987,9 +4082,12 @@
       var sameAsBranch = branchTxt && String(titleTxt).trim() === String(branchTxt).trim();
       var metaBits = [];
       if (branchTxt && !sameAsBranch) metaBits.push('<span class="pill flat">' + esc(branchTxt) + "</span>");
-      metaBits.push('<span class="rec-id" title="Record number">' + esc(recordCode(s)) + "</span>");
+      metaBits.push('<span class="rec-id" title="Record number">' + esc(recordNumber(s)) + "</span>");
+      // The star sits with the number, because the two are what you use to come back to
+      // a record: one to find it, one to mark it worth finding.
+      var starHtml = starHtmlFor(s.id);
       var headHtml = '<div class="card-head">' +
-        '<div class="name">' + esc(titleTxt) + tag + "</div>" +
+        '<div class="name">' + esc(titleTxt) + tag + starHtml + "</div>" +
         '<div class="card-meta">' + metaBits.join("") + "</div></div>";
       if (kcards) {
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
@@ -4006,7 +4104,7 @@
         if (tint && !mine) el.style.boxShadow = "inset 3px 0 0 " + tint;
         el.innerHTML = '<div class="ja-thumb">' + initial + '</div>' +
           '<div class="info"><div class="name">' + esc(titleTxt) + tag +
-            '<span class="rec-id">' + esc(recordCode(s)) + "</span></div>" +
+            '<span class="rec-id">' + esc(recordNumber(s)) + "</span>" + starHtml + "</div>" +
           '<div class="sub">' + (branchTxt && !sameAsBranch ? esc(branchTxt) + " · " : "") +
             summary.slice(1).filter(function (f) {
               if (scoreField && f.id === scoreField.id) return false;
@@ -4016,6 +4114,7 @@
           '</div></div>' +
           scoreHtml + '<div class="row-actions">' + actions + '</div>';
       }
+      wireStar(el, currentCustom.table.id, s.id);
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
@@ -4485,11 +4584,20 @@
   }
 
   // ---- A record's number --------------------------------------------------
-  // Airtable gives every record a number you can quote and search. Ours have uuids,
-  // which nobody can read out loud, so this derives a short stable code from the uuid:
-  // same record, same code, forever, and no column or backfill needed. Search matches
-  // it, so "8F3K2A" finds the record. (A truly sequential number needs a DB column —
-  // see the note in STATUS; this is the readable handle available without one.)
+  // Every record now carries `seq`: its number within its table, 1-based, in the order
+  // records were created (workspaces/03-record-number-and-stars.sql). That is the number
+  // to quote and to search — "#1945" — exactly as Airtable's autonumber is used.
+  //
+  // Airtable's OWN autonumber could not be reused: it came across as a field on Mystery
+  // Shopper and QC, but each source base started at 1, so merging six bases collided
+  // them (6,198 values, 5,653 distinct). The imported field stays visible as history;
+  // the number below is ours and is unique per table.
+  function recordNumber(s) {
+    if (s && s.seq != null) return "#" + s.seq;
+    return recordCode(s);   // built-in tables have no seq column yet
+  }
+  // The fallback for anything without seq: a short stable code derived from the uuid,
+  // because a uuid is not something anyone can read out loud.
   var CODE_ALPHABET = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZ";  // no I/O to misread as 1/0
   function recordCode(s) {
     var id = String((s && s.id) || "");
@@ -5176,7 +5284,7 @@
     if (!String(recTitle).trim()) recTitle = recBranch || "Record";
     var scoreHead = '<div class="rec-head">' +
       '<div class="rh-main"><div class="rh-title">' + esc(recTitle) + "</div>" +
-      '<div class="rh-meta">' + esc(recordCode(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
+      '<div class="rh-meta">' + esc(recordNumber(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
       (recBranch && String(recBranch).trim() !== String(recTitle).trim() ? " · " + esc(recBranch) : "") +
       "</div></div>" + scoreSlot + "</div>";
     // A record shows the questions the form asks today — the same list Airtable shows.
@@ -5464,6 +5572,19 @@
     if (b) b.addEventListener("click", function (e) { e.stopPropagation(); p.classList.toggle("open"); });
     document.addEventListener("click", function (e) { if (w && !w.contains(e.target)) p.classList.remove("open"); });
   })();
+  document.getElementById("custom-starred").addEventListener("click", function () {
+    if (!currentCustom) return;
+    currentCustom.starredOnly = !currentCustom.starredOnly;
+    paintStarredBtn();
+    renderCustom();
+  });
+  function paintStarredBtn() {
+    var b = document.getElementById("custom-starred");
+    if (!b) return;
+    var on = !!(currentCustom && currentCustom.starredOnly);
+    b.classList.toggle("on", on);
+    b.querySelector(".star-glyph").textContent = on ? "★" : "☆";
+  }
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) { useBuilderHost(); openBuilderEdit(currentCustom.table); } });
   // branch scope: chips on the page and the children in the sidebar do the same thing
