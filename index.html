@@ -782,6 +782,11 @@
     color: var(--text); font: inherit; font-size: 0.95rem; font-weight: 700; cursor: pointer;
     padding: 5px 8px; border-radius: 6px; max-width: 34vw; }
   .base-name:hover { background: rgba(255,255,255,0.07); }
+  /* Says out loud that you are looking at frozen history rather than the live board —
+     the two look identical otherwise, and that is exactly the confusion to avoid. */
+  .ws-tag { margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-size: 0.66rem;
+    font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+    background: rgba(255,255,255,0.08); color: var(--muted); }
   .base-name .bn-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .base-name .bn-ar { color: var(--muted); font-weight: 600; font-size: 0.84rem; }
   .base-name .bn-caret { color: var(--muted); font-size: 0.62rem; }
@@ -1229,7 +1234,8 @@
           <!-- Base bar: which table you're in, its Data / Form tabs, and Share. -->
           <div class="base-bar">
             <span class="tmark lg" data-tmark="job_applications"></span>
-            <button class="base-name" data-basemenu="job_applications"><span class="bn-txt">Job Applications</span><span class="bn-caret">▾</span></button>
+            <button class="base-name" data-basemenu="job_applications"><span class="bn-txt" id="ja-basename">Job Applications</span><span class="bn-caret">▾</span></button>
+            <span class="ws-tag" id="ja-wstag" style="display:none;">OLD (Airtable)</span>
             <nav class="base-tabs" data-tabs="job_applications">
               <button type="button" data-t="data" class="active">Data</button>
               <button type="button" data-t="form">Form</button>
@@ -1256,7 +1262,7 @@
             <div class="tb-right">
               <div class="tb-search" id="ja-searchwrap">
                 <button class="tb-btn tb-searchtoggle" title="Search" aria-label="Search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></button>
-                <input type="search" id="ja-search" placeholder="Search name, phone, area…">
+                <input type="search" id="ja-search" placeholder="Search #123, name, phone, area…">
               </div>
             </div>
           </div>
@@ -2256,14 +2262,19 @@
   // After the Airtable migration this table holds tens of thousands of rows, so
   // it can no longer be pulled into the browser and filtered there. Instead the
   // board loads one SCOPE at a time (a year + a country), the true counts come
-  // from the ja_facets() RPC, and searching outside the loaded slice is done by
+  // from the ja_facets_scoped() RPC, and searching outside the loaded slice is done by
   // the database. Country is a stored column filled from the phone dial code by
   // a trigger, so the grouping maintains itself.
   var JA_PAGE = 500;        // rows fetched per scope (API caps a response at 1000)
   var JA_RENDER_STEP = 300; // cards drawn before "Show more"
   // Default to the current year: the board is for live hiring, and older years are
   // history you switch to. Everything is still one table and one search away.
-  var jaScope = { year: new Date().getFullYear(), country: null }; // null = all
+  // origin splits the one table into the two workspaces without moving a row:
+  // 'blktable' = applications submitted through our own form (New), 'airtable' = the
+  // 33,943 imported ones (OLD). Both are the same table, so search, scoping and the
+  // hiring actions behave identically in each.
+  var JA_LIVE = "blktable", JA_HISTORY = "airtable";
+  var jaScope = { year: new Date().getFullYear(), country: null, origin: JA_LIVE }; // null = all
   var jaFacets = { years: {}, countries: {}, statuses: {}, total: 0, unsent: 0 };
   var jaRenderCap = JA_RENDER_STEP;
   var jaServerSearch = false; // true when the list came from a database search
@@ -2659,6 +2670,7 @@
 
   // Apply the current scope (year + country) to a job_applications query.
   function jaScoped(q) {
+    if (jaScope.origin) q = q.eq("origin", jaScope.origin);
     if (jaScope.year) {
       q = q.gte("created_at", jaScope.year + "-01-01T00:00:00Z")
            .lt("created_at", (jaScope.year + 1) + "-01-01T00:00:00Z");
@@ -2668,7 +2680,7 @@
     return q;
   }
   function loadFacets() {
-    return db.rpc("ja_facets", { p_year: jaScope.year, p_country: jaScope.country })
+    return db.rpc("ja_facets_scoped", { p_year: jaScope.year, p_country: jaScope.country, p_origin: jaScope.origin })
       .then(function (r) {
         if (!r.error && r.data) jaFacets = r.data;
         return jaFacets;
@@ -2766,7 +2778,7 @@
     return code ? '<img src="https://flagcdn.com/' + esc(code) + '.svg" alt="">' : "";
   }
   // Year switch + country chips + the sidebar's country children, all driven by
-  // ja_facets() so they always reflect what this user is allowed to see.
+  // ja_facets_scoped() so they always reflect what this user is allowed to see.
   function renderScopeBar() {
     var years = Object.keys(jaFacets.years || {}).sort().reverse();
     var sel = document.getElementById("ja-year");
@@ -2797,6 +2809,35 @@
   // appear underneath to choose from. The choice is remembered.
   var jaKidsOpen = false;
   try { jaKidsOpen = localStorage.getItem("blk_ja_kids") === "1"; } catch (e) {}
+  // Switch Job Applications between the live applications and the imported history.
+  // Same table, same board, same actions — only the scope changes, so nothing about the
+  // hiring workflow has to know this split exists.
+  function setJaOrigin(o) {
+    if (jaScope.origin === o) return openJa();
+    jaScope.origin = o;
+    // History spans 2021-2026 and the live set only exists this year, so a year filter
+    // carried across from the other side would show an empty board and look broken.
+    jaScope.year = (o === JA_HISTORY) ? null : new Date().getFullYear();
+    jaScope.country = null;
+    paintJaOrigin();
+    openJa();
+  }
+  function paintJaOrigin() {
+    var hist = jaScope.origin === JA_HISTORY;
+    var nm = document.getElementById("ja-basename");
+    if (nm) nm.textContent = hist ? "Job Applications — Airtable history" : "Job Applications";
+    var tag = document.getElementById("ja-wstag");
+    if (tag) tag.style.display = hist ? "" : "none";
+    var live = document.querySelector('.side-item[data-view="job_applications"]');
+    if (live) live.classList.toggle("active", !hist);
+    var histBtn = document.getElementById("side-ja-history");
+    if (histBtn) histBtn.classList.toggle("active", hist);
+  }
+  function openJa() {
+    showView("job_applications");
+    paintJaOrigin();
+    loadApps();
+  }
   function applyJaKids() {
     var kids = document.getElementById("ja-kids");
     var caret = document.getElementById("ja-caret");
@@ -3279,6 +3320,8 @@
   // pressing the Job Applications line reveals the countries to choose from
   document.querySelector('.side-item[data-view="job_applications"]').addEventListener("click", function (e) {
     if (e.target && e.target.closest && e.target.closest(".side-gear")) return; // gear = settings
+    // this line is the LIVE applications; the history sits in the OLD workspace group
+    if (jaScope.origin !== JA_LIVE) setJaOrigin(JA_LIVE); else paintJaOrigin();
     toggleJaKids();
   });
   applyJaKids();
@@ -3667,6 +3710,19 @@
             wrap.style.display = collapsed ? "none" : "block"; paintWs();
           });
           renderCategories(wrap, ws.items);
+          // Job Applications is one table holding both the imported history and the live
+          // applications, so it cannot sit in one workspace the way a custom table can.
+          // Its history is listed here, in OLD, and opens the same board scoped to the
+          // imported rows. Admin-only, matching who can see the live entry.
+          if (ws.name === WS_OLD && accessKeys["job_applications"]) {
+            var jh = document.createElement("button");
+            jh.className = "side-item"; jh.id = "side-ja-history";
+            jh.title = "Applications imported from Airtable — history, not the live board";
+            jh.innerHTML = '<span class="tmark" data-tmark="job_applications"></span>' +
+              '<span class="side-label">Job Applications · history</span>';
+            jh.addEventListener("click", function () { setJaOrigin(JA_HISTORY); });
+            wrap.insertBefore(jh, wrap.firstChild);
+          }
           slot.appendChild(head); slot.appendChild(wrap);
         });
       }
