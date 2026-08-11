@@ -1774,6 +1774,9 @@
     loadBuiltinTokens();
     loadBuiltinExtra();
     loadStars();
+    // your record stars, once, for every table — the built-in tables render before any
+    // custom table is opened, so this cannot wait for applyCustomSubs
+    loadRecordStars();
     loadAssignUsers();
     loadMyAssigned();
     paintSharedCount();
@@ -1998,25 +2001,44 @@
   // rows, so this is a short list, and asking by id would put 500 uuids — 18 KB — into a
   // request URL. Keys are submission ids, so stars from other tables sit harmlessly by.
   function loadRecordStars() {
-    return db.from("record_stars").select("submission_id")
+    return db.from("record_stars").select("record_id")
       .then(function (res) {
         if (res.error) return;                        // table not created yet: no stars, no noise
         recStars = {};
-        (res.data || []).forEach(function (r) { recStars[r.submission_id] = true; });
+        (res.data || []).forEach(function (r) { recStars[r.record_id] = true; });
       });
   }
-  function toggleRecordStar(id, btn) {
+  function toggleRecordStar(tableKey, id, btn) {
     if (recStars[id]) {
       delete recStars[id];
-      db.from("record_stars").delete().eq("submission_id", id).then(function () {});
+      db.from("record_stars").delete().eq("record_id", id).then(function () {});
     } else {
       recStars[id] = true;
-      db.from("record_stars").insert({ user_id: myUserId, submission_id: id }).then(function (r) {
-        if (r && r.error) { delete recStars[id]; if (btn) paintRecStar(btn, id); }
-      });
+      db.from("record_stars").insert({ user_id: myUserId, table_key: tableKey, record_id: id })
+        .then(function (r) {
+          // put the star back the way it was rather than showing a state the database
+          // does not agree with
+          if (r && r.error) { delete recStars[id]; if (btn) paintRecStar(btn, id); }
+        });
     }
     if (btn) paintRecStar(btn, id);
     if (currentCustom && currentCustom.starredOnly) renderCustom();
+  }
+  // One star, three renderers. Job Applications, Casting and every custom table print
+  // the same markup and wire it the same way, so a star cannot come to mean or look like
+  // different things depending on which table you are in.
+  function starHtmlFor(id) {
+    var on = !!recStars[id];
+    return '<button type="button" class="rec-star' + (on ? " on" : "") + '" title="' +
+      (on ? "Starred — click to unstar" : "Star this record") + '">' + (on ? "★" : "☆") + "</button>";
+  }
+  function wireStar(el, tableKey, id) {
+    var b = el.querySelector(".rec-star");
+    if (!b) return;
+    b.addEventListener("click", function (e) {
+      e.stopPropagation();                       // starring must not open the record
+      toggleRecordStar(tableKey, id, b);
+    });
   }
   function paintRecStar(btn, id) {
     var on = !!recStars[id];
@@ -2679,8 +2701,14 @@
     var listEl = document.getElementById("ja-list");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Searching…</div>';
     var safe = term.replace(/[,()*%]/g, " ").trim();
+    // "#1234" or "1234" finds record 1234 by its number as well as by its answers, so the
+    // number is worth quoting to someone. Only added when the term IS a number, because
+    // seq.eq needs an integer and a phone search is not one.
+    var num = safe.replace(/^#/, "");
+    var ors = "full_name.ilike.%" + safe + "%,phone.ilike.%" + safe + "%,living_area.ilike.%" + safe + "%";
+    if (/^\d+$/.test(num)) ors += ",seq.eq." + num;
     var q = jaScoped(db.from("job_applications").select("*"))
-      .or("full_name.ilike.%" + safe + "%,phone.ilike.%" + safe + "%,living_area.ilike.%" + safe + "%")
+      .or(ors)
       .order("created_at", { ascending: false }).limit(JA_PAGE);
     return q.then(function (res) {
       if (res.error) { if (window.console) console.error(res.error); return; }
@@ -2893,14 +2921,18 @@
         '<button class="btn-view">View</button>' + slotR + "</div>";
 
       var el = document.createElement("div");
+      // Same number and star as every other table: an applicant is a record like any
+      // other, and this is the table people spend the most time in.
+      var numHtml = '<span class="rec-id" title="Record number">' + esc(recordNumber(a)) + "</span>";
       if (cards) {
         el.className = "ja-card";
-        el.innerHTML = '<div class="photo">' + esc(initial) + '</div><div class="body"><div class="name">' + esc(a.full_name) + '</div><div class="meta">' + metaHtml + "</div>" + extraHtml + actionsHtml + "</div>";
+        el.innerHTML = '<div class="photo">' + esc(initial) + '</div><div class="body"><div class="name">' + esc(a.full_name) + starHtmlFor(a.id) + '</div><div class="meta">' + numHtml + " · " + metaHtml + "</div>" + extraHtml + actionsHtml + "</div>";
       } else {
         var rowExtra = section === "approved" ? ((a.interview_at ? " · 📅 " + esc(fmtInterview(a.interview_at)) : "") + (a.message_sent ? " · ✓ sent" : "") + (waEligible(a) ? "" : " · WhatsApp: Jordan only")) : "";
         el.className = "ja-row";
-        el.innerHTML = '<div class="ja-thumb">' + esc(initial) + '</div><div class="info"><div class="name">' + esc(a.full_name) + '</div><div class="sub">' + metaHtml + rowExtra + '</div></div><div class="row-actions">' + actionsHtml + "</div>";
+        el.innerHTML = '<div class="ja-thumb">' + esc(initial) + '</div><div class="info"><div class="name">' + esc(a.full_name) + numHtml + starHtmlFor(a.id) + '</div><div class="sub">' + metaHtml + rowExtra + '</div></div><div class="row-actions">' + actionsHtml + "</div>";
       }
+      wireStar(el, "job_applications", a.id);
       el.addEventListener("click", function () { openDetail(a); });
       var bv = el.querySelector(".btn-view"); if (bv) bv.addEventListener("click", function (e) { e.stopPropagation(); openDetail(a); });
       var b1 = el.querySelector(".btn-approve"); if (b1) b1.addEventListener("click", function (e) { e.stopPropagation(); openSchedule(a); });
@@ -3300,8 +3332,10 @@
       var sub = (age == null ? "" : (age + " yrs · ")) + esc(c.phone || "—") + " · " + esc(c.branch || "—") + " · Uni: " + esc(c.university_student || "—") + " · Acted: " + esc(c.ever_acted || "—");
       var viewBtn = '<div class="card-actions">' + recMenuHtml(null, canManage("casting")) + "</div>";
       var el = document.createElement("div");
-      if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + '</div><div class="meta">' + sub + "</div>" + viewBtn + "</div>"; }
-      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + '</div><div class="sub">' + sub + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
+      var cNum = '<span class="rec-id" title="Record number">' + esc(recordNumber(c)) + "</span>";
+      if (ccards) { el.className = "ja-card"; el.innerHTML = '<div class="photo">' + initial + '</div><div class="body"><div class="name">' + esc(c.full_name) + starHtmlFor(c.id) + '</div><div class="meta">' + cNum + " · " + sub + "</div>" + viewBtn + "</div>"; }
+      else { el.className = "ja-row"; el.innerHTML = '<div class="ja-thumb">' + initial + '</div><div class="info"><div class="name">' + esc(c.full_name) + cNum + starHtmlFor(c.id) + '</div><div class="sub">' + sub + "</div></div><div class=\"row-actions\">" + viewBtn + "</div>"; }
+      wireStar(el, "casting", c.id);
       el.addEventListener("click", function () { openCastingDetail(c); });
       wireRecMenu(el, function () { openCastingDetail(c); }, function () { deleteCasting(c); });
       ccont.appendChild(el);
@@ -4051,9 +4085,7 @@
       metaBits.push('<span class="rec-id" title="Record number">' + esc(recordNumber(s)) + "</span>");
       // The star sits with the number, because the two are what you use to come back to
       // a record: one to find it, one to mark it worth finding.
-      var starHtml = '<button type="button" class="rec-star' + (recStars[s.id] ? " on" : "") + '" title="' +
-        (recStars[s.id] ? "Starred — click to unstar" : "Star this record") + '">' +
-        (recStars[s.id] ? "★" : "☆") + "</button>";
+      var starHtml = starHtmlFor(s.id);
       var headHtml = '<div class="card-head">' +
         '<div class="name">' + esc(titleTxt) + tag + starHtml + "</div>" +
         '<div class="card-meta">' + metaBits.join("") + "</div></div>";
@@ -4082,11 +4114,7 @@
           '</div></div>' +
           scoreHtml + '<div class="row-actions">' + actions + '</div>';
       }
-      var starBtn = el.querySelector(".rec-star");
-      if (starBtn) starBtn.addEventListener("click", function (e) {
-        e.stopPropagation();                      // starring must not open the record
-        toggleRecordStar(s.id, starBtn);
-      });
+      wireStar(el, currentCustom.table.id, s.id);
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
