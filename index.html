@@ -868,14 +868,6 @@
   .selbar.on { display: flex; }
   .selbar b { font-variant-numeric: tabular-nums; }
   .selbar .sb-sp { margin-left: auto; }
-  /* the assignment filter, as a removable bar rather than a permanent button */
-  .minebar { display: none; align-items: center; gap: 9px; margin: 0 0 14px; padding: 8px 12px;
-    border: 1px solid rgba(248,43,96,0.35); background: var(--pink-soft); border-radius: 8px;
-    font-size: 0.82rem; color: var(--silver); }
-  .minebar.on { display: flex; }
-  .minebar svg { flex: 0 0 auto; color: var(--pink-hi); }
-  .minebar b { font-variant-numeric: tabular-nums; }
-  .minebar .sb-sp { margin-left: auto; }
 
   /* ---- the bell's notification panel ---- */
   .notif { position: fixed; z-index: 320; width: min(340px, 94vw); max-height: 60vh; overflow: auto;
@@ -1476,13 +1468,6 @@
             <div class="base-pane" data-pane="custom:data">
               <!-- branch grouping is in the sidebar only, by design -->
               <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
-              <!-- Only shown when you arrived from the notification bell, so the filter
-                   is visible and removable without living in the toolbar as a button. -->
-              <div class="minebar" id="custom-minebar">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15V10a6 6 0 1 0-12 0v5l-1.5 2.5h15L18 15z"></path><path d="M10 19a2 2 0 0 0 4 0"></path></svg>
-                <span>Showing only the <b id="mine-n">0</b> waiting on you</span>
-                <button class="linkbtn sb-sp" id="mine-clear" type="button">Show all records</button>
-              </div>
               <div class="selbar" id="custom-selbar">
                 <b id="sel-n">0</b><span>selected</span>
                 <button class="linkbtn sb-sp" id="sel-export" type="button">Export selected as CSV</button>
@@ -2008,10 +1993,10 @@
     });
     return list;
   }
-  function openTableByKey(key, mineOnly) {
+  function openTableByKey(key) {
     markOpened(key);
     if (key === "job_applications" || key === "casting") showView(key);
-    else { var t = (customTables || []).filter(function (x) { return x.id === key; })[0]; if (t) openCustomTable(t, mineOnly); }
+    else { var t = (customTables || []).filter(function (x) { return x.id === key; })[0]; if (t) openCustomTable(t); }
   }
   function loadStars() {
     db.from("table_stars").select("table_key").then(function (res) {
@@ -2058,9 +2043,6 @@
       var kind = t.kind === "task" ? '<span class="hc-kind" title="Scheduled task, not a public form">Task</span>' : "";
       var mark = tmarkHtml(t.key, t.name, t.config, !asRow);
       var el = document.createElement("div");
-      // Opening a table from Home always shows all of it. Narrowing to your own
-      // records is what the bell's panel is for, so the two never disagree.
-      var openMine = false;
       if (asRow) {
         // The recents row: icon, name, star, when you last opened it, its workspace.
         el.className = "home-card row";
@@ -2077,8 +2059,8 @@
       el.querySelector(".hc-star").addEventListener("click", function (e) { e.stopPropagation(); toggleStar(t.key); });
       var sh = el.querySelector(".hc-share"); if (sh) sh.addEventListener("click", function (e) { e.stopPropagation(); openShare(t.key, t.name); });
       var op = el.querySelector(".hc-open");
-      if (op) op.addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key, openMine); });
-      el.addEventListener("click", function () { openTableByKey(t.key, openMine); });
+      if (op) op.addEventListener("click", function (e) { e.stopPropagation(); openTableByKey(t.key); });
+      el.addEventListener("click", function () { openTableByKey(t.key); });
       return el;
     }
     var asRow = homeView === "list";
@@ -3646,7 +3628,7 @@
     for (var i = 0; i < items.length; i++) items[i].classList.remove("active");
     if (el) el.classList.add("active");
   }
-  function openCustomTable(t, mineOnly) {
+  function openCustomTable(t) {
     var views = document.querySelectorAll(".view");
     for (var i = 0; i < views.length; i++) views[i].classList.add("hidden");
     document.getElementById("view-custom").classList.remove("hidden");
@@ -3668,7 +3650,7 @@
     customSel = {}; paintSelBar();
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
-    currentCustom = { table: t, fields: [], subs: [], mineOnly: !!mineOnly };
+    currentCustom = { table: t, fields: [], subs: [] };
     currentCustom.fv = makeFilterView({
       key: "custom:" + t.id,
       // A date-of-birth field filters as its computed Age, the same way the built-in tables do.
@@ -3893,17 +3875,11 @@
     var mayEdit = canEdit(currentCustom.table.id);
     var mayManageTbl = canManage(currentCustom.table.id);
     var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty"), tabsEl = document.getElementById("custom-tabs");
+    // Assignment still marks a record "For you" and still drives the review chain; what
+    // is gone is filtering the table down to your own records, which was one more piece
+    // of state that could silently be on while you wondered where the records went.
     var isMine = function (s) { return s.current_assignee && s.current_assignee === myUserId; };
-    var mineCount = subs.filter(isMine).length;
-    // Nothing assigned here means the filter cannot be on — otherwise you would be
-    // looking at an empty table with no visible reason why.
-    if (!mineCount) currentCustom.mineOnly = false;
-    var mineBar = document.getElementById("custom-minebar");
-    if (mineBar) {
-      mineBar.classList.toggle("on", !!currentCustom.mineOnly);
-      document.getElementById("mine-n").textContent = String(mineCount);
-    }
-    var pool = currentCustom.mineOnly ? subs.filter(isMine) : subs;
+    var pool = subs;
     pool = pool.filter(passesCustomFilters);
     // the loaded slice may be a page of a much larger branch/table
     var scopeTotal = customFacets.total || pool.length;
@@ -3929,7 +3905,7 @@
     if (customSort.length) rows = rows.slice().sort(function (a, b) { return compareRows(a, b, sortableCols(currentCustom.table, fields)); });
     if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
     emptyEl.style.display = "none";
-    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (currentCustom.mineOnly ? "Nothing assigned to you here." : (stages.length ? "Nothing in this stage." : "No matches.")) + "</div>"; return; }
+    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (stages.length ? "Nothing in this stage." : "No matches.") + "</div>"; return; }
     listEl.innerHTML = "";
     // the Columns picker only makes sense in the grid
     var colsWrap = document.getElementById("cols-wrap");
@@ -5505,10 +5481,7 @@
     if (b) b.addEventListener("click", function (e) { e.stopPropagation(); p.classList.toggle("open"); });
     document.addEventListener("click", function (e) { if (w && !w.contains(e.target)) p.classList.remove("open"); });
   })();
-  document.getElementById("mine-clear").addEventListener("click", function () {
-    if (currentCustom) { currentCustom.mineOnly = false; renderCustom(); }
-  });
-  document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table, currentCustom.mineOnly); });
+  document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) { useBuilderHost(); openBuilderEdit(currentCustom.table); } });
   // branch scope: chips on the page and the children in the sidebar do the same thing
   document.getElementById("custom-kids").addEventListener("click", function (e) {
@@ -6070,7 +6043,7 @@
       closeBuilder();
       loadCustomTables();
       loadBuiltinExtra();
-      if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table, currentCustom.mineOnly);
+      if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table);
     }).catch(function (err) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(err); });
   }
 
@@ -6590,7 +6563,7 @@
       [].slice.call(notifEl.querySelectorAll(".nf-row")).forEach(function (b) {
         b.addEventListener("click", function (ev) {
           ev.stopPropagation(); closeNotif();
-          openTableByKey(b.getAttribute("data-k"), true);   // true = only your records
+          openTableByKey(b.getAttribute("data-k"));
         });
       });
     }
