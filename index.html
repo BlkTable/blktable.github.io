@@ -1944,7 +1944,10 @@
   // freezes the old table in OLD while a fresh copy of its structure starts collecting
   // in New. Airtable's own workspaces hold bases; ours hold the same tables and exist
   // to separate "what we still use" from "what we keep".
-  var WS_OLD = "OLD (Airtable)", WS_NEW = "New";
+  // Main renders FLAT — its tables sit directly under the Workspace heading beside Job
+  // Applications and BLK Casting, because the forms in daily use should not be one click
+  // inside a group. New holds the Operate task tables; OLD holds migrated history.
+  var WS_OLD = "OLD (Airtable)", WS_NEW = "New", WS_MAIN = "Main";
   function tableWorkspace(t) {
     var w = t && t.workspace;
     return (typeof w === "string" && w.trim()) ? w.trim() : null;
@@ -1960,16 +1963,18 @@
       if (!by[w]) { by[w] = { name: w, items: [] }; order.push(w); }
       by[w].items.push(t);
     });
-    // New first — it is the working set. Everything else alphabetically, OLD last.
+    // Main first and unheaded, then New, then anything else alphabetically, OLD last.
     order.sort(function (a, b) {
       if (a === b) return 0;
+      if (a === WS_MAIN) return -1;
+      if (b === WS_MAIN) return 1;
       if (a === WS_NEW) return -1;
       if (b === WS_NEW) return 1;
       if (a === WS_OLD) return 1;
       if (b === WS_OLD) return -1;
       return a.localeCompare(b);
     });
-    return order.map(function (w) { return by[w]; });
+    return order.map(function (w) { return { name: w, items: by[w].items, flat: w === WS_MAIN }; });
   }
   function wsCollapsedMap() {
     try { return JSON.parse(localStorage.getItem("blk_ws_collapsed") || "{}") || {}; } catch (e) { return {}; }
@@ -3761,6 +3766,8 @@
         renderCategories(slot, customTables);
       } else {
         wsGroups.forEach(function (ws) {
+          // Main has no header and no fold: its tables ARE the top level.
+          if (ws.flat) { renderCategories(slot, ws.items); return; }
           var collapsed = wsCollapsed(ws.name);
           var head = document.createElement("button");
           head.className = "side-item side-ws"; head.title = ws.name;
@@ -7048,6 +7055,7 @@
       var ws = tableWorkspace(t);
       if (ws) {
         items.push({ head: true, label: "Workspace · " + ws });
+        if (ws !== WS_MAIN) items.push({ label: "Move to the top level", hint: "beside Job Applications", on: function () { moveTableToWorkspace(t, WS_MAIN); } });
         if (ws !== WS_NEW) items.push({ label: "Move to " + WS_NEW, on: function () { moveTableToWorkspace(t, WS_NEW); } });
         if (ws !== WS_OLD) items.push({ label: "Move to " + WS_OLD, on: function () { moveTableToWorkspace(t, WS_OLD); } });
         if (!isTask) items.push({ label: "Restart form…", hint: "freeze + fresh copy", on: function () { restartFormInNew(t); } });
