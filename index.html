@@ -1941,13 +1941,14 @@
   // ---- Workspaces: OLD (Airtable) and New ---------------------------------
   // Everything migrated from Airtable lives in OLD as history. Everything in live use
   // lives in New. A table is moved between them from its ⋯ menu, and restarting a form
-  // freezes the old table in OLD while a fresh copy of its structure starts collecting
-  // in New. Airtable's own workspaces hold bases; ours hold the same tables and exist
-  // to separate "what we still use" from "what we keep".
+  // freezes the old table in OLD while a fresh copy of its structure starts collecting in
+  // the same workspace the original was in. Airtable's own workspaces hold bases; ours
+  // hold the same tables and exist to separate "what we still use" from "what we keep".
   // Main renders FLAT — its tables sit directly under the Workspace heading beside Job
   // Applications and BLK Casting, because the forms in daily use should not be one click
-  // inside a group. New holds the Operate task tables; OLD holds migrated history.
-  var WS_OLD = "OLD (Airtable)", WS_NEW = "New", WS_MAIN = "Main";
+  // inside a group, and it is where a newly built table lands. Operate holds the 33
+  // scheduled task tables and nothing else; OLD holds the migrated history.
+  var WS_OLD = "OLD (Airtable)", WS_OPERATE = "Operate", WS_MAIN = "Main";
   function tableWorkspace(t) {
     var w = t && t.workspace;
     return (typeof w === "string" && w.trim()) ? w.trim() : null;
@@ -1968,8 +1969,8 @@
       if (a === b) return 0;
       if (a === WS_MAIN) return -1;
       if (b === WS_MAIN) return 1;
-      if (a === WS_NEW) return -1;
-      if (b === WS_NEW) return 1;
+      if (a === WS_OPERATE) return -1;
+      if (b === WS_OPERATE) return 1;
       if (a === WS_OLD) return 1;
       if (b === WS_OLD) return -1;
       return a.localeCompare(b);
@@ -1981,8 +1982,10 @@
   }
   function wsCollapsed(name) {
     var m = wsCollapsedMap();
-    // New open, OLD folded away: history should not be the first thing in the way
-    return Object.prototype.hasOwnProperty.call(m, name) ? !!m[name] : (name !== WS_NEW);
+    // Both groups start folded now. What you use daily is in Main, which is flat and
+    // always visible; Operate is 33 scheduled tasks and OLD is 219 migrated tables, and
+    // neither should greet you with a wall of entries.
+    return Object.prototype.hasOwnProperty.call(m, name) ? !!m[name] : true;
   }
   function setWsCollapsed(name, v) {
     var m = wsCollapsedMap(); m[name] = !!v;
@@ -2022,7 +2025,7 @@
     if (!t || !isAdmin) return;
     var msg = "Restart “" + t.name + "”?\n\n" +
       "· This table keeps all its records and moves to " + WS_OLD + ", frozen — it stops accepting submissions.\n" +
-      "· A new empty table with the same questions starts collecting in " + WS_NEW + ".\n" +
+      "· A new empty table with the same questions starts collecting, in this table's own workspace.\n" +
       "· The form link and any printed QR codes keep working — they now point at the new table.\n\n" +
       "Records already collected stay where they are and are not copied.";
     if (!window.confirm(msg)) return;
@@ -7056,7 +7059,7 @@
       if (ws) {
         items.push({ head: true, label: "Workspace · " + ws });
         if (ws !== WS_MAIN) items.push({ label: "Move to the top level", hint: "beside Job Applications", on: function () { moveTableToWorkspace(t, WS_MAIN); } });
-        if (ws !== WS_NEW) items.push({ label: "Move to " + WS_NEW, on: function () { moveTableToWorkspace(t, WS_NEW); } });
+        if (ws !== WS_OPERATE) items.push({ label: "Move to " + WS_OPERATE, on: function () { moveTableToWorkspace(t, WS_OPERATE); } });
         if (ws !== WS_OLD) items.push({ label: "Move to " + WS_OLD, on: function () { moveTableToWorkspace(t, WS_OLD); } });
         if (!isTask) items.push({ label: "Restart form…", hint: "freeze + fresh copy", on: function () { restartFormInNew(t); } });
         items.push({ sep: true });
