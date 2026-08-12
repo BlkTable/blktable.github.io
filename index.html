@@ -1176,6 +1176,11 @@
   .hc-star.on { color: var(--gold); }
   .home-list .hc-star { position: static; order: -1; }
   .mine-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--gold); color: #1a1400; font-size: var(--fs-1); font-weight: 800; vertical-align: middle; }
+  /* A record that answered in a way somebody needs to notice — read at a glance, in the
+     one colour nothing else on a card uses. */
+  .flag-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+    background: var(--pink-soft); color: var(--pink-hi); border: 1px solid rgba(248,43,96,0.45);
+    font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.04em; vertical-align: middle; }
   .ja-card.is-mine, .ja-row.is-mine { box-shadow: inset 3px 0 0 var(--gold); }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
   .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: var(--bg-3) center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: var(--fs-7); }
@@ -4212,6 +4217,7 @@
       var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions, mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
+      tag += flagTagHtml(currentCustom.table, d);
       var tint = cardTint(d, fields);
       var el = document.createElement("div");
       // The title is the record's own name; the shop and the record number sit under it
@@ -4367,6 +4373,24 @@
   // never true and to conclude the app is broken. Both numbers are real and both are
   // still shown; the points total is a labelled field on the card, the way Airtable
   // shows it, where nothing implies one divides into the other.
+  // ---- A record worth noticing --------------------------------------------
+  // config.flag = { field, equals: [...], label } puts a red tag on any record whose
+  // answer to `field` is one of `equals`. Table-agnostic on purpose: the first use is
+  // Education details flagging someone who is not a university student, but nothing here
+  // knows that — any table can name a question and the answers that should stand out.
+  function flagTagHtml(table, d) {
+    var fl = table && table.config && table.config.flag;
+    if (!fl || !fl.field) return "";
+    var v = (d || {})[fl.field];
+    if (v == null || v === "") return "";
+    var want = fl.equals || [];
+    var hit = want.some(function (x) {
+      return String(x).toLowerCase() === String(v).toLowerCase();
+    });
+    if (!hit) return "";
+    return '<span class="flag-tag" title="' + esc(fl.label || "Flagged") + '">' +
+      esc(fl.label || "Flagged") + "</span>";
+  }
   function scoreChipHtml(n) {
     return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' +
       Math.round(n * 100) + "%</span></span>";
@@ -5434,7 +5458,8 @@
     var recBranch = recordBranch(s, fields);
     if (!String(recTitle).trim()) recTitle = recBranch || "Record";
     var scoreHead = '<div class="rec-head">' +
-      '<div class="rh-main"><div class="rh-title">' + esc(recTitle) + "</div>" +
+      '<div class="rh-main"><div class="rh-title">' + esc(recTitle) +
+        flagTagHtml(currentCustom ? currentCustom.table : null, d) + "</div>" +
       '<div class="rh-meta">' + esc(recordNumber(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
       (recBranch && String(recBranch).trim() !== String(recTitle).trim() ? " · " + esc(recBranch) : "") +
       "</div></div>" + scoreSlot + "</div>";
