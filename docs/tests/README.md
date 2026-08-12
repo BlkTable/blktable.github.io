@@ -16,3 +16,4 @@ a renamed function fails loudly instead of silently going untested.
 | file | covers |
 | --- | --- |
 | `shell-helpers.test.js` | Home's recently-opened grouping (`periodOf`, `groupByPeriod`, `agoText`), per-table colour and glyph (`tableTint`, `tableGlyph`), and the filter engine's condition groups (`passesList`, `filterCount`, `pruneConds`, `condSlot`) |
+| `conditional-questions.test.js` | "ask this only if" (`condMet`, `condLabel`) — and it loads `condMet` from **both** `index.html` and `f/index.html`, asserting the same answer from each, because the public form and the review panel each carry a copy of the rule |

@@ -169,8 +169,52 @@
   function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
 
   var slug = getParam("t");
-  var controls = []; // {field, validate(), value(), isPhoto, file()}
+  var controls = []; // {f, wrap, validate(), value(), isPhoto, file()}
   var currentTable = null;
+  var visible = {};  // field id -> is this question being asked right now
+
+  // ---- Conditional questions (every table, current and future) --------------
+  // app_fields.show_if = {field: "<other field id>", equals: ["Yes"]} asks this
+  // question only when that answer matches. Absent — which is every field written
+  // before this existed — means always asked, so nothing changes for older forms.
+  function condMet(f, data) {
+    var c = f && f.show_if;
+    if (!c || !c.field) return true;
+    var v = data ? data[c.field] : null;
+    v = (v == null ? "" : String(v));
+    var want = c.equals;
+    if (want == null) return v !== "";                       // no list = "answered at all"
+    if (!Array.isArray(want)) want = [want];
+    for (var i = 0; i < want.length; i++) if (String(want[i]) === v) return true;
+    return false;
+  }
+  // A question behind a question behind a question: a field whose controller is itself
+  // hidden contributes no answer, so it hides too. Settles in a couple of passes.
+  function computeVisible() {
+    var vis = {};
+    controls.forEach(function (c) { vis[c.f.id] = true; });
+    for (var pass = 0; pass < 8; pass++) {
+      var data = {};
+      controls.forEach(function (c) { data[c.f.id] = (vis[c.f.id] && c.value) ? c.value() : null; });
+      var changed = false;
+      controls.forEach(function (c) {
+        var v = condMet(c.f, data);
+        if (v !== vis[c.f.id]) { vis[c.f.id] = v; changed = true; }
+      });
+      if (!changed) break;
+    }
+    return vis;
+  }
+  function applyConditions() {
+    visible = computeVisible();
+    controls.forEach(function (c) {
+      if (!c.wrap) return;
+      var on = visible[c.f.id] !== false;
+      c.wrap.style.display = on ? "" : "none";
+      if (!on) markCtl(c, false);   // a hidden question is never the one to fix
+    });
+  }
+  function ctlVisible(c) { return visible[c.f.id] !== false; }
 
   function labelHtml(f) {
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
@@ -309,7 +353,9 @@
         otherWrap.style.display = on ? "block" : "none";
         if (on) autoGrow(otherInp); else { otherInp.value = ""; otherInp.classList.remove("invalid"); }
       };
-      var combo = buildCombo(f, dopts, toggleOther);
+      // the combobox settles a choice in code (click, arrow-Enter, blur-resolve) and fires
+      // no DOM event, so it tells the conditional engine itself
+      var combo = buildCombo(f, dopts, function (v) { toggleOther(v); applyConditions(); });
       wrap.appendChild(combo.wrap);
       if (hasOther) wrap.appendChild(otherWrap);
       controls.push({
@@ -361,6 +407,9 @@
       var inp2 = document.createElement("textarea"); inp2.id = id; inp2.rows = 1; growTextarea(inp2, true); wrap.appendChild(inp2);
       controls.push({ f: f, el: inp2, validate: function () { return !f.required || inp2.value.trim() !== ""; }, value: function () { return inp2.value.trim() || null; } });
     }
+    // every branch above pushes exactly one control; it owns this wrapper, which is what
+    // gets hidden when the question does not apply
+    if (controls.length) controls[controls.length - 1].wrap = wrap;
     return wrap;
   }
 
@@ -384,17 +433,28 @@
     var formEl = document.getElementById("form");
     formEl.addEventListener("input", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
     formEl.addEventListener("change", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
+    // Any answer can be the one another question waits on, so re-decide on every keystroke.
+    // A dropdown settles on blur (the combobox resolves typed text there), which "change"
+    // does not cover — hence both, plus focusout.
+    ["input", "change", "focusout"].forEach(function (ev) {
+      formEl.addEventListener(ev, function () { setTimeout(applyConditions, 0); }, true);
+    });
+    applyConditions();
   }
 
   function submitForm() {
     if (!currentTable) return;
     var msg = document.getElementById("form-msg"); var btn = document.getElementById("submit-btn"); msg.textContent = "";
     var firstBad = null;
-    controls.forEach(function (c) { var ok = c.validate(); markCtl(c, !ok); if (!ok && !firstBad) firstBad = c; });
+    applyConditions();   // decide once, then validate and submit against the same answer
+    controls.forEach(function (c) {
+      if (!ctlVisible(c)) { markCtl(c, false); return; }   // not asked = nothing to require
+      var ok = c.validate(); markCtl(c, !ok); if (!ok && !firstBad) firstBad = c;
+    });
     if (firstBad) { msg.textContent = "Please fill in the highlighted fields."; if (firstBad.el.scrollIntoView) firstBad.el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
 
     btn.disabled = true; btn.textContent = "Submitting…";
-    var photoCtls = controls.filter(function (c) { return c.isPhoto && c.file(); });
+    var photoCtls = controls.filter(function (c) { return c.isPhoto && ctlVisible(c) && c.file(); });
     var uploads = photoCtls.map(function (c) {
       var file = c.file();
       if (file.size > MAX_BYTES) return Promise.reject({ tooBig: true });
@@ -405,8 +465,10 @@
       var data = {};
       controls.forEach(function (c) {
         if (c.isPhoto) return;
-        data[c.f.id] = c.value();
-        if (c.otherKey) { var ov = c.otherValue(); if (ov) data[c.otherKey] = ov; }   // free text behind an "other" choice
+        // A question that was not asked stores no answer — an answer typed before the
+        // gate closed (Yes, then No) must not travel with the submission.
+        data[c.f.id] = ctlVisible(c) ? c.value() : null;
+        if (c.otherKey && ctlVisible(c)) { var ov = c.otherValue(); if (ov) data[c.otherKey] = ov; }   // free text behind an "other" choice
       });
       results.forEach(function (r) { data[r.id] = r.path; });
       // Submit via SECURITY DEFINER RPC: anon holds no direct table write grant (see 2026-08-09 lockdown). Server resolves the table from the slug and confirms it is a live form.

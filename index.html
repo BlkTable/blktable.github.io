@@ -521,6 +521,8 @@
   .fprev.empty { color: var(--muted); text-align: center; padding: 40px 20px; font-size: var(--fs-3); }
   .fprev .pv-staff { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line);
     color: var(--muted); font-size: var(--fs-2); }
+  /* "only if Did you go to university? = Yes" — a question that waits on another answer */
+  .fprev .pv-cond { color: var(--muted); font-size: var(--fs-2); font-weight: 500; }
   /* the question editor, shown in place of the preview */
   .fform-names { margin-bottom: 14px; }
   .fform-lab { display: block; color: var(--muted); font-size: var(--fs-2); letter-spacing: 0.08em;
@@ -3107,7 +3109,24 @@
       return '<option value="' + esc(v) + '"' + (String(value == null ? "" : value) === String(v) ? " selected" : "") + ">" + esc(l) + "</option>";
     }).join("") + "</select>";
   }
-  function edRow(label, inner, full) { return '<div class="m-field' + (full ? " full" : "") + '"><div class="k">' + esc(label) + "</div>" + inner + "</div>"; }
+  // What the open record editor holds right now, keyed by field id. One reader for both
+  // saving and deciding which conditional questions apply, so the two cannot disagree.
+  function edValues(fields) {
+    var out = {};
+    (fields || []).forEach(function (f) {
+      if (f.type === "photo") return;
+      if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
+      var el = document.getElementById("ed-" + f.id); if (!el) return;
+      out[f.id] = f.type === "multi_select" ? edChecksValue(el) : (el.value || "").trim();
+    });
+    return out;
+  }
+  // rowId + hidden are for conditional questions: the row is always built so that flipping
+  // the answer it depends on can reveal it without reopening the record
+  function edRow(label, inner, full, rowId, hidden) {
+    return '<div class="m-field' + (full ? " full" : "") + '"' + (rowId ? ' id="' + rowId + '"' : "") +
+      (hidden ? ' style="display:none;"' : "") + '><div class="k">' + esc(label) + "</div>" + inner + "</div>";
+  }
   // Phone editor with the full country/flag picker
   var COUNTRIES_ED = [
     { cc: "962", len: [9], ph: "7X XXX XXXX", flag: "jo", name: "Jordan" },
@@ -3606,6 +3625,28 @@
     return String(v == null ? "" : v).split(/\s*,\s*/).filter(Boolean);
   }
   function fieldHasOther(f) { return isChoiceField(f) && (f.options || []).some(function (o) { return o && o.other; }); }
+  // A question can be asked only when another answer says so: app_fields.show_if =
+  // {field: "<other field id>", equals: ["Yes"]}. NULL — every field written before this
+  // existed — means always asked. The rule is one function so the public form, the record
+  // panel and the builder cannot disagree about when a question applies.
+  function condMet(f, data) {
+    var c = f && f.show_if;
+    if (!c || !c.field) return true;
+    var v = data ? data[c.field] : null;
+    v = (v == null ? "" : String(v));
+    var want = c.equals;
+    if (want == null) return v !== "";
+    if (!Array.isArray(want)) want = [want];
+    for (var i = 0; i < want.length; i++) if (String(want[i]) === v) return true;
+    return false;
+  }
+  function condLabel(f, fields) {
+    var c = f && f.show_if; if (!c || !c.field) return "";
+    var on = (fields || []).filter(function (g) { return g.id === c.field; })[0];
+    if (!on) return "";
+    var want = c.equals == null ? [] : (Array.isArray(c.equals) ? c.equals : [c.equals]);
+    return "only if " + on.label + (want.length ? " = " + want.join(" / ") : " is answered");
+  }
   function isOtherChoice(f, v) {
     if (!v || !isChoiceField(f)) return false;
     return (f.options || []).some(function (o) { return o && o.other && String(o.en != null ? o.en : o) === String(v); });
@@ -4839,9 +4880,13 @@
           ph = names.slice(0, 2).join(" · ") + (names.length > 2 ? "  +" + (names.length - 2) + " more" : "");
         }
       }
+      // a conditional question is not on the page until its answer opens it, so the preview
+      // says so rather than leaving it looking like an ordinary question
+      var cond = condLabel(f, fields);
       return '<div class="pv-f"><div class="pv-lab">' + esc(f.label) +
         (f.label_ar ? '<span class="ar">' + esc(f.label_ar) + "</span>" : "") +
-        (f.required ? '<span class="req">*</span>' : "") + "</div>" +
+        (f.required ? '<span class="req">*</span>' : "") +
+        (cond ? ' <span class="pv-cond">' + esc(cond) + "</span>" : "") + "</div>" +
         '<div class="pv-box' + (f.type === "long_text" ? " tall" : "") + '"><span>' + esc(ph) + "</span>" +
         fieldIcon(f.type, f.label) + "</div></div>";
     }).join("");
@@ -5475,13 +5520,19 @@
     var pickedIds = (currentCustom && currentCustom.table && currentCustom.table.config
                      && currentCustom.table.config.detail_fields) || null;
     var curated = !!(pickedIds && pickedIds.length) && !detailShowAll;
-    function showsOn(f, d) {
+    // forEdit keeps conditional questions in the page (hidden) so the editor can reveal
+    // one the moment the answer it waits on changes
+    function showsOn(f, d, forEdit) {
       // the headline score is in the header, so it must not also appear as a field —
       // and as a computed value it should never have been an editable box
       if (scoreSlot && currentCustom && currentCustom.table.config &&
           f.id === currentCustom.table.config.score_field) return false;
       if (sd && (questionScorerMap(currentCustom.table, fields)[f.id] || isScorerField(f))) return false;
       if (curated) return pickedIds.indexOf(f.id) !== -1;
+      // A conditional question this record never reached is not a blank answer, it is a
+      // question that was never asked — the same reason a retired question stays hidden.
+      // If it does hold an answer it still shows: the answer is history and must be visible.
+      if (!forEdit && !condMet(f, d) && (d[f.id] == null || d[f.id] === "")) return false;
       return !f.internal || (d[f.id] != null && d[f.id] !== "");
     }
     function detailOrder(list) {
@@ -5568,7 +5619,7 @@
     }
     var grid = detailOrder(fields).map(function (f) {
       if (f.type === "photo") return "";
-      if (!showsOn(f, d)) return "";      // a retired question this record never answered
+      if (!showsOn(f, d, true)) return "";      // a retired question this record never answered
       var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
       if (f.type === "long_text") inner = edText(id, v, true);
       else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
@@ -5586,7 +5637,11 @@
       else if (f.type === "number") inner = edNum(id, v);
       else if (f.type === "phone") inner = edPhone(id, v);
       else inner = edText(id, v, false);
-      return edRow(label, inner, f.type === "long_text");
+      // a conditional question is built either way and hidden when it does not apply —
+      // unless it already holds an answer, which is history and stays on screen
+      var gated = !!(f.show_if && f.show_if.field);
+      var hide = gated && !condMet(f, d) && (v == null || v === "");
+      return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide);
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
     body.innerHTML = scoreHead +
@@ -5609,6 +5664,22 @@
         if (!on) oth.value = "";
       });
     });
+    // A conditional question follows its answer live: change "Did you go to university?"
+    // to Yes and the questions behind it appear without reopening the record. A row that
+    // already holds an answer is left visible whatever the gate now says.
+    function applyEdConds() {
+      var cur = edValues(fields);
+      fields.forEach(function (f) {
+        var row = (f.show_if && f.show_if.field) ? document.getElementById("cond-" + f.id) : null;
+        if (!row) return;
+        var answered = cur[f.id] != null && cur[f.id] !== "";
+        row.style.display = (condMet(f, cur) || answered) ? "" : "none";
+      });
+    }
+    if (fields.some(function (f) { return f.show_if && f.show_if.field; })) {
+      var mgrid = body.querySelector(".m-grid");
+      if (mgrid) ["change", "input"].forEach(function (ev) { mgrid.addEventListener(ev, applyEdConds, true); });
+    }
     wireAutosave(function () { return saveCustom(s, fields); });
     renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
     document.getElementById("modal").classList.add("open"); wireImportedFiles();
@@ -5622,15 +5693,16 @@
   function saveCustom(s, fields) {
     var d = s.data || {};
     var nd = {}; Object.keys(d).forEach(function (k) { nd[k] = d[k]; });
+    // a multi-select is a box of checkboxes and a phone is a picker + a box, so reading the
+    // editor is its own job (edValues); a field the panel did not render is left untouched
+    var cur = edValues(fields);
     fields.forEach(function (f) {
       if (f.type === "photo") return;
-      var v;
-      if (f.type === "phone" && edPhoneReg["ed-" + f.id]) v = edPhoneReg["ed-" + f.id]();
-      else {
-        var el = document.getElementById("ed-" + f.id); if (!el) return;
-        // a multi-select is a box of checkboxes, not an input with a value
-        v = f.type === "multi_select" ? edChecksValue(el) : (el.value || "").trim();
-      }
+      if (!Object.prototype.hasOwnProperty.call(cur, f.id)) return;
+      var v = cur[f.id];
+      // a question that no longer applies keeps no answer — the same rule the public form
+      // and the "other" free-text box follow
+      if (f.show_if && f.show_if.field && !condMet(f, cur)) v = "";
       if (v == null || v === "") delete nd[f.id]; else nd[f.id] = v;
     });
     // the free text behind an "other" choice — dropped when the choice moves off "other"
@@ -5979,8 +6051,9 @@
       '<textarea class="opts" rows="1" dir="auto" placeholder="Options — one per line (or comma-separated): English|عربي — add |other to a choice to open a free-text box" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
-      afterFieldSelectHtml() +
+      afterFieldSelectHtml() + condSelectHtml() +
       '<button type="button" class="rm">Remove</button></div>';
+    row.setAttribute("data-row-key", "r" + (++bldRowSeq));
     bldHost().appendChild(row);
     if (data) {
       if (data.id) row.setAttribute("data-field-id", data.id);
@@ -5993,8 +6066,14 @@
       optsInp.value = data.opts || "";
       row.querySelector(".freq").checked = data.required !== false;
       row.querySelector(".fint").checked = !!data.internal;
+      // resolved once every row exists — the question this one depends on may be below it
+      if (data.showIf || data.condIdx != null) row.setAttribute("data-cond-pending", JSON.stringify(data.showIf || { idx: data.condIdx, equals: data.condVal }));
     }
     row.querySelector(".ftype").addEventListener("change", function () { row.querySelector(".opts").style.display = (this.value === "dropdown" || this.value === "multi_select") ? "" : "none"; bldGrow(row.querySelector(".opts")); });
+    var condSel = row.querySelector(".fcond");
+    condSel.addEventListener("mousedown", function () { refreshCondSelect(row); });
+    condSel.addEventListener("change", function () { syncCondRow(row); saveDraft(); });
+    row.querySelector(".fcondv").addEventListener("input", saveDraft);
     [].slice.call(row.querySelectorAll("textarea")).forEach(wireBldGrow);
     row.querySelector(".rm").addEventListener("click", function () { row.remove(); saveDraft(); });
     var handle = row.querySelector(".bld-drag");
@@ -6031,10 +6110,14 @@
       intro: document.getElementById("bld-intro").value,
       introAr: document.getElementById("bld-intro-ar").value,
       fields: rows.map(function (r) {
+        // a draft has no field ids yet, so a condition is remembered by row position
+        var cs = r.querySelector(".fcond"), ci = null;
+        if (cs && cs.value) rows.forEach(function (o, i) { if (o.getAttribute("data-row-key") === cs.value) ci = i; });
         return {
           label: r.querySelector(".lab").value, labelAr: r.querySelector(".lab-ar").value,
           type: r.querySelector(".ftype").value, opts: r.querySelector(".opts").value,
-          required: r.querySelector(".freq").checked, internal: r.querySelector(".fint").checked
+          required: r.querySelector(".freq").checked, internal: r.querySelector(".fint").checked,
+          condIdx: ci, condVal: ci == null ? "" : r.querySelector(".fcondv").value
         };
       })
     };
@@ -6106,6 +6189,54 @@
   }
   // Built-in forms only: where an extra question sits on the public form (app_fields.after_field).
   // Empty = at the end. Any built-in question can be the anchor, so this works for every built-in form.
+  // ---- Builder: "ask this only if …" ----------------------------------------
+  // The picker names another question on the same table. A question being edited may not
+  // exist in the database yet, so rows are referenced by a key that lives only in the page
+  // and is resolved to a real field id at save time.
+  var bldRowSeq = 0;
+  function condSelectHtml() {
+    return '<label class="req-lbl">ask only if <select class="fcond"><option value="">— always —</option></select></label>' +
+      '<input class="fcondv" placeholder="answer, e.g. Yes" style="display:none;">';
+  }
+  // Rebuilt on every open because labels are typed as we go and rows can be reordered.
+  function refreshCondSelect(row) {
+    var sel = row.querySelector(".fcond"); if (!sel) return;
+    var keep = sel.value;
+    var opts = ['<option value="">— always —</option>'];
+    [].slice.call(bldHost().querySelectorAll(".bld-field")).forEach(function (r) {
+      if (r === row) return;                                   // a question cannot depend on itself
+      var key = r.getAttribute("data-row-key");
+      var lab = (r.querySelector(".lab").value || "").trim() || "(untitled question)";
+      opts.push('<option value="' + esc(key) + '"' + (key === keep ? " selected" : "") + ">" + esc(lab) + "</option>");
+    });
+    sel.innerHTML = opts.join("");
+    sel.value = [].slice.call(sel.options).some(function (o) { return o.value === keep; }) ? keep : "";
+    syncCondRow(row);
+  }
+  // Called once every row is on the page: a question may depend on one below it, and a
+  // draft restored from the browser references rows by position rather than by id.
+  function resolveCondPending() {
+    var rows = [].slice.call(bldHost().querySelectorAll(".bld-field"));
+    rows.forEach(function (row) {
+      var raw = row.getAttribute("data-cond-pending"); if (!raw) return;
+      row.removeAttribute("data-cond-pending");
+      var c; try { c = JSON.parse(raw); } catch (e) { return; }
+      var target = null;
+      if (c.field) target = rows.filter(function (r) { return r.getAttribute("data-field-id") === c.field; })[0];
+      else if (c.idx != null) target = rows[c.idx];
+      if (!target) return;   // the question it depended on is gone, and the condition goes with it
+      refreshCondSelect(row);
+      row.querySelector(".fcond").value = target.getAttribute("data-row-key");
+      row.querySelector(".fcondv").value = c.equals == null ? "" : (Array.isArray(c.equals) ? c.equals.join(", ") : String(c.equals));
+      syncCondRow(row);
+    });
+  }
+  function syncCondRow(row) {
+    var sel = row.querySelector(".fcond"), val = row.querySelector(".fcondv");
+    if (!sel || !val) return;
+    val.style.display = sel.value ? "" : "none";
+    if (!sel.value) val.value = "";
+  }
   function afterFieldSelectHtml() {
     if (builderMode !== "builtin") return "";
     var defs = BUILTIN_SCHEMA[builtinEditKey] || [];
@@ -6135,7 +6266,8 @@
       document.getElementById("bld-msg").textContent = "";
       var fields = (res && res.data) || [];
       if (!fields.length) addBuilderField();
-      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, afterField: f.after_field }); });
+      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, afterField: f.after_field, showIf: f.show_if }); });
+      resolveCondPending();
       requestAnimationFrame(growAllBld);
     }).catch(function () { document.getElementById("bld-msg").textContent = ""; });
   }
@@ -6151,6 +6283,7 @@
       setIntroInputs({ en: d.intro, ar: d.introAr });
       bldHost().innerHTML = "";
       (d.fields && d.fields.length ? d.fields : [null]).forEach(function (f) { addBuilderField(f); });
+      resolveCondPending();
       var note = document.getElementById("bld-draft-note"); if (note) note.textContent = "Restored your unsaved draft";
     } else {
       resetBuilder();
@@ -6191,8 +6324,9 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, showIf: f.show_if });
       });
+      resolveCondPending();
       if (presetType) {
         addBuilderField({ type: presetType });
         var rows = bldHost().querySelectorAll(".bld-field");
@@ -6277,7 +6411,21 @@
         }).filter(function (o) { return o.en; });
       }
       var afterSel = rows[i].querySelector(".fafter");
-      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null });
+      // "ask only if" points at another row. If that row is already a saved field the
+      // condition can be written straight away; if it is new too, its id does not exist
+      // yet and the condition is finished off after the rows are written.
+      var condSel = rows[i].querySelector(".fcond");
+      var condKey = condSel ? condSel.value : "", condOnIdx = null, showIf = null, equals = null;
+      if (condKey) {
+        for (var j = 0; j < rows.length; j++) if (rows[j].getAttribute("data-row-key") === condKey) condOnIdx = j;
+        if (condOnIdx != null) {
+          var cv = (rows[i].querySelector(".fcondv").value || "").trim();
+          equals = cv ? cv.split(/\s*,\s*/).filter(Boolean) : null;   // empty = "as long as it is answered"
+          var ctrlId = rows[condOnIdx].getAttribute("data-field-id");
+          if (ctrlId) { showIf = { field: ctrlId, equals: equals }; condOnIdx = null; }
+        }
+      }
+      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, condOnIdx: condOnIdx, condEquals: equals });
     }
     if (!fields.length) { msg.textContent = "Add at least one field."; return; }
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
@@ -6286,13 +6434,30 @@
     db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() } }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
-      var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options }; });
-      return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return tRes.data; });
+      var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if }; });
+      return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields); })
+        .then(function () { return tRes.data; });
     }).then(function (t) {
       clearDraft(); closeBuilder(); loadCustomTables();
       setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
     }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
   });
+  // "Ask only if <a question added in this same save>" — the question it points at has no
+  // id until its row is written, so those conditions are finished off here, matched by
+  // position. Nothing to do in the common case, and one query when there is.
+  function writePendingConds(tid, fields) {
+    var pending = fields.filter(function (f) { return f.condOnIdx != null; });
+    if (!pending.length) return Promise.resolve(null);
+    return db.from("app_fields").select("id,position").eq("table_id", tid).then(function (r) {
+      if (r.error) throw r.error;
+      var byPos = {}; (r.data || []).forEach(function (row) { byPos[row.position] = row.id; });
+      return Promise.all(pending.map(function (f) {
+        var ctrl = byPos[f.condOnIdx], self = byPos[f.position];
+        if (!ctrl || !self) return null;
+        return db.from("app_fields").update({ show_if: { field: ctrl, equals: f.condEquals } }).eq("id", self);
+      }).filter(Boolean));
+    });
+  }
   function saveTableEdit(name, nameAr, fields, msg) {
     var tid = editingTableId;
     if (!tid) { msg.textContent = "Something went wrong — please reopen the editor."; return; }
@@ -6310,14 +6475,17 @@
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
-      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field }).eq("id", f.id));
-      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field });
+      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if });
     });
     if (toInsert.length) ops.push(db.from("app_fields").insert(toInsert));
     if (toDelete.length) ops.push(db.from("app_fields").delete().in("id", toDelete));
     Promise.all(ops).then(function (results) {
       var bad = results.filter(function (r) { return r && r.error; })[0];
       if (bad) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(bad.error); return; }
+      return writePendingConds(tid, fields).then(function () { return results; });
+    }).then(function (results) {
+      if (!results) return;
       var ct = customTables.filter(function (x) { return x.id === tid; })[0]; if (ct) { ct.name = name; ct.name_ar = nameAr || null; if (builderMode !== "builtin") ct.config = tableUpdate.config; }
       if (currentCustom && currentCustom.table.id === tid) { currentCustom.table.name = name; currentCustom.table.name_ar = nameAr || null; if (builderMode !== "builtin") currentCustom.table.config = tableUpdate.config; }
       closeBuilder();
