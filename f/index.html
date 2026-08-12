@@ -499,9 +499,13 @@
 
   if (!slug) { notFound(); }
   else {
-    db.from("app_tables").select("*").eq("slug", slug).eq("is_active", true).single().then(function (tRes) {
+    // Ask for named columns, not "*": the public key may only read what a form needs to
+    // draw itself. `config` as a whole carries the review chain, the stage list and the
+    // WhatsApp templates, so anon is given `config_public` — intro, colour, icon — instead.
+    db.from("app_tables").select("id,name,name_ar,slug,is_active,kind,config_public").eq("slug", slug).eq("is_active", true).single().then(function (tRes) {
       if (tRes.error || !tRes.data) { notFound(); return; }
       var table = tRes.data;
+      table.config = table.config_public || {};
       db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (fRes) {
         if (fRes.error) { notFound(); return; }
         init(table, fRes.data || []);
