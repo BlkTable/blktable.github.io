@@ -63,6 +63,8 @@ What works right now:
 - Full architecture and the blow-by-blow history live in auto-memory (`project_blktable_app.md`) — richer than this file by design.
 
 ## Next steps
+**Waiting on a decision from you, both small:** (a) **PR #17** (conditional questions + the Education details table) is open and mergeable — the SQL is already applied to the live database, so merging *is* the deploy; until then that form asks all seven questions unconditionally. (b) Nobody but admins can see Education details — say if HR (or anyone) should have view-only access the way they do on the two certificate forms, and whether the table keeps that name (renaming does not change the form link).
+
 0. **Switch the Airtable forms off — this is the one with a clock on it (raised 2026-08-10).** Everything is migrated, but the Airtable form links are still live and taking ~90 submissions a day, mostly job applications. Until they are retired or redirected to the BLKTable equivalents, the two systems diverge every day and the cost of catching up grows. Sequence: retire/redirect the links → `recount.py` → top up the delta with the same idempotent importer → cancel the account. Nothing else in this list is time-sensitive in the same way.
 1. **Operate tasks — data imported, engine NOT built yet.** The 33 tasks + 249 questions + 31 branches are in the DB (hidden). Remaining work, in order:
    a. **Task instances** — records born from a schedule, not a submit. Columns already added to `app_submissions` (`branch`, `due_at`, `window_end`, `done_at`, `generated`) + a unique index per (table, branch, due slot). Needs the generator function.
