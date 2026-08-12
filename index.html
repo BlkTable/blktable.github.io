@@ -355,7 +355,11 @@
   .ja-card .card-actions { justify-content: center; }
   .rec-kebab { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-5); line-height: 1; cursor: pointer; flex: 0 0 auto !important; }
   .rec-kebab:hover { border-color: var(--silver); }
-  .rec-actions { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
+  /* Fixed, not absolute: the kebab sits on the bottom edge of a card, and .ja-card is
+     overflow:hidden, which clipped a menu opening below it into nothing. Fixed escapes
+     the card; placeRecMenu() sets left/top from the button and closeAllRecMenus() runs
+     on scroll, since a fixed menu does not travel with the list. */
+  .rec-actions { position: fixed; left: 0; top: 0; z-index: 120; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
   .rec-menu.open .rec-actions { display: block; }
   .rec-actions li { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: var(--fs-3); color: var(--text); font-weight: 500; }
   .rec-actions li:hover { background: rgba(255,255,255,0.06); }
@@ -3486,6 +3490,24 @@
   // ---- Per-record ⋯ menu (View / Delete) ----
   function closeAllRecMenus() { [].slice.call(document.querySelectorAll(".rec-menu.open")).forEach(function (m) { m.classList.remove("open"); }); }
   document.addEventListener("click", closeAllRecMenus);
+  // A fixed menu is placed once, at the moment it opens, so it has to close when the
+  // page moves underneath it — capture, because the list scrolls, not the window.
+  window.addEventListener("scroll", closeAllRecMenus, true);
+  window.addEventListener("resize", closeAllRecMenus);
+  // Anchor the open menu to its button, flipping above when the card is near the bottom
+  // of the screen — which is exactly where the last row of cards always is.
+  function placeRecMenu(menu) {
+    var btn = menu.querySelector(".rec-kebab"), ul = menu.querySelector(".rec-actions");
+    if (!btn || !ul) return;
+    var r = btn.getBoundingClientRect(), h = ul.offsetHeight, w = ul.offsetWidth, pad = 8;
+    var top = r.bottom + 4;
+    if (top + h > window.innerHeight - pad) top = r.top - 4 - h;          // flip up
+    if (top < pad) top = Math.max(pad, window.innerHeight - h - pad);      // taller than the screen: pin it
+    var left = r.right - w;                                               // right edge under the button
+    if (left + w > window.innerWidth - pad) left = window.innerWidth - w - pad;
+    ul.style.top = Math.round(top) + "px";
+    ul.style.left = Math.round(Math.max(pad, left)) + "px";
+  }
   // mayDelete: pass canManage(<table key>) — admins and that table's managers get Delete.
   function recMenuHtml(actions, mayDelete) {
     var acts = (actions || []).map(function (a, i) { return '<li data-act="do" data-ai="' + i + '">' + esc(a.label || defaultActionLabel(a.type)) + "</li>"; }).join("");
@@ -3493,7 +3515,7 @@
   }
   function wireRecMenu(el, onView, onDelete, onAction, actions) {
     var menu = el.querySelector(".rec-menu"); if (!menu) return;
-    menu.querySelector(".rec-kebab").addEventListener("click", function (e) { e.stopPropagation(); var open = menu.classList.contains("open"); closeAllRecMenus(); if (!open) menu.classList.add("open"); });
+    menu.querySelector(".rec-kebab").addEventListener("click", function (e) { e.stopPropagation(); var open = menu.classList.contains("open"); closeAllRecMenus(); if (!open) { menu.classList.add("open"); placeRecMenu(menu); } });
     [].slice.call(menu.querySelectorAll(".rec-actions li")).forEach(function (li) {
       li.addEventListener("click", function (e) {
         e.stopPropagation(); menu.classList.remove("open"); var act = li.getAttribute("data-act");
@@ -4255,7 +4277,12 @@
           return '<button type="button" class="sc-' + esc(st.color || "gray") + '" data-move="' + esc(st.key) + '">→ ' + esc(st.label) + "</button>";
         }).join("") + "</div>";
       }
-      var actions = '<div class="card-actions">' + moveHtml + recMenuHtml(tableActions, mayManageTbl) + "</div>";
+      // A card keeps the three slots every other card in the app uses — empty on the left,
+      // the status moves in the middle, the ⋯ on the right. Without the fillers a lone
+      // kebab lands in the left slot and reads as a stray button. A row has no slots.
+      var actions = '<div class="card-actions">' +
+        (kcards ? '<span class="slot"></span>' + (moveHtml || "<span></span>") : moveHtml) +
+        recMenuHtml(tableActions, mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       tag += flagTagHtml(currentCustom.table, d);
