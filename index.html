@@ -2097,7 +2097,7 @@
     var list = [];
     if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: "Job Applications", category: "", kind: "form", config: null });
     if (accessKeys["casting"]) list.push({ key: "casting", name: "BLK Casting", category: "", kind: "form", config: null });
-    (customTables || []).forEach(function (t) {
+    browsableTables().forEach(function (t) {
       list.push({ key: t.id, name: t.name, category: t.category || "", kind: t.kind || "form", config: t.config || null });
     });
     return list;
@@ -3868,6 +3868,14 @@
     return kids.length ? kids[0] : null;
   }
 
+  // Tables you BROWSE — the sidebar, Home, the Ctrl-K palette, the list of public form
+  // links. A child_only table is storage read inside its parent, so it belongs in none of
+  // them; it stays in customTables because everything that looks a table up by id needs it
+  // there, childTableOf included. Filtering the list itself is what hid the event's link.
+  function browsableTables() {
+    return (customTables || []).filter(function (t) { return !(t.config && t.config.child_only); });
+  }
+
   // Returns its promise so a caller that must act on the RELOADED list (restarting a
   // form, which then opens the new table) can wait for it instead of guessing with a
   // timeout. Callers that don't care can carry on ignoring it.
@@ -3880,8 +3888,6 @@
       // is cleared. Nothing is deleted to achieve this.
       customTables = (res.data || []).filter(function (t) {
         if (t.builtin_key) return false;                     // built-in placeholders
-        // child_only: storage for a parent's records, read inside the parent, not browsed
-        if (t.config && t.config.child_only) return false;
         return showArchived || !(t.config && t.config.archived);
       });
       var hiddenCount = (res.data || []).filter(function (t) {
@@ -3921,9 +3927,9 @@
       // Workspaces sit above categories: New is the working set, OLD (Airtable) is the
       // migrated history and stays folded away. Until app_tables.workspace exists in the
       // database no table reports one, and the sidebar renders exactly as it did before.
-      var wsGroups = groupByWorkspace(customTables);
+      var wsGroups = groupByWorkspace(browsableTables());
       if (!wsGroups) {
-        renderCategories(slot, customTables);
+        renderCategories(slot, browsableTables());
       } else {
         wsGroups.forEach(function (ws) {
           // Main has no header and no fold: its tables ARE the top level.
@@ -7686,7 +7692,7 @@
   }
   // Every public form in one place, so a link can be found without opening its table.
   document.getElementById("side-forms").addEventListener("click", function () {
-    var rows = (customTables || []).filter(function (t) { return (t.kind || "form") !== "task"; })
+    var rows = browsableTables().filter(function (t) { return (t.kind || "form") !== "task"; })
       .map(function (t) { return { name: t.name, link: publicFormLink(t.slug) }; });
     if (accessKeys["job_applications"]) rows.unshift({ name: "Job Applications", link: "https://blktable.blk.jo/apply/" });
     if (accessKeys["casting"]) rows.unshift({ name: "BLK Casting", link: "https://blktable.blk.jo/cast/" });
