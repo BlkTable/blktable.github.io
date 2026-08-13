@@ -33,6 +33,14 @@
   .intro p { margin: 0; color: var(--silver-lo); font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; }
   .intro p + p { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
   .intro p.ar { direction: rtl; text-align: right; }
+  /* The record this link belongs to — an event's time, location and description. Shown
+     above the questions because it is what the person came to read, not part of the form. */
+  .pcard { background: rgba(255,255,255,0.03); border: 1px solid var(--line-2); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 18px; }
+  .pcard h2 { margin: 0 0 12px; font-size: 1.05rem; font-weight: 700; }
+  .pcard dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
+  .pcard dt { color: var(--muted); font-size: 0.8rem; }
+  .pcard dd { margin: 0; font-size: 0.92rem; line-height: 1.5; white-space: pre-wrap; }
   .card { background: var(--card); border: 1px solid var(--line-2);
     border-radius: 10px; padding: 24px 22px; }
   .field { margin-bottom: 16px; }
@@ -113,6 +121,7 @@
       <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
       <div class="head" id="head" style="display:none;"><h1 id="form-title">—</h1></div>
       <div class="intro" id="form-intro" style="display:none;"></div>
+      <div class="pcard" id="parent-card" style="display:none;"></div>
       <div class="loading" id="loading">Loading…</div>
       <div class="card" id="card" style="display:none;">
         <form id="form" novalidate>
@@ -169,6 +178,10 @@
   function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
 
   var slug = getParam("t");
+  // A parent-scoped form is opened from a link that names one record of another table —
+  // /f/?t=event-signup&e=<token> is the signup form for ONE event. The token is the whole
+  // handle: nothing about the parent record is readable without it.
+  var parentToken = getParam("e");
   var controls = []; // {f, wrap, validate(), value(), isPhoto, file()}
   var currentTable = null;
   var visible = {};  // field id -> is this question being asked right now
@@ -228,6 +241,34 @@
     var en = (intro && intro.en || "").trim(), ar = (intro && intro.ar || "").trim();
     if (!en && !ar) { box.style.display = "none"; return; }
     box.innerHTML = (en ? "<p>" + esc(en) + "</p>" : "") + (ar ? '<p class="ar" dir="rtl">' + esc(ar) + "</p>" : "");
+    box.style.display = "block";
+  }
+
+  // What this link's record says: only the fields the table's config.parent.show names,
+  // which is all the server will hand out. A date is shown the way a person reads one.
+  function fmtParentValue(row) {
+    var v = row && row.value == null ? "" : String(row.value);
+    var m = (row && (row.type === "date" || row.type === "dob")) ? /^(\d{4})-(\d{2})-(\d{2})/.exec(v) : null;
+    if (m) {
+      var y = +m[1], mo = +m[2], da = +m[3];
+      var d = new Date(y, mo - 1, da);
+      // A date JavaScript had to roll over is not a date: new Date(2026, 1, 31) is the 3rd of
+      // March, and telling somebody an event is on the 3rd because the 31st of February was
+      // typed is worse than showing them what was actually recorded.
+      if (!isNaN(d) && d.getFullYear() === y && d.getMonth() === mo - 1 && d.getDate() === da) {
+        return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      }
+    }
+    return v;
+  }
+  function renderParent(p) {
+    var box = document.getElementById("parent-card"); if (!box) return;
+    var rows = (p && p.rows) || [];
+    if (!(p && p.title) && !rows.length) { box.style.display = "none"; return; }
+    box.innerHTML = (p.title ? "<h2>" + esc(p.title) + "</h2>" : "") +
+      (rows.length ? "<dl>" + rows.map(function (r) {
+        return "<dt>" + esc(r.label) + "</dt><dd>" + esc(fmtParentValue(r)) + "</dd>";
+      }).join("") + "</dl>" : "");
     box.style.display = "block";
   }
 
@@ -472,7 +513,18 @@
       });
       results.forEach(function (r) { data[r.id] = r.path; });
       // Submit via SECURITY DEFINER RPC: anon holds no direct table write grant (see 2026-08-09 lockdown). Server resolves the table from the slug and confirms it is a live form.
-      return db.rpc("submit_public_form", { p_slug: slug, p_data: data });
+      // p_token names which parent record this belongs to; the server checks it belongs to
+      // this form's parent table, and a parent-scoped form refuses a submission without one.
+      //
+      // It is sent ONLY when there is one, and that is not tidiness. PostgREST resolves an
+      // RPC by the keys in the body: a three-key body against a database that still has the
+      // two-argument function resolves to nothing, and every public form's submit fails —
+      // the 2026-08-09 outage, in a shape a merge could cause. Sending the same two keys an
+      // ordinary form has always sent means this page works before the migration as well as
+      // after, so the two can land in either order.
+      var payload = { p_slug: slug, p_data: data };
+      if (parentToken) payload.p_token = parentToken;
+      return db.rpc("submit_public_form", payload);
     }).then(function (res) {
       if (res && res.error) throw res.error;
       document.getElementById("card").style.display = "none";
@@ -506,9 +558,24 @@
       if (tRes.error || !tRes.data) { notFound(); return; }
       var table = tRes.data;
       table.config = table.config_public || {};
-      db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (fRes) {
-        if (fRes.error) { notFound(); return; }
-        init(table, fRes.data || []);
+      // A parent-scoped form is not a form on its own. Without a token — or with one that
+      // does not belong to this form's parent table — there is no event to sign up to, so
+      // the page says "not found" rather than showing questions that cannot be submitted.
+      // config_public carries a marker only — {"scoped": true} — because which record this
+      // link names is settled server-side against the token, not in the page.
+      var scoped = !!(table.config.parent && table.config.parent.scoped);
+      var parentReady = scoped
+        ? db.rpc("get_parent_details", { p_slug: slug, p_token: parentToken || null })
+            .then(function (r) { return (r && !r.error && r.data) ? r.data : null; })
+            .catch(function () { return null; })
+        : Promise.resolve(null);
+      parentReady.then(function (parent) {
+        if (scoped && !parent) { notFound(); return; }
+        db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (fRes) {
+          if (fRes.error) { notFound(); return; }
+          init(table, fRes.data || []);
+          if (parent) renderParent(parent);
+        });
       });
     });
   }
