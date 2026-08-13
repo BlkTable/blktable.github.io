@@ -57,8 +57,9 @@
   input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(45,127,249,0.25); }
   textarea { resize: vertical; min-height: 88px; }
   textarea.autogrow { min-height: 48px; resize: none; overflow: hidden; line-height: 1.4; }
-  input[type="date"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
-  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
+  input[type="date"], input[type="time"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
@@ -419,12 +420,13 @@
     if (f.type === "long_text" || f.type === "short_text") {
       var ta = document.createElement("textarea"); ta.id = id; ta.rows = 1; growTextarea(ta, f.type === "short_text"); wrap.appendChild(ta);
       controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; } });
-    } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob") {
+    } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "time") {
       var isDate = f.type === "date" || f.type === "dob";
+      var isPicked = isDate || f.type === "time";
       var inp = document.createElement("input");
-      inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (isDate ? "date" : "text"));
+      inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (isDate ? "date" : (f.type === "time" ? "time" : "text")));
       inp.id = id; wrap.appendChild(inp);
-      if (isDate) inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
+      if (isPicked) inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
       if (f.type === "dob") inp.max = new Date().toISOString().slice(0, 10);   // a birth date can't be in the future
       controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; } });
     } else if (f.type === "multi_select") {

@@ -3100,7 +3100,18 @@
   }
   // ---- Shared inline-edit builders (used by the three detail modals) ----
   function edText(id, value, multiline) { var v = value == null ? "" : value; return multiline ? '<textarea id="' + id + '" class="ed-in">' + esc(v) + "</textarea>" : '<input id="' + id + '" class="ed-in" value="' + esc(v) + '">'; }
-  function edDate(id, value) { return '<input type="date" id="' + id + '" class="ed-in" value="' + esc(value == null ? "" : value) + '">'; }
+  // A native date/time box shows only a small icon on desktop, so clicking the field reads as
+  // a text input that will not type. Opening the picker on click is what the public form
+  // already does; the dashboard was the half that did not.
+  function edDate(id, value) { return '<input type="date" id="' + id + '" class="ed-in ed-picker" value="' + esc(value == null ? "" : value) + '">'; }
+  function edTime(id, value) { return '<input type="time" id="' + id + '" class="ed-in ed-picker" value="' + esc(value == null ? "" : value) + '">'; }
+  // Delegated once, at the document, so it covers every panel that ever renders one of these
+  // — the record panel, New record, and anything added later.
+  document.addEventListener("click", function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.classList.contains("ed-picker")) return;
+    if (el.showPicker) { try { el.showPicker(); } catch (err) {} }
+  });
   function edNum(id, value) { return '<input type="number" id="' + id + '" class="ed-in" value="' + esc(value == null ? "" : value) + '">'; }
   // Multi-select editor: Airtable lets several choices be picked, so a single <select>
   // cannot represent the answer. Any recorded value that is no longer an offered choice
@@ -3183,6 +3194,7 @@
     }
     else if (f.type === "dob") { inner = edDate(id, v); if (v) label += " · " + ageText(v); }
     else if (f.type === "date") inner = edDate(id, v);
+    else if (f.type === "time") inner = edTime(id, v);
     else if (f.type === "number") inner = edNum(id, v);
     else if (f.type === "phone") inner = edPhone(id, v);
     else inner = edText(id, v, false);
@@ -3687,7 +3699,7 @@
   // ---- Custom tables: admin builder + dynamic views ----
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
-    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
+    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
     { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "email", label: "Email" }
   ];
   var customTables = [];
@@ -6283,11 +6295,19 @@
       }).catch(function (err) {
         btn.disabled = false;
         var m = String((err && (err.message || err.hint)) || "");
-        // The one failure worth naming precisely: the code is deployed but the migration
-        // behind it is not, which reads as "the button is broken" unless it says so.
-        say(/create_record|function.*not.*(exist|found)|PGRST202/i.test(m)
-          ? "Creating records needs the database migration (09-create-record.sql) applied first."
-          : "Not saved — try again.");
+        var code = String((err && err.code) || "");
+        // Report what the server actually said. The first version of this matched any error
+        // containing the string "create_record", so "permission denied for function
+        // create_record" reported itself as a missing migration and hid the real cause for
+        // an afternoon. A diagnostic that can be wrong about its own subject is worse than
+        // none: only PostgREST's own "function not found" code means what it used to claim.
+        say(code === "PGRST202" || /could not find the function/i.test(m)
+              ? "Creating records needs the database migration (09-create-record.sql) applied first."
+          : code === "42501" || /permission denied/i.test(m)
+              ? "Your login is not allowed to add records here. Try signing out and in again."
+          : /cannot add records/i.test(m)
+              ? "You do not have edit access to this table."
+          : "Not saved — " + (m || "try again") + ".");
         if (window.console) console.error(err);
       });
     });
