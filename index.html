@@ -4776,9 +4776,19 @@
     var cls = (f.type === "long_text" ? "wrap " : "") + (hasArabic(txt) ? "rtl" : "");
     return '<span class="' + cls.trim() + '" dir="auto">' + esc(txt) + "</span>";
   }
-  // every upload question that has an answer, labelled, click to enlarge or play
-  function photoSectionHtml(fields, d) {
-    var shots = fields.filter(function (f) { return isFileField(f) && d[f.id]; });
+  // every upload question that has an answer, labelled, click to enlarge or play.
+  // skipId names a question already shown elsewhere on the panel — the editable panel
+  // carries the first image as a header with its own Change button, and showing it again
+  // here would be the same photo twice. A video is never that header, so a video is never
+  // skipped: this gallery is the only place it can be played.
+  function photoSectionHtml(fields, d, skipId) {
+    var shots = fields.filter(function (f) {
+      if (!isFileField(f) || !d[f.id]) return false;
+      // Skip only a still image. The caller only ever names an image today, but that depends
+      // on how the header is chosen a few hundred lines away — and if that ever changes, the
+      // failure is a video nobody can play, which is the bug this whole section exists to fix.
+      return !(f.id === skipId && !isVideoPath(d[f.id]));
+    });
     if (!shots.length) return "";
     var vids = shots.filter(function (f) { return isVideoPath(d[f.id]); }).length;
     // The heading counts what is actually there. "Photos (3)" over two videos and a photo is
@@ -6064,7 +6074,11 @@
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub"><span id="ed-status" class="ed-status"></span></div>' +
-      '<div class="m-grid">' + grid + "</div>" + scoredBlock +
+      // The gallery was missing from this branch entirely, so anyone who could EDIT a record
+      // could not see its uploads: the header only ever shows the first image, and a video is
+      // never the header. A video answer was therefore invisible to exactly the people who
+      // review them. The header's own photo is skipped so it is not shown twice.
+      '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d, photoPath ? photoFieldId : null) +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
     wireMoreLine(s, fields); wireLinkChips();

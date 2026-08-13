@@ -183,6 +183,25 @@ t('the heading counts what is actually there', () => {
 t('a question that is not an upload never reaches the gallery', () => {
   assert.strictEqual(A.photoSectionHtml([F_TEXT], { f3: 'some notes' }), '');
 });
+// The editable record panel carries the first IMAGE as a header with its own Change button,
+// and passes that field's id here so the same photo is not shown twice.
+t('the question already shown as the panel header is not repeated', () => {
+  const h = A.photoSectionHtml([F_PHOTO, F_VID], { f1: 'a.jpg', f2: 'b.mp4' }, 'f1');
+  assert.ok(!/imp-thumb/.test(h), 'the header photo must not appear a second time');
+  assert.ok(/pc-video/.test(h), 'but everything else still must');
+  assert.ok(/Video \(1\)/.test(h), 'and the count follows what is actually listed');
+});
+// This is the bug that shipped: the editable panel never called this at all, so an admin —
+// the person who reviews these — could not see a video, because a video is never the header.
+// Skipping must be by id and must never swallow a video.
+t('a video is never skipped, whatever id is passed', () => {
+  const h = A.photoSectionHtml([F_VID], { f2: 'b.mp4' }, 'f2');
+  assert.ok(/pc-video/.test(h), 'a video must survive even if named as the header');
+});
+t('the editable record panel renders the gallery', () => {
+  assert.ok(/scoredBlock \+ photoSectionHtml\(fields, d, photoPath \? photoFieldId : null\)/.test(APP_SRC),
+    'without this an editor cannot see an upload at all — the header only shows an image');
+});
 // The label is typed by an admin and goes into markup.
 t('the question label is escaped', () => {
   const h = A.photoSectionHtml([{ id: 'f5', label: '<img src=x onerror=alert(1)>', type: 'media' }], { f5: 'a.mp4' });
