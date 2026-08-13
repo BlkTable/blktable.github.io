@@ -80,6 +80,30 @@ t('a child pointing at a different table is not this one\'s', () => {
   withTables([other], api => assert.strictEqual(api.childTableOf(parent), null));
 });
 
+// ---- the submit payload: what an ordinary form sends must not change ----
+// PostgREST resolves an RPC by the keys in the request body. A three-key body against a
+// database that still holds the two-argument submit_public_form resolves to nothing and
+// every public form's submit fails — so an ordinary form has to keep sending exactly the two
+// keys it always sent, or a merge landing before the migration is an outage.
+// Read out of the page as source rather than executed, because it is inside submitForm().
+const FORM_SRC = scripts('f/index.html');
+t('the payload is built conditionally, not with the token always present', () => {
+  assert.ok(/var payload = \{ p_slug: slug, p_data: data \};/.test(FORM_SRC),
+    'the two-key payload every existing form sends is no longer built that way');
+  assert.ok(/if \(parentToken\) payload\.p_token = parentToken;/.test(FORM_SRC),
+    'p_token is not added conditionally');
+  assert.ok(/db\.rpc\("submit_public_form", payload\)/.test(FORM_SRC),
+    'submit_public_form is not called with the built payload');
+});
+t('the submit call never passes p_token inline, as null or otherwise', () => {
+  // { p_token: null } is still a third key as far as PostgREST is concerned. Scoped to the
+  // submit call: get_parent_details is a two-argument function that always takes p_token, so
+  // an explicit null is correct there and must not fail this.
+  const call = /db\.rpc\("submit_public_form",\s*\{[^}]*\}/.exec(FORM_SRC);
+  assert.strictEqual(call, null,
+    'submit_public_form is called with an inline object: ' + (call && call[0]));
+});
+
 // ---- reading the parent's details on the public page ----
 // Asserted by parts rather than as one string: the exact punctuation of a locale format
 // varies with the ICU build, and a test that pins it would fail on a different machine

@@ -515,7 +515,16 @@
       // Submit via SECURITY DEFINER RPC: anon holds no direct table write grant (see 2026-08-09 lockdown). Server resolves the table from the slug and confirms it is a live form.
       // p_token names which parent record this belongs to; the server checks it belongs to
       // this form's parent table, and a parent-scoped form refuses a submission without one.
-      return db.rpc("submit_public_form", { p_slug: slug, p_data: data, p_token: parentToken || null });
+      //
+      // It is sent ONLY when there is one, and that is not tidiness. PostgREST resolves an
+      // RPC by the keys in the body: a three-key body against a database that still has the
+      // two-argument function resolves to nothing, and every public form's submit fails —
+      // the 2026-08-09 outage, in a shape a merge could cause. Sending the same two keys an
+      // ordinary form has always sent means this page works before the migration as well as
+      // after, so the two can land in either order.
+      var payload = { p_slug: slug, p_data: data };
+      if (parentToken) payload.p_token = parentToken;
+      return db.rpc("submit_public_form", payload);
     }).then(function (res) {
       if (res && res.error) throw res.error;
       document.getElementById("card").style.display = "none";
