@@ -350,6 +350,8 @@
   .ja-card:hover { border-color: var(--silver); }
   .ja-card .photo { width: 100%; aspect-ratio: 1 / 1; background: var(--bg-3) center/cover no-repeat; border-radius: 10px 10px 0 0;
     display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: var(--fs-9); font-weight: 700; }
+  /* A video answer has no thumbnail to paint, so the cover says "video" rather than sitting empty. */
+  .ja-card .photo.is-video { color: var(--silver-lo); background: var(--bg-3); }
   /* per-record ⋯ actions menu */
   .rec-menu { position: relative; flex: 0 0 auto; }
   .ja-card .card-actions { justify-content: center; }
@@ -593,6 +595,7 @@
   .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.86); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
   .lightbox.open { display: flex; }
   .lightbox img { max-width: 96vw; max-height: 92vh; border-radius: 10px; cursor: zoom-out; }
+  .lightbox video { max-width: 96vw; max-height: 92vh; border-radius: 10px; background: #000; outline: none; }
   .lightbox .lb-close { position: absolute; top: 16px; right: 20px; background: rgba(255,255,255,0.14); color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: var(--fs-5); cursor: pointer; }
   .lightbox .lb-close:hover { background: rgba(255,255,255,0.26); }
   .m-name { font-size: var(--fs-7); font-weight: 800; margin: 0; }
@@ -786,6 +789,19 @@
   .photo-cell img:hover { border-color: var(--silver); }
   .photo-cell .pc-lab { color: var(--muted); font-size: var(--fs-1); line-height: 1.3;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* a video answer: the same tile as a photo, but it plays instead of enlarging */
+  .photo-cell .pc-video { width: 100%; aspect-ratio: 1/1; border-radius: 10px; cursor: pointer;
+    background: var(--bg-3); border: 1px solid var(--field-border); color: var(--silver-lo);
+    display: flex; align-items: center; justify-content: center; padding: 0; }
+  .photo-cell .pc-video:hover { border-color: var(--silver); color: var(--silver-hi); }
+  .photo-cell .pc-video.loading { opacity: 0.5; cursor: progress; }
+  .photo-cell .pc-video.dead { opacity: 0.4; cursor: not-allowed; }
+  .photo-cell .pc-file { width: 100%; aspect-ratio: 1/1; border-radius: 10px; text-decoration: none;
+    background: var(--bg-3); border: 1px solid var(--field-border); color: var(--silver-lo);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; }
+  .photo-cell .pc-file span { font-size: var(--fs-1); text-align: center; word-break: break-all;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .photo-cell .pc-file:hover { border-color: var(--silver); color: var(--silver-hi); }
   /* ================================================================
      Airtable shell: global header, sidebar, base bar, grid toolbar.
      Everything here is flat — borders and low-contrast lines separate
@@ -1053,6 +1069,10 @@
   table.grid tbody tr:hover td.pin { background: #202024; }
   table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
   table.grid img.cellimg { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; display: block; cursor: zoom-in; }
+  /* a video answer in the grid: 34px of video is not worth fetching, so the cell says one is there */
+  table.grid span.cellvid { width: 34px; height: 34px; border-radius: 6px; background: var(--bg-3);
+    border: 1px solid var(--field-border); color: var(--silver-lo); display: flex; align-items: center; justify-content: center; }
+  table.grid span.cellvid svg { width: 18px; height: 18px; }
   /* The row-number column is now the leftmost thing, so it takes the sticky edge and
      the first data column moves over by its width — otherwise they overlap on scroll. */
   table.grid th.rowno, table.grid td.rowno { position: sticky; left: 0; z-index: 1;
@@ -2534,6 +2554,8 @@
     multi_select: '<path d="M4 7h9M4 12h9M4 17h9"/><path d="M17 6l2 2 3-3"/><path d="M17 16l2 2 3-3"/>',
     yesno: '<path d="M4 12l5 5L20 6"/>',
     photo: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M4 18l5-5 4 4 3-3 4 4"/>',
+    media: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5l5 2.5-5 2.5z"/>',
+    time: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/>',
     phone: '<path d="M6 3h4l2 5-3 2a11 11 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 4 5a2 2 0 0 1 2-2z"/>',
     email: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
     link: '<path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/>',
@@ -2685,10 +2707,12 @@
     [].slice.call(document.querySelectorAll(".imp-file[data-path]")).forEach(function (el) {
       var p = el.getAttribute("data-path");
       el.removeAttribute("data-path");
-      if (!p) { el.className = "imp-file dead"; return; }
+      // classList, not className: a cell may carry its own class as well (a media question's
+      // unplayable-video tile is `imp-file pc-file`), and reassigning className dropped it.
+      if (!p) { el.classList.add("dead"); return; }
       getPhotoUrl(p).then(function (url) {
         if (url) el.href = url;
-        else { el.className = "imp-file dead"; el.title = "file not available"; }
+        else { el.classList.add("dead"); el.title = "file not available"; }
       });
     });
     // imported photos: load the real image, and open the lightbox on click
@@ -2706,6 +2730,21 @@
         getPhotoUrl(p).then(function (full) { if (full) openLightbox(full); });
       });
     });
+    // a video answer: signed only when it is asked for, so opening a record does not start
+    // fetching however many megabytes of video it happens to hold
+    [].slice.call(document.querySelectorAll(".pc-video[data-vpath]")).forEach(function (b) {
+      var p = b.getAttribute("data-vpath");
+      b.removeAttribute("data-vpath");
+      if (!p) { b.classList.add("dead"); return; }
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        b.classList.add("loading");
+        getPhotoUrl(p).then(function (full) {
+          b.classList.remove("loading");
+          if (full) openLightbox(full, "video"); else b.classList.add("dead");
+        });
+      });
+    });
   }
 
   // ---- Submission fingerprint (IP + device): admin-only, table-agnostic ----
@@ -2716,21 +2755,40 @@
   }
 
   // ---- Photo lightbox: click any review photo to view it full size (all tables) ----
+  // A media answer can be a video, so the same overlay holds a player as well as an image and
+  // shows one of the two. Clicking the video itself must NOT close the overlay the way clicking
+  // the image does — that is the pause button, and closing the record instead would be maddening.
   var _lightbox = null;
-  function openLightbox(src) {
+  function openLightbox(src, kind) {
     if (!_lightbox) {
       _lightbox = document.createElement("div");
       _lightbox.className = "lightbox";
-      _lightbox.innerHTML = '<img alt=""><button type="button" class="lb-close" aria-label="Close">✕</button>';
+      _lightbox.innerHTML = '<img alt=""><video controls playsinline preload="metadata" style="display:none;"></video>' +
+        '<button type="button" class="lb-close" aria-label="Close">✕</button>';
       _lightbox.addEventListener("click", function (e) {
         if (e.target === _lightbox || e.target === _lightbox.querySelector("img") || (e.target.classList && e.target.classList.contains("lb-close"))) closeLightbox();
       });
       document.body.appendChild(_lightbox);
     }
-    _lightbox.querySelector("img").src = src;
+    var im = _lightbox.querySelector("img"), vi = _lightbox.querySelector("video");
+    if (kind === "video") {
+      im.src = ""; im.style.display = "none";
+      vi.src = src; vi.style.display = "block";
+      var p = vi.play(); if (p && p.catch) p.catch(function () {});   // autoplay refused is fine: the controls are there
+    } else {
+      vi.pause(); vi.removeAttribute("src"); vi.load(); vi.style.display = "none";
+      im.style.display = ""; im.src = src;
+    }
     _lightbox.classList.add("open");
   }
-  function closeLightbox() { if (_lightbox) { _lightbox.classList.remove("open"); _lightbox.querySelector("img").src = ""; } }
+  function closeLightbox() {
+    if (!_lightbox) return;
+    _lightbox.classList.remove("open");
+    _lightbox.querySelector("img").src = "";
+    // Stop the sound. A closed overlay still playing audio is the bug everyone remembers.
+    var vi = _lightbox.querySelector("video");
+    if (vi) { vi.pause(); vi.removeAttribute("src"); vi.load(); }
+  }
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeLightbox(); });
   document.addEventListener("click", function (e) {
     var im = e.target;
@@ -2754,6 +2812,12 @@
       inp.addEventListener("change", function () {
         var file = inp.files && inp.files[0];
         if (!file) return;
+        // This path had no size check at all: the upload simply 413'd and reported the raw
+        // error. The header image is always an image, so the photo ceiling is the right one.
+        if (file.size > PHOTO_MAX_BYTES) {
+          window.alert("That photo is larger than " + mbText(PHOTO_MAX_BYTES) + ". Please choose a smaller one.");
+          return;
+        }
         btn.disabled = true; btn.textContent = "Uploading…";
         var path = null;
         storageUpload(file)
@@ -3153,7 +3217,7 @@
   function edValues(fields) {
     var out = {};
     (fields || []).forEach(function (f) {
-      if (f.type === "photo") return;
+      if (isFileField(f)) return;
       if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
       var el = document.getElementById("ed-" + f.id); if (!el) return;
       out[f.id] = f.type === "multi_select" ? edChecksValue(el) : (el.value || "").trim();
@@ -3177,9 +3241,11 @@
     opts = opts || {};
     d = d || {};
     var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
-    if (f.type === "photo") {
+    if (isFileField(f)) {
       if (opts.photo !== "input") return "";
-      inner = '<input type="file" accept="image/*" class="ed-in" id="' + id + '">';
+      // The accept list is the only difference between the two here — what is uploaded, and
+      // where it is stored, is one path for both.
+      inner = '<input type="file" accept="' + (f.type === "media" ? "image/*,video/*" : "image/*") + '" class="ed-in" id="' + id + '">';
     }
     else if (f.type === "long_text") inner = edText(id, v, true);
     else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
@@ -3631,11 +3697,17 @@
   }
   function deleteCustomSub(s, fields) {
     if (!window.confirm("Delete this entry? This can't be undone.")) return;
-    var pf = (fields || []).filter(function (f) { return f.type === "photo"; })[0];
-    var photo = pf && s.data ? s.data[pf.id] : null;
+    // Every uploaded file on the record, not the first one. This used to take the first photo
+    // field only, so a table with two upload questions orphaned the rest in R2 — invisible
+    // while a table had exactly one, and a media question is the reason a table now has two
+    // (a photo of the shelf and a video of the machine). storageDelete always resolves, so
+    // one failure cannot strand the row itself.
+    var paths = (fields || []).filter(isFileField)
+      .map(function (f) { return s.data ? s.data[f.id] : null; })
+      .filter(function (p) { return !!p; });
     var done = function () { if (currentCustom) currentCustom.subs = currentCustom.subs.filter(function (x) { return x.id !== s.id; }); renderCustom(); };
     var del = function () { db.from("app_submissions").delete().eq("id", s.id).then(function (res) { if (res.error) { window.alert("Could not delete. " + (res.error.message || "")); return; } done(); }); };
-    if (photo) storageDelete(photo).then(del, del); else del();
+    if (paths.length) Promise.all(paths.map(storageDelete)).then(del, del); else del();
   }
 
   function openCastingDetail(c) {
@@ -3700,7 +3772,7 @@
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
     { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
-    { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "email", label: "Email" }
+    { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "email", label: "Email" }
   ];
   var customTables = [];
   // archived tables are excluded from the sidebar and Home until this is switched on
@@ -3714,6 +3786,46 @@
   // stored comma-joined exactly as Airtable stores it. Everywhere a dropdown is
   // special-cased, a multi_select behaves the same way unless stated otherwise.
   function isChoiceField(f) { return f && (f.type === "dropdown" || f.type === "multi_select"); }
+  // ---- Uploads: a "photo" question and a "media" question ------------------
+  // A media question is a photo question that also accepts a video. Everywhere the app
+  // asked "is this type photo?" it meant "does this answer hold an uploaded file?", and
+  // the answer to that is now two types — so it is asked once, here, and every caller
+  // uses it. `isFileField` is the honest name for what those checks were always for.
+  function isFileField(f) { return !!f && (f.type === "photo" || f.type === "media"); }
+  function isFileType(t) { return t === "photo" || t === "media"; }
+  // What is stored is a bare R2 object key — `<uuid>_<original filename>` — with no MIME
+  // type beside it and nowhere to put one without changing the shape of every answer.
+  // The extension survives sanitizing, so it is what decides how the file is shown. A key
+  // with no extension we can name reads as an image, which is what every row written
+  // before this existed is.
+  var VIDEO_EXT = /\.(mp4|m4v|mov|qt|webm|ogv|ogg|3gp|3g2|avi|mkv|wmv|flv|mpg|mpeg|mts|m2ts)(\?|#|$)/i;
+  // Not everything a phone records plays in a browser: .mov is usually H.264 and plays,
+  // .avi/.mkv/.wmv/.flv usually do not. Those are still stored and still downloadable —
+  // they are offered as a link rather than a player that would show a black rectangle.
+  var VIDEO_PLAYABLE = /\.(mp4|m4v|mov|qt|webm|ogv|ogg)(\?|#|$)/i;
+  function isVideoPath(p) { return VIDEO_EXT.test(String(p || "")); }
+  function isPlayableVideo(p) { return VIDEO_PLAYABLE.test(String(p || "")); }
+  // The file's own name, for a link that has to say what it points at. The stored key is
+  // "<uuid>_name.mp4"; the uuid is noise to a reader.
+  function fileLabel(p) {
+    var s = String(p || "").split("/").pop() || "";
+    return s.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, "") || s;
+  }
+  var PLAY_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">' +
+    '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.6 6.2 5.2 3.3a.6.6 0 0 1 0 1l-5.2 3.3a.6.6 0 0 1-.9-.5V8.7a.6.6 0 0 1 .9-.5z"/></svg>';
+  // A card cover for one uploaded answer. An image gets the usual lazily-painted thumbnail;
+  // a video gets a play mark, because it has no thumbnail to paint and an empty grey box
+  // reads as a card that failed to load rather than a card holding a video.
+  function coverHtml(path) {
+    return isVideoPath(path) ? '<div class="photo is-video">' + PLAY_SVG + "</div>" : '<div class="photo"></div>';
+  }
+  // The same two ceilings the public form uses, and for the same reason: a video is a
+  // different order of size from a photo. Both are enforced again in the r2 edge function —
+  // this copy exists so a person is told before the upload, not after it.
+  var PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+  var MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+  function uploadCap(f) { return f && f.type === "media" ? MEDIA_MAX_BYTES : PHOTO_MAX_BYTES; }
+  function mbText(b) { return Math.round(b / 1048576) + " MB"; }
   function choiceList(f) {
     return (f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })
       .filter(function (x) { return x != null && x !== ""; });
@@ -3753,6 +3865,9 @@
     var v = d[f.id];
     if (f.type === "dob") return v ? (ageText(v) + (long ? " · " + v : "")) : "—";
     if (isOtherChoice(f, v) && d[otherKeyFor(f)]) return v + " — " + d[otherKeyFor(f)];
+    // An upload reads as its own filename, not as the object key. A CSV column of
+    // "a3f1c2de-…-9b_IMG_4021.mp4" tells a reader nothing, and the uuid is ours, not theirs.
+    if (isFileField(f) && v) return fileLabel(v);
     return (v == null || v === "") ? "—" : String(v);
   }
   // ---- Builder: workflow stages editor ----
@@ -4046,7 +4161,7 @@
     Promise.all([fieldsP, viewsP]).then(function (out) {
       currentCustom.fields = (out[0] && out[0].data) || [];
       return loadCustomSubs(subsP);
-    });
+    }).then(function () { loadKidCounts(t); });
   }
 
   // ---- Custom tables at scale, grouped by branch --------------------------
@@ -4260,7 +4375,7 @@
       slotCountText(pool);
     var summary = summaryFields(currentCustom.table, fields);
     // config.card_no_cover opts a table out of the photo cover entirely (e.g. Complaints, where most records have no screenshot).
-    var photoField = (currentCustom.table.config && currentCustom.table.config.card_no_cover) ? null : fields.filter(function (f) { return f.type === "photo"; })[0];
+    var photoField = (currentCustom.table.config && currentCustom.table.config.card_no_cover) ? null : fields.filter(isFileField)[0];
     // pipeline tabs
     if (stages.length) {
       if (!currentCustom.stage || !stages.some(function (x) { return x.key === currentCustom.stage; })) currentCustom.stage = stages[0].key;
@@ -4396,9 +4511,11 @@
       if (!String(titleTxt).trim()) titleTxt = branchTxt || "—";
       var sameAsBranch = branchTxt && String(titleTxt).trim() === String(branchTxt).trim();
       var metaBits = [];
-      // The place comes first on the meta line: on a signup it is the one thing you are
-      // looking for, ahead of the shop and the record number.
-      var slotPill = slotPillHtml(s);
+      // The place, or — on a record that OWNS signups — the phase worked out from its date
+      // and how full it is. Either way it leads the meta line, because on both kinds of
+      // record it is the one thing you are looking for.
+      var slotPill = slotPillHtml(s) ||
+        phasePillHtml(parentPhase(currentCustom.table, s, kidCountsFor(s.id)));
       if (slotPill) metaBits.push(slotPill);
       if (branchTxt && !sameAsBranch) metaBits.push('<span class="pill flat">' + esc(branchTxt) + "</span>");
       metaBits.push('<span class="rec-id" title="Record number">' + esc(recordNumber(s)) + "</span>");
@@ -4412,7 +4529,7 @@
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
         if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
         el.innerHTML =
-          (photoField && d[photoField.id] ? '<div class="photo"></div>' : '') +
+          (photoField && d[photoField.id] ? coverHtml(d[photoField.id]) : '') +
           '<div class="body" style="text-align:left">' +
             threadHtml + headHtml + fldsHtml +
             '<div class="card-foot">' + (scoreStat || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
@@ -4443,7 +4560,12 @@
         menuActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
       kcont.appendChild(el);
-      if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
+      // A video has no thumbnail — the hourly sweeper builds them from images. Asking for one
+      // 404s and falls back to the full file, which as a CSS background paints nothing at all,
+      // so a video cover would read as a broken card. It gets a play mark instead.
+      if (photoField && d[photoField.id] && !isVideoPath(d[photoField.id])) {
+        setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
+      }
     });
   }
   // ---- Record panel formatting ------------------------------------------------
@@ -4654,14 +4776,30 @@
     var cls = (f.type === "long_text" ? "wrap " : "") + (hasArabic(txt) ? "rtl" : "");
     return '<span class="' + cls.trim() + '" dir="auto">' + esc(txt) + "</span>";
   }
-  // every photo question that has an answer, labelled, click to enlarge
+  // every upload question that has an answer, labelled, click to enlarge or play
   function photoSectionHtml(fields, d) {
-    var shots = fields.filter(function (f) { return f.type === "photo" && d[f.id]; });
+    var shots = fields.filter(function (f) { return isFileField(f) && d[f.id]; });
     if (!shots.length) return "";
-    return '<div class="photo-sec"><div class="ps-head">Photos (' + shots.length + ')</div><div class="photo-grid">' +
+    var vids = shots.filter(function (f) { return isVideoPath(d[f.id]); }).length;
+    // The heading counts what is actually there. "Photos (3)" over two videos and a photo is
+    // a small lie that makes a reviewer think a video is missing.
+    var head = !vids ? "Photos (" + shots.length + ")"
+      : vids === shots.length ? (vids === 1 ? "Video (1)" : "Videos (" + vids + ")")
+      : "Photos and videos (" + shots.length + ")";
+    return '<div class="photo-sec"><div class="ps-head">' + esc(head) + '</div><div class="photo-grid">' +
       shots.map(function (f) {
-        return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(d[f.id]) +
-          '" alt=""><span class="pc-lab">' + esc(f.label) + "</span></div>";
+        var p = d[f.id], lab = '<span class="pc-lab">' + esc(f.label) + "</span>";
+        if (!isVideoPath(p)) {
+          return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(p) + '" alt="">' + lab + "</div>";
+        }
+        // A format a browser will not play is still the person's answer: it is offered as a
+        // download rather than a player that would show a black rectangle and no explanation.
+        if (!isPlayableVideo(p)) {
+          return '<div class="photo-cell"><a class="imp-file pc-file" data-path="' + esc(p) + '" href="#" target="_blank" rel="noopener">' +
+            PLAY_SVG + "<span>" + esc(fileLabel(p)) + "</span></a>" + lab + "</div>";
+        }
+        return '<div class="photo-cell"><button type="button" class="pc-video" data-vpath="' + esc(p) + '" title="Play">' +
+          PLAY_SVG + "</button>" + lab + "</div>";
       }).join("") + "</div></div>";
   }
 
@@ -4756,9 +4894,13 @@
     var d = s.data || {};
     if (f.id === "__created") return esc(fmtDate(s.created_at));
     if (f.id === "__branch") return branchPillHtml(s.branch);
-    if (f.type === "photo") {
+    if (isFileField(f)) {
       var p = d[f.id];
-      return p ? '<img class="cellimg" data-path="' + esc(p) + '" alt="">' : "";
+      if (!p) return "";
+      // 34px of video is not worth fetching or watching. The cell says there is one and the
+      // record panel plays it, which is where a reviewer is actually looking at the answer.
+      if (isVideoPath(p)) return '<span class="cellvid" title="' + esc(fileLabel(p)) + '">' + PLAY_SVG + "</span>";
+      return '<img class="cellimg" data-path="' + esc(p) + '" alt="">';
     }
     var txt = customCellText(f, d);
     var pc = scoreFraction(f, txt);
@@ -4993,7 +5135,7 @@
     });
   }
   function sortableCols(t, fields) {
-    return fields.filter(function (f) { return !f.internal && f.type !== "photo"; })
+    return fields.filter(function (f) { return !f.internal && !isFileField(f); })
       .concat([{ id: "__created", label: "Submitted" }, { id: "__branch", label: "Branch" }]);
   }
   function renderSortPanel(t, fields) {
@@ -5064,7 +5206,7 @@
         return (fields || []).filter(function (f) { return f.id === id; })[0];
       }).filter(Boolean);
     }
-    return (fields || []).filter(function (f) { return f.type !== "photo"; }).slice(0, 3);
+    return (fields || []).filter(function (f) { return !isFileField(f); }).slice(0, 3);
   }
 
   // ---- Which shop a record belongs to -------------------------------------
@@ -5120,6 +5262,7 @@
     date: "dd / mm / yyyy", dob: "dd / mm / yyyy", yesno: "Yes  /  No",
     dropdown: "Choose one", multi_select: "Tick all that apply",
     phone: "+962 7X XXX XXXX", email: "name@example.com", photo: "Choose photo",
+    media: "Choose photo or video", time: "hh : mm",
     link: "Pick a record"
   };
   function renderFormPreview(t, fields) {
@@ -5327,7 +5470,9 @@
       state: { conj: "and", conds: [] }
     };
   }
-  function fvFields(fv) { return (fv && fv.getFields ? fv.getFields() : []).filter(function (f) { return f.type !== "photo"; }); }
+  // An uploaded file has no value a condition could test — the stored answer is an object key,
+  // so "contains .mp4" would be filtering on a filename, not on anything a person answered.
+  function fvFields(fv) { return (fv && fv.getFields ? fv.getFields() : []).filter(function (f) { return !isFileField(f); }); }
   function fvFieldById(fv, id) { return fvFields(fv).filter(function (f) { return f.id === id; })[0] || null; }
   function opsFor(type) {
     if (type === "number") return [["eq", "="], ["neq", "≠"], ["lt", "<"], ["lte", "≤"], ["gt", ">"], ["gte", "≥"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
@@ -5748,7 +5893,16 @@
     if (detailShowAllFor !== s.id) { detailShowAll = false; detailShowAllFor = s.id; }
     var d = s.data || {}, photoPath = null, photoFieldId = null;
     var body = document.getElementById("modal-body");
-    fields.forEach(function (f) { if (f.type === "photo") { if (photoFieldId == null) photoFieldId = f.id; if (d[f.id]) photoPath = d[f.id]; } });
+    // The header image and the Change button must name the SAME question. This used to take
+    // the first upload question for the id and the LAST answered one for the path, so with
+    // two of them Change wrote into a field other than the one on screen. And a video is
+    // never the header: it cannot render in an <img>, and it is already playable in the
+    // gallery below. Whatever the header shows, every answer is in that gallery.
+    fields.forEach(function (f) {
+      if (!isFileField(f)) return;
+      if (photoFieldId == null) photoFieldId = f.id;
+      if (photoPath == null && d[f.id] && !isVideoPath(d[f.id])) { photoPath = d[f.id]; photoFieldId = f.id; }
+    });
     // The score lives in the record's header, on the right of the record's own identity.
     var scoreSlot = "";
     var scoredBlock = "";
@@ -5779,7 +5933,8 @@
     if (!String(recTitle).trim()) recTitle = recBranch || "Record";
     var scoreHead = '<div class="rec-head">' +
       '<div class="rh-main"><div class="rh-title">' + esc(recTitle) +
-        flagTagHtml(currentCustom ? currentCustom.table : null, d) + " " + slotPillHtml(s) + "</div>" +
+        flagTagHtml(currentCustom ? currentCustom.table : null, d) + " " +
+        (slotPillHtml(s) || phasePillHtml(parentPhase(currentCustom && currentCustom.table, s, kidCountsFor(s.id)))) + "</div>" +
       '<div class="rh-meta">' + esc(recordNumber(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
       (recBranch && String(recBranch).trim() !== String(recTitle).trim() ? " · " + esc(recBranch) : "") +
       "</div></div>" + scoreSlot + "</div>";
@@ -5877,7 +6032,7 @@
       var grid = "";
       detailOrder(fields).forEach(function (f) {
         if (!showsOn(f, d)) return;
-        if (f.type === "photo") return;   // photos get their own labelled gallery below
+        if (isFileField(f)) return;   // uploads get their own labelled gallery below
         grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' +
           esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d, s) + "</div></div>";
       });
@@ -5896,7 +6051,7 @@
     // a conditional question is built either way and hidden when it does not apply — unless
     // it already holds an answer, which is history and stays on screen (edFieldRowHtml)
     var grid = detailOrder(fields).map(function (f) {
-      if (f.type === "photo") return "";
+      if (isFileField(f)) return "";
       if (!showsOn(f, d, true)) return "";      // a retired question this record never answered
       return edFieldRowHtml(f, d);
     }).join("");
@@ -5960,7 +6115,7 @@
     // editor is its own job (edValues); a field the panel did not render is left untouched
     var cur = edValues(fields);
     fields.forEach(function (f) {
-      if (f.type === "photo") return;
+      if (isFileField(f)) return;
       if (!Object.prototype.hasOwnProperty.call(cur, f.id)) return;
       var v = cur[f.id];
       // a question that no longer applies keeps no answer — the same rule the public form
@@ -6031,6 +6186,87 @@
   // its own link and QR: /f/?t=<child slug>&e=<token>. Same public page as every other
   // form, one extra parameter. The token is minted on first open and rotates the way the
   // per-table QR does — regenerating means every code already printed stops working.
+  // ---- A status that is worked out, not pressed -------------------------------
+  // Draft / Open / Filled / Running / Done were five buttons somebody had to press at the
+  // right moment. All five are implied by the event's own data, so they are derived and
+  // never stored — which also means no scheduler has to move them, and pg_cron is not
+  // installed on this server anyway.
+  //
+  // The rule is duplicated in SQL (event_time_phase) because the server has to refuse a
+  // late signup on its own authority. Two copies, one test file asserting they agree — the
+  // same arrangement condMet has.
+  //
+  // Anything unparseable reads as "before": a half-typed time must not close a form.
+  function eventWindow(cap, data) {
+    var w = cap && cap.window;
+    if (!w || !data) return null;
+    var d = String(data[w.date] || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+    var st = String(data[w.start] || "").trim(), en = String(data[w.end] || "").trim();
+    if (!/^\d{2}:\d{2}/.test(st)) st = "00:00";
+    if (!/^\d{2}:\d{2}/.test(en)) en = "23:59";      // no end time: runs until the day is out
+    var s = new Date(d + "T" + st.slice(0, 5) + ":00");
+    var e = new Date(d + "T" + en.slice(0, 5) + ":00");
+    if (isNaN(s) || isNaN(e)) return null;
+    if (e < s) e = new Date(d + "T23:59:00");         // an end before its start is a typo
+    return { start: s, end: e };
+  }
+  // 'running' | 'done' | 'filled' | 'open' — or null when the table declares no window,
+  // in which case the stored status still decides, exactly as it did before.
+  function eventPhase(cap, data, taken, waiting) {
+    var w = eventWindow(cap, data);
+    if (!w) return null;
+    var now = new Date();
+    if (now > w.end) return "done";
+    if (now >= w.start) return "running";
+    var slots = parseInt(String((data || {})[cap.slots] || "").trim(), 10);
+    var backup = parseInt(String((data || {})[cap.backup] || "").trim(), 10);
+    if (!isFinite(slots)) return "open";              // no number = no limit
+    if (!isFinite(backup)) backup = 0;
+    return ((taken || 0) + (waiting || 0)) >= (slots + backup) ? "filled" : "open";
+  }
+  // How many places are taken per parent record, for the phase on a card. parent_id and slot
+  // only — the names are nobody's business here and would be a much bigger read.
+  function loadKidCounts(t) {
+    var kid = childTableOf(t);
+    if (!kid) { if (currentCustom) currentCustom.kidCounts = null; return; }
+    db.from("app_submissions").select("parent_id,slot").eq("table_id", kid.id).then(function (r) {
+      if (!currentCustom || currentCustom.table.id !== t.id) return;   // moved on already
+      var m = {};
+      (r.data || []).forEach(function (x) {
+        if (!x.parent_id) return;
+        if (!m[x.parent_id]) m[x.parent_id] = { taken: 0, waiting: 0 };
+        if (x.slot === "confirmed") m[x.parent_id].taken++;
+        else if (x.slot === "backup") m[x.parent_id].waiting++;
+      });
+      currentCustom.kidCounts = m;
+      renderCustom();
+    });
+  }
+  function kidCountsFor(id) {
+    return (currentCustom && currentCustom.kidCounts && currentCustom.kidCounts[id]) || { taken: 0, waiting: 0 };
+  }
+
+  var PHASE_PILL = {
+    open:    { label: "Open",    cls: "good" },
+    filled:  { label: "Filled",  cls: "warn" },
+    running: { label: "Running", cls: "" },
+    done:    { label: "Done",    cls: "" }
+  };
+  function phasePillHtml(phase) {
+    var p = PHASE_PILL[phase];
+    return p ? '<span class="pill ' + p.cls + '">' + p.label + "</span>" : "";
+  }
+  // The capacity config lives on the child, and names the parent's questions — so a record
+  // learns its own phase through the table that collects signups against it.
+  function parentPhase(table, rec, counts) {
+    var kid = childTableOf(table);
+    var cap = kid && kid.config && kid.config.capacity;
+    if (!cap) return null;
+    var c = counts || {};
+    return eventPhase(cap, (rec && rec.data) || {}, c.taken, c.waiting);
+  }
+
   // ---- A parent record's children, listed inside it --------------------------
   // A child table is storage, not a place to browse: every signup from every event in one
   // flat list is not how anybody reads it. You open the event and its people are there.
@@ -6198,7 +6434,7 @@
     var vis = newRecordVisible(fields, cur);
     return (fields || []).filter(function (f) {
       if (!f.required || !vis[f.id]) return false;
-      if (f.type === "photo") return !(hasFile && hasFile(f));
+      if (isFileField(f)) return !(hasFile && hasFile(f));
       var v = (cur || {})[f.id];
       return v == null || String(v).trim() === "";
     });
@@ -6209,7 +6445,7 @@
     var out = {};
     var vis = newRecordVisible(fields, cur);
     (fields || []).forEach(function (f) {
-      if (f.type === "photo") return;
+      if (isFileField(f)) return;
       if (!vis[f.id]) return;                                  // never asked, no answer
       var v = (cur || {})[f.id];
       if (v == null || String(v).trim() === "") return;         // empty stores no key
@@ -6286,8 +6522,16 @@
         if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
+      // Too big is caught here rather than by the upload, so the person is told which question
+      // and which limit instead of watching a 90 MB video crawl up to a 413.
+      var over = asked.filter(function (f) { var fl = isFileField(f) && fileFor(f); return fl && fl.size > uploadCap(f); })[0];
+      if (over) {
+        var el = document.getElementById("ed-" + over.id); if (el) el.classList.add("invalid");
+        say(over.label + ": that file is larger than " + mbText(uploadCap(over)) + ".");
+        return;
+      }
       btn.disabled = true; say("Saving…", true);
-      var shots = asked.filter(function (f) { return f.type === "photo" && fileFor(f); });
+      var shots = asked.filter(function (f) { return isFileField(f) && fileFor(f); });
       Promise.all(shots.map(function (f) {
         return storageUpload(fileFor(f)).then(function (p) { return { id: f.id, path: p }; });
       })).then(function (ups) {
@@ -6313,6 +6557,12 @@
               ? "Your login is not allowed to add records here. Try signing out and in again."
           : /cannot add records/i.test(m)
               ? "You do not have edit access to this table."
+          // both come from the r2 edge function, and both mean the page is asking it for
+          // something it has not been updated to allow
+          : /images_only/i.test(m)
+              ? "The file server is not accepting videos yet — the r2 function needs its update."
+          : /too_large/i.test(m)
+              ? "The file server refused that file as too large."
           : "Not saved — " + (m || "try again") + ".");
         if (window.console) console.error(err);
       });

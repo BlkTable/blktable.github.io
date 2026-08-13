@@ -146,7 +146,7 @@
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg0NzExNjYwLCJleHAiOjIxMDAwNzE2NjB9.jve2CB0Dt8dESno2dgVHu5kcLnmCE-fISi0TYT_prwc";
   var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // ---- Photo storage: Supabase Storage now, Cloudflare R2 after cutover ----
+  // ---- File storage: Supabase Storage now, Cloudflare R2 after cutover ----
   // Flip STORAGE_MODE to "r2" at cutover (with SUPABASE_URL/KEY above). Uploads
   // then go through our own `r2` edge function, which keeps the stored path shape
   // identical and means the R2 bucket needs no CORS rule.
@@ -170,7 +170,20 @@
     return db.storage.from("photos").upload(path, file, { upsert: false })
       .then(function (r) { if (r.error) throw r.error; return r.data.path; });
   }
+  // A photo question and a media question have different ceilings, because a video is a
+  // different order of size: a phone photo is 2-4 MB, ten seconds of 1080p is 20-30 MB.
+  // Both are also enforced in the r2 edge function — this is the copy that can say so
+  // BEFORE a person waits through an upload that was never going to be accepted.
   var MAX_BYTES = 10 * 1024 * 1024;
+  var MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+  function isVideoFile(f) { return !!(f && /^video\//.test(f.type || "")); }
+  function mbText(b) { return Math.round(b / 1048576) + " MB"; }
+  function sizeText(b) {
+    if (!(b > 0)) return "0 KB";
+    if (b < 1048576) return Math.max(1, Math.round(b / 1024)) + " KB";
+    var mb = b / 1048576;
+    return (mb >= 10 ? Math.round(mb) : mb.toFixed(1)) + " MB";
+  }
 
   var COUNTRIES = [
     { cc: "962", len: [9],    ph: "7X XXX XXXX",  flag: "jo", name: "Jordan" },
@@ -519,15 +532,48 @@
       local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
       apply(0);
       controls.push({ f: f, el: local, validate: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return (!f.required && d === "") || sc.len.indexOf(d.length) !== -1; }, value: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + sc.cc + d : null; } });
-    } else if (f.type === "photo") {
+    } else if (f.type === "photo" || f.type === "media") {
+      // One branch, not two. A media question is the same upload as a photo question with a
+      // wider accept and a bigger ceiling — splitting it would mean two copies of the rules
+      // about what is chosen, what is too big and what is required, and they would drift.
+      var isMedia = f.type === "media";
+      var cap = isMedia ? MEDIA_MAX_BYTES : MAX_BYTES;
+      var pickTxt = isMedia ? "Choose photo or video" : "Choose photo";
+      var noneTxt = isMedia ? "No file chosen" : "No photo chosen";
       var frow = document.createElement("div"); frow.className = "file-row"; frow.id = "row-" + f.id;
-      frow.innerHTML = '<button type="button" class="file-btn">Choose photo</button><span class="file-check">✓</span><span class="file-name">No photo chosen</span>';
-      var fin = document.createElement("input"); fin.type = "file"; fin.accept = "image/*"; fin.style.display = "none"; fin.id = id;
-      wrap.appendChild(frow); wrap.appendChild(fin);
+      frow.innerHTML = '<button type="button" class="file-btn">' + esc(pickTxt) + '</button><span class="file-check">✓</span><span class="file-name">' + esc(noneTxt) + '</span>';
+      var fin = document.createElement("input"); fin.type = "file";
+      fin.accept = isMedia ? "image/*,video/*" : "image/*";
+      fin.style.display = "none"; fin.id = id;
+      var fhint = document.createElement("div"); fhint.className = "hint";
+      if (isMedia) fhint.textContent = "A photo or a video, up to " + mbText(cap) + ".";
+      wrap.appendChild(frow); wrap.appendChild(fin); wrap.appendChild(fhint);
       var fbtn = frow.querySelector(".file-btn"), fchk = frow.querySelector(".file-check"), fnm = frow.querySelector(".file-name");
+      var overCap = false;
       fbtn.addEventListener("click", function () { fin.click(); });
-      fin.addEventListener("change", function () { var has = fin.files.length > 0; fnm.textContent = has ? fin.files[0].name : "No photo chosen"; fchk.style.display = has ? "flex" : "none"; fbtn.textContent = has ? "Change photo" : "Choose photo"; if (has) frow.classList.remove("invalid"); });
-      controls.push({ f: f, el: frow, isPhoto: true, file: function () { return fin.files[0] || null; }, validate: function () { return !f.required || fin.files.length > 0; } });
+      fin.addEventListener("change", function () {
+        var file = fin.files[0] || null;
+        overCap = !!(file && file.size > cap);
+        // The size is shown next to the name because on a video it is the number that decides
+        // whether this works, and a person cannot see it any other way on a phone.
+        fnm.textContent = file ? file.name + " · " + sizeText(file.size) : noneTxt;
+        fchk.style.display = (file && !overCap) ? "flex" : "none";
+        fbtn.textContent = file ? (isMedia ? "Change file" : "Change photo") : pickTxt;
+        // Said now rather than after Submit: uploading 80 MB on shop wifi and being refused at
+        // the end is the failure worth designing out.
+        fhint.textContent = overCap
+          ? "That " + (isVideoFile(file) ? "video" : "photo") + " is " + sizeText(file.size) + " — the limit is " + mbText(cap) + "." +
+            (isVideoFile(file) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please choose a smaller one.")
+          : (isMedia ? "A photo or a video, up to " + mbText(cap) + "." : "");
+        fhint.style.color = overCap ? "var(--danger)" : "";
+        if (overCap) frow.classList.add("invalid"); else frow.classList.remove("invalid");
+      });
+      controls.push({
+        f: f, el: frow, isPhoto: true, cap: cap,
+        file: function () { return fin.files[0] || null; },
+        validate: function () { return !overCap && (!f.required || fin.files.length > 0); },
+        badMsg: function () { return overCap ? "That file is larger than " + mbText(cap) + ". Please choose a smaller one." : ""; }
+      });
     } else {
       var inp2 = document.createElement("textarea"); inp2.id = id; inp2.rows = 1; growTextarea(inp2, true); wrap.appendChild(inp2);
       controls.push({ f: f, el: inp2, validate: function () { return !f.required || inp2.value.trim() !== ""; }, value: function () { return inp2.value.trim() || null; } });
@@ -576,13 +622,17 @@
       if (!ctlVisible(c)) { markCtl(c, false); return; }   // not asked = nothing to require
       var ok = c.validate(); markCtl(c, !ok); if (!ok && !firstBad) firstBad = c;
     });
-    if (firstBad) { msg.textContent = "Please fill in the highlighted fields."; if (firstBad.el.scrollIntoView) firstBad.el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+    // "Please fill in the highlighted fields" is wrong for a file that is simply too big —
+    // nothing is missing, and telling somebody to fill in a question they answered sends them
+    // looking for the wrong problem.
+    if (firstBad) { msg.textContent = (firstBad.badMsg && firstBad.badMsg()) || "Please fill in the highlighted fields."; if (firstBad.el.scrollIntoView) firstBad.el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
 
     btn.disabled = true; btn.textContent = "Submitting…";
     var photoCtls = controls.filter(function (c) { return c.isPhoto && ctlVisible(c) && c.file(); });
     var uploads = photoCtls.map(function (c) {
       var file = c.file();
-      if (file.size > MAX_BYTES) return Promise.reject({ tooBig: true });
+      var cap = c.cap || MAX_BYTES;   // a media question allows more than a photo question
+      if (file.size > cap) return Promise.reject({ tooBig: true, cap: cap });
       return storageUpload(file).then(function (p) { return { id: c.f.id, path: p }; });
     });
 
@@ -639,8 +689,14 @@
       // Never surface the raw database error here — it leaks table names to the public and means nothing to an applicant. Detail goes to the console below.
       // The two exceptions are the ones the person can act on: the last place went while they
       // were filling the form in, or signups closed. Anything else stays generic.
+      // `images_only` and `too_large` come from the r2 edge function, and they are the two
+      // that say the page and the server disagree — a media question drawn by a page that has
+      // been deployed against a function that has not. Naming them means the person is told
+      // what to do instead of "try again" on something that will never work.
       var m = String((err && err.message) || "");
-      msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one."
+      msg.textContent = err && err.tooBig ? "A file is larger than " + mbText(err.cap || MAX_BYTES) + ". Please choose a smaller one."
+        : /images_only/i.test(m) ? "Videos can't be uploaded on this form yet. Please choose a photo, or tell whoever sent you this link."
+        : /too_large/i.test(m) ? "That file is too large to upload. Please choose a smaller one, or a shorter video."
         : /is full/i.test(m) ? "The last place was taken while you were filling this in. Nothing was submitted."
         : /not open for signups/i.test(m) ? "This has just closed for signups. Nothing was submitted."
         : "Couldn't submit — please try again, or contact us if it keeps happening.";
