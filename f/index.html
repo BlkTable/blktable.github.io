@@ -186,8 +186,32 @@
   // /f/?t=event-signup&e=<token> is the signup form for ONE event. The token is the whole
   // handle: nothing about the parent record is readable without it.
   var parentToken = getParam("e");
+
+  // ---- One submission per browser (opt-in per form) --------------------------
+  // A random id this browser mints once and keeps. Deliberately NOT the server's `device`
+  // column, which is the User-Agent string and identical across every iPhone on one iOS
+  // version — a uniqueness rule on that would refuse the second barista with the same phone
+  // model, which at an event where a group signs up together is most of them.
+  //
+  // Returns null when the browser has no storage to offer (private mode in some browsers,
+  // storage disabled, an embedded webview). That is deliberate: with no key the form behaves
+  // exactly as it always did and accepts the submission. Refusing a real person because their
+  // browser will not remember anything is a worse failure than accepting a duplicate.
+  var DEVICE_STORE = "blk_device";
+  function deviceKey() {
+    try {
+      var k = window.localStorage.getItem(DEVICE_STORE);
+      if (!k) {
+        k = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : String(Date.now()) + "-" + Math.random().toString(36).slice(2);
+        window.localStorage.setItem(DEVICE_STORE, k);
+      }
+      return k;
+    } catch (e) { return null; }
+  }
   var controls = []; // {f, wrap, validate(), value(), isPhoto, file()}
   var currentTable = null;
+  var submitDevice = null;   // set once the form declares it is one-per-browser
   var visible = {};  // field id -> is this question being asked right now
 
   // ---- Conditional questions (every table, current and future) --------------
@@ -293,6 +317,21 @@
                    (bleft === 1 ? "1 backup place left" : bleft + " backup places left") +
                    " — you would be on the backup list.",
              blocked: false, gone: true };
+  }
+  // What to say to a browser that already has a place here. Re-opening the link is how
+  // somebody checks where they stand, now that there is no cancel button to press.
+  function alreadyText(mine) {
+    if (!mine) return null;
+    if (mine.slot === "confirmed") {
+      return { head: "You already have a place",
+               body: "This link is already signed up from this phone, and your place is confirmed. If you cannot make it, contact Faisal or Waleed so they can give the place to someone else." };
+    }
+    if (mine.slot === "backup") {
+      return { head: "You are already on the backup list",
+               body: "This link is already signed up from this phone. Every place was taken, so you are on the backup list — if someone drops out you take their place, and you will be told." };
+    }
+    return { head: "You have already signed up",
+             body: "This link is already signed up from this phone." };
   }
   function showClosed(head, body) {
     document.getElementById("loading").style.display = "none";
@@ -567,14 +606,22 @@
       // after, so the two can land in either order.
       var payload = { p_slug: slug, p_data: data };
       if (parentToken) payload.p_token = parentToken;
+      if (submitDevice) payload.p_device = submitDevice;
       return db.rpc("submit_public_form", payload);
     }).then(function (res) {
       if (res && res.error) throw res.error;
       // Which place they took, when the form has capacity. A backup who is told only "thank
       // you" turns up believing they are working.
       var slot = res && res.data && res.data.slot;
-      if (slot === "confirmed" || slot === "backup") {
-        var box = document.getElementById("success");
+      var already = !!(res && res.data && res.data.already);
+      var box = document.getElementById("success");
+      if (already) {
+        // Nothing was written. Saying "received" would be a lie, and saying nothing would
+        // leave them wondering whether the second attempt took a second place.
+        var al = alreadyText({ slot: slot });
+        box.querySelector("h2").textContent = al.head;
+        box.querySelector("p").textContent = al.body + " Nothing was added — you still have exactly one place.";
+      } else if (slot === "confirmed" || slot === "backup") {
         box.querySelector("h2").textContent = slot === "confirmed" ? "You have a place" : "You are on the backup list";
         box.querySelector("p").textContent = slot === "confirmed"
           ? "Your place is confirmed. The details are in the message above — please keep this link."
@@ -635,10 +682,32 @@
             .then(function (r) { return (r && !r.error && r.data) ? r.data : null; })
             .catch(function () { return null; })
         : Promise.resolve(null);
-      Promise.all([parentReady, slotsReady]).then(function (both) {
-        var parent = both[0], slots = both[1];
+      // Only sent to a form that says it is one-per-browser. A key sent to a database that
+      // has not been migrated is an RPC call PostgREST cannot resolve and a dead submit
+      // button — the same trap the token had, so the same rule: never send what the form has
+      // not declared it takes.
+      var onePer = !!(table.config && table.config.one_per_device);
+      var myKey = onePer ? deviceKey() : null;
+      submitDevice = myKey;
+      var mineReady = (onePer && myKey)
+        ? db.rpc("my_signup", { p_slug: slug, p_token: parentToken || null, p_device: myKey })
+            .then(function (r) { return (r && !r.error && r.data) ? r.data : null; })
+            .catch(function () { return null; })
+        : Promise.resolve(null);
+      Promise.all([parentReady, slotsReady, mineReady]).then(function (both) {
+        var parent = both[0], slots = both[1], mine = both[2];
         if (scoped && !parent) { notFound(); return; }
         if (parent) parent.slots = slots;
+        // Where you stand comes before everything else, including "full": somebody who
+        // already has a place must never be shown a form or told there is no room.
+        var al = alreadyText(mine);
+        if (al) {
+          document.getElementById("form-title").innerHTML = esc(table.name);
+          document.getElementById("head").style.display = "block";
+          if (parent) renderParent(parent);
+          showClosed(al.head, al.body);
+          return;
+        }
         db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (fRes) {
           if (fRes.error) { notFound(); return; }
           var st = slotsText(slots);
