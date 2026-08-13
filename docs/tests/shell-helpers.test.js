@@ -17,7 +17,8 @@ function grabVar(name) {
 }
 const names = ['periodOf', 'groupByPeriod', 'agoText', 'keyHash', 'tableTint', 'tableGlyph',
   'isGroup', 'pruneConds', 'activeConds', 'isCondActive', 'filterCount', 'passesList', 'passesFilters',
-  'condSlot', 'evalCond', 'valueKind', 'opsFor', 'fvFields', 'fvFieldById', 'defaultValFor'];
+  // isFileField: fvFields excludes upload questions through it, so it has to come along
+  'condSlot', 'evalCond', 'valueKind', 'opsFor', 'isFileField', 'fvFields', 'fvFieldById', 'defaultValFor'];
 const code = grabVar('TINTS') + grabVar('PERIOD_ORDER') + names.map(grab).join('\n');
 const ctx = { console };
 vm.createContext(ctx);
