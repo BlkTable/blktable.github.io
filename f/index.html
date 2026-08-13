@@ -41,6 +41,9 @@
   .pcard dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
   .pcard dt { color: var(--muted); font-size: 0.8rem; }
   .pcard dd { margin: 0; font-size: 0.92rem; line-height: 1.5; white-space: pre-wrap; }
+  .pcard .slots { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+    font-size: 0.9rem; font-weight: 600; color: var(--silver); }
+  .pcard .slots.gone { color: var(--gold); }
   .card { background: var(--card); border: 1px solid var(--line-2);
     border-radius: 10px; padding: 24px 22px; }
   .field { margin-bottom: 16px; }
@@ -132,6 +135,7 @@
       </div>
       <div class="card success" id="success"><div class="check">✓</div><h2>Received</h2><p>Thank you! Your submission has been recorded.</p></div>
       <div class="card notfound" id="notfound"><h2>Form not found</h2><p>This form link is invalid or no longer active.</p></div>
+      <div class="card notfound" id="closed"><h2 id="closed-h">No places left</h2><p id="closed-p">Every place has been taken.</p></div>
     </div>
   </div>
 
@@ -261,14 +265,53 @@
     }
     return v;
   }
+  // How many places are left, in words. The server hands over counts only — never who
+  // signed up — so this is all the page knows and all it needs to know.
+  //   {limited:false}            a form with no capacity declared: say nothing
+  //   open:false                 not taking signups yet, or over
+  //   full:true                  every real and backup place gone
+  //   taken < slots              real places left
+  //   otherwise                  real places gone, backup places left
+  function slotsText(s) {
+    if (!s || !s.limited) return null;
+    if (!s.open) return { text: "This is not open for signups.", blocked: true, gone: true };
+    if (s.full) return { text: "Every place has been taken.", blocked: true, gone: true };
+    var slots = s.slots || 0, taken = s.taken || 0, backup = s.backup || 0, waiting = s.waiting || 0;
+    var left = slots - taken;
+    if (left > 0) {
+      return { text: left === 1 ? "1 place left of " + slots : left + " places left of " + slots,
+               blocked: false, gone: false };
+    }
+    // Clamped, and full when nothing is left either way, rather than trusting the flag: a
+    // capacity edited down below what is already booked would otherwise offer "-1 backup
+    // places". No real place and no backup place is full, whatever else was reported.
+    var bleft = Math.max(0, backup - waiting);
+    if (bleft === 0) return { text: "Every place has been taken.", blocked: true, gone: true };
+    // "8 places taken" and then a backup place is not a rejection — say plainly that this is
+    // the reserve list, or somebody signs up believing they are in.
+    return { text: "All " + slots + " places are taken. " +
+                   (bleft === 1 ? "1 backup place left" : bleft + " backup places left") +
+                   " — you would be on the backup list.",
+             blocked: false, gone: true };
+  }
+  function showClosed(head, body) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("card").style.display = "none";
+    document.getElementById("closed-h").textContent = head;
+    document.getElementById("closed-p").textContent = body;
+    document.getElementById("closed").style.display = "block";
+  }
+
   function renderParent(p) {
     var box = document.getElementById("parent-card"); if (!box) return;
     var rows = (p && p.rows) || [];
     if (!(p && p.title) && !rows.length) { box.style.display = "none"; return; }
+    var st = slotsText(p.slots);
     box.innerHTML = (p.title ? "<h2>" + esc(p.title) + "</h2>" : "") +
       (rows.length ? "<dl>" + rows.map(function (r) {
         return "<dt>" + esc(r.label) + "</dt><dd>" + esc(fmtParentValue(r)) + "</dd>";
-      }).join("") + "</dl>" : "");
+      }).join("") + "</dl>" : "") +
+      (st ? '<div class="slots' + (st.gone ? " gone" : "") + '">' + esc(st.text) + "</div>" : "");
     box.style.display = "block";
   }
 
@@ -527,6 +570,16 @@
       return db.rpc("submit_public_form", payload);
     }).then(function (res) {
       if (res && res.error) throw res.error;
+      // Which place they took, when the form has capacity. A backup who is told only "thank
+      // you" turns up believing they are working.
+      var slot = res && res.data && res.data.slot;
+      if (slot === "confirmed" || slot === "backup") {
+        var box = document.getElementById("success");
+        box.querySelector("h2").textContent = slot === "confirmed" ? "You have a place" : "You are on the backup list";
+        box.querySelector("p").textContent = slot === "confirmed"
+          ? "Your place is confirmed. The details are in the message above — please keep this link."
+          : "Every place is taken, so you are on the backup list. If someone drops out you take their place, and you will be told.";
+      }
       document.getElementById("card").style.display = "none";
       document.getElementById("head").style.display = "none";
       document.getElementById("form-intro").style.display = "none";
@@ -535,7 +588,13 @@
     }).catch(function (err) {
       btn.disabled = false; btn.textContent = "Submit";
       // Never surface the raw database error here — it leaks table names to the public and means nothing to an applicant. Detail goes to the console below.
-      msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one." : "Couldn't submit — please try again, or contact us if it keeps happening.";
+      // The two exceptions are the ones the person can act on: the last place went while they
+      // were filling the form in, or signups closed. Anything else stays generic.
+      var m = String((err && err.message) || "");
+      msg.textContent = err && err.tooBig ? "A photo is larger than 10 MB. Please choose a smaller one."
+        : /is full/i.test(m) ? "The last place was taken while you were filling this in. Nothing was submitted."
+        : /not open for signups/i.test(m) ? "This has just closed for signups. Nothing was submitted."
+        : "Couldn't submit — please try again, or contact us if it keeps happening.";
       if (window.console) console.error(err);
     });
   }
@@ -569,10 +628,32 @@
             .then(function (r) { return (r && !r.error && r.data) ? r.data : null; })
             .catch(function () { return null; })
         : Promise.resolve(null);
-      parentReady.then(function (parent) {
+      // form_slots is asked at the same time, not after: the page must not draw a form for a
+      // full event and then take it away. It returns counts only, never who signed up.
+      var slotsReady = scoped
+        ? db.rpc("form_slots", { p_slug: slug, p_token: parentToken || null })
+            .then(function (r) { return (r && !r.error && r.data) ? r.data : null; })
+            .catch(function () { return null; })
+        : Promise.resolve(null);
+      Promise.all([parentReady, slotsReady]).then(function (both) {
+        var parent = both[0], slots = both[1];
         if (scoped && !parent) { notFound(); return; }
+        if (parent) parent.slots = slots;
         db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (fRes) {
           if (fRes.error) { notFound(); return; }
+          var st = slotsText(slots);
+          if (st && st.blocked) {
+            // The details still show: somebody who arrives late should see WHICH event they
+            // missed, not a bare refusal.
+            document.getElementById("form-title").innerHTML = esc(table.name);
+            document.getElementById("head").style.display = "block";
+            renderParent(parent);
+            showClosed(slots && !slots.open ? "Not open for signups" : "No places left",
+              slots && !slots.open
+                ? "This is not taking signups at the moment. Please check with whoever sent you the link."
+                : "Every place, including the backup places, has been taken.");
+            return;
+          }
           init(table, fRes.data || []);
           if (parent) renderParent(parent);
         });
