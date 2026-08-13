@@ -4221,8 +4221,9 @@
     var scopeTotal = customFacets.total || pool.length;
     var partial = pool.length < scopeTotal && !q;
     document.getElementById("custom-count").textContent =
-      partial ? ("showing " + pool.length + " of " + scopeTotal)
-              : (pool.length + (pool.length === 1 ? " entry" : " entries"));
+      (partial ? ("showing " + pool.length + " of " + scopeTotal)
+               : (pool.length + (pool.length === 1 ? " entry" : " entries"))) +
+      slotCountText(pool);
     var summary = summaryFields(currentCustom.table, fields);
     // config.card_no_cover opts a table out of the photo cover entirely (e.g. Complaints, where most records have no screenshot).
     var photoField = (currentCustom.table.config && currentCustom.table.config.card_no_cover) ? null : fields.filter(function (f) { return f.type === "photo"; })[0];
@@ -4349,7 +4350,7 @@
       // kebab lands in the left slot and reads as a stray button. A row has no slots.
       var actions = '<div class="card-actions">' +
         (kcards ? '<span class="slot"></span>' + (moveHtml || "<span></span>") : moveHtml) +
-        recMenuHtml(tableActions, mayManageTbl) + "</div>";
+        recMenuHtml(tableActions.concat(slotActions(s, mayManageTbl)), mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       tag += flagTagHtml(currentCustom.table, d);
@@ -4361,6 +4362,10 @@
       if (!String(titleTxt).trim()) titleTxt = branchTxt || "—";
       var sameAsBranch = branchTxt && String(titleTxt).trim() === String(branchTxt).trim();
       var metaBits = [];
+      // The place comes first on the meta line: on a signup it is the one thing you are
+      // looking for, ahead of the shop and the record number.
+      var slotPill = slotPillHtml(s);
+      if (slotPill) metaBits.push(slotPill);
       if (branchTxt && !sameAsBranch) metaBits.push('<span class="pill flat">' + esc(branchTxt) + "</span>");
       metaBits.push('<span class="rec-id" title="Record number">' + esc(recordNumber(s)) + "</span>");
       // The star sits with the number, because the two are what you use to come back to
@@ -4396,7 +4401,12 @@
       }
       wireStar(el, currentCustom.table.id, s.id);
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
-      wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); }, function (a) { doRecordAction(a, s, fields); }, tableActions);
+      var menuActions = tableActions.concat(slotActions(s, mayManageTbl));
+      wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); },
+        // A place move is not a WhatsApp/Call/Email template, so it is intercepted before the
+        // template dispatcher rather than taught to it.
+        function (a) { if (a && a.type === "slot") moveSignup(s, a.slot, fields); else doRecordAction(a, s, fields); },
+        menuActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
       kcont.appendChild(el);
       if (photoField && d[photoField.id]) setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
@@ -5598,7 +5608,7 @@
     if (!String(recTitle).trim()) recTitle = recBranch || "Record";
     var scoreHead = '<div class="rec-head">' +
       '<div class="rh-main"><div class="rh-title">' + esc(recTitle) +
-        flagTagHtml(currentCustom ? currentCustom.table : null, d) + "</div>" +
+        flagTagHtml(currentCustom ? currentCustom.table : null, d) + " " + slotPillHtml(s) + "</div>" +
       '<div class="rh-meta">' + esc(recordNumber(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
       (recBranch && String(recBranch).trim() !== String(recTitle).trim() ? " · " + esc(recBranch) : "") +
       "</div></div>" + scoreSlot + "</div>";
@@ -5797,6 +5807,52 @@
       s.data = nd; renderCustom(); setEdStatus("Saved ✓");
     });
   }
+  // ---- Places: confirmed / backup, and moving somebody between them ----------
+  // `slot` is owned by the capacity engine and never typed into a field, so it is shown and
+  // changed here rather than being an answer on the form.
+  function slotPillHtml(s) {
+    if (!s || !s.slot) return "";
+    return s.slot === "confirmed"
+      ? '<span class="pill good" title="Has a place">Confirmed</span>'
+      : '<span class="pill warn" title="On the backup list">Backup</span>';
+  }
+  // The ⋯ entries for a record that holds a place. Returned as ordinary record actions of a
+  // new type, so the existing menu and its wiring carry them with no new plumbing.
+  //   - only offered to somebody who can manage the table (it is the authority the RPC checks)
+  //   - only the move you are not already on
+  //   - promoting is offered even when the places are full: the server refuses and says how
+  //     to make room, which is more use than a menu entry that quietly is not there
+  function slotActions(s, mayManage) {
+    if (!mayManage || !s || !s.slot) return [];
+    return s.slot === "confirmed"
+      ? [{ type: "slot", slot: "backup", label: "Move to backup" }]
+      : [{ type: "slot", slot: "confirmed", label: "Give a place" }];
+  }
+  // "10 entries · 8 confirmed · 2 backup" — what Faisal opens the table to find out.
+  function slotCountText(subs) {
+    var c = 0, b = 0;
+    (subs || []).forEach(function (s) { if (s.slot === "confirmed") c++; else if (s.slot === "backup") b++; });
+    if (!c && !b) return "";
+    return " · " + c + " confirmed" + (b ? " · " + b + " backup" : "");
+  }
+  function moveSignup(s, slot, fields) {
+    db.rpc("set_signup_slot", { p_record: s.id, p_slot: slot }).then(function (r) {
+      if (r.error) {
+        var m = String(r.error.message || "");
+        window.alert(/places are taken/i.test(m) ? m
+          : /cannot change places/i.test(m) ? "You cannot change places on this table."
+          : /set_signup_slot|PGRST202/i.test(m) ? "This needs the database migration (13-swap-and-promote.sql)."
+          : "Could not move this person.");
+        if (window.console) console.error(r.error);
+        return;
+      }
+      // Reload rather than patch the row: promoting or removing somebody can change a second
+      // record (the backup who moved up) and the event's own status, and guessing which is how
+      // the screen ends up disagreeing with the database.
+      if (currentCustom) openCustomTable(currentCustom.table);
+    });
+  }
+
   // ---- A record's own public link (parent-scoped forms) -----------------------
   // When another table collects submissions against records of this one, each record has
   // its own link and QR: /f/?t=<child slug>&e=<token>. Same public page as every other
