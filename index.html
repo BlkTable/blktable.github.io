@@ -551,6 +551,9 @@
   .ed-in { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); font-family: inherit; outline: none; box-sizing: border-box; margin-top: 4px; }
   .ed-in:focus { border-color: var(--silver); }
   textarea.ed-in { min-height: 70px; resize: vertical; }
+  /* the same red the public form uses to point at the answer that is missing. .ed-checks is
+     here too because a multi-select is a box of checkboxes, not an .ed-in. */
+  .ed-in.invalid, .ed-checks.invalid { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
   .m-editbtn { margin: 0 0 14px auto; display: block; }
   .ed-status { font-size: var(--fs-3); margin-left: 6px; }
   .phone-row { display: flex; gap: 8px; align-items: stretch; margin-top: 4px; }
@@ -874,7 +877,16 @@
   .btn-share { background: var(--pink); border: none; color: #fff; font: inherit; font-size: var(--fs-3);
     font-weight: 600; padding: 6px 13px; border-radius: 6px; cursor: pointer; }
   .btn-share:hover { background: var(--pink-hi); }
+  /* Blue, because adding a record is the primary action on a table — pink stays sharing. */
+  .btn-new { background: var(--accent); border: none; color: #fff; font: inherit; font-size: var(--fs-3);
+    font-weight: 600; padding: 6px 13px; border-radius: 6px; cursor: pointer; }
+  .btn-new:hover { background: var(--accent-hi); }
+  .btn-new:disabled { opacity: 0.55; cursor: default; }
   .base-count { color: var(--muted); font-size: var(--fs-2); padding-right: 4px; }
+  /* New record panel: the same editor rows as the record panel, with a footer that commits */
+  .nr-foot { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .nr-msg { color: var(--danger); font-size: var(--fs-2); }
+  .nr-msg.ok { color: var(--ok); }
 
   /* ---- the toolbar above the records ---- */
   .at-toolbar { position: sticky; top: 44px; z-index: 29;
@@ -1458,6 +1470,7 @@
             <div class="base-right">
               <span class="base-count" id="custom-count">—</span>
               <button class="hd-btn" id="custom-refresh" title="Reload from the database" aria-label="Refresh"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v4h-4"></path></svg></button>
+              <button class="btn-new" id="custom-new" style="display:none;" title="Add a record by hand">＋ New record</button>
               <button class="btn-share" id="custom-share">Share</button>
             </div>
           </div>
@@ -3131,6 +3144,45 @@
     return '<div class="m-field' + (full ? " full" : "") + '"' + (rowId ? ' id="' + rowId + '"' : "") +
       (hidden ? ' style="display:none;"' : "") + '><div class="k">' + esc(label) + "</div>" + inner + "</div>";
   }
+  // One editor row for one question. Both places a record is edited — the record panel and
+  // the New record panel — build their rows here, so the two cannot drift apart the way a
+  // second copy of this if/else chain would.
+  //
+  // opts.photo === "input" asks for a file picker instead of skipping the question: the
+  // record panel shows photos as a gallery with its own Change button, but a record being
+  // created has no photo to show yet and no row to attach one to.
+  function edFieldRowHtml(f, d, opts) {
+    opts = opts || {};
+    d = d || {};
+    var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
+    if (f.type === "photo") {
+      if (opts.photo !== "input") return "";
+      inner = '<input type="file" accept="image/*" class="ed-in" id="' + id + '">';
+    }
+    else if (f.type === "long_text") inner = edText(id, v, true);
+    else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
+    else if (f.type === "multi_select") inner = edChecks(id, v, choiceList(f));
+    else if (f.type === "dropdown") {
+      inner = edSelect(id, v, [""].concat(choiceList(f)));
+      if (fieldHasOther(f)) {
+        var ov = d[otherKeyFor(f)];
+        inner += '<input id="' + id + '__other" class="ed-in" placeholder="If other — what?" value="' + esc(ov == null ? "" : ov) +
+                 '" style="margin-top:6px;' + (isOtherChoice(f, v) ? "" : "display:none;") + '">';
+      }
+    }
+    else if (f.type === "dob") { inner = edDate(id, v); if (v) label += " · " + ageText(v); }
+    else if (f.type === "date") inner = edDate(id, v);
+    else if (f.type === "number") inner = edNum(id, v);
+    else if (f.type === "phone") inner = edPhone(id, v);
+    else inner = edText(id, v, false);
+    // Only the create panel marks what must be answered; the record panel is autosave and
+    // never refuses a save, so a star there would promise a validation that does not happen.
+    if (opts.stars && f.required) label += ' <span style="color:var(--silver);">*</span>';
+    var gated = !!(f.show_if && f.show_if.field);
+    var hide = gated && !condMet(f, d) && (v == null || v === "");
+    return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide);
+  }
+
   // Phone editor with the full country/flag picker
   var COUNTRIES_ED = [
     { cc: "962", len: [9], ph: "7X XXX XXXX", flag: "jo", name: "Jordan" },
@@ -3911,6 +3963,9 @@
     if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-flex" : "none";
     document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
+    // Adding a record by hand is an edit, so it follows can_edit rather than admin — the same
+    // permission that lets someone change an answer already on file.
+    document.getElementById("custom-new").style.display = canEdit(t.id) ? "" : "none";
     customSel = {}; paintSelBar();
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
@@ -5644,31 +5699,12 @@
       wireImportedFiles();   // resolves every .imp-thumb, including the photo gallery
       return;
     }
+    // a conditional question is built either way and hidden when it does not apply — unless
+    // it already holds an answer, which is history and stays on screen (edFieldRowHtml)
     var grid = detailOrder(fields).map(function (f) {
       if (f.type === "photo") return "";
       if (!showsOn(f, d, true)) return "";      // a retired question this record never answered
-      var id = "ed-" + f.id, v = d[f.id], inner, label = f.label;
-      if (f.type === "long_text") inner = edText(id, v, true);
-      else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
-      else if (f.type === "multi_select") inner = edChecks(id, v, choiceList(f));
-      else if (f.type === "dropdown") {
-        inner = edSelect(id, v, [""].concat(choiceList(f)));
-        if (fieldHasOther(f)) {
-          var ov = d[otherKeyFor(f)];
-          inner += '<input id="' + id + '__other" class="ed-in" placeholder="If other — what?" value="' + esc(ov == null ? "" : ov) +
-                   '" style="margin-top:6px;' + (isOtherChoice(f, v) ? "" : "display:none;") + '">';
-        }
-      }
-      else if (f.type === "dob") { inner = edDate(id, v); if (v) label += " · " + ageText(v); }
-      else if (f.type === "date") inner = edDate(id, v);
-      else if (f.type === "number") inner = edNum(id, v);
-      else if (f.type === "phone") inner = edPhone(id, v);
-      else inner = edText(id, v, false);
-      // a conditional question is built either way and hidden when it does not apply —
-      // unless it already holds an answer, which is history and stays on screen
-      var gated = !!(f.show_if && f.show_if.field);
-      var hide = gated && !condMet(f, d) && (v == null || v === "");
-      return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide);
+      return edFieldRowHtml(f, d);
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
     body.innerHTML = scoreHead +
@@ -5744,6 +5780,153 @@
       s.data = nd; renderCustom(); setEdStatus("Saved ✓");
     });
   }
+  // ---- New record: add a row by hand (all tables, current and future) --------
+  // Until now every record in the app was born from a public form submit or an import —
+  // there was no way to type one in. A phoned-in complaint, a paper form, and an event
+  // somebody has to create before anyone can sign up all need this.
+  //
+  // The rules a created record follows are the public form's rules, not new ones: a
+  // question that does not apply carries no answer, an empty answer stores no key at all,
+  // and only the questions actually being asked can be required.
+
+  // Which questions apply to the answers held right now. A created record has no history,
+  // so — unlike the record panel — nothing is kept visible on the grounds that it was
+  // answered before the gate closed. Settles in a few passes, the way the public form does,
+  // because a question can sit behind a question that sits behind a question.
+  function newRecordVisible(fields, cur) {
+    var vis = {};
+    (fields || []).forEach(function (f) { vis[f.id] = true; });
+    for (var pass = 0; pass < 8; pass++) {
+      var seen = {}, changed = false;
+      (fields || []).forEach(function (f) { seen[f.id] = vis[f.id] ? (cur || {})[f.id] : null; });
+      (fields || []).forEach(function (f) {
+        var on = condMet(f, seen);
+        if (on !== vis[f.id]) { vis[f.id] = on; changed = true; }
+      });
+      if (!changed) break;
+    }
+    return vis;
+  }
+  // Required questions with nothing in them — counting only the ones being asked, because a
+  // required question that does not apply would otherwise make the record impossible to save.
+  function newRecordMissing(fields, cur, hasFile) {
+    var vis = newRecordVisible(fields, cur);
+    return (fields || []).filter(function (f) {
+      if (!f.required || !vis[f.id]) return false;
+      if (f.type === "photo") return !(hasFile && hasFile(f));
+      var v = (cur || {})[f.id];
+      return v == null || String(v).trim() === "";
+    });
+  }
+  // The row to store. Same shape a public submission has, so a typed record and a submitted
+  // one are indistinguishable to the grid, the filter, the scorer and the export.
+  function newRecordData(fields, cur, photos, others) {
+    var out = {};
+    var vis = newRecordVisible(fields, cur);
+    (fields || []).forEach(function (f) {
+      if (f.type === "photo") return;
+      if (!vis[f.id]) return;                                  // never asked, no answer
+      var v = (cur || {})[f.id];
+      if (v == null || String(v).trim() === "") return;         // empty stores no key
+      out[f.id] = typeof v === "string" ? v.trim() : v;
+      var ok = (others || {})[f.id];
+      if (ok && isOtherChoice(f, out[f.id])) out[otherKeyFor(f)] = ok;
+    });
+    Object.keys(photos || {}).forEach(function (fid) { if (photos[fid]) out[fid] = photos[fid]; });
+    return out;
+  }
+
+  function openNewRecord(t, fields) {
+    clearAutosave();                 // this panel commits on a button; it must never autosave
+    currentApp = null;
+    var body = document.getElementById("modal-body");
+    // Staff-only questions are shown: the person filling this in IS staff, and a table whose
+    // status or price is staff-only would otherwise be uncreatable.
+    var asked = (fields || []).filter(function (f) { return f.type !== "link"; });
+    var grid = asked.map(function (f) { return edFieldRowHtml(f, {}, { photo: "input", stars: true }); }).join("");
+    body.innerHTML =
+      '<div class="rec-head"><div class="rh-main"><div class="rh-title">New record</div>' +
+      '<div class="rh-meta">' + esc(t.name) + "</div></div></div>" +
+      '<div class="m-grid">' + grid + "</div>" +
+      '<div class="nr-foot"><button type="button" class="btn-new" id="nr-save">Create record</button>' +
+      '<span class="nr-msg" id="nr-msg"></span></div>';
+
+    asked.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
+    // the free-text box behind an "other" choice, same behaviour as the record panel
+    asked.forEach(function (f) {
+      if (!fieldHasOther(f)) return;
+      var sel = document.getElementById("ed-" + f.id), oth = document.getElementById("ed-" + f.id + "__other");
+      if (!sel || !oth) return;
+      sel.addEventListener("change", function () {
+        var on = isOtherChoice(f, sel.value);
+        oth.style.display = on ? "" : "none";
+        if (!on) oth.value = "";
+      });
+    });
+    function fileFor(f) { var el = document.getElementById("ed-" + f.id); return (el && el.files && el.files[0]) || null; }
+    function othersNow() {
+      var o = {};
+      asked.forEach(function (f) {
+        if (!fieldHasOther(f)) return;
+        var el = document.getElementById("ed-" + f.id + "__other");
+        var v = el ? (el.value || "").trim() : "";
+        if (v) o[f.id] = v;
+      });
+      return o;
+    }
+    // Questions appear and disappear as the answers they wait on change, live.
+    function applyConds() {
+      var cur = edValues(asked), vis = newRecordVisible(asked, cur);
+      asked.forEach(function (f) {
+        var row = (f.show_if && f.show_if.field) ? document.getElementById("cond-" + f.id) : null;
+        if (row) row.style.display = vis[f.id] ? "" : "none";
+      });
+    }
+    if (asked.some(function (f) { return f.show_if && f.show_if.field; })) {
+      var mg = body.querySelector(".m-grid");
+      if (mg) ["change", "input"].forEach(function (ev) { mg.addEventListener(ev, applyConds, true); });
+      applyConds();
+    }
+
+    var btn = document.getElementById("nr-save"), msg = document.getElementById("nr-msg");
+    function say(text, ok) { msg.textContent = text; msg.className = "nr-msg" + (ok ? " ok" : ""); }
+    btn.addEventListener("click", function () {
+      var cur = edValues(asked);
+      var missing = newRecordMissing(asked, cur, fileFor);
+      [].slice.call(body.querySelectorAll(".invalid")).forEach(function (e) { e.classList.remove("invalid"); });
+      if (missing.length) {
+        missing.forEach(function (f) { var el = document.getElementById("ed-" + f.id); if (el) el.classList.add("invalid"); });
+        say("Fill in " + missing.map(function (f) { return f.label; }).join(", "));
+        var first = document.getElementById("ed-" + missing[0].id);
+        if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      btn.disabled = true; say("Saving…", true);
+      var shots = asked.filter(function (f) { return f.type === "photo" && fileFor(f); });
+      Promise.all(shots.map(function (f) {
+        return storageUpload(fileFor(f)).then(function (p) { return { id: f.id, path: p }; });
+      })).then(function (ups) {
+        var photos = {};
+        ups.forEach(function (u) { photos[u.id] = u.path; });
+        return db.rpc("create_record", { p_table: t.id, p_data: newRecordData(asked, cur, photos, othersNow()) });
+      }).then(function (res) {
+        if (res && res.error) throw res.error;
+        document.getElementById("modal").classList.remove("open");
+        if (currentCustom && currentCustom.table && currentCustom.table.id === t.id) openCustomTable(t);
+      }).catch(function (err) {
+        btn.disabled = false;
+        var m = String((err && (err.message || err.hint)) || "");
+        // The one failure worth naming precisely: the code is deployed but the migration
+        // behind it is not, which reads as "the button is broken" unless it says so.
+        say(/create_record|function.*not.*(exist|found)|PGRST202/i.test(m)
+          ? "Creating records needs the database migration (09-create-record.sql) applied first."
+          : "Not saved — try again.");
+        if (window.console) console.error(err);
+      });
+    });
+    document.getElementById("modal").classList.add("open");
+  }
+
   // ---- Review chain (dynamic: each person assigns who's next) ----
   function userSelectHtml(cls) {
     return '<select class="' + cls + '"><option value="">— choose who is next —</option>' + assignUsers.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(u.name) + "</option>"; }).join("") + "</select>";
@@ -5861,6 +6044,9 @@
     b.querySelector(".star-glyph").textContent = on ? "★" : "☆";
   }
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
+  document.getElementById("custom-new").addEventListener("click", function () {
+    if (currentCustom) openNewRecord(currentCustom.table, currentCustom.fields || []);
+  });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) { useBuilderHost(); openBuilderEdit(currentCustom.table); } });
   // branch scope: chips on the page and the children in the sidebar do the same thing
   document.getElementById("custom-kids").addEventListener("click", function (e) {
