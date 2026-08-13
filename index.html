@@ -886,6 +886,14 @@
   /* New record panel: the same editor rows as the record panel, with a footer that commits */
   .nr-foot { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
   .nr-msg { color: var(--danger); font-size: var(--fs-2); }
+  /* A parent record's children, listed inside it — the signups on an event */
+  .kid-rows { display: flex; flex-direction: column; gap: 6px; }
+  .kid-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 8px;
+    background: var(--bg-2); border: 1px solid var(--line); }
+  .kid-main { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+  .kid-name { font-weight: 600; font-size: var(--fs-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kid-sub { color: var(--muted); font-size: var(--fs-2); }
+  .kid-acts { display: flex; gap: 6px; flex: 0 0 auto; }
   .nr-msg.ok { color: var(--ok); }
 
   /* ---- the toolbar above the records ---- */
@@ -3860,6 +3868,8 @@
       // is cleared. Nothing is deleted to achieve this.
       customTables = (res.data || []).filter(function (t) {
         if (t.builtin_key) return false;                     // built-in placeholders
+        // child_only: storage for a parent's records, read inside the parent, not browsed
+        if (t.config && t.config.child_only) return false;
         return showArchived || !(t.config && t.config.archived);
       });
       var hiddenCount = (res.data || []).filter(function (t) {
@@ -3983,7 +3993,7 @@
     document.getElementById("custom-new").style.display = canEdit(t.id) ? "" : "none";
     // Payroll is money leaving the business, so it follows can_manage rather than can_edit.
     document.getElementById("custom-payroll").style.display =
-      (payrollConfig(t) && canManage(t.id)) ? "inline-flex" : "none";
+      (payrollHost(t) && canManage(t.id)) ? "inline-flex" : "none";
     customSel = {}; paintSelBar();
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
@@ -4827,6 +4837,13 @@
     return (t.config.parent && t.config.parent.table) ? c : null;
   }
   function payrollParentTable(t) { return t.config.parent.table; }
+  // The button belongs where Faisal is — on Events — while the config that describes the
+  // export stays on the table whose rows it reads.
+  function payrollHost(t) {
+    if (payrollConfig(t)) return t;
+    var k = childTableOf(t);
+    return (k && payrollConfig(k)) ? k : null;
+  }
   // A date is "in range" on whole days, inclusive at both ends: somebody asking for
   // 1 to 31 August means the 31st too, and comparing ISO dates as text does that without
   // dragging a timezone into it.
@@ -5850,8 +5867,9 @@
       // the header already carries the number, the date and the shop
       body.innerHTML = scoreHead +
         '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
-        moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
+        '<div id="cd-kids"></div>' + moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
       wireMoreLine(s, fields); wireLinkChips();
+      loadChildRows(s, childTableOf(currentCustom && currentCustom.table));
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
       document.getElementById("modal").classList.add("open");
       wireImportedFiles();   // resolves every .imp-thumb, including the photo gallery
@@ -5865,11 +5883,11 @@
       return edFieldRowHtml(f, d);
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
-    // Only a manager sees the link block, which is the same permission record_share_token
-    // enforces — an editor shown a block that then refuses them is just a worse way to say no.
-    var childT = (currentCustom && currentCustom.table && canManage(currentCustom.table.id))
-      ? childTableOf(currentCustom.table) : null;
-    body.innerHTML = scoreHead + recordLinkBlockHtml(childT) +
+    // The children are listed for anyone who can open the record; only a manager gets the
+    // link block, which is the permission record_share_token enforces anyway.
+    var kidT = (currentCustom && currentCustom.table) ? childTableOf(currentCustom.table) : null;
+    var childT = (kidT && canManage(currentCustom.table.id)) ? kidT : null;
+    body.innerHTML = scoreHead + recordLinkBlockHtml(childT) + '<div id="cd-kids"></div>' +
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub"><span id="ed-status" class="ed-status"></span></div>' +
@@ -5878,6 +5896,7 @@
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
     wireMoreLine(s, fields); wireLinkChips();
     fillRecordLink(s, childT);
+    loadChildRows(s, kidT);
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
     // show/hide the "other" free-text box as the choice changes
     fields.forEach(function (f) {
@@ -5994,6 +6013,87 @@
   // its own link and QR: /f/?t=<child slug>&e=<token>. Same public page as every other
   // form, one extra parameter. The token is minted on first open and rotates the way the
   // per-table QR does — regenerating means every code already printed stops working.
+  // ---- A parent record's children, listed inside it --------------------------
+  // A child table is storage, not a place to browse: every signup from every event in one
+  // flat list is not how anybody reads it. You open the event and its people are there.
+  // config.child_only keeps such a table off the sidebar and Home while leaving it a live
+  // public form — the link is keyed on the slug, not on being in the sidebar.
+  function childRowText(child, fields, s) {
+    var ids = (child.config && child.config.card_fields) || [];
+    var parts = ids.map(function (id) {
+      var f = (fields || []).filter(function (x) { return x.id === id; })[0];
+      return f ? String(customCellText(f, s.data || {}) || "").trim() : "";
+    }).filter(Boolean);
+    return parts.length ? parts : ["—"];
+  }
+  function renderChildRows(host, child, fields, rows, mayManage) {
+    if (!rows.length) {
+      host.innerHTML = '<div class="m-sub" style="margin-top:14px;">' + esc(child.name) +
+        '</div><div style="color:var(--muted);padding:10px 0;">Nobody yet.</div>';
+      return;
+    }
+    // confirmed first, then backup, each oldest first — the order the places were earned
+    var order = { confirmed: 0, backup: 1 };
+    rows = rows.slice().sort(function (a, b) {
+      var d = (order[a.slot] == null ? 2 : order[a.slot]) - (order[b.slot] == null ? 2 : order[b.slot]);
+      return d || String(a.created_at).localeCompare(String(b.created_at));
+    });
+    var c = rows.filter(function (r) { return r.slot === "confirmed"; }).length;
+    var b = rows.filter(function (r) { return r.slot === "backup"; }).length;
+    host.innerHTML = '<div class="m-sub" style="margin-top:14px;">' + esc(child.name) + " · " +
+        c + " confirmed" + (b ? " · " + b + " backup" : "") + "</div>" +
+      '<div class="kid-rows">' + rows.map(function (s) {
+        var txt = childRowText(child, fields, s);
+        return '<div class="kid-row" data-id="' + esc(s.id) + '">' +
+          '<div class="kid-main"><span class="kid-name">' + esc(txt[0]) + "</span>" +
+          (txt[1] ? '<span class="kid-sub">' + esc(txt[1]) + "</span>" : "") + "</div>" +
+          slotPillHtml(s) +
+          (mayManage ? '<div class="kid-acts">' +
+            (s.slot === "backup" ? '<button type="button" class="linkbtn" data-slot="confirmed">Give a place</button>' : "") +
+            (s.slot === "confirmed" ? '<button type="button" class="linkbtn" data-slot="backup">To backup</button>' : "") +
+            '<button type="button" class="linkbtn qr-regen" data-del="1">Remove</button>' +
+          "</div>" : "") + "</div>";
+      }).join("") + "</div>";
+
+    if (!mayManage) return;
+    [].slice.call(host.querySelectorAll(".kid-row")).forEach(function (row) {
+      var id = row.getAttribute("data-id");
+      var rec = rows.filter(function (r) { return String(r.id) === String(id); })[0];
+      [].slice.call(row.querySelectorAll("[data-slot]")).forEach(function (btn) {
+        btn.addEventListener("click", function () { moveSignup(rec, btn.getAttribute("data-slot")); });
+      });
+      var del = row.querySelector("[data-del]");
+      if (del) del.addEventListener("click", function () {
+        // Removing a confirmed person promotes the first backup, by trigger. Say so, because
+        // it is a second change the click causes and nobody should be surprised by it.
+        if (!window.confirm("Remove " + childRowText(child, fields, rec)[0] + " from this event?" +
+          (rec.slot === "confirmed" ? "\n\nThe first person on the backup list takes the place." : ""))) return;
+        db.from("app_submissions").delete().eq("id", rec.id).then(function (r) {
+          if (r.error) { window.alert("Could not remove them. " + (r.error.message || "")); return; }
+          if (currentCustom) openCustomTable(currentCustom.table);
+        });
+      });
+    });
+  }
+  function loadChildRows(parentRec, child) {
+    var host = document.getElementById("cd-kids");
+    if (!host || !child) return;
+    host.innerHTML = '<div class="m-sub" style="margin-top:14px;">' + esc(child.name) + "</div>" +
+      '<div style="color:var(--muted);padding:10px 0;">Loading…</div>';
+    var mayManage = canManage(child.id);
+    Promise.all([
+      db.from("app_fields").select("*").eq("table_id", child.id).order("position", { ascending: true }),
+      db.from("app_submissions").select("*").eq("table_id", child.id).eq("parent_id", parentRec.id)
+    ]).then(function (out) {
+      if (out[1].error) {
+        host.innerHTML = '<div class="m-sub" style="margin-top:14px;">' + esc(child.name) +
+          '</div><div style="color:var(--muted);padding:10px 0;">Cannot read these yet.</div>';
+        return;
+      }
+      renderChildRows(host, child, out[0].data || [], out[1].data || [], mayManage);
+    });
+  }
+
   function recordLinkBlockHtml(child) {
     if (!child) return "";
     return '<div class="m-sub" style="margin-top:14px;">' + esc(child.name) + " link</div>" +
@@ -6315,7 +6415,9 @@
     if (currentCustom) openNewRecord(currentCustom.table, currentCustom.fields || []);
   });
   document.getElementById("custom-payroll").addEventListener("click", function () {
-    if (currentCustom) openPayroll(currentCustom.table, currentCustom.fields || []);
+    if (!currentCustom) return;
+    var host = payrollHost(currentCustom.table);
+    if (host) openPayroll(host, currentCustom.fields || []);
   });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) { useBuilderHost(); openBuilderEdit(currentCustom.table); } });
   // branch scope: chips on the page and the children in the sidebar do the same thing
