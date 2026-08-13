@@ -1515,6 +1515,9 @@
             <button class="tb-btn" id="custom-export" type="button" style="display:none;" title="Download these records as CSV">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"></path><path d="M8 11l4 4 4-4"></path><path d="M4 19h16"></path></svg>CSV
             </button>
+            <button class="tb-btn" id="custom-payroll" type="button" style="display:none;" title="Export names and money for a date range">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path><path d="M8 14h8"></path></svg>Payroll
+            </button>
             <div class="tb-right">
               <button class="tb-btn" id="custom-edit" style="display:none;" title="Edit this table and its questions">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"></path></svg>Edit table
@@ -3978,6 +3981,9 @@
     // Adding a record by hand is an edit, so it follows can_edit rather than admin — the same
     // permission that lets someone change an answer already on file.
     document.getElementById("custom-new").style.display = canEdit(t.id) ? "" : "none";
+    // Payroll is money leaving the business, so it follows can_manage rather than can_edit.
+    document.getElementById("custom-payroll").style.display =
+      (payrollConfig(t) && canManage(t.id)) ? "inline-flex" : "none";
     customSel = {}; paintSelBar();
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
@@ -4800,6 +4806,136 @@
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
+  // ---- Date-range export with a per-person total (all tables) ----------------
+  // "Pick two dates, get the names and the money." A table declares:
+  //
+  //   config.payroll = {
+  //     date:  '<parent field id>',   -- the parent's date the range filters on
+  //     group: '<child field id>',    -- the person
+  //     rate:  '<parent field id>',   -- money earned per row
+  //     only_slot: 'confirmed'        -- optional: which places count
+  //   }
+  //
+  // The range filters on the PARENT's date, not the submission's: pay is earned by working
+  // the event, not by signing up for it. And the amount SUMS each event's own rate rather
+  // than multiplying by one number, so a rate that changes next year leaves old months alone.
+  // The date and the rate are the PARENT's questions, so a table with no parent has no
+  // payroll — better to offer nothing than a button that builds a query with no table id.
+  function payrollConfig(t) {
+    var c = t && t.config && t.config.payroll;
+    if (!c || !c.date || !c.group) return null;
+    return (t.config.parent && t.config.parent.table) ? c : null;
+  }
+  function payrollParentTable(t) { return t.config.parent.table; }
+  // A date is "in range" on whole days, inclusive at both ends: somebody asking for
+  // 1 to 31 August means the 31st too, and comparing ISO dates as text does that without
+  // dragging a timezone into it.
+  function inDateRange(v, from, to) {
+    var d = String(v == null ? "" : v).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;   // no date, no pay period
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  }
+  function payrollNumber(v) {
+    var n = parseFloat(String(v == null ? "" : v).replace(/[^\d.\-]/g, ""));
+    return isFinite(n) ? n : 0;
+  }
+  // One row per person: name exactly as they typed it, how many events, and the money.
+  // Rows whose person is blank are kept under "(no name)" rather than dropped — a signup
+  // that somehow has no name is money somebody is owed, and hiding it loses it.
+  function payrollRows(subs, parents, cfg, from, to) {
+    if (!cfg) return [];
+    var byId = {};
+    (parents || []).forEach(function (p) { byId[p.id] = p; });
+    var acc = {}, order = [];
+    (subs || []).forEach(function (s) {
+      if (cfg.only_slot && s.slot !== cfg.only_slot) return;
+      var p = byId[s.parent_id];
+      if (!p) return;                                   // no event, nothing earned
+      var pd = p.data || {};
+      if (!inDateRange(pd[cfg.date], from, to)) return;
+      var name = String(((s.data || {})[cfg.group]) || "").trim() || "(no name)";
+      var key = name.toLowerCase();                     // "Ahmad" and "ahmad " are one person
+      if (!acc[key]) { acc[key] = { name: name, events: 0, amount: 0 }; order.push(key); }
+      acc[key].events += 1;
+      acc[key].amount += cfg.rate ? payrollNumber(pd[cfg.rate]) : 0;
+    });
+    return order.map(function (k) { return acc[k]; })
+      .sort(function (a, b) { return a.name.localeCompare(b.name); });
+  }
+  function payrollCsv(rows, from, to, t) {
+    var head = ["Name", "Events worked", "Amount (JD)"].map(csvCell).join(",");
+    var body = rows.map(function (r) {
+      return [csvCell(r.name), csvCell(r.events), csvCell(r.amount)].join(",");
+    }).join("\n");
+    var tot = rows.reduce(function (a, r) { return { e: a.e + r.events, m: a.m + r.amount }; }, { e: 0, m: 0 });
+    // A total row, because it is the first thing anyone checks and adding it by hand in Excel
+    // is how a payroll sheet ends up disagreeing with itself.
+    var total = [csvCell("TOTAL — " + rows.length + (rows.length === 1 ? " person" : " people")),
+                 csvCell(tot.e), csvCell(tot.m)].join(",");
+    var title = csvCell((t && t.name ? t.name : "Export") + ": " + (from || "the beginning") + " to " + (to || "today"));
+    // BOM so Excel opens Arabic correctly instead of as mojibake
+    var blob = new Blob(["﻿" + title + "\n\n" + head + "\n" + body + "\n" + total],
+      { type: "text/csv;charset=utf-8;" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = ((t && t.slug) || "export") + "-" + (from || "start") + "-to-" + (to || "today") + ".csv";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function openPayroll(t, fields) {
+    var cfg = payrollConfig(t); if (!cfg) return;
+    clearAutosave();
+    var body = document.getElementById("modal-body");
+    var today = new Date().toISOString().slice(0, 10);
+    var first = today.slice(0, 8) + "01";
+    body.innerHTML =
+      '<div class="rec-head"><div class="rh-main"><div class="rh-title">Export for payroll</div>' +
+      '<div class="rh-meta">' + esc(t.name) + ' · by event date, ' +
+      (cfg.only_slot ? esc(cfg.only_slot) + " places only" : "every place") + "</div></div></div>" +
+      '<div class="m-grid">' +
+        edRow("From", edDate("pay-from", first)) +
+        edRow("To", edDate("pay-to", today)) +
+      "</div>" +
+      '<div id="pay-preview" class="m-sub" style="margin-top:12px;"></div>' +
+      '<div class="nr-foot"><button type="button" class="btn-new" id="pay-go">Download CSV</button>' +
+      '<span class="nr-msg" id="pay-msg"></span></div>';
+
+    // Every event this table's records hang off, so the range can be applied to the event's
+    // own date. Read once when the panel opens rather than per row.
+    var parents = [];
+    db.from("app_submissions").select("id,data").eq("table_id", payrollParentTable(t))
+      .then(function (r) { parents = (r.data || []); preview(); });
+
+    function range() {
+      return { from: (document.getElementById("pay-from") || {}).value || "",
+               to: (document.getElementById("pay-to") || {}).value || "" };
+    }
+    function rowsNow() {
+      var g = range();
+      return payrollRows((currentCustom && currentCustom.subs) || [], parents, cfg, g.from, g.to);
+    }
+    function preview() {
+      var rows = rowsNow();
+      var tot = rows.reduce(function (a, r) { return { e: a.e + r.events, m: a.m + r.amount }; }, { e: 0, m: 0 });
+      document.getElementById("pay-preview").textContent = rows.length
+        ? rows.length + (rows.length === 1 ? " person" : " people") + " · " + tot.e +
+          (tot.e === 1 ? " event" : " events") + " · " + tot.m + " JD"
+        : "Nothing in that range.";
+    }
+    ["pay-from", "pay-to"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) ["change", "input"].forEach(function (ev) { el.addEventListener(ev, preview); });
+    });
+    document.getElementById("pay-go").addEventListener("click", function () {
+      var g = range(), rows = rowsNow();
+      if (!rows.length) { document.getElementById("pay-msg").textContent = "Nothing in that range to export."; return; }
+      payrollCsv(rows, g.from, g.to, t);
+    });
+    document.getElementById("modal").classList.add("open");
+  }
+
   function renderGroupPanel(t, fields) {
     var panel = document.getElementById("group-panel");
     if (!panel) return;
@@ -6177,6 +6313,9 @@
   document.getElementById("custom-refresh").addEventListener("click", function () { if (currentCustom) openCustomTable(currentCustom.table); });
   document.getElementById("custom-new").addEventListener("click", function () {
     if (currentCustom) openNewRecord(currentCustom.table, currentCustom.fields || []);
+  });
+  document.getElementById("custom-payroll").addEventListener("click", function () {
+    if (currentCustom) openPayroll(currentCustom.table, currentCustom.fields || []);
   });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) { useBuilderHost(); openBuilderEdit(currentCustom.table); } });
   // branch scope: chips on the page and the children in the sidebar do the same thing
