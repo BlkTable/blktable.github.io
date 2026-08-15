@@ -768,6 +768,13 @@
   .link-chip .lk { opacity: 0.65; font-size: var(--fs-2); }
   .side-archive { opacity: 0.55; margin-top: 6px; border-top: 1px solid var(--line); border-radius: 0; }
   .side-archive:hover { opacity: 1; }
+  /* An archived table only appears while Archived is switched on, and has to be tellable
+     apart from a live one at a glance — otherwise you edit history thinking it is today. */
+  .side-item.is-archived .side-label { opacity: 0.6; }
+  .side-item.is-archived .tmark { opacity: 0.5; }
+  .side-arch-tag { margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: var(--fs-1);
+    font-weight: 700; letter-spacing: 0.2px; color: var(--muted);
+    background: rgba(255,255,255,0.07); border: 1px solid var(--line); }
   .grid th .sort sup { font-size: var(--fs-1); margin-left: 1px; opacity: 0.8; }
   /* grouped rows and the summary line under the grid */
   .grid tr.grp td { background: rgba(255,255,255,0.06); font-weight: 800; letter-spacing: 0.2px;
@@ -3778,6 +3785,69 @@
   // archived tables are excluded from the sidebar and Home until this is switched on
   var showArchived = false;
   var currentCustom = null;
+
+  // ---- Archive: the way a table is finished with (every table, current + future) ----
+  // Deleting a table takes its records with it and there is no undo, so "we are done with
+  // this one" is a different action from "this was a mistake". Archiving sets one flag in
+  // the table's own config — nothing is copied, moved or dropped — and the table leaves the
+  // sidebar, Home, the Ctrl-K palette and the public-forms list. Its records, its fields,
+  // its saved views and its public link are all exactly where they were, and clearing the
+  // flag puts the table back with them. That is the whole feature: the same flag the
+  // imported Airtable history has already used, now reachable from the menu.
+  //
+  // What archiving deliberately does NOT do is close the public form. The link and any
+  // printed QR code keep working, because a table can be archived by one person on a
+  // Tuesday and a form's job is decided by whoever prints the poster. Restart the form
+  // if you need it frozen; the confirm text says so.
+  function isArchived(t) { return !!(t && t.config && t.config.archived); }
+  // Kept pure and separate from the write so it can be tested without a database, and so
+  // config keys nobody here knows about (columns, statuses, capacity…) survive untouched.
+  function archivedConfig(cfg, on, whenIso, byId) {
+    var out = Object.assign({}, cfg || {});
+    if (on) {
+      out.archived = true;
+      if (whenIso) out.archived_at = whenIso;
+      if (byId) out.archived_by = byId;
+    } else {
+      // restoring leaves no trace: a table back in the sidebar reading "archived by" is a
+      // table people hesitate over
+      delete out.archived; delete out.archived_at; delete out.archived_by;
+    }
+    return out;
+  }
+  function archiveConfirmText(t) {
+    return "Archive “" + (t && t.name ? t.name : "this table") + "”?\n\n" +
+      "· Nothing is deleted. Every record, field and saved view stays as it is.\n" +
+      "· It leaves the sidebar, Home and the Ctrl-K search, and moves under Archived at the foot of the sidebar.\n" +
+      "· Its public form link and any printed QR codes keep working — archiving hides the table, it does not close the form.\n\n" +
+      "You can put it back at any time from Archived.";
+  }
+  function setTableArchived(t, on) {
+    if (!t || !isAdmin) return;
+    var cfg = archivedConfig(t.config, on, new Date().toISOString(), myUserId);
+    db.from("app_tables").update({ config: cfg }).eq("id", t.id).then(function (r) {
+      if (r && r.error) {
+        window.alert("Could not " + (on ? "archive" : "restore") + " the table.\n\n" + (r.error.message || ""));
+        if (window.console) console.error(r.error);
+        return;
+      }
+      t.config = cfg;
+      // Archiving the table you are looking at while archived tables are hidden would leave
+      // you staring at a page that is no longer in the sidebar — so step back to Home.
+      var open = currentCustom && currentCustom.table.id === t.id;
+      var leaving = on && !showArchived && open;
+      if (leaving) currentCustom = null;
+      loadCustomTables().then(function () {
+        if (leaving) { showView("home"); return; }
+        // still on it (restored, or archived while Archived is switched on): reopen so the
+        // header tag matches what the menu just did
+        if (open) {
+          var nt = (customTables || []).filter(function (x) { return x.id === t.id; })[0];
+          if (nt) openCustomTable(nt);
+        }
+      });
+    });
+  }
   // ---- Shared custom-field semantics (every table, current + future) ----
   // A dropdown choice flagged {other:true} opens a free-text box on the public form; that answer is
   // stored next to the choice under "<fieldId>__other". A "dob" field stores a date but reads as an age.
@@ -4003,17 +4073,21 @@
       // is cleared. Nothing is deleted to achieve this.
       customTables = (res.data || []).filter(function (t) {
         if (t.builtin_key) return false;                     // built-in placeholders
-        return showArchived || !(t.config && t.config.archived);
+        return showArchived || !isArchived(t);
       });
       var hiddenCount = (res.data || []).filter(function (t) {
-        return !t.builtin_key && t.config && t.config.archived;
+        return !t.builtin_key && isArchived(t);
       }).length;
       var slot = document.getElementById("custom-tables-slot");
       slot.innerHTML = "";
       function sideItem(t) {
         var b = document.createElement("button");
-        b.className = "side-item"; b.setAttribute("data-custom", t.id); b.title = t.name;
-        b.innerHTML = tmarkHtml(t.id, t.name, t.config) + '<span class="side-label">' + esc(t.name) + '</span><span class="side-gear" title="Options">⋯</span>';
+        b.className = "side-item" + (isArchived(t) ? " is-archived" : "");
+        b.setAttribute("data-custom", t.id);
+        b.title = isArchived(t) ? t.name + " — archived" : t.name;
+        b.innerHTML = tmarkHtml(t.id, t.name, t.config) + '<span class="side-label">' + esc(t.name) + '</span>' +
+          (isArchived(t) ? '<span class="side-arch-tag">archived</span>' : "") +
+          '<span class="side-gear" title="Options">⋯</span>';
         b.addEventListener("click", function () { openCustomTable(t); });
         return b;
       }
@@ -4087,6 +4161,10 @@
         if (hiddenCount || showArchived) {
           var tog = document.createElement("button");
           tog.className = "side-item side-nav-item side-archive";
+          tog.title = showArchived
+            ? "Hide archived tables again"
+            : hiddenCount + (hiddenCount === 1 ? " table has" : " tables have") +
+              " been archived — show them, and restore any one from its ⋯ menu";
           tog.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="4" rx="1"></rect><path d="M5 8v11h14V8"></path><path d="M10 12h4"></path></svg>' +
             '<span class="side-label">' + (showArchived ? "Hide archived" : "Archived") +
             '</span><span class="side-cat-n">' + hiddenCount + "</span>";
@@ -4108,8 +4186,11 @@
     document.getElementById("view-custom").classList.remove("hidden");
     setActiveSide(document.querySelector('.side-item[data-custom="' + t.id + '"]'));
     markOpened(t.id);
-    document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span class="bn-ar">· ' + esc(t.name_ar) + "</span>" : "");
-    document.getElementById("custom-basemenu").title = t.name + (t.name_ar ? " · " + t.name_ar : "");
+    document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span class="bn-ar">· ' + esc(t.name_ar) + "</span>" : "") +
+      // an archived table opens and reads exactly like a live one, which is the point and
+      // also the trap — say which one you are looking at
+      (isArchived(t) ? ' <span class="ws-tag">Archived</span>' : "");
+    document.getElementById("custom-basemenu").title = t.name + (t.name_ar ? " · " + t.name_ar : "") + (isArchived(t) ? " · archived" : "");
     paintTmark(document.getElementById("custom-tmark"), t.id, t.name, t.config, true);
     // Task tables are not public forms — no shareable link or QR for them, so the
     // Form tab has nothing to show and is taken away rather than left empty.
@@ -7693,6 +7774,11 @@
       items.push('<li data-a="edit">Edit form</li>');
       items.push('<li data-a="share">Who can see it…</li>');
       if (t.kind !== "task") items.push('<li data-a="link">Copy public link</li>');
+      // Archive sits above the separator, with Delete below it: finishing with a table is
+      // the ordinary ending and should be the one that is easy to reach.
+      items.push(isArchived(t)
+        ? '<li data-a="unarchive">Restore from archive</li>'
+        : '<li data-a="archive">Archive…</li>');
       items.push('<li data-a="delete" class="danger sep">Delete form…</li>');
     } else if (dv === "job_applications" || dv === "casting") {
       items.push('<li data-a="open">Open</li>');
@@ -7733,6 +7819,10 @@
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(link).catch(function () { window.prompt("Copy this link:", link); });
       } else { window.prompt("Copy this link:", link); }
+    } else if (act === "archive" && ctx.table) {
+      if (window.confirm(archiveConfirmText(ctx.table))) setTableArchived(ctx.table, true);
+    } else if (act === "unarchive" && ctx.table) {
+      setTableArchived(ctx.table, false);
     } else if (act === "delete" && ctx.table) {
       openDeleteTable(ctx.table.id, ctx.table.name);
     }
@@ -7853,6 +7943,13 @@
       '<div class="m-field full"><div class="k">Saving how you look at a table</div><div class="v" style="line-height:1.8;">' +
       'Set up a filter, sort and columns, then <b>Create new…</b> under the table in the sidebar saves it as a view. ' +
       "Personal views are yours alone; only admins can share one with everyone." +
+      "</div></div>" +
+      '<div class="m-field full"><div class="k">Finishing with a table</div><div class="v" style="line-height:1.8;">' +
+      "<b>Archive…</b> in the table's <b>⋯</b> menu is the ordinary ending: the table leaves the sidebar, Home and " +
+      mod + " K, and every record, field and saved view stays exactly where it is. " +
+      "Archived tables live under <b>Archived</b> at the foot of the sidebar, and <b>Restore from archive</b> puts one back.<br>" +
+      "Archiving does <b>not</b> close the public form — the link and any printed QR code keep working.<br>" +
+      "<b>Delete</b> is for a table that should never have existed. It takes its records with it and cannot be undone." +
       "</div></div>";
     document.getElementById("modal").classList.add("open");
   }
@@ -8135,6 +8232,13 @@
       items.push({ label: "Edit the form", on: function () { setBasePane("custom", "form"); } });
       items.push({ label: "Table settings", hint: "stages, actions, chain", on: function () { useBuilderHost(); openBuilderEdit(t); } });
       items.push({ label: "Share…", on: function () { openShare(t.id, t.name); } });
+      if (isArchived(t)) {
+        items.push({ label: "Restore from archive", hint: "back in the sidebar", on: function () { setTableArchived(t, false); } });
+      } else {
+        items.push({ label: "Archive…", hint: "keeps every record", on: function () {
+          if (window.confirm(archiveConfirmText(t))) setTableArchived(t, true);
+        } });
+      }
       items.push({ label: "Delete table…", on: function () { openDeleteTable(t.id, t.name); } });
     } else {
       items.push({ label: "Share…", on: function () { openShare(t.id, t.name); } });
