@@ -754,7 +754,16 @@
         : Promise.resolve(null);
       Promise.all([parentReady, slotsReady, mineReady]).then(function (both) {
         var parent = both[0], slots = both[1], mine = both[2];
-        if (scoped && !parent) { notFound(); return; }
+        if (scoped && !parent) {
+          // The slug is real, but this is a per-event form opened without (or with a stale)
+          // event token. Say so, rather than the generic "form not found" that reads as if the
+          // whole form is gone — the person needs the specific event's link, not this one.
+          document.getElementById("loading").style.display = "none";
+          var nf = document.getElementById("notfound");
+          nf.innerHTML = '<h2>This link needs an event code</h2><p>This form is filled per event, so it needs the specific event’s link. Please ask BLK for the link to the event you mean.</p>';
+          nf.style.display = "block";
+          return;
+        }
         if (parent) parent.slots = slots;
         // Where you stand comes before everything else, including "full": somebody who
         // already has a place must never be shown a form or told there is no room.

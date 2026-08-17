@@ -80,6 +80,34 @@ t('a child pointing at a different table is not this one\'s', () => {
   withTables([other], api => assert.strictEqual(api.childTableOf(parent), null));
 });
 
+// ---- recognising a scoped form (so no dead form-level link is ever offered for it) ----
+// A scoped form has no working /f/?t=<slug> of its own — only per-record links with a token.
+// Every share surface in the dashboard checks isScopedForm before offering publicFormLink,
+// which is what a token-less link opening as "Form not found" was.
+const scopedChild = { id: 'c-1', name: 'Event signups', slug: 'event-signup', config: { parent: { table: 'p-1', scoped: true } } };
+function withScoped(list, fn) {
+  return fn(load('index.html', ['publicFormLink', 'isScopedForm', 'parentTableOf'], { customTables: list }));
+}
+t('a scoped form is recognised as scoped', () => {
+  withScoped([scopedChild], api => assert.strictEqual(api.isScopedForm(scopedChild), true));
+});
+t('a parent pointer without scoped:true is a plain form, not scoped', () => {
+  // childTableOf keys off config.parent.table; scoping is a separate, explicit flag
+  withScoped([child], api => assert.strictEqual(api.isScopedForm(child), false));
+});
+t('an ordinary form with no parent is not scoped', () => {
+  withScoped([], api => assert.strictEqual(api.isScopedForm({ id: 'x', slug: 's', config: {} }), false));
+});
+t('null is not scoped', () => {
+  withScoped([], api => assert.strictEqual(api.isScopedForm(null), false));
+});
+t('a scoped form resolves its parent table by id', () => {
+  withScoped([scopedChild, parent], api => assert.strictEqual(api.parentTableOf(scopedChild).id, 'p-1'));
+});
+t('parentTableOf returns null for a non-scoped form', () => {
+  withScoped([child, parent], api => assert.strictEqual(api.parentTableOf(child), null));
+});
+
 // ---- the submit payload: what an ordinary form sends must not change ----
 // PostgREST resolves an RPC by the keys in the request body. A three-key body against a
 // database that still holds the two-argument submit_public_form resolves to nothing and
