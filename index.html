@@ -4062,6 +4062,17 @@
     return kids.length ? kids[0] : null;
   }
 
+  // A scoped form is filled per RECORD of its parent, so it has no form-level link — only
+  // /f/?t=<slug>&e=<token>, one per record. Handing out the token-less /f/?t=<slug> is what
+  // showed people "Form not found" (f/index.html trips notFound when a scoped form loads with
+  // no token). Everywhere a public link is offered checks this and points at the record share.
+  function isScopedForm(t) { return !!(t && t.config && t.config.parent && t.config.parent.scoped); }
+  function parentTableOf(t) {
+    if (!isScopedForm(t)) return null;
+    var pid = t.config.parent.table;
+    return (customTables || []).filter(function (c) { return c.id === pid; })[0] || null;
+  }
+
   // Tables you BROWSE — the sidebar, Home, the Ctrl-K palette, the list of public form
   // links. A child_only table is storage read inside its parent, so it belongs in none of
   // them; it stays in customTables because everything that looks a table up by id needs it
@@ -4207,8 +4218,31 @@
     document.getElementById("custom-tab-form").style.display = isTask ? "none" : "";
     formEditFor = null;                    // a different table needs its own questions loaded
     setBasePane("custom", "data");
-    var clink = publicFormLink(t.slug); var ca = document.getElementById("custom-link-a"); ca.href = clink; ca.textContent = clink;
-    if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
+    var ca = document.getElementById("custom-link-a"), qrBar = document.getElementById("custom-qr-bar");
+    if (isScopedForm(t)) {
+      // No form-level link exists for a scoped form. Send the admin to the parent, where each
+      // record has its own working link and QR via that record's Share.
+      var par = parentTableOf(t), parName = par ? par.name : "its parent table";
+      ca.removeAttribute("href"); ca.style.cursor = "pointer";
+      ca.textContent = "Open " + parName + " to share a record";
+      ca.onclick = function (e) { e.preventDefault(); if (par) openCustomTable(par); };
+      qrBar.querySelector(".qr-cap").textContent = "Shared per record";
+      qrBar.querySelector(".qr-sub").textContent = "Each " + parName + " record has its own link and QR. Open " + parName + " and use a record's Share to copy it.";
+      document.getElementById("custom-qr").style.display = "none";
+      document.getElementById("custom-qr-dl").style.display = "none";
+      document.getElementById("custom-qr-share").style.display = "none";
+    } else {
+      // Reset the panel: openCustomTable reuses these nodes across tables, so a scoped form
+      // opened earlier must not leave its overrides on a plain form opened next.
+      var clink = publicFormLink(t.slug);
+      ca.onclick = null; ca.style.cursor = ""; ca.href = clink; ca.textContent = clink;
+      qrBar.querySelector(".qr-cap").textContent = "Scan to open the form";
+      qrBar.querySelector(".qr-sub").textContent = "Point a phone camera at the code.";
+      document.getElementById("custom-qr").style.display = "";
+      document.getElementById("custom-qr-dl").style.display = "";
+      document.getElementById("custom-qr-share").style.display = "";
+      if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
+    }
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-flex" : "none";
     document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
     // Adding a record by hand is an edit, so it follows can_edit rather than admin — the same
@@ -7891,11 +7925,18 @@
     } else if (act === "share") {
       openShare(ctx.key, ctx.table ? ctx.table.name : (ctx.view === "casting" ? "BLK Casting" : "Job Applications"));
     } else if (act === "link") {
-      var link = ctx.table ? publicFormLink(ctx.table.slug)
-        : ("https://blktable.blk.jo/" + (ctx.view === "casting" ? "cast/" : "apply/"));
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(link).catch(function () { window.prompt("Copy this link:", link); });
-      } else { window.prompt("Copy this link:", link); }
+      if (ctx.table && isScopedForm(ctx.table)) {
+        // No single link to copy — open the parent so a specific record can be shared.
+        var par = parentTableOf(ctx.table);
+        if (par) { openCustomTable(par); }
+        window.alert("This form is filled per record, so it has no single link. Open " + (par ? par.name : "its parent table") + " and use a record's Share to copy that record's link.");
+      } else {
+        var link = ctx.table ? publicFormLink(ctx.table.slug)
+          : ("https://blktable.blk.jo/" + (ctx.view === "casting" ? "cast/" : "apply/"));
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(link).catch(function () { window.prompt("Copy this link:", link); });
+        } else { window.prompt("Copy this link:", link); }
+      }
     } else if (act === "archive" && ctx.table) {
       if (window.confirm(archiveConfirmText(ctx.table))) setTableArchived(ctx.table, true);
     } else if (act === "unarchive" && ctx.table) {
@@ -8130,7 +8171,7 @@
   }
   // Every public form in one place, so a link can be found without opening its table.
   document.getElementById("side-forms").addEventListener("click", function () {
-    var rows = browsableTables().filter(function (t) { return (t.kind || "form") !== "task"; })
+    var rows = browsableTables().filter(function (t) { return (t.kind || "form") !== "task" && !isScopedForm(t); })
       .map(function (t) { return { name: t.name, link: publicFormLink(t.slug) }; });
     if (accessKeys["job_applications"]) rows.unshift({ name: "Job Applications", link: "https://blktable.blk.jo/apply/" });
     if (accessKeys["casting"]) rows.unshift({ name: "BLK Casting", link: "https://blktable.blk.jo/cast/" });
@@ -8294,7 +8335,8 @@
     var t = currentCustom.table, isTask = (t.kind === "task");
     var items = [{ head: true, label: t.name },
       { label: stars[t.id] ? "Remove from starred" : "Add to starred", on: function () { toggleStar(t.id); } }];
-    if (!isTask) items.push({ label: "Open the public form", on: function () { window.open(publicFormLink(t.slug), "_blank"); } });
+    if (!isTask && !isScopedForm(t)) items.push({ label: "Open the public form", on: function () { window.open(publicFormLink(t.slug), "_blank"); } });
+    else if (!isTask && isScopedForm(t)) { var par = parentTableOf(t); items.push({ label: "Share a record (" + (par ? par.name : "parent") + ")", on: function () { if (par) openCustomTable(par); } }); }
     items.push({ sep: true });
     if (isAdmin) {
       var ws = tableWorkspace(t);
