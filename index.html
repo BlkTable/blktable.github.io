@@ -583,13 +583,26 @@
   #sched-dt:focus, #sched-loc:focus { border-color: var(--silver); }
   .sched-label { display: block; font-size: var(--fs-3); color: var(--muted); margin-bottom: 7px; }
 
+  /* The panel has to sit ABOVE the top bar, which is z-index 60. At 50 the bar painted over
+     the panel's first ~110px — the record's name, and the ✕ that closes it — so every record
+     opened looking cut off at the top with no way out except the backdrop. */
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.62); backdrop-filter: blur(3px);
-    display: none; align-items: flex-start; justify-content: center; padding: 24px 16px; z-index: 50; overflow-y: auto; }
+    display: none; align-items: flex-start; justify-content: center; padding: 24px 16px; z-index: 100; overflow-y: auto; }
   .modal-overlay.open { display: flex; }
-  .modal { position: relative; width: 100%; max-width: 520px; background: var(--card);
-    border: 1px solid var(--line-2); border-radius: 10px; padding: 24px; }
-  .modal-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: var(--fs-6); cursor: pointer; }
-  .modal-close:hover { color: var(--text); }
+  /* `margin: auto` centres the card while there is room to spare and collapses to nothing
+     when there isn't — align-items:center would instead push the top of a tall record above
+     the scroll area, where it can never be scrolled back to. */
+  .modal { position: relative; width: 100%; max-width: 520px; margin: auto; background: var(--card);
+    border: 1px solid var(--line-2); border-radius: 10px; padding: 46px 24px 24px; }
+  .modal-close { position: absolute; top: 10px; right: 10px; z-index: 6; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center; border-radius: 50%;
+    background: var(--bg-2); border: 1px solid var(--line); color: var(--muted);
+    font-size: var(--fs-4); line-height: 1; cursor: pointer; }
+  .modal-close:hover { color: var(--text); background: var(--bg-3); border-color: var(--field-border); }
+  /* A record scrolls inside its own card rather than dragging the whole card up the screen,
+     so the ✕ is still in the corner at question 60 of 171. */
+  #modal .modal { display: flex; flex-direction: column; max-height: calc(100vh - 48px); max-height: calc(100dvh - 48px); }
+  #modal-body { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
   .m-photo { width: 96px; height: 96px; border-radius: 10px; object-fit: cover; background: var(--bg-3); margin-bottom: 14px; cursor: zoom-in; }
   .m-photo-actions { margin: -8px 0 14px; }
   .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.86); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 24px; }
@@ -3434,6 +3447,19 @@
   function closeModal() { clearAutosave(); document.getElementById("modal").classList.remove("open"); currentApp = null; }
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("modal").addEventListener("click", function (e) { if (e.target === this) closeModal(); });
+
+  // Escape closes whichever panel is on top. Written against the ✕ rather than a list of
+  // close functions so every overlay — the ones here and any added later — gets it for free;
+  // each ✕ already carries that modal's own teardown. The lightbox has its own Escape and
+  // sits above the panel, so the picture closes first and the record stays open.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (document.querySelector(".lightbox.open")) return;
+    var open = document.querySelectorAll(".modal-overlay.open");
+    if (!open.length) return;
+    var btn = open[open.length - 1].querySelector(".modal-close");
+    if (btn) btn.click();
+  });
 
   // ---- Approve (schedule interview + WhatsApp invite) & Reject (delete) ----
   var schedApp = null;
