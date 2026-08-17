@@ -27,7 +27,7 @@ function load(file, names, extra) {
   return ctx.API;
 }
 
-const API = load('index.html', ['isArchived', 'archivedConfig', 'archiveConfirmText']);
+const API = load('index.html', ['isArchived', 'archivedConfig', 'archiveConfirmText', 'linkLive']);
 const SRC = scripts('index.html');
 
 let n = 0;
@@ -55,6 +55,30 @@ t('archived: false is not archived', () => {
 t('the answer is a boolean, not the flag itself', () => {
   // it is used in string concatenation and class names; a truthy object would print
   assert.strictEqual(API.isArchived({ config: { archived: 'yes' } }), true);
+});
+
+// ---- the public link switch (is_active), separate from archiving ----
+t('a form with is_active false has its link off', () => {
+  assert.strictEqual(API.linkLive({ id: 'x', is_active: false }), false);
+});
+t('a form with is_active true is live', () => {
+  assert.strictEqual(API.linkLive({ id: 'x', is_active: true }), true);
+});
+t('a form that never had the column reads as live, not off', () => {
+  // every table created before this switch existed must keep working untouched
+  assert.strictEqual(API.linkLive({ id: 'x' }), true);
+  assert.strictEqual(API.linkLive({ id: 'x', is_active: undefined }), true);
+  assert.strictEqual(API.linkLive({ id: 'x', is_active: null }), true);
+});
+t('no table is treated as live rather than throwing', () => {
+  assert.strictEqual(API.linkLive(null), true);
+  assert.strictEqual(API.linkLive(undefined), true);
+});
+t('archiving and the link switch are independent', () => {
+  // the confirm copy promises archiving keeps the link working, so an archived form is still
+  // link-live unless is_active itself is false
+  assert.strictEqual(API.linkLive({ config: { archived: true } }), true);
+  assert.strictEqual(API.linkLive({ config: { archived: true }, is_active: false }), false);
 });
 
 // ---- building the new config ----
