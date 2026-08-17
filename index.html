@@ -974,6 +974,9 @@
     color: var(--muted); font-variant-numeric: tabular-nums; font-size: var(--fs-2); }
   .grid td.rowno .rn { display: inline-block; width: 20px; }
   .grid td.rowno .rchk { display: none; width: 13px; height: 13px; margin: 0; accent-color: var(--accent); vertical-align: -2px; }
+  /* the select-all is always shown — it is what tells you rows can be ticked at all */
+  .grid th.rowno .rchk-all { display: inline-block; width: 13px; height: 13px; margin: 0;
+    accent-color: var(--accent); vertical-align: -2px; cursor: pointer; }
   .grid tbody tr:hover td.rowno .rn, .grid tr.sel td.rowno .rn { display: none; }
   .grid tbody tr:hover td.rowno .rchk, .grid tr.sel td.rowno .rchk { display: inline-block; }
   .grid td.rowno .rexp { visibility: hidden; background: none; border: 1px solid var(--field-border);
@@ -1512,7 +1515,7 @@
           <div class="at-toolbar">
             <!-- How the records are drawn. This belongs first and always visible: it was
                  dropped in the toolbar rewrite, which lost Cards and List entirely. -->
-            <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards" class="active">Cards</button><button type="button" data-v="list">List</button><button type="button" data-v="table">Grid</button></div>
+            <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards">Cards</button><button type="button" data-v="list">List</button><button type="button" data-v="table" class="active">Grid</button></div>
             <div class="tb-sep"></div>
             <div class="cols-wrap" id="cols-wrap" style="display:none;">
               <button class="tb-btn" id="cols-btn" type="button" title="Show or hide fields">
@@ -2392,7 +2395,13 @@
 
   // ---- Job Applications review ----
   var section = "new"; // active tab: new | approved | rejected
-  var jaView = "cards", castingView = "cards", customView = "cards"; // per-table Cards/List
+  // Custom tables open on the GRID, because the grid is what a table is in Airtable and it
+  // is the only view carrying the furniture people go looking for — the tick boxes, Hide
+  // fields, Group, row height. Opening on Cards meant every one of those was absent on the
+  // first screen of every table, which reads as "this app has no sort and no selection"
+  // rather than "those live one toggle away". The two built-in hiring tables stay on Cards:
+  // they are a review queue with a photo per person, not a spreadsheet.
+  var jaView = "cards", castingView = "cards", customView = "table"; // per-table Cards/List/Grid
 
   // ---- Job Applications at scale -------------------------------------------
   // After the Airtable migration this table holds tens of thousands of rows, so
@@ -4479,14 +4488,18 @@
     });
     if (currentCustom.starredOnly) rows = rows.filter(function (s) { return !!recStars[s.id]; });
     if (customSort.length) rows = rows.slice().sort(function (a, b) { return compareRows(a, b, sortableCols(currentCustom.table, fields)); });
-    if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
-    emptyEl.style.display = "none";
-    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (stages.length ? "Nothing in this stage." : "No matches.") + "</div>"; return; }
-    listEl.innerHTML = "";
+    // ---- The toolbar is decided BEFORE the empty cases return -----------------
+    // Sort, Filter, Group, Hide fields and CSV all start life as display:none and are
+    // switched on here. This block used to sit AFTER the two early returns below, so a
+    // table with no records at all — and any stage tab, filter or search that happened to
+    // match nothing — returned with the whole toolbar still hidden. The controls that
+    // change what you are looking at cannot live behind "there is something to look at":
+    // an empty stage is exactly when you want to clear the filter or re-sort, and a
+    // brand-new table would otherwise show no Sort button until its first record arrived.
     // the Columns picker only makes sense in the grid
     var colsWrap = document.getElementById("cols-wrap");
     if (colsWrap) colsWrap.style.display = customView === "table" ? "" : "none";
-    // grouping, the summary line and CSV belong to the grid
+    // grouping and row height belong to the grid
     var groupWrap = document.getElementById("group-wrap");
     if (groupWrap) groupWrap.style.display = customView === "table" ? "" : "none";
     var sortWrap = document.getElementById("sort-wrap");
@@ -4500,6 +4513,8 @@
     updateSortLabel();
     var expBtn = document.getElementById("custom-export");
     if (expBtn) {
+      // Exporting nothing is not an error worth hiding the button for — it downloads a
+      // file with headers and no rows, which is the honest answer to "export this filter".
       expBtn.style.display = "";
       expBtn.onclick = function () {
         exportCustomCsv(rows, customCols(currentCustom.table, fields)
@@ -4507,6 +4522,11 @@
           currentCustom.table);
       };
     }
+
+    if (!subs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; paintSelBar(); return; }
+    emptyEl.style.display = "none";
+    if (!rows.length) { listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">' + (stages.length ? "Nothing in this stage." : "No matches.") + "</div>"; paintSelBar(); return; }
+    listEl.innerHTML = "";
     if (customView === "table") {
       renderGroupPanel(currentCustom.table, fields);
       renderColsPanel(currentCustom.table, fields);
@@ -5170,11 +5190,36 @@
       '<div class="nr-foot"><button type="button" class="btn-new" id="pay-go">Download CSV</button>' +
       '<span class="nr-msg" id="pay-msg"></span></div>';
 
-    // Every event this table's records hang off, so the range can be applied to the event's
-    // own date. Read once when the panel opens rather than per row.
-    var parents = [];
-    db.from("app_submissions").select("id,data").eq("table_id", payrollParentTable(t))
-      .then(function (r) { parents = (r.data || []); preview(); });
+    // Both sides are read from the database when the panel opens, rather than per row.
+    //
+    // The signups CANNOT come from `currentCustom.subs`, which is what this used to do.
+    // payrollHost() deliberately puts the button on Events — "where Faisal is" — so the
+    // table on screen is Events and `currentCustom.subs` holds EVENT rows. An event has no
+    // `slot`, so `only_slot: 'confirmed'` dropped every one of them and the export was
+    // always empty. And even opened from the signups table it would have been wrong at
+    // scale: that array is capped at CUSTOM_FIRST rows, and a payroll sheet missing the
+    // rows that had not loaded yet looks complete while paying some people nothing.
+    var parents = [], subs = [], loaded = false;
+    Promise.all([fetchAllRows(payrollParentTable(t), "id,data"),
+                 fetchAllRows(t.id, "id,data,parent_id,slot")])
+      .then(function (out) { parents = out[0]; subs = out[1]; loaded = true; preview(); });
+
+    // PostgREST answers with at most one page, so anything that must be complete has to ask
+    // for the next one until a short page comes back. Stopping at the first page is the same
+    // silent-shortfall bug as reading the screen's array.
+    function fetchAllRows(tableId, cols) {
+      var PAGE = 1000, all = [];
+      function next(from) {
+        return db.from("app_submissions").select(cols).eq("table_id", tableId)
+          .order("created_at", { ascending: true }).range(from, from + PAGE - 1)
+          .then(function (r) {
+            var rows = (r.data || []);
+            all = all.concat(rows);
+            return rows.length < PAGE ? all : next(from + PAGE);
+          });
+      }
+      return next(0);
+    }
 
     function range() {
       return { from: (document.getElementById("pay-from") || {}).value || "",
@@ -5182,22 +5227,31 @@
     }
     function rowsNow() {
       var g = range();
-      return payrollRows((currentCustom && currentCustom.subs) || [], parents, cfg, g.from, g.to);
+      return payrollRows(subs, parents, cfg, g.from, g.to);
     }
     function preview() {
+      var el = document.getElementById("pay-preview");
+      if (!el) return;
+      // "Nothing in that range" and "not read yet" are different answers, and showing the
+      // first while the second is true is how somebody concludes a month was unpaid.
+      if (!loaded) { el.textContent = "Reading the signups…"; return; }
       var rows = rowsNow();
       var tot = rows.reduce(function (a, r) { return { e: a.e + r.events, m: a.m + r.amount }; }, { e: 0, m: 0 });
-      document.getElementById("pay-preview").textContent = rows.length
+      el.textContent = rows.length
         ? rows.length + (rows.length === 1 ? " person" : " people") + " · " + tot.e +
           (tot.e === 1 ? " event" : " events") + " · " + tot.m + " JD"
         : "Nothing in that range.";
     }
+    preview();
     ["pay-from", "pay-to"].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) ["change", "input"].forEach(function (ev) { el.addEventListener(ev, preview); });
     });
     document.getElementById("pay-go").addEventListener("click", function () {
       var g = range(), rows = rowsNow();
+      // Downloading before the read finishes would hand over an empty sheet that reads as
+      // "nobody worked" rather than "ask again in a second".
+      if (!loaded) { document.getElementById("pay-msg").textContent = "Still reading the signups — try again in a moment."; return; }
       if (!rows.length) { document.getElementById("pay-msg").textContent = "Nothing in that range to export."; return; }
       payrollCsv(rows, g.from, g.to, t);
     });
@@ -5442,7 +5496,16 @@
     // Airtable's grid carries furniture as well as data: a row number that becomes a
     // tick box, an expand button, and a "+" at the end of the header row for a new field.
     var span = allCols.length + 1 + (isAdmin ? 1 : 0);
-    var html = '<div class="grid-wrap"><table class="grid"><thead><tr><th class="rowno"></th>' +
+    // The select-all box is the ONE piece of selection furniture that is always visible.
+    // Each row's own tick box only appears on hover, which is Airtable's behaviour and fine
+    // once you know rows can be ticked — but nothing on the screen said so, so the whole
+    // selection feature was invisible and read as missing. This is the affordance: it says
+    // "these rows can be selected" before the pointer is anywhere near a row.
+    var allOn = ordered.length > 0 && ordered.every(function (s) { return !!customSel[s.id]; });
+    var someOn = !allOn && ordered.some(function (s) { return !!customSel[s.id]; });
+    var html = '<div class="grid-wrap"><table class="grid"><thead><tr><th class="rowno">' +
+      '<input type="checkbox" class="rchk-all" id="grid-selall"' + (allOn ? " checked" : "") +
+      ' title="Select every record shown" aria-label="Select every record shown">' + '</th>' +
       allCols.map(function (c, i) {
         var si = -1;
         for (var k = 0; k < customSort.length; k++) if (customSort[k].id === c.id) si = k;
@@ -5501,6 +5564,20 @@
                  on: function () { useBuilderHost(); openBuilderEdit(t, ft.v); } };
       })));
     });
+    // Select-all ticks exactly the rows on screen, not the whole table: what is on screen is
+    // already narrowed by the stage tab, the filter and the search, and "select all" meaning
+    // rows you have filtered out is how the wrong records get exported.
+    var selAll = listEl.querySelector("#grid-selall");
+    if (selAll) {
+      selAll.indeterminate = someOn;
+      selAll.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        if (selAll.checked) ordered.forEach(function (s) { customSel[s.id] = true; });
+        else ordered.forEach(function (s) { delete customSel[s.id]; });
+        paintSelBar();
+        renderCustom();
+      });
+    }
     // hovering a row offers the tick box and the expand button; both must not open the record
     listEl.querySelectorAll("tbody tr[data-id] .rchk").forEach(function (cb) {
       cb.addEventListener("click", function (ev) {
