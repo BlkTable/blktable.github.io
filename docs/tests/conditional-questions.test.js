@@ -65,10 +65,11 @@ both('a bare value works like a list of one', single, { [gate]: 'Yes' }, true);
 const numGate = { id: 'ng', show_if: { field: 'f-n', equals: [4] } };
 both('a number matches its text', numGate, { 'f-n': '4' }, true);
 both('a number does not match a different one', numGate, { 'f-n': '5' }, false);
-// a multi-select stores "A, B" — comma-joined, exactly as Airtable does — so an exact
-// match on one choice is deliberately false. Worth pinning: it is a design choice.
+// a multi-select stores "A, B" — comma-joined, exactly as Airtable does. Matching now checks
+// membership, so "show if the answer includes Clean" fires even when more than one is chosen.
+// (This replaced the earlier whole-string-only rule so BLKTable can mirror Airtable's forms.)
 const ms = { id: 'x', show_if: { field: 'f-ms', equals: ['Clean'] } };
-both('a multi-select answer is matched whole', ms, { 'f-ms': 'Clean, Organized' }, false);
+both('a multi-select answer matches on any chosen part', ms, { 'f-ms': 'Clean, Organized' }, true);
 
 // ---- how it reads on screen (dashboard only) ----
 const fields = [{ id: gate, label: 'Did you go to university?' }, dependent];
@@ -81,5 +82,16 @@ t('label without a list says "is answered"', () =>
 t('an unconditional field has no label', () => assert.strictEqual(DASH.condLabel({ id: 'a' }, fields), ''));
 t('a condition on a deleted question has no label', () =>
   assert.strictEqual(DASH.condLabel(dependent, [{ id: 'other', label: 'x' }]), ''));
+
+// ---- multi_select driver: "show if the answer INCLUDES x" (Airtable-style) ----
+// A multi_select answer is stored comma-joined; the sub-question must appear when its value
+// is one of several chosen, not only when it is the sole choice.
+const msCond = { id: 's', show_if: { field: gate, equals: ['Product'] } };
+both('a sole multi-select answer still matches', msCond, { [gate]: 'Product' }, true);
+both('one of several chosen answers matches', msCond, { [gate]: 'Customer Service, Product' }, true);
+both('matches regardless of position in the list', msCond, { [gate]: 'Product, Shop Atmosphere' }, true);
+both('no comma spacing still matches', msCond, { [gate]: 'Customer Service,Product' }, true);
+both('a near-miss substring does not match', msCond, { [gate]: 'Product Issue' }, false);
+both('an unrelated multi answer does not match', msCond, { [gate]: 'Customer Service, Other' }, false);
 
 console.log(n + ' tests passed');
