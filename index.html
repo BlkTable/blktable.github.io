@@ -3982,7 +3982,15 @@
     var want = c.equals;
     if (want == null) return v !== "";
     if (!Array.isArray(want)) want = [want];
-    for (var i = 0; i < want.length; i++) if (String(want[i]) === v) return true;
+    // A multi_select answer is stored comma-joined ("A, B"); a single answer is one value.
+    // Match the whole answer OR any one of its comma-separated parts, so "show if X includes
+    // Product" works the way Airtable's conditional forms do. Single-select still matches
+    // exactly, since it is the sole part.
+    var parts = v.split(/\s*,\s*/);
+    for (var i = 0; i < want.length; i++) {
+      var w = String(want[i]);
+      if (w === v || parts.indexOf(w) !== -1) return true;
+    }
     return false;
   }
   function condLabel(f, fields) {
