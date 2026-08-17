@@ -6,137 +6,250 @@
 <title>BLK Form</title>
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <style>
+  /* ============================================================================
+     The public form, styled as a replica of an Airtable shared form.
+     ----------------------------------------------------------------------------
+     Until 2026-08-17 this page was near-black with the BLK brand, by a decision
+     recorded in `docs/superpowers/specs/2026-08-10-airtable-shell-design.md`:
+     that parity pass covered the internal workspace and deliberately left the
+     applicant-facing pages alone. That was the wrong call — a form is the only
+     part of BLKTable an outsider ever sees, and it was the part that looked
+     least like the thing it replaced. This is the corrected version.
+
+     What "like Airtable" means here, measured off a real Airtable form rather
+     than remembered: a light page, one white card ~640px wide, a large bold
+     left-aligned title, 15px semibold labels with a red asterisk when required,
+     compact 36px inputs with a thin grey border and a blue focus ring, choices
+     as radio/checkbox rows carrying a coloured pill, attachments as a dashed
+     drop area, and a left-aligned blue Submit — not a full-width one.
+
+     Every colour is a token in the two blocks below, so the whole page can go
+     back to dark by swapping the tokens and touching nothing else.
+     ============================================================================ */
   :root {
-    --bg: #000000; --bg-2: #0d0d0f; --bg-top: #1a1a1a; --card: #141416; --text: #f2f3f5; --muted: #8b9198;
-    --silver: #d6dade; --silver-hi: #eef0f2; --silver-lo: #b4b9c0;
-    --line: rgba(255,255,255,0.07); --line-2: rgba(255,255,255,0.14);
-    --field-bg: #0d0d0f; --field-border: #2a2a2d;
-    --accent: #2d7ff9; --accent-hi: #4f97ff; --pink: #f82b60;
-    /* state colours, named where they used to be raw hex */
-    --danger: #ff6b6b;
-    --gold: #eab308;
-    --ok: #7ed08a;
-    --wa: #25d366;
-    --bg-3: #232326;
+    /* page + surface */
+    --page: #f4f4f4;
+    --card: #ffffff;
+    --card-line: rgba(0,0,0,0.09);
+    --card-shadow: 0 0 0 1px rgba(0,0,0,0.045), 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.05);
+    /* type */
+    --text: #1d1f25;
+    --muted: #616670;
+    --faint: #8c919b;
+    /* controls */
+    --field-bg: #ffffff;
+    --field-border: rgba(0,0,0,0.16);
+    --field-border-hover: rgba(0,0,0,0.3);
+    --row-hover: rgba(0,0,0,0.035);
+    --sunk: #f6f6f7;
+    /* accents — Airtable's own blue for the action, its red for required/errors */
+    --accent: #2d7ff9;
+    --accent-hi: #1a6ce0;
+    --accent-ring: rgba(45,127,249,0.22);
+    --danger: #dc043b;
+    --danger-ring: rgba(220,4,59,0.18);
+    --gold: #b26e00;
+    --ok: #17803d;
+    /* the brand logo is white paths, so on a light card it is inverted to black */
+    --logo-filter: invert(1);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
-  ::placeholder { color: #5f656d; }
-  .wrap { min-height: 100vh; padding: 32px 20px 60px; background: var(--bg); }
-  .sheet { width: 100%; max-width: 520px; margin: 0 auto; }
-  .brand-logo { display: block; width: 210px; max-width: 70%; height: auto; margin: 8px auto 20px; }
-  .head { text-align: center; margin-bottom: 26px; }
-  .head h1 { font-size: 1.3rem; margin: 0 0 6px; font-weight: 800; letter-spacing: 0.02em; }
-  .head p { margin: 0; color: var(--muted); font-size: 0.9rem; }
-  .intro { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; }
-  .intro p { margin: 0; color: var(--silver-lo); font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; }
-  .intro p + p { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  html, body { margin: 0; padding: 0; min-height: 100%; background: var(--page); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 1.5; }
+  ::placeholder { color: var(--faint); }
+  .wrap { min-height: 100vh; padding: 40px 16px 72px; }
+  .sheet { width: 100%; max-width: 640px; margin: 0 auto; }
+
+  /* ---- the card ---------------------------------------------------------- */
+  /* Airtable puts everything — logo, title, description, questions, submit —
+     inside ONE card. The old page had the logo and title floating above a card
+     that held only the inputs, which is what made it read as a login box. */
+  .card { background: var(--card); border-radius: 8px; box-shadow: var(--card-shadow); padding: 32px 36px 36px; }
+  @media (max-width: 640px) { .wrap { padding: 20px 12px 48px; } .card { padding: 24px 20px 28px; border-radius: 6px; } }
+
+  .brand-logo { display: block; width: 132px; max-width: 45%; height: auto; margin: 0 0 24px;
+    filter: var(--logo-filter); }
+  .head { margin-bottom: 4px; }
+  .head h1 { font-size: 1.75rem; line-height: 1.25; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .head .ar { display: block; font-size: 1.15rem; font-weight: 600; color: var(--muted); margin-top: 6px;
+    direction: rtl; }
+  /* Airtable's form description: plain grey text under the title, no box around it. */
+  .intro { margin: 12px 0 0; }
+  .intro p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; }
+  .intro p + p { margin-top: 10px; }
   .intro p.ar { direction: rtl; text-align: right; }
+  /* the rule that separates the preamble from the questions, as Airtable has */
+  .qsep { height: 1px; background: var(--card-line); border: 0; margin: 26px 0 24px; }
+
   /* The record this link belongs to — an event's time, location and description. Shown
      above the questions because it is what the person came to read, not part of the form. */
-  .pcard { background: rgba(255,255,255,0.03); border: 1px solid var(--line-2); border-radius: 10px;
-    padding: 16px 18px; margin-bottom: 18px; }
+  .pcard { background: var(--sunk); border: 1px solid var(--card-line); border-radius: 6px;
+    padding: 16px 18px; margin-top: 20px; }
   .pcard h2 { margin: 0 0 12px; font-size: 1.05rem; font-weight: 700; }
   .pcard dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; }
   .pcard dt { color: var(--muted); font-size: 0.8rem; }
   .pcard dd { margin: 0; font-size: 0.92rem; line-height: 1.5; white-space: pre-wrap; }
-  .pcard .slots { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
-    font-size: 0.9rem; font-weight: 600; color: var(--silver); }
+  .pcard .slots { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-line);
+    font-size: 0.9rem; font-weight: 600; color: var(--ok); }
   .pcard .slots.gone { color: var(--gold); }
-  .card { background: var(--card); border: 1px solid var(--line-2);
-    border-radius: 10px; padding: 24px 22px; }
-  .field { margin-bottom: 16px; }
-  label { display: block; font-size: 0.82rem; color: var(--text); margin-bottom: 7px; font-weight: 600; }
-  label .req { color: var(--silver); }
+
+  /* ---- a question ------------------------------------------------------- */
+  /* 24px between questions and a 15px semibold label is the single biggest
+     reason an Airtable form reads as roomy and this one used to read as cramped
+     (it was 16px and 0.82rem). */
+  .field { margin-bottom: 24px; }
+  label { display: block; font-size: 0.95rem; color: var(--text); margin-bottom: 6px; font-weight: 600;
+    line-height: 1.4; }
+  label .req { color: var(--danger); font-weight: 600; margin-left: 2px; }
   label .ar { color: var(--muted); font-weight: 400; }
-  input, select, textarea { width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--field-border);
-    background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none; font-family: inherit;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease; color-scheme: dark; }
-  input:not([type=file]), select { height: 48px; }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(45,127,249,0.25); }
-  textarea { resize: vertical; min-height: 88px; }
-  textarea.autogrow { min-height: 48px; resize: none; overflow: hidden; line-height: 1.4; }
+
+  /* ---- text-ish inputs -------------------------------------------------- */
+  input, select, textarea { width: 100%; padding: 7px 10px; border-radius: 4px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text);
+    font-size: 0.95rem; outline: none; font-family: inherit; line-height: 1.4;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease; color-scheme: light; }
+  input:not([type=file]), select { height: 36px; }
+  input:hover, select:hover, textarea:hover { border-color: var(--field-border-hover); }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
+  textarea { resize: vertical; min-height: 72px; }
+  textarea.autogrow { min-height: 36px; resize: none; overflow: hidden; }
   input[type="date"], input[type="time"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
   input[type="date"]::-webkit-calendar-picker-indicator,
-  input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
-  select { appearance: none; -webkit-appearance: none; cursor: pointer;
+  input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; }
+  select { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
-  input.invalid, select.invalid, textarea.invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(255,107,107,0.3) !important; }
-  /* multi-select: tick as many as apply */
-  .checks { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line);
-    border-radius: 10px; padding: 6px; background: var(--card); }
-  .checks.invalid { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
-  .chk { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px;
-    cursor: pointer; font-size: 0.95rem; line-height: 1.35; }
-  .chk:hover { background: rgba(255,255,255,0.05); }
-  .chk input { width: 17px; height: 17px; flex: 0 0 auto; accent-color: var(--silver); margin: 0; }
-  /* searchable dropdown (combobox) */
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  input.invalid, select.invalid, textarea.invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 2px var(--danger-ring) !important; }
+
+  /* ---- choices: radio rows (single) and checkbox rows (multi) ------------ */
+  /* Airtable renders a select as a list of options you press, each carrying its
+     own coloured pill — not as a native <select>, and never as a placeholder
+     that reads "Abdoun · Abdali Boulevard  +32 more". Long lists still get the
+     searchable combobox below, because 300 branches in a radio list is worse. */
+  .checks { display: flex; flex-direction: column; gap: 1px; }
+  .checks.boxed { border: 1px solid var(--field-border); border-radius: 4px; padding: 4px; }
+  .checks.invalid { border: 1px solid var(--danger); border-radius: 4px; padding: 4px;
+    box-shadow: 0 0 0 2px var(--danger-ring); }
+  .chk { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 4px;
+    cursor: pointer; font-size: 0.95rem; line-height: 1.35; font-weight: 400; margin: 0; }
+  .chk:hover { background: var(--row-hover); }
+  .chk input { width: 16px; height: 16px; flex: 0 0 auto; accent-color: var(--accent); margin: 0; }
+  .chk .pill { min-width: 0; }
+  .chk .ar { color: var(--muted); }
+  /* Airtable's choice pill: a pastel fill with near-black text. The tint is
+     derived from the choice's own text, so a branch keeps the same colour on
+     every form it appears on without anything being stored. */
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 0.875rem;
+    line-height: 1.5; color: #1d1f25; background: #eee; max-width: 100%;
+    overflow-wrap: anywhere; }
+
+  /* ---- searchable dropdown (combobox), for long choice lists ------------ */
   .combo { position: relative; }
-  .combo-input { padding-right: 34px;
+  .combo-input { padding-right: 30px; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
-  .combo.open .combo-input { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(45,127,249,0.25); }
-  .combo-list { position: absolute; z-index: 25; left: 0; right: 0; top: calc(100% + 6px); max-height: 264px; overflow-y: auto;
-    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px; display: none; }
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  .combo.open .combo-input { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
+  .combo-list { position: absolute; z-index: 25; left: 0; right: 0; top: calc(100% + 4px); max-height: 260px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--card-line); border-radius: 6px; padding: 4px; display: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
   .combo.open .combo-list { display: block; }
-  .combo-opt { padding: 11px 12px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
-  .combo-opt.hi, .combo-opt:hover { background: rgba(255,255,255,0.06); }
-  .combo-opt.sel { color: var(--silver); font-weight: 600; }
-  .combo-empty { padding: 11px 12px; color: var(--muted); font-size: 0.9rem; }
-  .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
+  .combo-opt { padding: 7px 8px; border-radius: 4px; cursor: pointer; font-size: 0.95rem; }
+  .combo-opt.hi, .combo-opt:hover { background: var(--row-hover); }
+  .combo-opt.sel { font-weight: 600; }
+  .combo-empty { padding: 8px; color: var(--muted); font-size: 0.9rem; }
+
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+  /* An Arabic question, laid out the way it reads. The phone row keeps its LTR order —
+     a dial code and a number are read left to right in any language. */
+  .field.rtl label, .field.rtl .hint, .field.rtl input, .field.rtl textarea { text-align: right; }
+  .field.rtl .phone-row { direction: ltr; }
+  .field.rtl .cc-menu { left: auto; right: 0; }
   .other-box { margin-top: 8px; }
-  .phone-row { display: flex; gap: 10px; align-items: stretch; }
+
+  /* ---- phone, with its country picker ----------------------------------- */
+  .phone-row { display: flex; gap: 8px; align-items: stretch; }
   .phone-row input { flex: 1; }
   .cc-picker { position: relative; flex: 0 0 auto; }
-  .cc-btn { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 12px; border-radius: 8px;
-    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1rem; cursor: pointer; font-family: inherit; }
-  .cc-btn:hover { border-color: var(--line-2); }
-  .cc-flag, .cc-menu li img { width: 22px; height: 15px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
+  .cc-btn { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px; border-radius: 4px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.95rem;
+    cursor: pointer; font-family: inherit; }
+  .cc-btn:hover { border-color: var(--field-border-hover); }
+  .cc-flag, .cc-menu li img { width: 21px; height: 14px; object-fit: cover; border-radius: 2px; display: block;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.12); background: #ddd; }
   .cc-caret { color: var(--muted); font-size: 0.7rem; }
-  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; margin: 0; padding: 6px; list-style: none; min-width: 190px;
-    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px; display: none; }
+  .cc-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; margin: 0; padding: 4px; list-style: none; min-width: 200px;
+    background: var(--card); border: 1px solid var(--card-line); border-radius: 6px; display: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
   .cc-menu.open { display: block; }
-  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
-  .cc-menu li:hover { background: rgba(255,255,255,0.06); }
+  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 0.95rem; }
+  .cc-menu li:hover { background: var(--row-hover); }
   .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
-  .file-row { display: flex; align-items: center; gap: 12px; }
-  .file-btn { padding: 11px 16px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; white-space: nowrap; }
-  .file-btn:hover { border-color: var(--silver); }
-  .file-name { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .file-check { display: none; width: 22px; height: 22px; border-radius: 50%; background: var(--wa); color: #0a2e17; font-weight: 800; font-size: 0.78rem; align-items: center; justify-content: center; flex: 0 0 auto; }
-  .file-row.invalid .file-btn { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
-  .submit { width: 100%; margin-top: 22px; padding: 14px 16px; border-radius: 8px; border: none;
-    background: var(--accent); color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer;
-    transition: background 0.15s ease, transform 0.05s ease; }
-  .submit:hover { background: var(--accent-hi); } .submit:active { transform: translateY(1px); } .submit:disabled { opacity: 0.5; cursor: default; background: var(--accent); }
-  .form-msg { text-align: center; min-height: 1.2em; margin-top: 12px; font-size: 0.88rem; color: var(--danger); }
-  .success, .notfound { display: none; text-align: center; padding: 20px 10px; }
-  .success .check { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 18px; border: 2px solid var(--silver);
-    display: flex; align-items: center; justify-content: center; font-size: 30px; color: var(--silver); }
-  .success h2, .notfound h2 { margin: 0 0 8px; font-size: 1.2rem; } .success p, .notfound p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
-  .loading { text-align: center; color: var(--muted); padding: 40px 0; }
+
+  /* ---- attachments: Airtable's dashed drop area -------------------------- */
+  .file-row { display: flex; flex-direction: column; align-items: stretch; gap: 0;
+    border: 1px dashed var(--field-border); border-radius: 4px; background: var(--sunk);
+    padding: 18px 16px; text-align: center; transition: border-color 0.12s ease, background 0.12s ease; }
+  .file-row:hover, .file-row.drag { border-color: var(--accent); background: rgba(45,127,249,0.04); }
+  .file-btn { padding: 0; border: none; background: none; color: var(--accent); font-size: 0.95rem;
+    font-weight: 600; cursor: pointer; font-family: inherit; }
+  .file-btn:hover { text-decoration: underline; }
+  .file-name { color: var(--muted); font-size: 0.85rem; margin-top: 4px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .file-check { display: none; width: 20px; height: 20px; border-radius: 50%; background: var(--ok); color: #fff;
+    font-weight: 700; font-size: 0.72rem; align-items: center; justify-content: center; margin: 0 auto 6px; }
+  .file-row.has .file-check { display: flex; }
+  .file-row.invalid { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-ring); }
+
+  /* ---- submit ----------------------------------------------------------- */
+  /* Left-aligned and sized to its text, which is what Airtable does. A
+     full-width button is a checkout page, not a form. */
+  .actions { margin-top: 4px; }
+  .submit { width: auto; min-width: 104px; padding: 0 18px; height: 36px; border-radius: 4px; border: none;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+    font-family: inherit; transition: background 0.12s ease; }
+  .submit:hover { background: var(--accent-hi); }
+  .submit:disabled { opacity: 0.55; cursor: default; background: var(--accent); }
+  .form-msg { min-height: 1.2em; margin-top: 12px; font-size: 0.9rem; color: var(--danger); }
+
+  /* ---- the states that are not a form ----------------------------------- */
+  .success, .notfound { display: none; text-align: center; padding: 16px 4px; }
+  .success .check { width: 48px; height: 48px; border-radius: 50%; margin: 0 auto 16px; background: var(--ok);
+    display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff; }
+  .success h2, .notfound h2 { margin: 0 0 8px; font-size: 1.3rem; font-weight: 700; }
+  .success p, .notfound p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.55; }
+  .loading { text-align: center; color: var(--muted); padding: 48px 0; }
+  /* Airtable's forms carry a small line under the card. Ours says who it is
+     from, which on a link somebody was sent over WhatsApp is worth saying. */
+  .foot { text-align: center; color: var(--faint); font-size: 0.8rem; margin-top: 20px; }
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="sheet">
-      <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
-      <div class="head" id="head" style="display:none;"><h1 id="form-title">—</h1></div>
-      <div class="intro" id="form-intro" style="display:none;"></div>
-      <div class="pcard" id="parent-card" style="display:none;"></div>
-      <div class="loading" id="loading">Loading…</div>
+      <!-- One card for every state, the way an Airtable form behaves: the logo and the
+           title stay put and only the part below the rule is replaced. It also means the
+           brand is on the "Form not found" and "Thank you" screens without a second copy
+           of the logo in the markup, which is how those two used to drift apart. -->
       <div class="card" id="card" style="display:none;">
-        <form id="form" novalidate>
+        <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
+        <div class="head" id="head" style="display:none;"><h1 id="form-title">—</h1></div>
+        <div class="intro" id="form-intro" style="display:none;"></div>
+        <div class="pcard" id="parent-card" style="display:none;"></div>
+        <hr class="qsep" id="qsep" style="display:none;">
+        <form id="form" novalidate style="display:none;">
           <div id="fields"></div>
-          <button type="button" class="submit" id="submit-btn">Submit</button>
+          <div class="actions">
+            <button type="button" class="submit" id="submit-btn">Submit</button>
+          </div>
           <div class="form-msg" id="form-msg"></div>
         </form>
+        <div class="success" id="success"><div class="check">✓</div><h2>Thank you</h2><p>Your response has been recorded.</p></div>
+        <div class="notfound" id="notfound"><h2>Form not found</h2><p>This form link is invalid or no longer active.</p></div>
+        <div class="notfound" id="closed"><h2 id="closed-h">No places left</h2><p id="closed-p">Every place has been taken.</p></div>
       </div>
-      <div class="card success" id="success"><div class="check">✓</div><h2>Received</h2><p>Thank you! Your submission has been recorded.</p></div>
-      <div class="card notfound" id="notfound"><h2>Form not found</h2><p>This form link is invalid or no longer active.</p></div>
-      <div class="card notfound" id="closed"><h2 id="closed-h">No places left</h2><p id="closed-p">Every place has been taken.</p></div>
+      <div class="loading" id="loading">Loading…</div>
+      <div class="foot">BLK قهوة</div>
     </div>
   </div>
 
@@ -277,6 +390,99 @@
     return esc(f.label) + ar + req;
   }
 
+  // ---- Questions that are written in Arabic ----------------------------------
+  // A great many of these questions have no English at all — `label` itself is Arabic
+  // ("اسم الفرع؟", "يرجى متابعة على الرابط"). Left-aligned in an LTR block, the question mark
+  // lands on the wrong side and the line reads backwards to the person answering it. So a
+  // question whose own text is Arabic gets an RTL wrapper, and everything inside it — the
+  // label, the input, the choice rows — follows. A bilingual question stays LTR, because its
+  // English half is the first thing read.
+  var RTL_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
+  function isRtlText(s) {
+    s = String(s == null ? "" : s);
+    if (!RTL_RE.test(s)) return false;
+    // Mixed strings are judged on which script carries more of the letters, so a branch
+    // name like "Abdoun عبدون" stays LTR and a sentence with one English word does not.
+    var ar = (s.match(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g) || []).length;
+    var la = (s.match(/[A-Za-z]/g) || []).length;
+    return ar >= la;
+  }
+
+  // ---- Choice pills, the way Airtable colours a select ------------------------
+  // Airtable gives every choice in a select its own pastel, and that colour is the
+  // fastest way to read a long option list. Ours has no colour stored on a choice —
+  // `app_fields.options` is `{en, ar}` and nothing else — so the tint is DERIVED from
+  // the choice's own text. That means it needs no migration, and the same branch name
+  // gets the same colour on every form it appears on, which is the property that makes
+  // the colour worth having at all. Airtable's own Light-2 ramp, so a BLK form and an
+  // Airtable form put side by side read as the same product.
+  var PILL_TINTS = [
+    "#cfdfff", "#d0f0fd", "#c2f5e9", "#d1f7c4", "#ffeab6",
+    "#fee2d5", "#ffdce5", "#ffdaf6", "#ede2fe", "#e5e9f0"
+  ];
+  function pillTint(text) {
+    var s = String(text == null ? "" : text), h = 0;
+    // A plain deterministic hash. Not security, not distribution — only "the same text
+    // always lands on the same tint", which is the whole requirement.
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return PILL_TINTS[Math.abs(h) % PILL_TINTS.length];
+  }
+  function pillHtml(en, ar) {
+    return '<span class="pill" style="background:' + pillTint(en) + '">' + esc(en) +
+      (ar ? ' <span class="ar">' + esc(ar) + "</span>" : "") + "</span>";
+  }
+
+  // ---- A list of choices you press, not a native <select> ---------------------
+  // This is what Airtable shows for a single select (radios) and a multiple select
+  // (checkboxes): one row per choice, each carrying its coloured pill. Both share this
+  // builder so the two can never drift in spacing, hover or validation.
+  //
+  // Long lists deliberately do NOT come through here — 300 branches or 292 staff names
+  // as radio rows is a page nobody can use, and those keep the searchable combobox. The
+  // cut is `CHOICE_ROWS_MAX`; above it, search wins.
+  var CHOICE_ROWS_MAX = 8;
+  function buildChoiceRows(f, opts, multi, onChange) {
+    var box = document.createElement("div");
+    box.className = "checks boxed";
+    box.id = "fld-" + f.id;
+    var name = "r-" + f.id;
+    opts.forEach(function (o) {
+      var l = document.createElement("label");
+      l.className = "chk";
+      var inp = document.createElement("input");
+      inp.type = multi ? "checkbox" : "radio";
+      if (!multi) inp.name = name;
+      inp.value = o.value;
+      l.appendChild(inp);
+      var span = document.createElement("span");
+      span.className = "pill";
+      span.style.background = pillTint(o.value);
+      span.innerHTML = esc(o.value) + (o.ar ? ' <span class="ar">' + esc(o.ar) + "</span>" : "");
+      l.appendChild(span);
+      box.appendChild(l);
+      // A radio group cannot be un-picked with the keyboard or the mouse, and a person who
+      // ticked the wrong answer on a question that is not required has no way back. Airtable
+      // lets you clear a select, so a second press on the chosen radio clears it too.
+      if (!multi) {
+        inp.addEventListener("click", function (e) {
+          if (inp.getAttribute("data-on") === "1") {
+            inp.checked = false; inp.removeAttribute("data-on");
+          } else {
+            [].slice.call(box.querySelectorAll("input")).forEach(function (x) { x.removeAttribute("data-on"); });
+            inp.setAttribute("data-on", "1");
+          }
+          if (onChange) onChange(picked()[0] || "");
+        });
+      } else if (onChange) {
+        inp.addEventListener("change", function () { onChange(picked()); });
+      }
+    });
+    function picked() {
+      return [].slice.call(box.querySelectorAll("input:checked")).map(function (i) { return i.value; });
+    }
+    return { wrap: box, el: box, picked: picked };
+  }
+
   // Optional bilingual intro shown under the title, from app_tables.config.intro = {en, ar}.
   function renderIntro(intro) {
     var box = document.getElementById("form-intro"); if (!box) return;
@@ -347,12 +553,24 @@
     return { head: "You have already signed up",
              body: "This link is already signed up from this phone." };
   }
-  function showClosed(head, body) {
+  // ---- Which part of the card is showing -------------------------------------
+  // Every state is a block inside the one card, so switching state is "show the card,
+  // then show exactly one of these". Doing it in one place is what stops a state from
+  // being reachable with the questions still on screen underneath it.
+  function showState(which) {
     document.getElementById("loading").style.display = "none";
-    document.getElementById("card").style.display = "none";
+    document.getElementById("card").style.display = "block";
+    ["form", "success", "notfound", "closed"].forEach(function (id) {
+      document.getElementById(id).style.display = (id === which) ? "block" : "none";
+    });
+    // The rule belongs to the questions. Above a "Thank you" it is a line with nothing
+    // under it, and above "Form not found" there is nothing above it either.
+    document.getElementById("qsep").style.display = (which === "form") ? "block" : "none";
+  }
+  function showClosed(head, body) {
     document.getElementById("closed-h").textContent = head;
     document.getElementById("closed-p").textContent = body;
-    document.getElementById("closed").style.display = "block";
+    showState("closed");
   }
 
   function renderParent(p) {
@@ -425,6 +643,10 @@
   function buildField(f) {
     var wrap = document.createElement("div");
     wrap.className = "field";
+    // An Arabic-only question is laid out right-to-left, label and answer together. Set on
+    // the wrapper rather than on the label alone so the text somebody types, the choice rows
+    // and the placeholder all sit on the same side as the question.
+    if (isRtlText(f.label) && !f.label_ar) { wrap.dir = "rtl"; wrap.classList.add("rtl"); }
     var lab = document.createElement("label");
     lab.innerHTML = labelHtml(f);
     wrap.appendChild(lab);
@@ -443,30 +665,18 @@
       if (f.type === "dob") inp.max = new Date().toISOString().slice(0, 10);   // a birth date can't be in the future
       controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; } });
     } else if (f.type === "multi_select") {
-      // Airtable's multi-select: tick as many as apply. The answer is stored comma-
-      // joined, exactly the way Airtable stores it, so old and new records read alike.
-      var box = document.createElement("div");
-      box.className = "checks"; box.id = id;
-      (f.options || []).forEach(function (o) {
-        var v = typeof o === "string" ? o : o.en;
-        var arv = typeof o === "string" ? "" : (o.ar || "");
-        var l = document.createElement("label");
-        l.className = "chk";
-        var cb = document.createElement("input");
-        cb.type = "checkbox"; cb.value = v;
-        l.appendChild(cb);
-        l.appendChild(document.createTextNode(" " + v + (arv ? " / " + arv : "")));
-        box.appendChild(l);
+      // Airtable's multi-select: tick as many as apply, each choice on its own row with
+      // its coloured pill. The answer is stored comma-joined, exactly the way Airtable
+      // stores it, so old and new records read alike.
+      var mopts = (f.options || []).map(function (o) {
+        return typeof o === "string" ? { value: o, ar: "" } : { value: o.en, ar: o.ar || "" };
       });
-      wrap.appendChild(box);
-      var picked = function () {
-        return [].slice.call(box.querySelectorAll("input:checked"))
-          .map(function (i) { return i.value; });
-      };
+      var rows = buildChoiceRows(f, mopts, true, function () { applyConditions(); });
+      wrap.appendChild(rows.wrap);
       controls.push({
-        f: f, el: box,
-        validate: function () { return !f.required || picked().length > 0; },
-        value: function () { return picked().join(", ") || null; }
+        f: f, el: rows.el,
+        validate: function () { return !f.required || rows.picked().length > 0; },
+        value: function () { return rows.picked().join(", ") || null; }
       });
     } else if (f.type === "dropdown") {
       var otherVals = {};
@@ -474,7 +684,9 @@
         var v = typeof o === "string" ? o : o.en;
         var arv = typeof o === "string" ? "" : (o.ar || "");
         if (o && o.other) otherVals[v] = true;      // this choice opens a free-text box
-        return { value: v, label: v + (arv ? " / " + arv : "") };
+        // `label` is what the combobox searches and displays; `ar` is kept apart so the
+        // radio rows can style the Arabic rather than concatenating it into the pill text.
+        return { value: v, label: v + (arv ? " / " + arv : ""), ar: arv };
       });
       var hasOther = Object.keys(otherVals).length > 0;
       var otherWrap = null, otherInp = null;
@@ -491,32 +703,54 @@
         otherWrap.style.display = on ? "block" : "none";
         if (on) autoGrow(otherInp); else { otherInp.value = ""; otherInp.classList.remove("invalid"); }
       };
-      // the combobox settles a choice in code (click, arrow-Enter, blur-resolve) and fires
-      // no DOM event, so it tells the conditional engine itself
-      var combo = buildCombo(f, dopts, function (v) { toggleOther(v); applyConditions(); });
-      wrap.appendChild(combo.wrap);
+      // A short list is rendered the way Airtable renders a select — every choice visible
+      // as a pressable row with its own colour. A long one keeps the searchable combobox:
+      // this same field type carries the 32-branch list and the 292-name staff list, and
+      // 292 radio rows is not a form. Both paths expose the same three functions below, so
+      // the "other" box, the conditional engine and validation do not know which is on
+      // screen. The old page used the combobox for every list, which is why a 3-choice
+      // question was drawn as a search box whose placeholder read
+      // "Abdoun · Abdali Boulevard  +32 more" — the thing that looked worst from outside.
+      var useRows = dopts.length <= CHOICE_ROWS_MAX;
+      var pick;
+      if (useRows) {
+        var rrows = buildChoiceRows(f, dopts.map(function (o) { return { value: o.value, ar: o.ar }; }),
+          false, function (v) { toggleOther(v); applyConditions(); });
+        wrap.appendChild(rrows.wrap);
+        pick = { el: rrows.el, getValue: function () { return rrows.picked()[0] || null; } };
+      } else {
+        // the combobox settles a choice in code (click, arrow-Enter, blur-resolve) and fires
+        // no DOM event, so it tells the conditional engine itself
+        var combo = buildCombo(f, dopts, function (v) { toggleOther(v); applyConditions(); });
+        wrap.appendChild(combo.wrap);
+        pick = { el: combo.input, getValue: combo.getValue };
+      }
       if (hasOther) wrap.appendChild(otherWrap);
       controls.push({
-        f: f, el: combo.input, otherEl: otherInp,
+        f: f, el: pick.el, otherEl: otherInp,
         validate: function () {
-          var v = combo.getValue();
+          var v = pick.getValue();
           if (f.required && !v) return false;
           if (hasOther && v && otherVals[v] && otherInp.value.trim() === "") return false;   // picked "other" but said nothing
           return true;
         },
-        badEl: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v] && otherInp.value.trim() === "") ? otherInp : combo.input; },
-        value: function () { return combo.getValue(); },
+        badEl: function () { var v = pick.getValue(); return (hasOther && v && otherVals[v] && otherInp.value.trim() === "") ? otherInp : pick.el; },
+        value: function () { return pick.getValue(); },
         otherKey: hasOther ? f.id + "__other" : null,
-        otherValue: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v]) ? (otherInp.value.trim() || null) : null; }
+        otherValue: function () { var v = pick.getValue(); return (hasOther && v && otherVals[v]) ? (otherInp.value.trim() || null) : null; }
       });
     } else if (f.type === "yesno") {
-      var sel = document.createElement("select"); sel.id = id;
-      var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Select… / اختر"; sel.appendChild(opt0);
-      [{ en: "Yes", ar: "نعم" }, { en: "No", ar: "لا" }].forEach(function (o) {
-        var op = document.createElement("option"); op.value = o.en; op.textContent = o.en + " / " + o.ar; sel.appendChild(op);
+      // Two choices behind a native <select> that had to be opened to find out it held
+      // Yes and No. Airtable shows both, so both are shown — the same radio rows every
+      // other two-choice question on the form now gets.
+      var yrows = buildChoiceRows(f, [{ value: "Yes", ar: "نعم" }, { value: "No", ar: "لا" }],
+        false, function () { applyConditions(); });
+      wrap.appendChild(yrows.wrap);
+      controls.push({
+        f: f, el: yrows.el,
+        validate: function () { return !f.required || yrows.picked().length > 0; },
+        value: function () { return yrows.picked()[0] || null; }
       });
-      wrap.appendChild(sel);
-      controls.push({ f: f, el: sel, validate: function () { return !f.required || sel.value !== ""; }, value: function () { return sel.value || null; } });
     } else if (f.type === "phone") {
       var row = document.createElement("div"); row.className = "phone-row";
       row.innerHTML = '<div class="cc-picker"><button type="button" class="cc-btn"><img class="cc-flag" alt=""><span class="cc-dial">+962</span><span class="cc-caret">▾</span></button><ul class="cc-menu" role="listbox"></ul></div><input type="tel" inputmode="numeric" id="' + id + '">';
@@ -540,25 +774,54 @@
       var cap = isMedia ? MEDIA_MAX_BYTES : MAX_BYTES;
       var pickTxt = isMedia ? "Choose photo or video" : "Choose photo";
       var noneTxt = isMedia ? "No file chosen" : "No photo chosen";
+      // Airtable's attachment question is a dashed drop area you can also click, not a grey
+      // "Choose photo" button with a filename beside it. The whole area is the target, and
+      // on a desktop a file can be dragged onto it.
       var frow = document.createElement("div"); frow.className = "file-row"; frow.id = "row-" + f.id;
-      frow.innerHTML = '<button type="button" class="file-btn">' + esc(pickTxt) + '</button><span class="file-check">✓</span><span class="file-name">' + esc(noneTxt) + '</span>';
+      frow.innerHTML = '<span class="file-check">✓</span>' +
+        '<button type="button" class="file-btn">＋ ' + esc(pickTxt) + '</button>' +
+        '<span class="file-name">' + esc(noneTxt) + '</span>';
       var fin = document.createElement("input"); fin.type = "file";
       fin.accept = isMedia ? "image/*,video/*" : "image/*";
       fin.style.display = "none"; fin.id = id;
       var fhint = document.createElement("div"); fhint.className = "hint";
       if (isMedia) fhint.textContent = "A photo or a video, up to " + mbText(cap) + ".";
       wrap.appendChild(frow); wrap.appendChild(fin); wrap.appendChild(fhint);
-      var fbtn = frow.querySelector(".file-btn"), fchk = frow.querySelector(".file-check"), fnm = frow.querySelector(".file-name");
+      // The tick is shown by the `.has` class rather than by reaching for the element, so
+      // there is one place that knows "a file is chosen and it fits".
+      var fbtn = frow.querySelector(".file-btn"), fnm = frow.querySelector(".file-name");
       var overCap = false;
-      fbtn.addEventListener("click", function () { fin.click(); });
+      fbtn.addEventListener("click", function (e) { e.stopPropagation(); fin.click(); });
+      // The area itself opens the picker, so a thumb landing anywhere in the box works.
+      frow.addEventListener("click", function () { fin.click(); });
+      ["dragenter", "dragover"].forEach(function (ev) {
+        frow.addEventListener(ev, function (e) { e.preventDefault(); frow.classList.add("drag"); });
+      });
+      ["dragleave", "drop"].forEach(function (ev) {
+        frow.addEventListener(ev, function (e) { e.preventDefault(); frow.classList.remove("drag"); });
+      });
+      frow.addEventListener("drop", function (e) {
+        var dropped = e.dataTransfer && e.dataTransfer.files;
+        if (dropped && dropped.length) {
+          // DataTransfer.files is not assignable, so hand the input a real FileList via a
+          // DataTransfer we build. Guarded: older Safari has no constructor for it, and there
+          // the drop simply does nothing and the click path still works.
+          try {
+            var dt = new DataTransfer();
+            dt.items.add(dropped[0]);
+            fin.files = dt.files;
+            fin.dispatchEvent(new Event("change"));
+          } catch (err) { /* click to choose still works */ }
+        }
+      });
       fin.addEventListener("change", function () {
         var file = fin.files[0] || null;
         overCap = !!(file && file.size > cap);
         // The size is shown next to the name because on a video it is the number that decides
         // whether this works, and a person cannot see it any other way on a phone.
         fnm.textContent = file ? file.name + " · " + sizeText(file.size) : noneTxt;
-        fchk.style.display = (file && !overCap) ? "flex" : "none";
-        fbtn.textContent = file ? (isMedia ? "Change file" : "Change photo") : pickTxt;
+        frow.classList.toggle("has", !!(file && !overCap));
+        fbtn.textContent = file ? (isMedia ? "Change file" : "Change photo") : "＋ " + pickTxt;
         // Said now rather than after Submit: uploading 80 MB on shop wifi and being refused at
         // the end is the failure worth designing out.
         fhint.textContent = overCap
@@ -592,11 +855,14 @@
 
   function init(table, fields) {
     currentTable = table;
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("form-title").innerHTML = esc(table.name) + (table.name_ar ? ' <span style="color:var(--muted);font-weight:600;">· ' + esc(table.name_ar) + "</span>" : "");
+    // Airtable puts the Arabic name on its own line under the English one rather than
+    // running the two together after a middot — at 1.75rem the joined version wrapped
+    // mid-title on a phone, which is how the old header came to look broken.
+    document.getElementById("form-title").innerHTML = esc(table.name) +
+      (table.name_ar ? '<span class="ar">' + esc(table.name_ar) + "</span>" : "");
     document.getElementById("head").style.display = "block";
     renderIntro(table.config && table.config.intro);
-    document.getElementById("card").style.display = "block";
+    showState("form");
     var host = document.getElementById("fields");
     fields.filter(function (f) { return !f.internal; }).forEach(function (f) { host.appendChild(buildField(f)); }); // staff-only fields never render publicly
     [].slice.call(host.querySelectorAll("textarea.autogrow")).forEach(autoGrow);
@@ -679,10 +945,12 @@
           ? "Your place is confirmed. The details are in the message above — please keep this link."
           : "Every place is taken, so you are on the backup list. If someone drops out you take their place, and you will be told.";
       }
-      document.getElementById("card").style.display = "none";
-      document.getElementById("head").style.display = "none";
+      // The title stays — on a link somebody was sent, "Thank you" on its own does not say
+      // what they just applied for. The intro is the instructions for a form that is now
+      // filled in, so that goes; the event's own details stay, because a confirmed place is
+      // read together with where and when.
       document.getElementById("form-intro").style.display = "none";
-      document.getElementById("success").style.display = "block";
+      showState("success");
       window.scrollTo({ top: 0, behavior: "smooth" });
     }).catch(function (err) {
       btn.disabled = false; btn.textContent = "Submit";
@@ -711,7 +979,18 @@
     if (b) b.addEventListener("click", function (e) { e.preventDefault(); submitForm(); });
   })();
 
-  function notFound() { document.getElementById("loading").style.display = "none"; document.getElementById("notfound").style.display = "block"; }
+  function notFound() { showState("notfound"); }
+  // A per-event form opened without (or with a stale) event token. The slug is real, so the
+  // generic "form not found" would read as though the whole form had gone — what the person
+  // actually needs is the link to their specific event. Kept as its own function rather than
+  // rewriting #notfound in place, so the two messages cannot leak into one another when a
+  // visitor hits both states in one session.
+  function notEventLink() {
+    var nf = document.getElementById("notfound");
+    nf.querySelector("h2").textContent = "This link needs an event code";
+    nf.querySelector("p").textContent = "This form is filled in per event, so it needs that event’s own link. Please ask BLK for the link to the event you mean.";
+    showState("notfound");
+  }
 
   if (!slug) { notFound(); }
   else {
@@ -754,16 +1033,7 @@
         : Promise.resolve(null);
       Promise.all([parentReady, slotsReady, mineReady]).then(function (both) {
         var parent = both[0], slots = both[1], mine = both[2];
-        if (scoped && !parent) {
-          // The slug is real, but this is a per-event form opened without (or with a stale)
-          // event token. Say so, rather than the generic "form not found" that reads as if the
-          // whole form is gone — the person needs the specific event's link, not this one.
-          document.getElementById("loading").style.display = "none";
-          var nf = document.getElementById("notfound");
-          nf.innerHTML = '<h2>This link needs an event code</h2><p>This form is filled per event, so it needs the specific event’s link. Please ask BLK for the link to the event you mean.</p>';
-          nf.style.display = "block";
-          return;
-        }
+        if (scoped && !parent) { notEventLink(); return; }
         if (parent) parent.slots = slots;
         // Where you stand comes before everything else, including "full": somebody who
         // already has a place must never be shown a form or told there is no room.

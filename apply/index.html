@@ -6,137 +6,175 @@
 <title>Job Application — طلب توظيف | BLK</title>
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <style>
+  /* ============================================================================
+     Styled as a replica of an Airtable shared form — the same design the
+     custom-table form at /f/ uses, so the three public pages an outsider can
+     reach (this one, /cast/ and /f/) are one design rather than three.
+
+     Before 2026-08-17 all three were near-black with the BLK brand, by the
+     decision recorded in docs/superpowers/specs/2026-08-10-airtable-shell-design.md
+     ("the public form pages keep their own BLK branding"). That parity pass
+     covered the internal workspace only, which left the forms — the one part of
+     BLKTable a customer or an applicant ever sees — looking least like the
+     Airtable forms they replaced.
+
+     Every colour is a token below, so the whole page can go back to dark by
+     swapping the tokens and touching nothing else.
+     ============================================================================ */
   :root {
-    --bg: #000000;
-    --bg-2: #0d0d0f;
-    --bg-top: #1a1a1a;
-    --card: #141416;
-    --text: #f2f3f5;
-    --muted: #8b9198;
-    --silver: #d6dade;
-    --silver-hi: #eef0f2;
-    --silver-lo: #b4b9c0;
-    --line: rgba(255,255,255,0.07);
-    --line-2: rgba(255,255,255,0.14);
-    --field-bg: #0d0d0f;
-    --field-border: #2a2a2d;
+    --page: #f4f4f4;
+    --card: #ffffff;
+    --card-line: rgba(0,0,0,0.09);
+    --card-shadow: 0 0 0 1px rgba(0,0,0,0.045), 0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.05);
+    --text: #1d1f25;
+    --muted: #616670;
+    --faint: #8c919b;
+    --field-bg: #ffffff;
+    --field-border: rgba(0,0,0,0.16);
+    --field-border-hover: rgba(0,0,0,0.3);
+    --row-hover: rgba(0,0,0,0.035);
+    --sunk: #f6f6f7;
     --accent: #2d7ff9;
-    --accent-hi: #4f97ff;
-    --pink: #f82b60;
-    /* state colours, named where they used to be raw hex */
-    --danger: #ff6b6b;
-    --gold: #eab308;
-    --ok: #7ed08a;
-    --wa: #25d366;
-    --bg-3: #232326;
+    --accent-hi: #1a6ce0;
+    --accent-ring: rgba(45,127,249,0.22);
+    --danger: #dc043b;
+    --danger-ring: rgba(220,4,59,0.18);
+    --ok: #17803d;
+    /* the brand logo is white paths, so on a light card it is inverted to black */
+    --logo-filter: invert(1);
   }
   * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0; min-height: 100%;
-    background: var(--bg); color: var(--text);
+  html, body { margin: 0; padding: 0; min-height: 100%; background: var(--page); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  ::placeholder { color: #5f656d; }
-  .wrap {
-    min-height: 100vh; padding: 32px 20px 60px;
-    background: var(--bg);
-  }
-  .sheet { width: 100%; max-width: 520px; margin: 0 auto; }
-  .brand-logo { display: block; width: 210px; max-width: 70%; height: auto; margin: 8px auto 20px; }
-  .head { text-align: center; margin-bottom: 26px; }
-  .head h1 { font-size: 1.3rem; margin: 0 0 6px; font-weight: 800; letter-spacing: 0.02em; }
-  .head p { margin: 0; color: var(--muted); font-size: 0.9rem; }
-  .intro { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; }
-  .intro p { margin: 0; color: var(--silver-lo); font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; }
-  .intro p + p { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+    -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 1.5; }
+  ::placeholder { color: var(--faint); }
+  .wrap { min-height: 100vh; padding: 40px 16px 72px; }
+  .sheet { width: 100%; max-width: 640px; margin: 0 auto; }
+
+  /* One card holds the logo, the title, the questions and the confirmation, the
+     way an Airtable form does — not a logo floating above a box of inputs. */
+  .card { background: var(--card); border-radius: 8px; box-shadow: var(--card-shadow); padding: 32px 36px 36px; }
+  @media (max-width: 640px) { .wrap { padding: 20px 12px 48px; } .card { padding: 24px 20px 28px; border-radius: 6px; } }
+  .brand-logo { display: block; width: 132px; max-width: 45%; height: auto; margin: 0 0 24px;
+    filter: var(--logo-filter); }
+  .head { margin-bottom: 4px; }
+  .head h1 { font-size: 1.75rem; line-height: 1.25; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .head h1 .ar { color: var(--muted); font-weight: 600; }
+  .head p { margin: 10px 0 0; color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
+  .intro { margin: 12px 0 0; }
+  .intro p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; }
+  .intro p + p { margin-top: 10px; }
   .intro p.ar { direction: rtl; text-align: right; }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--line-2); border-radius: 10px; padding: 24px 22px;
-  }
-  .field { margin-bottom: 16px; }
-  .field:last-of-type { margin-bottom: 0; }
-  label { display: block; font-size: 0.82rem; color: var(--text); margin-bottom: 7px; font-weight: 600; }
-  label .req { color: var(--silver); }
+  .qsep { height: 1px; background: var(--card-line); border: 0; margin: 26px 0 24px; }
+
+  /* ---- a question ------------------------------------------------------- */
+  .field { margin-bottom: 24px; }
+  label { display: block; font-size: 0.95rem; color: var(--text); margin-bottom: 6px; font-weight: 600;
+    line-height: 1.4; }
+  label .req { color: var(--danger); font-weight: 600; margin-left: 2px; }
   label .ar { color: var(--muted); font-weight: 400; }
-  input, select, textarea {
-    width: 100%; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--field-border);
-    background: var(--field-bg); color: var(--text); font-size: 1rem; outline: none;
-    font-family: inherit; transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    color-scheme: dark;
-  }
-  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(45,127,249,0.25); }
-  /* Uniform height for all single-line fields so the date input can't render taller/longer than the rest */
-  input, select { height: 48px; }
-  input[type="date"] {
-    cursor: pointer; -webkit-appearance: none; appearance: none;
-    min-width: 0; max-width: 100%; height: 48px;
-  }
+
+  input, select, textarea { width: 100%; padding: 7px 10px; border-radius: 4px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text);
+    font-size: 0.95rem; outline: none; font-family: inherit; line-height: 1.4;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease; color-scheme: light; }
+  input, select { height: 36px; }
+  input:hover, select:hover, textarea:hover { border-color: var(--field-border-hover); }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-ring); }
+  textarea { resize: vertical; min-height: 72px; }
+  textarea.autogrow { min-height: 36px; height: 36px; resize: none; overflow: hidden; }
+  textarea.grow-y { resize: none; overflow: hidden; }
+  input[type="date"] { cursor: pointer; -webkit-appearance: none; appearance: none;
+    min-width: 0; max-width: 100%; height: 36px; }
   input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
   input[type="date"]::-webkit-datetime-edit { padding: 0; }
-  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
-  textarea { resize: vertical; min-height: 88px; }
-  textarea.autogrow { min-height: 48px; height: 48px; resize: none; overflow: hidden; line-height: 1.4; }
-  textarea.grow-y { resize: none; overflow: hidden; }
-  select { appearance: none; -webkit-appearance: none; cursor: pointer;
+  input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; }
+  select { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
-  .phone-row { display: flex; gap: 10px; align-items: stretch; }
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+  input.invalid, select.invalid, textarea.invalid {
+    border-color: var(--danger) !important; box-shadow: 0 0 0 2px var(--danger-ring) !important; }
+  input[type="file"] { display: none; }
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+
+  /* ---- phone ------------------------------------------------------------ */
+  .phone-row { display: flex; gap: 8px; align-items: stretch; }
   .phone-row input { flex: 1; }
   /* The dial code is not a question: it follows the Country answer asked just above, so it
      shows as a read-only prefix instead of a picker the applicant can contradict. */
-  .cc-fixed { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; padding: 0 13px;
-    border-radius: 8px; border: 1px solid var(--field-border); background: rgba(255,255,255,0.03);
-    color: var(--silver-lo); font-size: 1rem; }
-  .cc-flag { width: 22px; height: 15px; object-fit: cover; border-radius: 2px;
-    display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
-  .file-row { display: flex; align-items: center; gap: 12px; }
-  .file-btn {
-    padding: 11px 16px; border-radius: 8px; border: 1px solid var(--field-border);
-    background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; white-space: nowrap;
-  }
-  .file-btn:hover { border-color: var(--silver); }
-  .file-name { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .file-check { display: none; width: 22px; height: 22px; border-radius: 50%; background: var(--wa); color: #0a2e17;
-    font-weight: 800; font-size: 0.78rem; align-items: center; justify-content: center; flex: 0 0 auto; }
-  input.invalid, select.invalid, textarea.invalid {
-    border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(255,107,107,0.3) !important;
-  }
-  .file-row.invalid .file-btn { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
-  input[type="file"] { display: none; }
-  .hint { color: var(--muted); font-size: 0.76rem; margin-top: 6px; }
-  .submit {
-    width: 100%; margin-top: 22px; padding: 14px 16px; border-radius: 8px; border: none;
-    background: var(--accent);
-    color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer;
-    transition: background 0.15s ease, transform 0.05s ease;
-  }
+  .cc-fixed { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 0 10px; height: 36px;
+    border-radius: 4px; border: 1px solid var(--field-border); background: var(--sunk);
+    color: var(--muted); font-size: 0.95rem; }
+  .cc-picker { position: relative; flex: 0 0 auto; }
+  .cc-btn { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px; border-radius: 4px;
+    border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text);
+    font-size: 0.95rem; cursor: pointer; font-family: inherit; }
+  .cc-btn:hover { border-color: var(--field-border-hover); }
+  .cc-flag, .cc-menu li img { width: 21px; height: 14px; object-fit: cover; border-radius: 2px; display: block;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.12); background: #ddd; }
+  .cc-caret { color: var(--muted); font-size: 0.7rem; }
+  .cc-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; margin: 0; padding: 4px;
+    list-style: none; min-width: 200px; background: var(--card); border: 1px solid var(--card-line);
+    border-radius: 6px; display: none; box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+  .cc-menu.open { display: block; }
+  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 4px;
+    cursor: pointer; font-size: 0.95rem; }
+  .cc-menu li:hover { background: var(--row-hover); }
+  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+
+  /* ---- attachments: Airtable's dashed drop area -------------------------- */
+  .file-row { display: flex; flex-direction: column; align-items: stretch; gap: 0;
+    border: 1px dashed var(--field-border); border-radius: 4px; background: var(--sunk);
+    padding: 18px 16px; text-align: center; transition: border-color 0.12s ease, background 0.12s ease; }
+  .file-row:hover { border-color: var(--accent); background: rgba(45,127,249,0.04); }
+  .file-btn { padding: 0; border: none; background: none; color: var(--accent); font-size: 0.95rem;
+    font-weight: 600; cursor: pointer; font-family: inherit; }
+  .file-btn:hover { text-decoration: underline; }
+  .file-name { color: var(--muted); font-size: 0.85rem; margin-top: 4px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .file-check { display: none; width: 20px; height: 20px; border-radius: 50%; background: var(--ok);
+    color: #fff; font-weight: 700; font-size: 0.72rem; align-items: center; justify-content: center;
+    margin: 0 auto 6px; }
+  .file-row.has .file-check { display: flex; }
+  /* The tick sits above the prompt whichever order the markup happens to use, so the
+     three public pages read identically. */
+  .file-row .file-check { order: -1; }
+  .file-row.invalid { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-ring); }
+
+  /* ---- submit ----------------------------------------------------------- */
+  /* Left-aligned and sized to its text, as Airtable does. A full-width button is
+     a checkout page, not a form. */
+  .submit { width: auto; min-width: 104px; margin-top: 4px; padding: 0 18px; height: 36px; border-radius: 4px;
+    border: none; background: var(--accent); color: #fff; font-weight: 600; font-size: 0.95rem;
+    cursor: pointer; font-family: inherit; transition: background 0.12s ease; }
   .submit:hover { background: var(--accent-hi); }
-  .submit:active { transform: translateY(1px); }
-  .submit:disabled { opacity: 0.5; cursor: default; background: var(--accent); }
-  .form-msg { text-align: center; min-height: 1.2em; margin-top: 12px; font-size: 0.88rem; color: var(--danger); }
-  .success { display: none; text-align: center; padding: 20px 10px; }
-  .success .check {
-    width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 18px;
-    border: 2px solid var(--silver); display: flex; align-items: center; justify-content: center;
-    font-size: 30px; color: var(--silver);
-  }
-  .success h2 { margin: 0 0 8px; font-size: 1.2rem; }
-  .success p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+  .submit:disabled { opacity: 0.55; cursor: default; background: var(--accent); }
+  .form-msg { min-height: 1.2em; margin-top: 12px; font-size: 0.9rem; color: var(--danger); }
+
+  /* ---- confirmation, and the states that are not a form ------------------ */
+  .success, .notfound { display: none; text-align: center; padding: 16px 4px; }
+  .success .check { width: 48px; height: 48px; border-radius: 50%; margin: 0 auto 16px; background: var(--ok);
+    display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff; }
+  .success h2, .notfound h2 { margin: 0 0 8px; font-size: 1.3rem; font-weight: 700; }
+  .success p, .notfound p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.55; }
+  .foot { text-align: center; color: var(--faint); font-size: 0.8rem; margin-top: 20px; }
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="sheet">
-      <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
-      <div class="head">
-        <h1>Job Application <span style="color:var(--muted);font-weight:600;">· طلب توظيف</span></h1>
-        <p>Fill in your details below and we'll be in touch.</p>
-      </div>
-      <div class="intro" id="form-intro" style="display:none;"></div>
-
+      <!-- One card, the way an Airtable form is laid out: the logo and the title sit inside
+           it with the questions, and the confirmation replaces the questions rather than
+           replacing the whole card. That is also what keeps the brand on the "Application
+           received" screen without a second copy of the logo. -->
       <div class="card" id="card">
+        <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
+        <div class="head">
+          <h1>Job Application <span class="ar">· طلب توظيف</span></h1>
+          <p>Fill in your details below and we'll be in touch.</p>
+        </div>
+        <div class="intro" id="form-intro" style="display:none;"></div>
+        <hr class="qsep" id="qsep">
         <form id="form" novalidate>
           <div class="field">
             <label for="full_name">Full name <span class="ar">/ الاسم الكامل</span> <span class="req">*</span></label>
@@ -243,7 +281,7 @@
           <div class="field">
             <label>Photo of yourself <span class="ar">/ صورة الك</span> <span class="req">*</span></label>
             <div class="file-row" id="file-row">
-              <button type="button" class="file-btn" id="file-btn">Choose photo</button>
+              <button type="button" class="file-btn" id="file-btn">＋ Choose photo</button>
               <span class="file-check" id="file-check" aria-hidden="true">✓</span>
               <span class="file-name" id="file-name">No photo chosen</span>
             </div>
@@ -253,13 +291,18 @@
           <button type="button" class="submit" id="submit-btn">Submit application</button>
           <div class="form-msg" id="form-msg"></div>
         </form>
-      </div>
 
-      <div class="card success" id="success">
-        <div class="check">✓</div>
-        <h2>Application received</h2>
-        <p>Thank you for applying to BLK.<br>We've got your application and will reach out if there's a fit.</p>
+        <div class="success" id="success">
+          <div class="check">✓</div>
+          <h2>Application received</h2>
+          <p>Thank you for applying to BLK.<br>We've got your application and will reach out if there's a fit.</p>
+        </div>
+        <div class="notfound" id="notfound">
+          <h2>This link is no longer active</h2>
+          <p>Please request the current link or QR code from BLK.</p>
+        </div>
       </div>
+      <div class="foot">BLK قهوة</div>
     </div>
   </div>
 
@@ -327,16 +370,25 @@
     }
   }).catch(function () {});
 
+  // ---- Which part of the card is showing -------------------------------------
+  // The questions, the confirmation and the dead-link message are three blocks in one
+  // card, so switching between them is "show exactly one". The heading and the logo are
+  // above all three and stay put, which is the Airtable behaviour and also the reason the
+  // dead-link message no longer has to build itself a second card out of inline styles.
+  function showState(which) {
+    document.getElementById("card").style.display = "block";
+    ["form", "success", "notfound"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = (id === which) ? "block" : "none";
+    });
+    var sep = document.getElementById("qsep");
+    if (sep) sep.style.display = (which === "form") ? "block" : "none";
+  }
+
   // Rotatable link gate: only blocks when the token is explicitly invalid; any error fails open.
   function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
   db.rpc("form_token_valid", { p_key: "job_applications", p_k: getParam("k") }).then(function (res) {
-    if (res && !res.error && res.data === false) {
-      var card = document.getElementById("card"); if (card) card.style.display = "none";
-      var host = document.querySelector(".sheet") || document.body;
-      var m = document.createElement("div"); m.className = "card";
-      m.innerHTML = '<div style="text-align:center;padding:14px 6px;"><div style="font-size:1.15rem;font-weight:800;margin-bottom:8px;">This link is no longer active</div><div style="color:var(--muted);line-height:1.5;">Please request the current link or QR code from BLK.</div></div>';
-      host.appendChild(m);
-    }
+    if (res && !res.error && res.data === false) showState("notfound");
   }).catch(function () {});
 
   var MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -529,9 +581,10 @@
       })
       .then(function (res) {
         if (res && res.error) throw res.error;
-        document.getElementById("card").style.display = "none";
+        // The intro is instructions for a form that is now filled in, so it goes; the
+        // heading stays, because "Application received" alone does not say what for.
         document.getElementById("form-intro").style.display = "none";
-        document.getElementById("success").style.display = "block";
+        showState("success");
         window.scrollTo({ top: 0, behavior: "smooth" });
       })
       .catch(function (err) {
