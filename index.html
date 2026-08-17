@@ -1606,7 +1606,11 @@
                       <div class="qr-btns">
                         <button class="linkbtn" id="custom-qr-dl" type="button">Download QR</button>
                         <button class="linkbtn" id="custom-qr-share" type="button">Share QR</button>
+                        <button class="linkbtn" id="custom-qr-toggle" type="button" style="display:none;">Turn link off</button>
                         <button class="linkbtn qr-regen" id="custom-qr-regen" type="button" style="display:none;">Regenerate</button>
+                      </div>
+                      <div id="custom-link-off" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--danger);background:rgba(255,107,107,0.08);color:var(--text);font-size:0.85rem;line-height:1.45;">
+                        This form’s public link is <b>off</b>. Anyone opening it sees “Form not found”. Use <b>Turn link on</b> above to make it live again.
                       </div>
                     </div>
                   </div>
@@ -3809,6 +3813,12 @@
   // Tuesday and a form's job is decided by whoever prints the poster. Restart the form
   // if you need it frozen; the confirm text says so.
   function isArchived(t) { return !!(t && t.config && t.config.archived); }
+  // The public /f/ page serves a form only while its is_active column is true. That column is
+  // separate from archiving (which deliberately keeps the link working) and until now the app
+  // never read or set it, so a form switched off in the database looked live to staff and dead
+  // to the public — exactly how contact-us went missing. Missing counts as live, so nothing
+  // created before this reads as off.
+  function linkLive(t) { return !t || t.is_active !== false; }
   // Kept pure and separate from the write so it can be tested without a database, and so
   // config keys nobody here knows about (columns, statuses, capacity…) survive untouched.
   function archivedConfig(cfg, on, whenIso, byId) {
@@ -3830,6 +3840,27 @@
       "· It leaves the sidebar, Home and the Ctrl-K search, and moves under Archived at the foot of the sidebar.\n" +
       "· Its public form link and any printed QR codes keep working — archiving hides the table, it does not close the form.\n\n" +
       "You can put it back at any time from Archived.";
+  }
+  // Turn a form's public link on or off — the is_active control the app never had. Kept
+  // separate from archiving on purpose (archiving hides the table but keeps the link live).
+  function setFormLive(t, on) {
+    if (!t || !isAdmin) return;
+    db.from("app_tables").update({ is_active: on }).eq("id", t.id).then(function (r) {
+      if (r && r.error) {
+        window.alert("Could not turn the public link " + (on ? "on" : "off") + ".\n\n" +
+          (r.error.message || "") +
+          "\n\nIf this keeps failing the database may not allow this column to be changed from here — tell whoever runs the server.");
+        if (window.console) console.error(r.error);
+        return;
+      }
+      t.is_active = on;
+      loadCustomTables().then(function () {
+        if (currentCustom && currentCustom.table.id === t.id) {
+          var nt = (customTables || []).filter(function (x) { return x.id === t.id; })[0];
+          if (nt) openCustomTable(nt);
+        }
+      });
+    });
   }
   function setTableArchived(t, on) {
     if (!t || !isAdmin) return;
@@ -4223,7 +4254,7 @@
       // No form-level link exists for a scoped form. Send the admin to the parent, where each
       // record has its own working link and QR via that record's Share.
       var par = parentTableOf(t), parName = par ? par.name : "its parent table";
-      ca.removeAttribute("href"); ca.style.cursor = "pointer";
+      ca.removeAttribute("href"); ca.style.cursor = "pointer"; ca.style.opacity = "";
       ca.textContent = "Open " + parName + " to share a record";
       ca.onclick = function (e) { e.preventDefault(); if (par) openCustomTable(par); };
       qrBar.querySelector(".qr-cap").textContent = "Shared per record";
@@ -4231,6 +4262,8 @@
       document.getElementById("custom-qr").style.display = "none";
       document.getElementById("custom-qr-dl").style.display = "none";
       document.getElementById("custom-qr-share").style.display = "none";
+      document.getElementById("custom-qr-toggle").style.display = "none";
+      document.getElementById("custom-link-off").style.display = "none";
     } else {
       // Reset the panel: openCustomTable reuses these nodes across tables, so a scoped form
       // opened earlier must not leave its overrides on a plain form opened next.
@@ -4242,6 +4275,13 @@
       document.getElementById("custom-qr-dl").style.display = "";
       document.getElementById("custom-qr-share").style.display = "";
       if (!isTask) drawQR(document.getElementById("custom-qr"), clink);
+      // Show whether the public link is live, and give admins the switch. A dead link is
+      // greyed and called out so nobody copies it thinking it works.
+      var live = linkLive(t), tog = document.getElementById("custom-qr-toggle");
+      ca.style.opacity = live ? "" : "0.45";
+      document.getElementById("custom-link-off").style.display = (live || isTask) ? "none" : "";
+      tog.style.display = (isAdmin && !isTask) ? "" : "none";
+      tog.textContent = live ? "Turn link off" : "Turn link on";
     }
     document.getElementById("custom-edit").style.display = isAdmin ? "inline-flex" : "none";
     document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
@@ -7022,6 +7062,12 @@
   document.getElementById("ja-qr-share").addEventListener("click", function () { shareQR(document.getElementById("ja-qr"), "job-applications", builtinLink("job_applications")); });
   document.getElementById("cast-qr-share").addEventListener("click", function () { shareQR(document.getElementById("cast-qr"), "blk-casting", builtinLink("casting")); });
   document.getElementById("custom-qr-share").addEventListener("click", function () { if (currentCustom) shareQR(document.getElementById("custom-qr"), currentCustom.table.slug, publicFormLink(currentCustom.table.slug)); });
+  document.getElementById("custom-qr-toggle").addEventListener("click", function () {
+    var t = currentCustom && currentCustom.table; if (!t) return;
+    var turningOff = linkLive(t);
+    if (turningOff && !window.confirm("Turn off the public link for “" + t.name + "”?\n\nAnyone who opens it — including printed QR codes — will see “Form not found” until you turn it back on.")) return;
+    setFormLive(t, !turningOff);
+  });
 
   // ---- Regenerate QR (admin only, math-gated so it can't happen by accident) ----
   var regenCtx = null;
@@ -7930,6 +7976,10 @@
         var par = parentTableOf(ctx.table);
         if (par) { openCustomTable(par); }
         window.alert("This form is filled per record, so it has no single link. Open " + (par ? par.name : "its parent table") + " and use a record's Share to copy that record's link.");
+      } else if (ctx.table && !linkLive(ctx.table)) {
+        // Copying a link that opens as "Form not found" is the trap this whole change closes.
+        openCustomTable(ctx.table);
+        window.alert("This form's public link is off, so it would open as “Form not found”. Turn it on from the form's Share panel first.");
       } else {
         var link = ctx.table ? publicFormLink(ctx.table.slug)
           : ("https://blktable.blk.jo/" + (ctx.view === "casting" ? "cast/" : "apply/"));
@@ -8172,14 +8222,18 @@
   // Every public form in one place, so a link can be found without opening its table.
   document.getElementById("side-forms").addEventListener("click", function () {
     var rows = browsableTables().filter(function (t) { return (t.kind || "form") !== "task" && !isScopedForm(t); })
-      .map(function (t) { return { name: t.name, link: publicFormLink(t.slug) }; });
-    if (accessKeys["job_applications"]) rows.unshift({ name: "Job Applications", link: "https://blktable.blk.jo/apply/" });
-    if (accessKeys["casting"]) rows.unshift({ name: "BLK Casting", link: "https://blktable.blk.jo/cast/" });
+      .map(function (t) { return { name: t.name, link: publicFormLink(t.slug), live: linkLive(t) }; });
+    if (accessKeys["job_applications"]) rows.unshift({ name: "Job Applications", link: "https://blktable.blk.jo/apply/", live: true });
+    if (accessKeys["casting"]) rows.unshift({ name: "BLK Casting", link: "https://blktable.blk.jo/cast/", live: true });
     document.getElementById("modal-body").innerHTML =
       '<div class="m-name">Public forms</div><div class="m-sub">Anyone with the link can submit; nobody needs a login.</div>' +
       (rows.length ? rows.map(function (r) {
-        return '<div class="m-field full"><div class="k">' + esc(r.name) + '</div><div class="v"><a href="' +
-          esc(r.link) + '" target="_blank" rel="noopener">' + esc(r.link) + "</a></div></div>";
+        // A form whose link is off is shown but flagged, not offered as a working link — the
+        // whole point of this list is that every link in it can be copied and trusted.
+        var v = r.live
+          ? '<a href="' + esc(r.link) + '" target="_blank" rel="noopener">' + esc(r.link) + "</a>"
+          : '<span style="color:var(--danger);">Link is off — open the form and turn it on</span>';
+        return '<div class="m-field full"><div class="k">' + esc(r.name) + '</div><div class="v">' + v + "</div></div>";
       }).join("") : '<div class="m-sub">No forms yet.</div>');
     document.getElementById("modal").classList.add("open");
   });
@@ -8335,8 +8389,9 @@
     var t = currentCustom.table, isTask = (t.kind === "task");
     var items = [{ head: true, label: t.name },
       { label: stars[t.id] ? "Remove from starred" : "Add to starred", on: function () { toggleStar(t.id); } }];
-    if (!isTask && !isScopedForm(t)) items.push({ label: "Open the public form", on: function () { window.open(publicFormLink(t.slug), "_blank"); } });
-    else if (!isTask && isScopedForm(t)) { var par = parentTableOf(t); items.push({ label: "Share a record (" + (par ? par.name : "parent") + ")", on: function () { if (par) openCustomTable(par); } }); }
+    if (!isTask && isScopedForm(t)) { var par = parentTableOf(t); items.push({ label: "Share a record (" + (par ? par.name : "parent") + ")", on: function () { if (par) openCustomTable(par); } }); }
+    else if (!isTask && !linkLive(t)) items.push({ label: "Public link is off", hint: "turn it on in the form's Share panel", on: function () { openCustomTable(t); } });
+    else if (!isTask) items.push({ label: "Open the public form", on: function () { window.open(publicFormLink(t.slug), "_blank"); } });
     items.push({ sep: true });
     if (isAdmin) {
       var ws = tableWorkspace(t);
