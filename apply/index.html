@@ -297,11 +297,16 @@
   // Removed built-in questions (set by the dashboard editor) are hidden from this form
   var hiddenCols = {};
   var HIDE_MAP = { how_found: "how_found", city: "city", living_area: "living_area", gender: "gender", work_type: "work_type", currently_working: "currently_working", education_level: "education_level", favorite_drink: "favorite_drink", why_join: "why_join" };
+  // Where each built-in question sits, for ANCHORING an extra question after it. Every
+  // question is in here, not just the removable ones: the dashboard offers all of them as
+  // "show after", and an anchor this page cannot resolve silently drops the question to the
+  // bottom of the form instead of where it was placed.
+  var ANCHOR_IDS = { full_name: "full_name", date_of_birth: "dob", country: "country", phone: "phone_local", photo: "photo" };
   // The .field wrapper of a built-in question — used both to hide it and to place extra questions after it
   function builtinWrap(col) {
     if (col === "city") return document.getElementById("city-field");
     if (col === "is_lebanese") return document.getElementById("leb-field");
-    var id = HIDE_MAP[col]; if (!id) return null;
+    var id = HIDE_MAP[col] || ANCHOR_IDS[col]; if (!id) return null;
     var el = document.getElementById(id);
     return (el && el.closest) ? el.closest(".field") : null;
   }
