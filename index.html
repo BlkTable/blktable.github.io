@@ -352,6 +352,7 @@
     display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: var(--fs-9); font-weight: 700; }
   /* A video answer has no thumbnail to paint, so the cover says "video" rather than sitting empty. */
   .ja-card .photo.is-video { color: var(--silver-lo); background: var(--bg-3); }
+  .ja-card .photo.is-file { color: var(--silver-lo); background: var(--bg-3); }
   /* per-record ⋯ actions menu */
   .rec-menu { position: relative; flex: 0 0 auto; }
   .ja-card .card-actions { justify-content: center; }
@@ -1096,6 +1097,9 @@
   table.grid span.cellvid { width: 34px; height: 34px; border-radius: 6px; background: var(--bg-3);
     border: 1px solid var(--field-border); color: var(--silver-lo); display: flex; align-items: center; justify-content: center; }
   table.grid span.cellvid svg { width: 18px; height: 18px; }
+  table.grid span.cellfile { width: 34px; height: 34px; border-radius: 6px; background: var(--bg-3);
+    border: 1px solid var(--field-border); color: var(--silver-lo); display: flex; align-items: center; justify-content: center; }
+  table.grid span.cellfile svg { width: 16px; height: 16px; }
   /* The row-number column is now the leftmost thing, so it takes the sticky edge and
      the first data column moves over by its width — otherwise they overlap on scroll. */
   table.grid th.rowno, table.grid td.rowno { position: sticky; left: 0; z-index: 1;
@@ -3971,7 +3975,9 @@
   // a video gets a play mark, because it has no thumbnail to paint and an empty grey box
   // reads as a card that failed to load rather than a card holding a video.
   function coverHtml(path) {
-    return isVideoPath(path) ? '<div class="photo is-video">' + PLAY_SVG + "</div>" : '<div class="photo"></div>';
+    return isVideoPath(path) ? '<div class="photo is-video">' + PLAY_SVG + "</div>"
+      : !isImagePath(path) ? '<div class="photo is-file">' + FILE_SVG + "</div>"
+      : '<div class="photo"></div>';
   }
   // The same two ceilings the public form uses, and for the same reason: a video is a
   // different order of size from a photo. Both are enforced again in the r2 edge function —
@@ -4790,7 +4796,7 @@
       // A video has no thumbnail — the hourly sweeper builds them from images. Asking for one
       // 404s and falls back to the full file, which as a CSS background paints nothing at all,
       // so a video cover would read as a broken card. It gets a play mark instead.
-      if (photoField && d[photoField.id] && !isVideoPath(d[photoField.id])) {
+      if (photoField && d[photoField.id] && isImagePath(d[photoField.id])) {
         setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
       }
     });
@@ -5143,6 +5149,7 @@
       // 34px of video is not worth fetching or watching. The cell says there is one and the
       // record panel plays it, which is where a reviewer is actually looking at the answer.
       if (isVideoPath(p)) return '<span class="cellvid" title="' + esc(fileLabel(p)) + '">' + PLAY_SVG + "</span>";
+      if (!isImagePath(p)) return '<span class="cellfile" title="' + esc(fileLabel(p)) + '">' + FILE_SVG + "</span>";
       return '<img class="cellimg" data-path="' + esc(p) + '" alt="">';
     }
     var txt = customCellText(f, d);

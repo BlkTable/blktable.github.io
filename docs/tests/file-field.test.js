@@ -47,7 +47,7 @@ function load(js, vars, fns) {
 // that task's red state, resolved by implementing the function.
 const A = load(APP,
   ['PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES', 'VIDEO_EXT', 'VIDEO_PLAYABLE', 'IMAGE_EXT', 'PLAY_SVG', 'FILE_SVG'],
-  ['isFileField', 'isFileType', 'uploadCap', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel', 'esc', 'photoSectionHtml']);
+  ['isFileField', 'isFileType', 'uploadCap', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel', 'esc', 'photoSectionHtml', 'coverHtml']);
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; } catch (e) { console.log('FAIL: ' + name + ' -> ' + e.message); process.exitCode = 1; } };
@@ -145,6 +145,26 @@ t('documents mixed with photos are headed Attachments', () => {
 t('the document question label is escaped', () => {
   const h = A.photoSectionHtml([{ id: 'g9', label: '<img src=x onerror=alert(1)>', type: 'file' }], { g9: 'a.pdf' });
   assert.ok(!/<img src=x/.test(h) && /&lt;img/.test(h));
+});
+
+// ---- the card cover ------------------------------------------------------
+t('a document cover is marked as a file, not left as an empty photo box', () => {
+  const h = A.coverHtml('uuid_cv.pdf');
+  assert.ok(/is-file/.test(h), 'a file cover must carry is-file');
+  assert.ok(/<svg/.test(h), 'and must show a glyph rather than an empty box');
+});
+t('an image cover is unchanged', () => {
+  assert.strictEqual(A.coverHtml('uuid_face.jpg'), '<div class="photo"></div>');
+});
+t('a video cover is unchanged', () => {
+  assert.ok(/is-video/.test(A.coverHtml('uuid_clip.mp4')));
+});
+t('the is-file cover class is styled', () => {
+  assert.ok(/\.ja-card \.photo\.is-file\s*\{/.test(APP_SRC), 'is-file cover has no stylesheet rule');
+});
+t('the grid cell has a file indicator that is styled', () => {
+  assert.ok(/class="cellfile"/.test(APP_SRC), 'gridCell never emits a cellfile indicator for a document');
+  assert.ok(/table\.grid span\.cellfile\s*\{/.test(APP_SRC), 'cellfile has no stylesheet rule');
 });
 
 console.log(n + ' tests defined');
