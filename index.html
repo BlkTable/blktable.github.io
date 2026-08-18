@@ -3819,7 +3819,7 @@
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
     { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
-    { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "email", label: "Email" }
+    { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "file", label: "File" }, { v: "email", label: "Email" }
   ];
   var customTables = [];
   // archived tables are excluded from the sidebar and Home until this is switched on
@@ -3928,8 +3928,8 @@
   // asked "is this type photo?" it meant "does this answer hold an uploaded file?", and
   // the answer to that is now two types — so it is asked once, here, and every caller
   // uses it. `isFileField` is the honest name for what those checks were always for.
-  function isFileField(f) { return !!f && (f.type === "photo" || f.type === "media"); }
-  function isFileType(t) { return t === "photo" || t === "media"; }
+  function isFileField(f) { return !!f && (f.type === "photo" || f.type === "media" || f.type === "file"); }
+  function isFileType(t) { return t === "photo" || t === "media" || t === "file"; }
   // What is stored is a bare R2 object key — `<uuid>_<original filename>` — with no MIME
   // type beside it and nowhere to put one without changing the shape of every answer.
   // The extension survives sanitizing, so it is what decides how the file is shown. A key
@@ -3961,7 +3961,7 @@
   // this copy exists so a person is told before the upload, not after it.
   var PHOTO_MAX_BYTES = 10 * 1024 * 1024;
   var MEDIA_MAX_BYTES = 50 * 1024 * 1024;
-  function uploadCap(f) { return f && f.type === "media" ? MEDIA_MAX_BYTES : PHOTO_MAX_BYTES; }
+  function uploadCap(f) { return f && (f.type === "media" || f.type === "file") ? MEDIA_MAX_BYTES : PHOTO_MAX_BYTES; }
   function mbText(b) { return Math.round(b / 1048576) + " MB"; }
   function choiceList(f) {
     return (f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })
