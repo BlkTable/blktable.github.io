@@ -1635,6 +1635,7 @@
               <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
               <div class="selbar" id="custom-selbar">
                 <b id="sel-n">0</b><span>selected</span>
+                <button class="linkbtn qr-regen" id="sel-delete" type="button" style="display:none;">Delete selected</button>
                 <button class="linkbtn sb-sp" id="sel-export" type="button">Export selected as CSV</button>
                 <button class="linkbtn" id="sel-clear" type="button">Clear</button>
               </div>
@@ -5570,9 +5571,14 @@
   }
 
   // ---- Selecting rows in the grid ----------------------------------------
-  // Ticking rows is how Airtable's grid lets you act on a handful of records. Here
-  // the one action is exporting them, which is what the tick boxes are actually for:
-  // pulling a specific set of records out without filtering the whole table down to it.
+  // Ticking rows is how Airtable's grid lets you act on a handful of records. Two actions
+  // hang off a selection: exporting it — pulling a specific set of records out without
+  // filtering the whole table down to it — and deleting it.
+  //
+  // Deleting needed to live HERE rather than only on the ⋯ menu, because the grid has no ⋯:
+  // its row furniture is the tick box and the expand button. So Grid, the default view, had
+  // no way to delete a record at all, and twelve rows ticked offered only "Export" — the
+  // tick boxes made a selection the screen then refused to act on.
   var customSel = {};
   function selectedIds() { return Object.keys(customSel); }
   function paintSelBar() {
@@ -5580,6 +5586,14 @@
     var n = selectedIds().length;
     document.getElementById("sel-n").textContent = String(n);
     bar.classList.toggle("on", n > 0);
+    // Deleting follows can_manage, the same permission the ⋯ menu's Delete follows and the
+    // same one the DELETE policy on app_submissions enforces — so a reviewer who may export
+    // is not shown a button the database will refuse.
+    var del = document.getElementById("sel-delete");
+    if (del) {
+      del.style.display = (currentCustom && canManage(currentCustom.table.id)) ? "inline-block" : "none";
+      del.textContent = n === 1 ? "Delete 1 record" : "Delete " + n + " records";
+    }
   }
   document.getElementById("sel-clear").addEventListener("click", function () {
     customSel = {}; paintSelBar(); renderCustom();
@@ -5590,6 +5604,87 @@
     exportCustomCsv((currentCustom.subs || []).filter(function (s) { return picked[s.id]; }),
       customCols(t, fields).concat([{ id: "__branch", label: "Branch" }, { id: "__created", label: "Submitted" }]), t);
   });
+
+  // Deleting a selection, for every table the app has and every one it will have. Three
+  // things make this more than one .delete() call:
+  //
+  //  1. A record's uploads live in R2, not in the row. deleteCustomSub already learned that
+  //     it is EVERY file field and not just the first, or a table with two upload questions
+  //     strands the rest in the bucket. The same rule has to hold in bulk.
+  //  2. A parent record's children point at it with ON DELETE SET NULL, so deleting the
+  //     parent first does not delete them — it ORPHANS them: parent_id null, invisible in
+  //     every view (they are only ever read as .eq("parent_id", …)) and worth nothing to the
+  //     payroll export, which joins through it. That is exactly the state two real event
+  //     signups were found in on 2026-08-18. So children go first, the way the events test
+  //     cleanup file does it, and the confirm says how many are going with them.
+  //  3. .in("id", …) with a whole table ticked is a URL, and a URL has a length. Chunked.
+  function deleteSelectedRecords() {
+    if (!currentCustom) return;
+    var t = currentCustom.table;
+    if (!canManage(t.id)) return;                       // the button is hidden, but never trust the button
+    var ids = selectedIds();
+    if (!ids.length) return;
+    var kid = childTableOf(t);
+    var btn = document.getElementById("sel-delete");
+    var chunks = function (a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+
+    // Count the children before asking, so the question names the second effect rather than
+    // springing it — the same promise the ⋯ Remove makes about promoting a backup.
+    var counted = kid
+      ? db.from("app_submissions").select("id", { count: "exact", head: true })
+          .eq("table_id", kid.id).in("parent_id", ids)
+          .then(function (r) { return r.error ? null : (r.count || 0); })
+          .catch(function () { return null; })
+      : Promise.resolve(0);
+
+    counted.then(function (kids) {
+      var what = ids.length === 1 ? "this record" : ids.length + " records";
+      var also = "";
+      if (kids === null) also = "\n\nIts " + kid.name.toLowerCase() + " go too, if it has any.";
+      else if (kids > 0) also = "\n\n" + kids + " " + kid.name.toLowerCase() +
+        (kids === 1 ? " on it is" : " on them are") + " deleted as well — a signup cannot outlive its event.";
+      if (!window.confirm("Delete " + what + "? This can't be undone." + also)) return;
+
+      if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
+      var picked = (currentCustom.subs || []).filter(function (s) { return customSel[s.id]; });
+      var paths = [];
+      (currentCustom.fields || []).filter(isFileField).forEach(function (f) {
+        picked.forEach(function (s) { var p = s.data ? s.data[f.id] : null; if (p) paths.push(p); });
+      });
+
+      // storageDelete always resolves, so one bucket failure cannot strand the rows.
+      Promise.all(paths.map(storageDelete)).then(function () {
+        var step = Promise.resolve();
+        if (kid) {
+          chunks(ids, 100).forEach(function (c) {
+            step = step.then(function () {
+              return db.from("app_submissions").delete().eq("table_id", kid.id).in("parent_id", c)
+                .then(function (r) { if (r.error) throw r.error; });
+            });
+          });
+        }
+        chunks(ids, 100).forEach(function (c) {
+          step = step.then(function () {
+            return db.from("app_submissions").delete().in("id", c)
+              .then(function (r) { if (r.error) throw r.error; });
+          });
+        });
+        return step;
+      }).then(function () {
+        customSel = {};
+        if (btn) btn.disabled = false;
+        paintSelBar();
+        openCustomTable(t);          // re-read rather than splice: counts, phases and the footer totals all move
+      }).catch(function (err) {
+        if (btn) btn.disabled = false;
+        paintSelBar();
+        window.alert("Could not delete. " + ((err && err.message) || ""));
+        if (window.console) console.error(err);
+      });
+    });
+  }
+  document.getElementById("sel-delete").addEventListener("click", deleteSelectedRecords);
+
   function renderCustomGrid(listEl, rows, fields, t) {
     var cols = customCols(t, fields);
     var allCols = [{ id: "__branch", label: "Branch", type: "short_text" }].concat(cols,
