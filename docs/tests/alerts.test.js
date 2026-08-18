@@ -211,4 +211,102 @@ t('a number is reduced to digits for wa.me', () => {
   assert.strictEqual(waDigits(null), '');
 });
 
+// ---- the numbers, as a person types them into the editor ----
+// One contact per line, "Name, +962…". Split on the LAST comma, because a name can contain
+// one ("Ahmad, QC") and a number cannot.
+const EDIT = load('index.html', ['parseContactLines', 'contactLinesText', 'notifyRowLineHtml', 'waDigits', 'esc'],
+  { fmtDate: () => '18 Aug 2026',
+    NOTIFY_ICON: { sent: '✓', queued: '⏳', sending: '⏳', failed: '✕', skipped: '⊘' } });
+const { parseContactLines, contactLinesText, notifyRowLineHtml } = EDIT;
+
+t('a name and a number on one line', () => {
+  const r = parseContactLines('Ahmad - QC, +962791234567');
+  assert.strictEqual(r.list.length, 1);
+  assert.strictEqual(r.list[0].name, 'Ahmad - QC');
+  assert.strictEqual(r.list[0].phone, '+962791234567');
+  assert.strictEqual(r.bad.length, 0);
+});
+t('a name containing a comma keeps its name', () => {
+  const r = parseContactLines('Ahmad, QC manager, +962791234567');
+  assert.strictEqual(r.list[0].name, 'Ahmad, QC manager');
+  assert.strictEqual(r.list[0].phone, '+962791234567');
+});
+t('a bare number needs no name', () => {
+  const r = parseContactLines('+962791234567');
+  assert.strictEqual(r.list.length, 1);
+  assert.strictEqual(r.list[0].name, null);
+});
+// A line that cannot be messaged must be reported, never silently dropped: a recipient who
+// quietly did not save is the failure mode that gets nobody told.
+t('an unusable number is reported, not dropped', () => {
+  const r = parseContactLines('Ahmad, 0791\nSalwa, +962791234567\n\n  \nBad line with no digits,');
+  assert.strictEqual(r.list.length, 1, 'only the good one is kept');
+  assert.strictEqual(r.bad.length, 2, 'both bad lines are reported: ' + JSON.stringify(r.bad));
+});
+t('blank lines are not contacts', () => {
+  assert.strictEqual(parseContactLines('\n\n   \n').list.length, 0);
+  assert.strictEqual(parseContactLines('').bad.length, 0);
+});
+t('what was saved reads back the same way', () => {
+  const text = 'Ahmad - QC, +962791234567\nKitchen manager, +962799999999';
+  assert.strictEqual(contactLinesText(parseContactLines(text).list), text);
+  assert.strictEqual(contactLinesText([]), '');
+  assert.strictEqual(contactLinesText(null), '');
+});
+
+// ---- the log line ----
+t('a sent message names who it went to', () => {
+  const h = notifyRowLineHtml({ id: 'x', status: 'sent', to_name: 'Ahmad', to_number: '962791234567',
+    template: 'qc_result_rejected_v1', body_preview: 'Rejected batch - Hummus', created_at: 'x', sent_at: 'y' }, false);
+  assert.ok(h.includes('Ahmad') && h.includes('+962791234567'), h);
+  assert.ok(h.includes('st-sent'), h);
+  assert.ok(!h.includes('nl-retry'), 'a sent message is not retryable: ' + h);
+});
+t('a failed message shows the reason and a retry', () => {
+  const h = notifyRowLineHtml({ id: 'x', status: 'failed', to_number: '962791234567', template: 't',
+    last_error: '131026 - not a WhatsApp user', attempts: 5, created_at: 'x' }, false);
+  assert.ok(h.includes('not a WhatsApp user'), h);
+  assert.ok(h.includes('nl-retry'), h);
+  assert.ok(h.includes('5 attempts'), h);
+});
+// The ceiling marker has no recipient - it must not render as a call to "+-".
+t('a marker with no recipient prints no phone number', () => {
+  const h = notifyRowLineHtml({ id: 'x', status: 'skipped', to_number: '-', template: '-',
+    last_error: 'ceiling reached', created_at: 'x' }, false);
+  assert.ok(!h.includes('+-'), h);
+  assert.ok(h.includes('ceiling reached'), h);
+});
+t('a failure with no recorded reason still says something', () => {
+  const h = notifyRowLineHtml({ id: 'x', status: 'failed', to_number: '962791234567', template: 't', created_at: 'x' }, false);
+  assert.ok(h.includes('no reason recorded'), h);
+});
+
+// ---- the editor reads back exactly what it wrote ----
+// serializeAlerts() reaches into the markup addAlertRow() built. There is no DOM here to
+// exercise that against, so this checks the join itself: every class the editor QUERIES must
+// be a class it WRITES. One mistyped selector is a rule that saves as empty, silently, and a
+// silent alert is the failure this whole feature exists to prevent.
+t('every class the alerts editor queries is one it writes', () => {
+  const js = scripts('index.html');
+  const src = ['addAlertRow', 'addAlertParamRow', 'serializeAlerts', 'renumberAlertParams']
+    .map(fn => grab(js, fn, 'index.html')).join('\n');
+  const written = new Set();
+  for (const m of src.matchAll(/class="([^"]+)"/g)) m[1].split(/\s+/).forEach(c => c && written.add(c));
+  // a row can also get its class in code (row.className = "al-p") rather than in markup
+  for (const m of src.matchAll(/className\s*=\s*"([^"]+)"/g)) m[1].split(/\s+/).forEach(c => c && written.add(c));
+  const queried = new Set();
+  for (const m of src.matchAll(/querySelector(?:All)?\("\.([A-Za-z0-9_-]+)/g)) queried.add(m[1]);
+  const missing = [...queried].filter(c => !written.has(c));
+  assert.strictEqual(missing.length, 0, 'queried but never written: ' + missing.join(', '));
+  assert.ok(queried.size >= 10, 'expected the editor to read at least ten of its own fields, saw ' + queried.size);
+});
+// The same join for the log: notifyRowLineHtml writes the row, wireRetries reads it.
+t('the retry button the log writes is the one it wires', () => {
+  const js = scripts('index.html');
+  const src = [grab(js, 'notifyRowLineHtml', 'index.html'), grab(js, 'wireRetries', 'index.html')].join('\n');
+  assert.ok(src.includes('class="nl-row') && src.includes('.nl-row'), 'row class and lookup disagree');
+  assert.ok(src.includes('nl-retry') && src.match(/querySelectorAll\("\.nl-retry"\)/), 'retry class and lookup disagree');
+  assert.ok(src.includes('data-id="'), 'the row must carry the message id it retries');
+});
+
 if (!process.exitCode) console.log('alerts: ' + n + ' tests passed');
