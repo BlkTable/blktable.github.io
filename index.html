@@ -535,18 +535,12 @@
   /* "only if Did you go to university? = Yes" — a question that waits on another answer */
   .fprev .pv-cond { color: var(--muted); font-size: var(--fs-2); font-weight: 500; }
   /* the question editor, shown in place of the preview */
-  .fform-names { margin-bottom: 14px; }
-  .fform-lab { display: block; color: var(--muted); font-size: var(--fs-2); letter-spacing: 0.08em;
-    text-transform: uppercase; margin-bottom: 6px; }
-  .fform-lab span { text-transform: none; letter-spacing: 0; }
   .fform-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px;
     padding-top: 14px; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
   .fform-actions .primary { margin-left: auto; padding: 9px 18px; font-size: var(--fs-3); }
   .fform-msg { color: var(--muted); font-size: var(--fs-3); }
   .fform-msg.err { color: var(--danger); }
   .fform-msg.ok { color: var(--ok); }
-  .builtin-note { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px;
-    padding: 13px 15px; margin-bottom: 16px; color: var(--silver-lo); font-size: var(--fs-3); line-height: 1.6; max-width: 720px; }
   .qr-regen { color: #ff9b9b !important; border-color: rgba(255,107,107,0.4) !important; }
   .qr-regen:hover { color: var(--danger) !important; border-color: var(--danger) !important; }
   .regen-math { margin-top: 8px; }
@@ -1440,17 +1434,22 @@
           <div class="view-body">
             <!-- The Form tab: everything about the public form for this table. -->
             <div class="base-pane" data-pane="job_applications:form" style="display:none;">
-              <div class="builtin-note">This form is <b>hand-coded in the app</b>, so its questions aren't generated from a field list and can't be previewed here. Extra questions an admin adds do appear on it. Open it to see exactly what an applicant sees.</div>
-              <div class="qr-bar">
-                <img class="qr-img" id="ja-qr" alt="QR code for the public form">
-                <div class="qr-side">
-                  <div class="qr-cap">Scan to open the public form</div>
-                  <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-                  <a id="ja-link" href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
-                  <div class="qr-btns">
-                    <button class="linkbtn" id="ja-qr-dl" type="button">Download QR</button>
-                    <button class="linkbtn" id="ja-qr-share" type="button">Share QR</button>
-                    <button class="linkbtn qr-regen" id="ja-qr-regen" type="button" style="display:none;">Regenerate</button>
+              <div class="form-pane">
+                <!-- The one form editor lives here while this tab is open; see mountFormPane(). -->
+                <div class="fp-main" data-formhost="job_applications"></div>
+                <div class="fp-side">
+                  <div class="qr-bar">
+                    <img class="qr-img" id="ja-qr" alt="QR code for the public form">
+                    <div class="qr-side">
+                      <div class="qr-cap">Scan to open the public form</div>
+                      <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+                      <a id="ja-link" href="https://blktable.blk.jo/apply/" target="_blank" rel="noopener">https://blktable.blk.jo/apply/</a>
+                      <div class="qr-btns">
+                        <button class="linkbtn" id="ja-qr-dl" type="button">Download QR</button>
+                        <button class="linkbtn" id="ja-qr-share" type="button">Share QR</button>
+                        <button class="linkbtn qr-regen" id="ja-qr-regen" type="button" style="display:none;">Regenerate</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1515,17 +1514,21 @@
 
           <div class="view-body">
             <div class="base-pane" data-pane="casting:form" style="display:none;">
-              <div class="builtin-note">This form is <b>hand-coded in the app</b>, so its questions aren't generated from a field list and can't be previewed here. Extra questions an admin adds do appear on it. Open it to see exactly what an applicant sees.</div>
-              <div class="qr-bar">
-                <img class="qr-img" id="cast-qr" alt="QR code for the public form">
-                <div class="qr-side">
-                  <div class="qr-cap">Scan to open the public form</div>
-                  <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
-                  <a id="cast-link" href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
-                  <div class="qr-btns">
-                    <button class="linkbtn" id="cast-qr-dl" type="button">Download QR</button>
-                    <button class="linkbtn" id="cast-qr-share" type="button">Share QR</button>
-                    <button class="linkbtn qr-regen" id="cast-qr-regen" type="button" style="display:none;">Regenerate</button>
+              <div class="form-pane">
+                <div class="fp-main" data-formhost="casting"></div>
+                <div class="fp-side">
+                  <div class="qr-bar">
+                    <img class="qr-img" id="cast-qr" alt="QR code for the public form">
+                    <div class="qr-side">
+                      <div class="qr-cap">Scan to open the public form</div>
+                      <div class="qr-sub">Point a phone camera at the code to fill this form.</div>
+                      <a id="cast-link" href="https://blktable.blk.jo/cast/" target="_blank" rel="noopener">https://blktable.blk.jo/cast/</a>
+                      <div class="qr-btns">
+                        <button class="linkbtn" id="cast-qr-dl" type="button">Download QR</button>
+                        <button class="linkbtn" id="cast-qr-share" type="button">Share QR</button>
+                        <button class="linkbtn qr-regen" id="cast-qr-regen" type="button" style="display:none;">Regenerate</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1625,26 +1628,29 @@
           <div class="view-body">
             <div class="base-pane" data-pane="custom:form" style="display:none;">
               <div class="form-pane">
-                <div>
-                  <div class="fp-title">
-                    <span class="lab" id="fform-heading">What the applicant sees</span>
-                    <div class="seg viewtoggle" id="fform-mode" style="display:none;">
-                      <button type="button" data-m="preview" class="active">Preview</button>
-                      <button type="button" data-m="edit">Edit questions</button>
+                <div class="fp-main" data-formhost="custom">
+                  <!-- ONE form editor for every form in the app — the two hand-coded ones and
+                       every table. It is moved into whichever Form tab is open (mountFormPane),
+                       so there is a single preview and a single editor rather than one per view. -->
+                  <div id="form-editor">
+                    <div class="fp-title">
+                      <span class="lab" id="fform-heading">What the applicant sees</span>
+                      <div class="seg viewtoggle" id="fform-mode" style="display:none;">
+                        <button type="button" data-m="preview" class="active">Preview</button>
+                        <button type="button" data-m="edit">Edit form</button>
+                      </div>
                     </div>
-                  </div>
-                  <div class="fprev" id="custom-fprev"></div>
-                  <!-- The question editor, in the Form tab where the form lives. Same
-                       widget as the builder's, so saving goes through the same code. -->
-                  <div id="fform-edit" style="display:none;">
-                    <div class="fform-names">
-                      <label class="fform-lab">Questions <span id="fform-title-note"></span></label>
-                    </div>
-                    <div class="bld-fields" id="fform-fields"></div>
-                    <div class="fform-actions">
-                      <button type="button" class="linkbtn" id="fform-add">＋ Add question</button>
-                      <span class="fform-msg" id="fform-msg"></span>
-                      <button type="button" class="primary" id="fform-save">Save form</button>
+                    <div class="fprev" id="custom-fprev"></div>
+                    <!-- The whole table editor, in the Form tab where the form lives. The
+                         builder's own body is moved in here, so saving goes through the same
+                         code and nothing about a table is editable in only one of the two. -->
+                    <div id="fform-edit" style="display:none;">
+                      <div id="fform-slot"></div>
+                      <div class="fform-actions">
+                        <span class="fform-msg" id="fform-msg"></span>
+                        <button type="button" class="linkbtn qr-regen" id="fform-delete" style="display:none;">Delete form</button>
+                        <button type="button" class="primary" id="fform-save">Save form</button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1790,33 +1796,49 @@
         <button class="modal-close" id="builder-close" aria-label="Close">✕</button>
         <div class="m-name" id="bld-title">New table</div>
         <div class="m-sub" id="bld-sub">Create a form — it gets its own public link.</div>
-        <div id="bld-builtin-note" style="display:none;"></div>
-        <div class="bld-two">
-          <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
-          <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
-        </div>
-        <div class="fp-label" style="margin: 0 0 6px;">Form intro <span style="color:var(--muted);font-weight:400;">— optional. Shown under the title on the public form.</span></div>
-        <div class="bld-two">
-          <textarea id="bld-intro" rows="2" placeholder="Intro (English)"></textarea>
-          <textarea id="bld-intro-ar" rows="2" placeholder="مقدمة (عربي)" dir="rtl"></textarea>
-        </div>
-        <div class="bld-fields" id="bld-fields"></div>
-        <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add field</button>
-        <div class="bld-stages-wrap" id="bld-stages-wrap">
-          <div class="fp-label" style="margin: 16px 0 6px;">Workflow stages <span style="color:var(--muted);font-weight:400;">— optional. Add stages (e.g. New / Approved / Rejected) to get tabs + move buttons.</span></div>
-          <div id="bld-stages"></div>
-          <button type="button" class="btn-save" id="bld-add-stage" style="margin-top: 4px;">＋ Add stage</button>
-        </div>
-        <div class="bld-actions-wrap" id="bld-actions-wrap">
-          <div class="fp-label" style="margin: 16px 0 6px;">Record actions <span style="color:var(--muted);font-weight:400;">— optional. Buttons on each record: WhatsApp / Call / Email (uses the table's phone/email field).</span></div>
-          <div id="bld-actions"></div>
-          <button type="button" class="btn-save" id="bld-add-action" style="margin-top: 4px;">＋ Add action</button>
-        </div>
-        <div class="bld-layers-wrap" id="bld-layers-wrap">
-          <div class="fp-label" style="margin: 16px 0 6px;">Review chain <span style="color:var(--muted);font-weight:400;">— optional. Ordered layers each record passes through; pick a type and who's assigned.</span></div>
-          <div id="bld-layers"></div>
-          <button type="button" class="btn-save" id="bld-add-layer" style="margin-top: 4px;">＋ Add layer</button>
-        </div>
+        <!-- Everything you can change about a table. Moved between this modal (creating one)
+             and the Form tab (editing one) so there is a single editor, not two that drift. -->
+        <div id="bld-slot"><div id="bld-body">
+          <div id="bld-builtin-note" style="display:none;"></div>
+          <div class="fp-label" id="bld-name-lab" style="margin: 0 0 6px;">Form name <span style="color:var(--muted);font-weight:400;">— the title applicants read at the top of the form, and how it is named here.</span></div>
+          <div class="bld-two" id="bld-names">
+            <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
+            <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
+          </div>
+          <!-- Built-in forms only: their public page prints its own heading, which is not the
+               same string as the table's name ("Job Application" vs "Job Applications"). It is
+               editable here rather than left as the one thing about a form you cannot change. -->
+          <div id="bld-pubtitle-wrap" style="display:none;">
+            <div class="fp-label" id="bld-pubtitle-lab" style="margin: 12px 0 6px;">Heading on the public form</div>
+            <div class="bld-two">
+              <textarea id="bld-pubtitle" rows="1" placeholder="Heading (English)"></textarea>
+              <textarea id="bld-pubtitle-ar" rows="1" placeholder="العنوان (عربي)" dir="rtl"></textarea>
+            </div>
+          </div>
+          <div class="fp-label" style="margin: 12px 0 6px;">Form intro <span style="color:var(--muted);font-weight:400;">— optional. Shown under the title on the public form.</span></div>
+          <div class="bld-two">
+            <textarea id="bld-intro" rows="2" placeholder="Intro (English)"></textarea>
+            <textarea id="bld-intro-ar" rows="2" placeholder="مقدمة (عربي)" dir="rtl"></textarea>
+          </div>
+          <div class="fp-label" id="bld-q-lab" style="margin: 16px 0 6px;">Questions</div>
+          <div class="bld-fields" id="bld-fields"></div>
+          <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add question</button>
+          <div class="bld-stages-wrap" id="bld-stages-wrap">
+            <div class="fp-label" style="margin: 16px 0 6px;">Workflow stages <span style="color:var(--muted);font-weight:400;">— optional. Add stages (e.g. New / Approved / Rejected) to get tabs + move buttons.</span></div>
+            <div id="bld-stages"></div>
+            <button type="button" class="btn-save" id="bld-add-stage" style="margin-top: 4px;">＋ Add stage</button>
+          </div>
+          <div class="bld-actions-wrap" id="bld-actions-wrap">
+            <div class="fp-label" style="margin: 16px 0 6px;">Record actions <span style="color:var(--muted);font-weight:400;">— optional. Buttons on each record: WhatsApp / Call / Email (uses the table's phone/email field).</span></div>
+            <div id="bld-actions"></div>
+            <button type="button" class="btn-save" id="bld-add-action" style="margin-top: 4px;">＋ Add action</button>
+          </div>
+          <div class="bld-layers-wrap" id="bld-layers-wrap">
+            <div class="fp-label" style="margin: 16px 0 6px;">Review chain <span style="color:var(--muted);font-weight:400;">— optional. Ordered layers each record passes through; pick a type and who's assigned.</span></div>
+            <div id="bld-layers"></div>
+            <button type="button" class="btn-save" id="bld-add-layer" style="margin-top: 4px;">＋ Add layer</button>
+          </div>
+        </div></div>
         <div class="m-actions" style="margin-top: 16px; align-items: center; gap: 12px;">
           <button class="btn-wa" id="bld-save">Create table</button>
           <button class="linkbtn" id="bld-discard" type="button">Discard draft</button>
@@ -2182,8 +2204,8 @@
   // ---- Home / Starred / Share ----
   function allAccessibleTables() {
     var list = [];
-    if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: "Job Applications", category: "", kind: "form", config: null });
-    if (accessKeys["casting"]) list.push({ key: "casting", name: "BLK Casting", category: "", kind: "form", config: null });
+    if (accessKeys["job_applications"]) list.push({ key: "job_applications", name: builtinName("job_applications"), category: "", kind: "form", config: null });
+    if (accessKeys["casting"]) list.push({ key: "casting", name: builtinName("casting"), category: "", kind: "form", config: null });
     browsableTables().forEach(function (t) {
       list.push({ key: t.id, name: t.name, category: t.category || "", kind: t.kind || "form", config: t.config || null });
     });
@@ -2606,11 +2628,11 @@
     el.style.background = tableTint(key, cfg);
     el.textContent = tableGlyph(name, cfg);
   }
-  // the two built-in tables have fixed names, so their marks can be painted once
+  // the mark follows the name, so it is repainted whenever a built-in form is renamed
   function paintBuiltinTmarks() {
     [].slice.call(document.querySelectorAll("[data-tmark]")).forEach(function (el) {
       var k = el.getAttribute("data-tmark");
-      paintTmark(el, k, k === "casting" ? "BLK Casting" : "Job Applications", null, el.classList.contains("lg"));
+      paintTmark(el, k, builtinName(k), null, el.classList.contains("lg"));
     });
   }
 
@@ -3071,7 +3093,7 @@
   function paintJaOrigin() {
     var hist = jaScope.origin === JA_HISTORY;
     var nm = document.getElementById("ja-basename");
-    if (nm) nm.textContent = hist ? "Job Applications — Airtable history" : "Job Applications";
+    if (nm) nm.textContent = builtinName("job_applications") + (hist ? " — Airtable history" : "");
     var tag = document.getElementById("ja-wstag");
     if (tag) tag.style.display = hist ? "" : "none";
     var live = document.querySelector('.side-item[data-view="job_applications"]');
@@ -4165,11 +4187,47 @@
   var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
   var builtinExtra = { job_applications: [], casting: [] };
   var builtinHidden = { job_applications: [], casting: [] };
+  // The two hand-coded forms have a row in app_tables like every other table. Their name
+  // lives there, which is what makes renaming them possible at all — everything that used
+  // to print their name as a literal now asks builtinName() instead.
+  var BUILTIN_DEFAULT_NAME = { job_applications: "Job Applications", casting: "BLK Casting" };
+  var builtinTable = { job_applications: null, casting: null };
+  function builtinName(k) {
+    var t = builtinTable[k];
+    return (t && (t.name || "").trim()) || BUILTIN_DEFAULT_NAME[k] || "";
+  }
+  function builtinNameAr(k) { var t = builtinTable[k]; return (t && t.name_ar) || ""; }
   function loadBuiltinExtra() {
     ["job_applications", "casting"].forEach(function (k) {
       db.rpc("get_extra_fields", { p_key: k }).then(function (res) { if (res && !res.error) builtinExtra[k] = res.data || []; });
       db.rpc("get_form_config", { p_key: k }).then(function (res) { if (res && !res.error && res.data) builtinHidden[k] = res.data.hidden || []; });
     });
+    // Staff-only: anon has no read on app_tables, so a failure here just leaves the default name.
+    db.from("app_tables").select("id,name,name_ar,config")
+      .in("id", [BUILTIN_PLACEHOLDER.job_applications, BUILTIN_PLACEHOLDER.casting])
+      .then(function (res) {
+        if (!res || res.error || !res.data) return;
+        res.data.forEach(function (row) {
+          Object.keys(BUILTIN_PLACEHOLDER).forEach(function (k) { if (BUILTIN_PLACEHOLDER[k] === row.id) builtinTable[k] = row; });
+        });
+        paintBuiltinNames();
+      });
+  }
+  // One place that prints the two built-in names, so a rename lands everywhere at once.
+  function paintBuiltinNames() {
+    var ja = document.getElementById("ja-basename");
+    // Same wording as paintJaOrigin, without its side effect of marking a sidebar line active.
+    if (ja) ja.textContent = builtinName("job_applications") + (jaScope.origin === JA_HISTORY ? " — Airtable history" : "");
+    var cn = document.querySelector('[data-basemenu="casting"] .bn-txt');
+    if (cn) cn.textContent = builtinName("casting");
+    ["job_applications", "casting"].forEach(function (k) {
+      var item = document.querySelector('.side-item[data-view="' + k + '"]');
+      if (!item) return;
+      var lab = item.querySelector(".side-label");
+      if (lab) lab.textContent = builtinName(k);
+      item.title = builtinName(k);
+    });
+    paintBuiltinTmarks();
   }
   function extraFieldsHtml(extra, defs) {
     if (!defs || !defs.length) return "";
@@ -4341,7 +4399,7 @@
     for (var i = 0; i < items.length; i++) items[i].classList.remove("active");
     if (el) el.classList.add("active");
   }
-  function openCustomTable(t) {
+  function openCustomTable(t, pane) {
     var views = document.querySelectorAll(".view");
     for (var i = 0; i < views.length; i++) views[i].classList.add("hidden");
     document.getElementById("view-custom").classList.remove("hidden");
@@ -4353,12 +4411,15 @@
       (isArchived(t) ? ' <span class="ws-tag">Archived</span>' : "");
     document.getElementById("custom-basemenu").title = t.name + (t.name_ar ? " · " + t.name_ar : "") + (isArchived(t) ? " · archived" : "");
     paintTmark(document.getElementById("custom-tmark"), t.id, t.name, t.config, true);
-    // Task tables are not public forms — no shareable link or QR for them, so the
-    // Form tab has nothing to show and is taken away rather than left empty.
+    // Task tables are not public forms — no shareable link or QR for them. The tab stays,
+    // because its fields still have to be editable; only the link half of it goes away.
+    // Taking the whole tab meant a task table's questions could not be edited at all.
     var isTask = (t.kind === "task");
-    document.getElementById("custom-tab-form").style.display = isTask ? "none" : "";
+    document.getElementById("custom-tab-form").style.display = "";
+    var fpSide = document.querySelector('[data-pane="custom:form"] .fp-side');
+    if (fpSide) fpSide.style.display = isTask ? "none" : "";
     formEditFor = null;                    // a different table needs its own questions loaded
-    setBasePane("custom", "data");
+    setBasePane("custom", pane === "form" ? "form" : "data");
     var ca = document.getElementById("custom-link-a"), qrBar = document.getElementById("custom-qr-bar");
     if (isScopedForm(t)) {
       // No form-level link exists for a scoped form. Send the admin to the parent, where each
@@ -4434,6 +4495,8 @@
     var viewsP = loadViews(t.id);
     Promise.all([fieldsP, viewsP]).then(function (out) {
       currentCustom.fields = (out[0] && out[0].data) || [];
+      // the Form tab was drawn before the questions arrived, so redraw it now that they have
+      if (formPaneScope === "custom" && basePaneShowing("custom") === "form") mountFormPane("custom");
       return loadCustomSubs(subsP);
     }).then(function () { loadKidCounts(t); });
   }
@@ -5798,24 +5861,32 @@
     media: "Choose photo or video", time: "hh : mm",
     link: "Pick a record"
   };
-  function renderFormPreview(t, fields) {
+  // Takes a form face (see formFace) so the two hand-coded forms preview through exactly
+  // the same code as a table's — the whole point of describing them in BUILTIN_SCHEMA.
+  function renderFormPreview(face) {
+    if (!face) return;
     var host = document.getElementById("custom-fprev"); if (!host) return;
+    var fields = face.preview || [];
     var modeSeg = document.getElementById("fform-mode");
     if (modeSeg) modeSeg.style.display = isAdmin ? "" : "none";
-    var pub = (fields || []).filter(function (f) { return !f.internal; });
-    var staff = (fields || []).length - pub.length;
+    var pub = fields.filter(function (f) { return !f.internal; });
+    var staff = fields.length - pub.length;
     if (!pub.length) {
       host.className = "fprev empty";
-      host.textContent = (fields || []).length
+      host.textContent = fields.length
         ? "Every question on this table is staff-only, so the public form has nothing to ask."
         : "This table has no questions yet.";
       return;
     }
     host.className = "fprev";
-    var cfg = t.config || {}, intro = cfg.intro || {};
+    var cfg = face.config || {}, intro = cfg.intro || {};
+    // A built-in form prints its own heading, which config.title may override.
+    var title = face.builtinKey
+      ? (cfg.title && (cfg.title.en || cfg.title.ar) ? cfg.title : BUILTIN_PUBLIC_TITLE[face.builtinKey])
+      : { en: face.name, ar: face.nameAr };
     var h = '<img class="pv-logo" src="assets/blk-logo.svg" alt="BLK">' +
-      '<div class="pv-h1">' + esc(t.name) + "</div>" +
-      (t.name_ar ? '<div class="pv-ar">' + esc(t.name_ar) + "</div>" : "");
+      '<div class="pv-h1">' + esc(title.en || "") + "</div>" +
+      (title.ar ? '<div class="pv-ar">' + esc(title.ar) + "</div>" : "");
     if (intro.en || intro.ar) {
       h += '<div class="pv-intro">' + esc(intro.en || "") +
         (intro.ar ? '<span class="ar">' + esc(intro.ar) + "</span>" : "") + "</div>";
@@ -5832,8 +5903,9 @@
         }
       }
       // a conditional question is not on the page until its answer opens it, so the preview
-      // says so rather than leaving it looking like an ordinary question
-      var cond = condLabel(f, fields);
+      // says so rather than leaving it looking like an ordinary question. A built-in
+      // question carries its condition as prose (`only`) because the page, not a rule, holds it.
+      var cond = f.only || condLabel(f, fields);
       return '<div class="pv-f"><div class="pv-lab">' + esc(f.label) +
         (f.label_ar ? '<span class="ar">' + esc(f.label_ar) + "</span>" : "") +
         (f.required ? '<span class="req">*</span>' : "") +
@@ -5841,7 +5913,11 @@
         '<div class="pv-box' + (f.type === "long_text" ? " tall" : "") + '"><span>' + esc(ph) + "</span>" +
         fieldIcon(f.type, f.label) + "</div></div>";
     }).join("");
-    h += '<div class="pv-submit">Submit</div>';
+    // A task table is filled in by staff, not by the public, so it gets no Submit button
+    // and says so rather than pretending to be a form somebody out there can open.
+    h += face.isTask
+      ? '<div class="pv-staff" style="margin-top:18px;">This table has no public form — these are the fields on each record, filled in here.</div>'
+      : '<div class="pv-submit">Submit</div>';
     if (staff) {
       h += '<div class="pv-staff">' + staff + (staff === 1 ? " staff-only question is" : " staff-only questions are") +
         " not on the public form — they are filled in during review.</div>";
@@ -6043,7 +6119,7 @@
       ev.stopPropagation();
       openAtMenu(addcol, [{ head: true, label: "Add a field" }].concat(FIELD_TYPES.map(function (ft) {
         return { label: ft.label, icon: fieldIcon(ft.v, ft.label),
-                 on: function () { useBuilderHost(); openBuilderEdit(t, ft.v); } };
+                 on: function () { openFormEditor(t, ft.v); } };
       })));
     });
     // Select-all ticks exactly the rows on screen, not the whole table: what is on screen is
@@ -7349,7 +7425,7 @@
     var host = payrollHost(currentCustom.table);
     if (host) openPayroll(host, currentCustom.fields || []);
   });
-  document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) { useBuilderHost(); openBuilderEdit(currentCustom.table); } });
+  document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openFormEditor(currentCustom.table); });
   // branch scope: chips on the page and the children in the sidebar do the same thing
   document.getElementById("custom-kids").addEventListener("click", function (e) {
     var del = e.target.closest(".vk-del");
@@ -7530,13 +7606,17 @@
   var builderMode = "create";   // "create" | "edit"
   var editingTableId = null;
   var editingFieldIds = [];      // field ids that existed when the editor opened
-  // The question editor is one widget with two homes: the builder modal (creating a
-  // table, or its settings) and a table's Form tab (editing the form itself). This says
-  // which home it is in right now, so every read and write goes to the same rows.
-  var bldFieldsHostId = "bld-fields";
-  function bldHost() { return document.getElementById(bldFieldsHostId) || document.getElementById("bld-fields"); }
-  function useBuilderHost() { bldFieldsHostId = "bld-fields"; }
-  function useFormTabHost() { bldFieldsHostId = "fform-fields"; }
+  // The editor is one widget with two homes: the builder modal (creating a table) and a
+  // Form tab (editing one). The whole body is MOVED between them rather than copied — that
+  // is why bld-name, bld-fields, bld-stages and the rest mean the same thing in both places,
+  // and why "edit everything" cannot be true in one home and false in the other.
+  function bldHost() { return document.getElementById("bld-fields"); }
+  function moveBuilderBody(slotId) {
+    var body = document.getElementById("bld-body"), slot = document.getElementById(slotId);
+    if (body && slot && body.parentNode !== slot) slot.appendChild(body);
+  }
+  function useBuilderHost() { moveBuilderBody("bld-slot"); }
+  function useFormTabHost() { moveBuilderBody("fform-slot"); }
   function bldGrow(el) { if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
   function wireBldGrow(el, multiline) {
     if (!el) return;
@@ -7545,12 +7625,14 @@
     bldGrow(el);
   }
   function growAllBld() {
-    bldGrow(document.getElementById("bld-name")); bldGrow(document.getElementById("bld-name-ar"));
-    bldGrow(document.getElementById("bld-intro")); bldGrow(document.getElementById("bld-intro-ar"));
+    ["bld-name", "bld-name-ar", "bld-pubtitle", "bld-pubtitle-ar", "bld-intro", "bld-intro-ar"]
+      .forEach(function (id) { bldGrow(document.getElementById(id)); });
     [].slice.call(bldHost().querySelectorAll("textarea")).forEach(bldGrow);
   }
   wireBldGrow(document.getElementById("bld-name"));
   wireBldGrow(document.getElementById("bld-name-ar"));
+  wireBldGrow(document.getElementById("bld-pubtitle"));
+  wireBldGrow(document.getElementById("bld-pubtitle-ar"));
   wireBldGrow(document.getElementById("bld-intro"), true);      // intro is multi-line — Enter must work
   wireBldGrow(document.getElementById("bld-intro-ar"), true);
   // config.intro = {en, ar} — the one intro standard, used by every public form (f/, apply/, cast/).
@@ -7562,6 +7644,23 @@
   function setIntroInputs(intro) {
     document.getElementById("bld-intro").value = (intro && intro.en) || "";
     document.getElementById("bld-intro-ar").value = (intro && intro.ar) || "";
+  }
+  // config.title = {en, ar} — the heading a built-in form's public page prints instead of its
+  // own hard-coded one. Left unset, the page keeps what it prints today, so pressing Save
+  // without touching this cannot quietly retitle a live form.
+  function serializePublicTitle() {
+    var en = (document.getElementById("bld-pubtitle").value || "").trim();
+    var ar = (document.getElementById("bld-pubtitle-ar").value || "").trim();
+    return (en || ar) ? { en: en, ar: ar } : null;
+  }
+  function setPublicTitleInputs(formKey, title) {
+    var def = BUILTIN_PUBLIC_TITLE[formKey] || { en: "", ar: "" };
+    var en = document.getElementById("bld-pubtitle"), ar = document.getElementById("bld-pubtitle-ar");
+    en.value = (title && title.en) || ""; en.placeholder = def.en || "Heading (English)";
+    ar.value = (title && title.ar) || ""; ar.placeholder = def.ar || "العنوان (عربي)";
+    var lab = document.getElementById("bld-pubtitle-lab");
+    if (lab) lab.innerHTML = 'Heading on the public form <span style="color:var(--muted);font-weight:400;">— ' +
+      "optional. Leave both empty to keep “" + esc(def.en) + (def.ar ? " · " + esc(def.ar) : "") + "”.</span>";
   }
   function addBuilderField(data) {
     var row = document.createElement("div"); row.className = "bld-field";
@@ -7612,16 +7711,12 @@
     els.forEach(function (c) { var box = c.getBoundingClientRect(); var off = y - box.top - box.height / 2; if (off < 0 && off > closest.offset) closest = { offset: off, el: c }; });
     return closest.el;
   }
-  // Drag-to-reorder is wired on both hosts, because the field editor can be shown in the
-  // builder modal or inside a table's Form tab and reordering must work in either.
-  ["bld-fields", "fform-fields"].forEach(function (id) {
-    var host = document.getElementById(id);
-    if (!host) return;
-    host.addEventListener("dragover", function (e) {
-      if (!bldDragEl) return; e.preventDefault();
-      var after = bldDragAfter(this, e.clientY);
-      if (after == null) this.appendChild(bldDragEl); else this.insertBefore(bldDragEl, after);
-    });
+  // Wired once: the host node itself travels between the modal and the Form tab, so the
+  // listener travels with it and reordering works wherever the editor is showing.
+  document.getElementById("bld-fields").addEventListener("dragover", function (e) {
+    if (!bldDragEl) return; e.preventDefault();
+    var after = bldDragAfter(this, e.clientY);
+    if (after == null) this.appendChild(bldDragEl); else this.insertBefore(bldDragEl, after);
   });
   // ---- Auto-save draft so an in-progress table survives closing/reloading ----
   function serializeBuilder() {
@@ -7660,6 +7755,7 @@
   function resetBuilder() {
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
     setIntroInputs(null);
+    document.getElementById("bld-pubtitle").value = ""; document.getElementById("bld-pubtitle-ar").value = "";
     bldHost().innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     document.getElementById("bld-stages").innerHTML = "";
     document.getElementById("bld-actions").innerHTML = "";
@@ -7676,36 +7772,80 @@
     document.getElementById("bld-save").textContent = isCreate ? "Create table" : "Save changes";
     document.getElementById("bld-discard").style.display = isCreate ? "" : "none";
     var note = document.getElementById("bld-draft-note"); if (note) note.style.display = isCreate ? "" : "none";
-    var two = document.querySelector("#builder-modal .bld-two"); if (two) two.style.display = isBuiltin ? "none" : "flex";
+    // The name is editable for every form, the two hand-coded ones included: renaming one
+    // used to be impossible because this row was hidden for them.
+    var nameLab = document.getElementById("bld-name-lab");
+    if (nameLab) nameLab.innerHTML = 'Form name <span style="color:var(--muted);font-weight:400;">— ' +
+      (isBuiltin ? "how this form is named across the dashboard."
+                 : "the title applicants read at the top of the form, and how it is named here.") + "</span>";
     var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
+    var pw = document.getElementById("bld-pubtitle-wrap"); if (pw) pw.style.display = isBuiltin ? "" : "none";
+    var qlab = document.getElementById("bld-q-lab");
+    if (qlab) qlab.innerHTML = isBuiltin
+      ? 'Extra questions <span style="color:var(--muted);font-weight:400;">— added below the built-in ones. Use “show after” to place one mid-form.</span>'
+      : "Questions";
+    // Stages, record actions and the review chain are hard-coded for the two built-in
+    // views, so they are not offered there rather than offered and quietly ignored.
     var sw = document.getElementById("bld-stages-wrap"); if (sw) sw.style.display = isBuiltin ? "none" : "";
     var aw = document.getElementById("bld-actions-wrap"); if (aw) aw.style.display = isBuiltin ? "none" : "";
     var lw = document.getElementById("bld-layers-wrap"); if (lw) lw.style.display = isBuiltin ? "none" : "";
     var del = document.getElementById("bld-delete"); if (del) del.style.display = (mode === "edit") ? "inline-block" : "none";
+    var fdel = document.getElementById("fform-delete"); if (fdel) fdel.style.display = (mode === "edit") ? "inline-block" : "none";
   }
+  // The two hand-coded forms, described the way every other form is described: in page
+  // order, with the label, the Arabic label and the type each question actually has. Listed
+  // this way they can be previewed and placed like any table's questions instead of being
+  // "hand-coded, so it can't be shown here". `col` is stored in config.hidden and in
+  // app_fields.after_field, so a col may be reworded but never renamed.
   var BUILTIN_SCHEMA = {
     job_applications: [
-      { col: "full_name", label: "Full name", core: true }, { col: "date_of_birth", label: "Date of birth", core: true },
-      { col: "phone", label: "Phone", core: true }, { col: "photo", label: "Photo", core: true },
-      { col: "how_found", label: "How did you hear about us" }, { col: "city", label: "City" },
-      { col: "is_lebanese", label: "Are you Lebanese? (asked only for Lebanese numbers)" },
-      { col: "living_area", label: "Living area" }, { col: "gender", label: "Gender" },
-      { col: "work_type", label: "Full / Part time" }, { col: "currently_working", label: "Currently working" },
-      { col: "education_level", label: "Education level" }, { col: "favorite_drink", label: "Favorite drink" },
-      { col: "why_join", label: "Why join" }
+      { col: "full_name", label: "Full name", ar: "الاسم الكامل", type: "short_text", core: true },
+      { col: "date_of_birth", label: "Date of birth", ar: "تاريخ الميلاد", type: "dob", core: true },
+      { col: "country", label: "Country", ar: "الدولة", type: "dropdown", core: true,
+        choices: ["Jordan", "Lebanon", "Syria", "Iraq"] },
+      { col: "phone", label: "Phone number", ar: "رقم التلفون", type: "phone", core: true },
+      { col: "how_found", label: "How did you find about the work opportunity?", ar: "كيف عرفتوا عن فرصة العمل؟",
+        type: "dropdown", choices: ["Online", "Employee at BLK", "LinkedIn", "Other"] },
+      { col: "city", label: "City", ar: "المدينة", type: "dropdown", choices: ["Amman", "Zarqa", "Aqaba", "Irbid"],
+        only: "asked for Jordanian numbers" },
+      { col: "is_lebanese", label: "Are you Lebanese?", ar: "هل أنت لبناني؟", type: "yesno",
+        only: "asked for Lebanese numbers" },
+      { col: "living_area", label: "Living area", ar: "منطقة السكن", type: "short_text" },
+      { col: "gender", label: "Gender", ar: "الجنس", type: "dropdown", choices: ["Female", "Male"] },
+      { col: "work_type", label: "Looking for Full/Part time?", ar: "بدور على دوام كامل/ جزئي؟",
+        type: "dropdown", choices: ["Full-time", "Part-time"] },
+      { col: "currently_working", label: "Are you currently working?", ar: "هل انت حاليا عم تشتغل؟", type: "yesno" },
+      { col: "education_level", label: "Education level", ar: "المستوى التعليمي", type: "dropdown",
+        choices: ["Highschool", "Diploma", "University", "Masters"] },
+      { col: "favorite_drink", label: "Favorite drink at QahwaBLK", ar: "شرابك المفضل من عندنا", type: "short_text" },
+      { col: "why_join", label: "Why do you want to join?", ar: "ليش حاب تشتغل معنا؟", type: "long_text", optional: true },
+      { col: "photo", label: "Photo of yourself", ar: "صورة الك", type: "photo", core: true }
     ],
     casting: [
-      { col: "full_name", label: "Full name", core: true }, { col: "date_of_birth", label: "Date of birth", core: true },
-      { col: "phone", label: "Phone", core: true }, { col: "photo", label: "Photo", core: true },
-      { col: "branch", label: "Branch" }, { col: "university_student", label: "University student?" }, { col: "ever_acted", label: "Ever acted?" }
+      { col: "full_name", label: "Name", ar: "الاسم", type: "short_text", core: true },
+      { col: "date_of_birth", label: "Date of birth", ar: "تاريخ الميلاد", type: "dob", core: true },
+      { col: "phone", label: "Phone number", ar: "رقم التلفون", type: "phone", core: true },
+      { col: "branch", label: "Branch", ar: "الفرع", type: "short_text" },
+      { col: "university_student", label: "University student?", ar: "مسجل جامعة؟", type: "yesno" },
+      { col: "ever_acted", label: "Have you ever acted?", ar: "هل سبق أن مثّلت؟", type: "yesno" },
+      { col: "photo", label: "Photo of yourself", ar: "صورة الك", type: "photo", core: true }
     ]
+  };
+  // The heading printed on the public page today. It is the fallback the page falls back to
+  // when config.title is not set, and the placeholder the editor shows so an admin can see
+  // what they would be replacing.
+  var BUILTIN_PUBLIC_TITLE = {
+    job_applications: { en: "Job Application", ar: "طلب توظيف" },
+    casting: { en: "BLK Casting", ar: "كاستنج" }
   };
   function builtinFieldsHtml(formKey, hidden) {
     var defs = BUILTIN_SCHEMA[formKey] || [];
     var rows = defs.map(function (d) {
-      if (d.core) return '<div class="bl-row"><span class="bl-name">' + esc(d.label) + '</span><span class="bl-lock">🔒 required</span></div>';
+      var nm = '<span class="bl-name">' + esc(d.label) +
+        (d.only ? ' <span style="color:var(--muted);font-weight:400;">— ' + esc(d.only) + "</span>" : "") + "</span>";
+      if (d.core) return '<div class="bl-row">' + nm + '<span class="bl-lock">🔒 required</span></div>';
       var checked = hidden.indexOf(d.col) === -1 ? "checked" : "";
-      return '<div class="bl-row"><span class="bl-name">' + esc(d.label) + '</span><label class="bl-toggle"><input type="checkbox" class="bl-cb" data-col="' + d.col + '" ' + checked + '> on form</label></div>';
+      return '<div class="bl-row">' + nm + '<label class="bl-toggle"><input type="checkbox" class="bl-cb" data-col="' + d.col + '" ' + checked + '> on form</label></div>';
     }).join("");
     return '<div class="bld-fixed"><div class="bld-fixed-h">Built-in questions — untick one to remove it from the form (existing answers are kept):</div>' + rows + "</div>";
   }
@@ -7768,33 +7908,41 @@
       "</select></label>";
   }
   var builtinEditKey = null;
-  function openBuiltinEdit(formKey) {
-    var name = formKey === "job_applications" ? "Job Applications" : "BLK Casting";
+  // Returns the load, exactly like openBuilderEdit, so the Form tab can wait for the rows.
+  function openBuiltinEdit(formKey, msgEl) {
+    var msg = msgEl || document.getElementById("bld-msg");
     builtinEditKey = formKey;
     editingTableId = BUILTIN_PLACEHOLDER[formKey]; editingFieldIds = [];
-    setBuilderChrome("builtin", name);
+    setBuilderChrome("builtin", builtinName(formKey));
     document.getElementById("bld-builtin-note").innerHTML = "";
-    document.getElementById("bld-name").value = name; document.getElementById("bld-name-ar").value = "";
+    document.getElementById("bld-name").value = builtinName(formKey);
+    document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
     setIntroInputs(null);
-    document.getElementById("bld-msg").textContent = "Loading…";
+    setPublicTitleInputs(formKey, null);
+    msg.textContent = "Loading…";
     bldHost().innerHTML = "";
-    builder.classList.add("open");
-    db.from("app_tables").select("config").eq("id", editingTableId).single().then(function (cRes) {
-      var cfg = (cRes && cRes.data && cRes.data.config) || {};
-      document.getElementById("bld-builtin-note").innerHTML = builtinFieldsHtml(formKey, (cfg && cfg.hidden) || []);
-      setIntroInputs(cfg && cfg.intro);
+    return db.from("app_tables").select("name,name_ar,config").eq("id", editingTableId).single().then(function (cRes) {
+      var row = (cRes && cRes.data) || {};
+      var cfg = row.config || {};
+      builtinTable[formKey] = { id: editingTableId, name: row.name, name_ar: row.name_ar, config: cfg };
+      document.getElementById("bld-name").value = builtinName(formKey);
+      document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
+      document.getElementById("bld-builtin-note").innerHTML = builtinFieldsHtml(formKey, cfg.hidden || []);
+      setIntroInputs(cfg.intro);
+      setPublicTitleInputs(formKey, cfg.title);
       return db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true });
     }).then(function (res) {
-      document.getElementById("bld-msg").textContent = "";
+      msg.textContent = "";
       var fields = (res && res.data) || [];
-      if (!fields.length) addBuilderField();
-      else fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, afterField: f.after_field, showIf: f.show_if }); });
+      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, afterField: f.after_field, showIf: f.show_if }); });
       resolveCondPending();
       requestAnimationFrame(growAllBld);
-    }).catch(function () { document.getElementById("bld-msg").textContent = ""; });
+    }).catch(function () { msg.textContent = ""; });
   }
   function openBuilder() {
-    useBuilderHost();               // claim the question editor back from any Form tab
+    useBuilderHost();               // claim the editor back from any Form tab it is sitting in
+    formEditFor = null;             // and make that tab reload it rather than show an empty box
+    builtinEditKey = null;
     editingTableId = null; editingFieldIds = [];
     setBuilderChrome("create");
     document.getElementById("bld-msg").textContent = "";
@@ -7828,11 +7976,13 @@
   }
   // presetType comes from the grid's "+" field-type picker: the editor opens with a
   // fresh question of that type already waiting at the bottom, so the pick isn't lost.
-  function openBuilderEdit(table, presetType) {
+  function openBuilderEdit(table, presetType, msgEl) {
     if (!table) return;
+    var msg = msgEl || document.getElementById("bld-msg");
+    builtinEditKey = null;
     editingTableId = table.id; editingFieldIds = [];
     setBuilderChrome("edit");
-    document.getElementById("bld-msg").textContent = "Loading…";
+    msg.textContent = "Loading…";
     document.getElementById("bld-name").value = table.name || "";
     document.getElementById("bld-name-ar").value = table.name_ar || "";
     setIntroInputs(table.config && table.config.intro);
@@ -7843,10 +7993,9 @@
     ((table.config && table.config.actions) || []).forEach(function (a) { addActionRow(a); });
     document.getElementById("bld-layers").innerHTML = "";
     ((table.config && table.config.layers) || []).forEach(function (l) { addLayerRow(l); });
-    builder.classList.add("open");
     // returns the load, so the Form tab can wait for the rows before showing them
     return db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
-      document.getElementById("bld-msg").textContent = "";
+      msg.textContent = "";
       var fields = (res && res.data) || [];
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
@@ -7915,21 +8064,29 @@
     doDeleteTable();
   });
   document.getElementById("bld-discard").addEventListener("click", function () { clearDraft(); resetBuilder(); });
-  document.getElementById("bld-save").addEventListener("click", function () {
-    var msg = document.getElementById("bld-msg");
+  // One save for both homes of the editor. It used to be the modal's click handler, which
+  // the Form tab drove by clicking the hidden button and then guessing the outcome off the
+  // modal's message 900ms later; the outcome now goes to whichever message element asked.
+  document.getElementById("bld-save").addEventListener("click", function () { runBuilderSave(document.getElementById("bld-msg"), "m-msg"); });
+  function saveMsg(el, baseClass) {
+    var base = baseClass || "m-msg";
+    return { set: function (t, kind) { el.className = base + (kind ? " " + kind : ""); el.textContent = t; } };
+  }
+  function runBuilderSave(msgEl, baseClass) {
+    var msg = saveMsg(msgEl, baseClass);
     var name = document.getElementById("bld-name").value.trim();
     var nameAr = document.getElementById("bld-name-ar").value.trim();
-    if (!name) { msg.textContent = "Please enter a table name."; return; }
+    if (!name) { msg.set("Please enter a form name.", "err"); return; }
     var rows = [].slice.call(bldHost().querySelectorAll(".bld-field"));
     var fields = [];
     for (var i = 0; i < rows.length; i++) {
       var lab = rows[i].querySelector(".lab").value.trim();
-      if (!lab) { msg.textContent = "Every field needs an English label."; return; }
+      if (!lab) { msg.set("Every question needs an English label.", "err"); return; }
       var type = rows[i].querySelector(".ftype").value;
       var options = null;
       if (type === "dropdown" || type === "multi_select") {
         var raw = rows[i].querySelector(".opts").value.trim();
-        if (!raw) { msg.textContent = "Choice fields need options."; return; }
+        if (!raw) { msg.set("Choice questions need options.", "err"); return; }
         options = raw.split(/[\r\n,]+/).map(function (p) {
           var kv = p.split("|");
           var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
@@ -7941,7 +8098,7 @@
         var lraw = rows[i].querySelector(".opts").value.trim();
         var kv = lraw.split("|");
         var url = (kv[0] || "").trim();
-        if (!/^https?:\/\//i.test(url)) { msg.textContent = "A link field needs a URL starting with http:// or https://"; return; }
+        if (!/^https?:\/\//i.test(url)) { msg.set("A link field needs a URL starting with http:// or https://", "err"); return; }
         options = { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" };
       }
       var afterSel = rows[i].querySelector(".fafter");
@@ -7961,10 +8118,12 @@
       }
       fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: type === "link" ? false : rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, condOnIdx: condOnIdx, condEquals: equals });
     }
-    if (!fields.length) { msg.textContent = "Add at least one field."; return; }
+    // A built-in form's rows are EXTRA questions on top of hand-coded ones, so having none
+    // is normal — BLK Casting has none today. Only a table needs at least one question.
+    if (!fields.length && builderMode !== "builtin") { msg.set("Add at least one question.", "err"); return; }
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
-    msg.textContent = "Creating…";
+    msg.set("Creating…");
     db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() } }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
@@ -7974,8 +8133,8 @@
     }).then(function (t) {
       clearDraft(); closeBuilder(); loadCustomTables();
       setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
-    }).catch(function (err) { msg.textContent = "Could not create the table. Please try again."; if (window.console) console.error(err); });
-  });
+    }).catch(function (err) { msg.set("Could not create the table. Please try again.", "err"); if (window.console) console.error(err); });
+  }
   // "Ask only if <a question added in this same save>" — the question it points at has no
   // id until its row is written, so those conditions are finished off here, matched by
   // position. Nothing to do in the common case, and one query when there is.
@@ -7994,8 +8153,8 @@
   }
   function saveTableEdit(name, nameAr, fields, msg) {
     var tid = editingTableId;
-    if (!tid) { msg.textContent = "Something went wrong — please reopen the editor."; return; }
-    msg.textContent = "Saving…";
+    if (!tid) { msg.set("Something went wrong — please reopen the editor.", "err"); return; }
+    msg.set("Saving…");
     var keptIds = fields.filter(function (f) { return f.id; }).map(function (f) { return f.id; });
     var toDelete = editingFieldIds.filter(function (id) { return keptIds.indexOf(id) === -1; });
     var toInsert = [];
@@ -8003,7 +8162,7 @@
     if (builderMode === "builtin") {
       var hidden = [];
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
-      tableUpdate.config = { hidden: hidden, intro: serializeIntro() };
+      tableUpdate.config = { hidden: hidden, intro: serializeIntro(), title: serializePublicTitle() };
     } else {
       tableUpdate.config = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() };
     }
@@ -8016,17 +8175,30 @@
     if (toDelete.length) ops.push(db.from("app_fields").delete().in("id", toDelete));
     Promise.all(ops).then(function (results) {
       var bad = results.filter(function (r) { return r && r.error; })[0];
-      if (bad) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(bad.error); return; }
+      if (bad) { msg.set("Could not save changes. Please try again.", "err"); if (window.console) console.error(bad.error); return; }
       return writePendingConds(tid, fields).then(function () { return results; });
     }).then(function (results) {
       if (!results) return;
-      var ct = customTables.filter(function (x) { return x.id === tid; })[0]; if (ct) { ct.name = name; ct.name_ar = nameAr || null; if (builderMode !== "builtin") ct.config = tableUpdate.config; }
-      if (currentCustom && currentCustom.table.id === tid) { currentCustom.table.name = name; currentCustom.table.name_ar = nameAr || null; if (builderMode !== "builtin") currentCustom.table.config = tableUpdate.config; }
+      var wasBuiltin = builderMode === "builtin", bk = builtinEditKey;
+      var ct = customTables.filter(function (x) { return x.id === tid; })[0]; if (ct) { ct.name = name; ct.name_ar = nameAr || null; if (!wasBuiltin) ct.config = tableUpdate.config; }
+      if (currentCustom && currentCustom.table.id === tid) { currentCustom.table.name = name; currentCustom.table.name_ar = nameAr || null; if (!wasBuiltin) currentCustom.table.config = tableUpdate.config; }
+      // A renamed built-in has to land on the sidebar, the base bar and its mark straight
+      // away, not on the next reload — the rename is the change you just made.
+      if (wasBuiltin && bk) {
+        builtinTable[bk] = { id: tid, name: name, name_ar: nameAr || null, config: tableUpdate.config };
+        builtinHidden[bk] = tableUpdate.config.hidden || [];
+        paintBuiltinNames();
+      }
+      msg.set("Saved.", "ok");
       closeBuilder();
       loadCustomTables();
       loadBuiltinExtra();
-      if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table);
-    }).catch(function (err) { msg.textContent = "Could not save changes. Please try again."; if (window.console) console.error(err); });
+      // the preview behind the editor is now out of date; the next look at it must not lie
+      formEditFor = null;
+      var onForm = basePaneShowing(formPaneScope === "custom" ? "custom" : formPaneScope) === "form";
+      if (currentCustom && currentCustom.table.id === tid) openCustomTable(currentCustom.table, onForm ? "form" : "data");
+      else if (onForm && formPaneScope) setTimeout(function () { mountFormPane(formPaneScope); }, 300);
+    }).catch(function (err) { msg.set("Could not save changes. Please try again.", "err"); if (window.console) console.error(err); });
   }
 
   // ---- Admin: users management (list, create, edit, delete, reassign) ----
@@ -8056,14 +8228,14 @@
   function invokeErr(res) { return (res && res.data && res.data.error) || (res && res.error && (res.error.message || res.error)) || null; }
   function errText(err) { return (err && err.message) ? err.message : (typeof err === "string" ? err : ""); }
   function keyName(k) {
-    if (k === "job_applications") return "Job Applications";
-    if (k === "casting") return "BLK Casting";
+    if (k === "job_applications") return builtinName("job_applications");
+    if (k === "casting") return builtinName("casting");
     var t = customTables.filter(function (x) { return x.id === k; })[0];
     return t ? t.name : k;
   }
   function renderUserTables() {
     var host = document.getElementById("u-tables"); host.innerHTML = "";
-    var all = [{ key: "job_applications", name: "Job Applications" }, { key: "casting", name: "BLK Casting" }]
+    var all = [{ key: "job_applications", name: builtinName("job_applications") }, { key: "casting", name: builtinName("casting") }]
       .concat(customTables.map(function (t) { return { key: t.id, name: t.name }; }));
     all.forEach(function (t) {
       var row = document.createElement("div"); row.className = "u-trow";
@@ -8327,13 +8499,6 @@
   }
   // Sidebar gear ⚙ (settings/edit) on every table — capture phase so it wins over the item's open-click.
   // Works for current AND future custom tables because it's delegated on the container.
-  function showBuiltinSettings(dv) {
-    var name = dv === "job_applications" ? "Job Applications" : "BLK Casting";
-    document.getElementById("modal-body").innerHTML =
-      '<div class="m-name">' + name + ' · settings</div>' +
-      '<div class="m-sub" style="margin-top:12px; line-height:1.65;">This is a <b>built-in form</b>, so its questions are fixed in the app and can\'t be edited from here. You can still view submissions, share its QR code, and regenerate its link from the table\'s page.<br><br>Want its questions changed? Tell me what to add or remove and I\'ll update the form.</div>';
-    document.getElementById("modal").classList.add("open"); wireImportedFiles();
-  }
   document.getElementById("side-tables").addEventListener("click", function (e) {
     var gear = e.target && e.target.closest ? e.target.closest(".side-gear") : null;
     if (!gear) return;
@@ -8368,7 +8533,7 @@
       items.push('<li data-a="delete" class="danger sep">Delete form…</li>');
     } else if (dv === "job_applications" || dv === "casting") {
       items.push('<li data-a="open">Open</li>');
-      items.push('<li data-a="edit">Edit questions</li>');
+      items.push('<li data-a="edit">Edit form</li>');   // the same editor a table gets
       items.push('<li data-a="share">Who can see it…</li>');
       items.push('<li data-a="link">Copy public link</li>');
     } else { return; }
@@ -8395,10 +8560,9 @@
     } else if (act === "open") {
       if (ctx.table) openCustomTable(ctx.table); else showView(ctx.view);
     } else if (act === "edit") {
-      useBuilderHost();
-      if (ctx.table) openBuilderEdit(ctx.table); else openBuiltinEdit(ctx.view);
+      openFormEditor(ctx.table || ctx.view);
     } else if (act === "share") {
-      openShare(ctx.key, ctx.table ? ctx.table.name : (ctx.view === "casting" ? "BLK Casting" : "Job Applications"));
+      openShare(ctx.key, ctx.table ? ctx.table.name : builtinName(ctx.view));
     } else if (act === "link") {
       if (ctx.table && isScopedForm(ctx.table)) {
         // No single link to copy — open the parent so a specific record can be shared.
@@ -8652,8 +8816,8 @@
   document.getElementById("side-forms").addEventListener("click", function () {
     var rows = browsableTables().filter(function (t) { return (t.kind || "form") !== "task" && !isScopedForm(t); })
       .map(function (t) { return { name: t.name, link: publicFormLink(t.slug), live: linkLive(t) }; });
-    if (accessKeys["job_applications"]) rows.unshift({ name: "Job Applications", link: "https://blktable.blk.jo/apply/", live: true });
-    if (accessKeys["casting"]) rows.unshift({ name: "BLK Casting", link: "https://blktable.blk.jo/cast/", live: true });
+    if (accessKeys["job_applications"]) rows.unshift({ name: builtinName("job_applications"), link: "https://blktable.blk.jo/apply/", live: true });
+    if (accessKeys["casting"]) rows.unshift({ name: builtinName("casting"), link: "https://blktable.blk.jo/cast/", live: true });
     document.getElementById("modal-body").innerHTML =
       '<div class="m-name">Public forms</div><div class="m-sub">Anyone with the link can submit; nobody needs a login.</div>' +
       (rows.length ? rows.map(function (r) {
@@ -8695,6 +8859,15 @@
   });
 
   // ---- Base bar: Data / Form tabs, the name menu, Share -------------------
+  // Which pane a view is showing, read off the DOM rather than kept in a second variable
+  // that could disagree with it.
+  function basePaneShowing(scope) {
+    var panes = [].slice.call(document.querySelectorAll('[data-pane^="' + scope + ':"]'));
+    for (var i = 0; i < panes.length; i++) {
+      if (panes[i].style.display !== "none") return panes[i].getAttribute("data-pane").split(":")[1];
+    }
+    return null;
+  }
   function setBasePane(scope, tab) {
     [].slice.call(document.querySelectorAll('[data-pane^="' + scope + ':"]')).forEach(function (p) {
       p.style.display = p.getAttribute("data-pane") === scope + ":" + tab ? "" : "none";
@@ -8707,46 +8880,94 @@
     var view = document.getElementById("view-" + (scope === "custom" ? "custom" : scope));
     var tb = view && view.querySelector(".at-toolbar");
     if (tb) tb.style.display = tab === "data" ? "" : "none";
-    // the preview is drawn when the tab is opened, so it always reflects the
-    // questions as they are now rather than as they were when the table loaded
-    if (scope === "custom" && tab === "form" && currentCustom && currentCustom.table) {
-      renderFormPreview(currentCustom.table, currentCustom.fields || []);
-      var modeSeg = document.getElementById("fform-mode");
-      // only an admin can change the questions, so only an admin is offered the switch
-      if (modeSeg) modeSeg.style.display = isAdmin ? "" : "none";
-      setFormMode("preview");
-    }
+    if (tab === "form") mountFormPane(scope);
   }
-  // ---- Editing the form, in the Form tab ----------------------------------
-  // "Edit questions" is not the table builder: it edits the form and nothing else. The
-  // table's stages, record actions and review chain stay in Table settings, because they
-  // are not part of what an applicant fills in.
+  // ---- The Form tab, for every form there is ------------------------------
+  // Job Applications, BLK Casting and all 226 tables share ONE preview and ONE editor.
+  // The two hand-coded forms used to get a paragraph saying their questions "can't be
+  // previewed here" and no editor at all; describing them in BUILTIN_SCHEMA the way a
+  // table describes itself is what makes one implementation cover all three.
   //
-  // It reuses the builder's question rows and the builder's save, rather than a second
-  // implementation that would drift from it. The builder's own state is loaded for this
-  // table (so saving cannot wipe the stages and actions it also writes) while its overlay
-  // stays shut, and the rows are built into the Form tab's host instead of the modal's.
-  var formEditFor = null;
-  function mountFormEditor(t) {
-    if (!t || !isAdmin) return;
-    var msg = document.getElementById("fform-msg");
-    if (msg) { msg.className = "fform-msg"; msg.textContent = "Loading the questions…"; }
-    useFormTabHost();
-    openBuilderEdit(t).then(function () {
-      closeBuilder();                     // its state is what we want, not its overlay
-      formEditFor = t.id;
-      // The title is not a question, so it is not edited here — but it must be visible,
-      // because it is the heading an applicant reads above these questions.
-      var note = document.getElementById("fform-title-note");
-      if (note) note.textContent = "— “" + t.name + (t.name_ar ? " · " + t.name_ar : "") +
-        "”, changed in Table settings";
-      if (msg) msg.textContent = "";
-    }).catch(function () {
-      if (msg) { msg.className = "fform-msg err"; msg.textContent = "Could not load the questions."; }
+  // formFace(scope) is that shared description: who to load, what to preview, what a save
+  // writes. Anything the Form tab does asks the face rather than asking which view it is in.
+  function formFace(scope) {
+    if (scope === "custom") {
+      if (!currentCustom || !currentCustom.table) return null;
+      var t = currentCustom.table;
+      return { scope: "custom", key: t.id, table: t, builtinKey: null, isTask: t.kind === "task",
+        name: t.name, nameAr: t.name_ar, config: t.config || {},
+        preview: (currentCustom.fields || []) };
+    }
+    if (!BUILTIN_PLACEHOLDER[scope]) return null;
+    var bt = builtinTable[scope] || {};
+    return { scope: scope, key: scope, table: null, builtinKey: scope,
+      name: builtinName(scope), nameAr: builtinNameAr(scope), config: bt.config || {},
+      preview: builtinPreviewFields(scope) };
+  }
+  // The hand-coded questions as ordinary field rows, with the admin's extra questions
+  // slotted in at their after_field anchors — the same order the public page builds.
+  function builtinPreviewFields(formKey) {
+    var defs = BUILTIN_SCHEMA[formKey] || [];
+    var hidden = builtinHidden[formKey] || [];
+    var extras = (builtinExtra[formKey] || []).slice();
+    var out = [];
+    defs.forEach(function (d) {
+      if (!d.core && hidden.indexOf(d.col) !== -1) return;
+      out.push({ id: "b-" + d.col, label: d.label, label_ar: d.ar || null, type: d.type || "short_text",
+        required: !d.optional, internal: false, builtin: true, only: d.only || null,
+        options: (d.choices || []).map(function (c) { return { en: c, ar: "" }; }) });
+      extras.filter(function (f) { return f.after_field === d.col; })
+        .forEach(function (f) { out.push(f); });
     });
+    // anything anchored to a question that is off, or to nothing at all, goes at the end —
+    // which is exactly where the public page puts it
+    extras.forEach(function (f) {
+      if (out.indexOf(f) === -1) out.push(f);
+    });
+    return out;
+  }
+  var formEditFor = null;      // which form's rows are currently loaded into the editor
+  var formEditLoad = null;     // the load in flight, for callers that must wait for the rows
+  var formPaneScope = null;    // which Form tab the shared editor block is sitting in
+  function mountFormPane(scope) {
+    var face = formFace(scope);
+    var host = document.querySelector('[data-formhost="' + scope + '"]');
+    var block = document.getElementById("form-editor");
+    if (!host || !block) return;
+    if (block.parentNode !== host) host.appendChild(block);
+    formPaneScope = scope;
+    if (!face) return;
+    var modeSeg = document.getElementById("fform-mode");
+    // only an admin can change a form, so only an admin is offered the switch
+    if (modeSeg) modeSeg.style.display = isAdmin ? "" : "none";
+    // setFormMode draws the preview, so it always reflects the questions as they are now
+    // rather than as they were when the table loaded
+    setFormMode("preview");
+  }
+  // Loads the whole table into the editor — name, intro, questions, and for a table its
+  // stages, actions and review chain too. Nothing about a form is editable in one place
+  // and not the other; there is only one editor.
+  function mountFormEditor(face) {
+    if (!face || !isAdmin) return Promise.resolve();
+    var msg = document.getElementById("fform-msg");
+    if (msg) { msg.className = "fform-msg"; msg.textContent = "Loading…"; }
+    // Claimed before the load, not after it: setFormMode("edit") runs while this is still in
+    // flight, and an unclaimed form would start a second load of the same questions.
+    formEditFor = face.key;
+    useFormTabHost();
+    var load = face.builtinKey ? openBuiltinEdit(face.builtinKey, msg) : openBuilderEdit(face.table, null, msg);
+    closeBuilder();                       // the builder's state is what we want, not its overlay
+    formEditLoad = Promise.resolve(load).then(function () {
+      if (msg) { msg.className = "fform-msg"; msg.textContent = ""; }
+    }).catch(function () {
+      formEditFor = null;
+      if (msg) { msg.className = "fform-msg err"; msg.textContent = "Could not load this form."; }
+    });
+    return formEditLoad;
   }
   function setFormMode(mode) {
     var edit = mode === "edit";
+    var face = formFace(formPaneScope);
     var heading = document.getElementById("fform-heading");
     if (heading) heading.textContent = edit ? "Editing the form" : "What the applicant sees";
     document.getElementById("custom-fprev").style.display = edit ? "none" : "";
@@ -8754,33 +8975,47 @@
     [].slice.call(document.querySelectorAll("#fform-mode button")).forEach(function (b) {
       b.classList.toggle("active", (b.getAttribute("data-m") === "edit") === edit);
     });
-    if (edit && currentCustom && currentCustom.table && formEditFor !== currentCustom.table.id) {
-      mountFormEditor(currentCustom.table);
-    }
-    if (!edit && currentCustom && currentCustom.table) {
-      // redraw the preview from what is on screen now, so a save shows up immediately
-      renderFormPreview(currentCustom.table, currentCustom.fields || []);
-    }
+    if (edit && face && formEditFor !== face.key) mountFormEditor(face);
+    // redraw the preview from what is on screen now, so a save shows up immediately
+    if (!edit && face) renderFormPreview(face);
   }
   document.getElementById("fform-mode").addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("button") : null; if (!b) return;
     setFormMode(b.getAttribute("data-m"));
   });
-  document.getElementById("fform-add").addEventListener("click", function () {
-    useFormTabHost(); addBuilderField(); requestAnimationFrame(growAllBld);
-  });
+  // Every "edit this form" in the app lands here: the toolbar button, the sidebar ⋯ menu,
+  // the base-name menu and the grid's "+" column. One door, so the two built-in forms
+  // cannot end up with a lesser editor than a table's.
+  function openFormEditor(target, presetType) {
+    if (!isAdmin) return;
+    var scope = (typeof target === "string") ? target : "custom";
+    function go() {
+      setBasePane(scope, "form");
+      if (!formFace(scope)) return;
+      formEditFor = null;                 // always reload: the table may have changed under us
+      setFormMode("edit");                // which is what mounts the editor, exactly once
+      // the grid's "+" picked a field type; it must not be lost while the rows load
+      if (presetType) Promise.resolve(formEditLoad).then(function () { addBuilderField({ type: presetType }); focusLastBuilderRow(); });
+    }
+    if (scope !== "custom") { showView(scope); go(); return; }
+    if (!target) return;
+    if (currentCustom && currentCustom.table && currentCustom.table.id === target.id) { go(); return; }
+    openCustomTable(target);
+    setTimeout(go, 400);                  // the table has to be loaded before its form can be
+  }
+  function focusLastBuilderRow() {
+    var rows = bldHost().querySelectorAll(".bld-field");
+    var last = rows[rows.length - 1];
+    if (!last) return;
+    if (last.scrollIntoView) last.scrollIntoView({ block: "center" });
+    var lab = last.querySelector("textarea"); if (lab) lab.focus();
+    requestAnimationFrame(growAllBld);
+  }
   document.getElementById("fform-save").addEventListener("click", function () {
-    var msg = document.getElementById("fform-msg");
-    msg.className = "fform-msg"; msg.textContent = "Saving…";
-    useFormTabHost();
-    // the builder's save reads the active host, validates, and writes fields + config
-    document.getElementById("bld-save").click();
-    // its own message element carries the outcome; mirror it here
-    setTimeout(function () {
-      var bm = document.getElementById("bld-msg").textContent;
-      if (bm) { msg.className = "fform-msg err"; msg.textContent = bm; }
-      else { msg.className = "fform-msg ok"; msg.textContent = "Saved."; }
-    }, 900);
+    runBuilderSave(document.getElementById("fform-msg"), "fform-msg");
+  });
+  document.getElementById("fform-delete").addEventListener("click", function () {
+    openDeleteTable(editingTableId, document.getElementById("bld-name").value.trim());
   });
   [].slice.call(document.querySelectorAll("[data-tabs]")).forEach(function (tabs) {
     var scope = tabs.getAttribute("data-tabs");
@@ -8792,7 +9027,7 @@
   [].slice.call(document.querySelectorAll("[data-shareof]")).forEach(function (b) {
     var key = b.getAttribute("data-shareof");
     b.addEventListener("click", function () {
-      openShare(key, key === "casting" ? "BLK Casting" : "Job Applications");
+      openShare(key, builtinName(key));
     });
   });
   document.getElementById("custom-share").addEventListener("click", function () {
@@ -8802,7 +9037,7 @@
     var key = b.getAttribute("data-basemenu");
     b.addEventListener("click", function (e) {
       e.stopPropagation();
-      var name = key === "casting" ? "BLK Casting" : "Job Applications";
+      var name = builtinName(key);
       openAtMenu(this, [
         { head: true, label: name },
         { label: stars[key] ? "Remove from starred" : "Add to starred", on: function () { toggleStar(key); } },
@@ -8832,8 +9067,9 @@
         if (!isTask) items.push({ label: "Restart form…", hint: "freeze + fresh copy", on: function () { restartFormInNew(t); } });
         items.push({ sep: true });
       }
-      items.push({ label: "Edit the form", on: function () { setBasePane("custom", "form"); } });
-      items.push({ label: "Table settings", hint: "stages, actions, chain", on: function () { useBuilderHost(); openBuilderEdit(t); } });
+      // One editor now holds the questions AND the stages, actions and review chain, so
+      // these two used to go to different places and now go to the same one.
+      items.push({ label: "Edit the form", hint: "name, questions, stages, chain", on: function () { openFormEditor(t); } });
       items.push({ label: "Share…", on: function () { openShare(t.id, t.name); } });
       if (isArchived(t)) {
         items.push({ label: "Restore from archive", hint: "back in the sidebar", on: function () { setTableArchived(t, false); } });

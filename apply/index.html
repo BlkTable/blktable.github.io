@@ -131,7 +131,7 @@
     <div class="sheet">
       <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
       <div class="head">
-        <h1>Job Application <span style="color:var(--muted);font-weight:600;">· طلب توظيف</span></h1>
+        <h1 id="form-title">Job Application <span style="color:var(--muted);font-weight:600;">· طلب توظيف</span></h1>
         <p>Fill in your details below and we'll be in touch.</p>
       </div>
       <div class="intro" id="form-intro" style="display:none;"></div>
@@ -297,13 +297,33 @@
   // Removed built-in questions (set by the dashboard editor) are hidden from this form
   var hiddenCols = {};
   var HIDE_MAP = { how_found: "how_found", city: "city", living_area: "living_area", gender: "gender", work_type: "work_type", currently_working: "currently_working", education_level: "education_level", favorite_drink: "favorite_drink", why_join: "why_join" };
+  // Where each built-in question sits, for ANCHORING an extra question after it. Every
+  // question is in here, not just the removable ones: the dashboard offers all of them as
+  // "show after", and an anchor this page cannot resolve silently drops the question to the
+  // bottom of the form instead of where it was placed.
+  var ANCHOR_IDS = { full_name: "full_name", date_of_birth: "dob", country: "country", phone: "phone_local", photo: "photo" };
   // The .field wrapper of a built-in question — used both to hide it and to place extra questions after it
   function builtinWrap(col) {
     if (col === "city") return document.getElementById("city-field");
     if (col === "is_lebanese") return document.getElementById("leb-field");
-    var id = HIDE_MAP[col]; if (!id) return null;
+    var id = HIDE_MAP[col] || ANCHOR_IDS[col]; if (!id) return null;
     var el = document.getElementById(id);
     return (el && el.closest) ? el.closest(".field") : null;
+  }
+  // Optional heading override from config.title = {en, ar}; without it the page keeps the
+  // heading it prints, so saving the form in the dashboard cannot silently retitle it.
+  function renderTitle(title) {
+    var h1 = document.getElementById("form-title"); if (!h1) return;
+    var en = ((title && title.en) || "").trim(), ar = ((title && title.ar) || "").trim();
+    if (!en && !ar) return;
+    h1.textContent = en || ar;
+    if (en && ar) {
+      var s = document.createElement("span");
+      s.style.color = "var(--muted)"; s.style.fontWeight = "600";
+      s.textContent = " · " + ar;
+      h1.appendChild(s);
+    }
+    document.title = (en || ar) + " · BLK";
   }
   function applyHidden() {
     Object.keys(hiddenCols).forEach(function (col) {
@@ -323,6 +343,7 @@
   db.rpc("get_form_config", { p_key: "job_applications" }).then(function (res) {
     if (res && !res.error && res.data) {
       if (res.data.hidden) { res.data.hidden.forEach(function (c) { hiddenCols[c] = true; }); applyHidden(); }
+      renderTitle(res.data.title);
       renderIntro(res.data.intro);
     }
   }).catch(function () {});
