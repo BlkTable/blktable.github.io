@@ -167,4 +167,18 @@ t('the grid cell has a file indicator that is styled', () => {
   assert.ok(/table\.grid span\.cellfile\s*\{/.test(APP_SRC), 'cellfile has no stylesheet rule');
 });
 
+// ---- the upload widgets (asserted by source, they touch the DOM) ----------
+// The public form's one upload branch must accept a file question, with a "Choose file"
+// button and no accept restriction, at the media ceiling (files reuse it, no new constant).
+t('the public form handles a file question', () => {
+  assert.ok(/f\.type === "photo" \|\| f\.type === "media" \|\| f\.type === "file"/.test(PUB_SRC),
+    'the upload branch must include the file type');
+  assert.ok(/Choose file/.test(PUB_SRC), 'a file question needs its own button label');
+});
+// The in-record editor must give a file question a file input with no accept restriction.
+t('the in-record editor accepts any file for a file question', () => {
+  assert.ok(/f\.type === "file" \? ""/.test(APP_SRC),
+    'the editor must leave accept empty (any type) for a file question');
+});
+
 console.log(n + ' tests defined');

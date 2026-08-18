@@ -3283,7 +3283,7 @@
       if (opts.photo !== "input") return "";
       // The accept list is the only difference between the two here — what is uploaded, and
       // where it is stored, is one path for both.
-      inner = '<input type="file" accept="' + (f.type === "media" ? "image/*,video/*" : "image/*") + '" class="ed-in" id="' + id + '">';
+      inner = '<input type="file" accept="' + (f.type === "file" ? "" : f.type === "media" ? "image/*,video/*" : "image/*") + '" class="ed-in" id="' + id + '">';
     }
     else if (f.type === "long_text") inner = edText(id, v, true);
     else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);

@@ -540,21 +540,25 @@
       local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
       apply(0);
       controls.push({ f: f, el: local, validate: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return (!f.required && d === "") || sc.len.indexOf(d.length) !== -1; }, value: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + sc.cc + d : null; } });
-    } else if (f.type === "photo" || f.type === "media") {
-      // One branch, not two. A media question is the same upload as a photo question with a
-      // wider accept and a bigger ceiling — splitting it would mean two copies of the rules
-      // about what is chosen, what is too big and what is required, and they would drift.
+    } else if (f.type === "photo" || f.type === "media" || f.type === "file") {
+      // One branch, not three. A media question is a photo question with a wider accept and a
+      // bigger ceiling; a file question is a media question with any accept at all — splitting
+      // them would mean copies of the rules about what is chosen, what is too big and what is
+      // required, and they would drift.
       var isMedia = f.type === "media";
-      var cap = isMedia ? MEDIA_MAX_BYTES : MAX_BYTES;
-      var pickTxt = isMedia ? "Choose photo or video" : "Choose photo";
-      var noneTxt = isMedia ? "No file chosen" : "No photo chosen";
+      var isFile = f.type === "file";
+      var cap = (isMedia || isFile) ? MEDIA_MAX_BYTES : MAX_BYTES;
+      var pickTxt = isFile ? "Choose file" : (isMedia ? "Choose photo or video" : "Choose photo");
+      var noneTxt = (isMedia || isFile) ? "No file chosen" : "No photo chosen";
       var frow = document.createElement("div"); frow.className = "file-row"; frow.id = "row-" + f.id;
       frow.innerHTML = '<button type="button" class="file-btn">' + esc(pickTxt) + '</button><span class="file-check">✓</span><span class="file-name">' + esc(noneTxt) + '</span>';
       var fin = document.createElement("input"); fin.type = "file";
       fin.accept = isMedia ? "image/*,video/*" : "image/*";
+      if (isFile) fin.accept = "";
       fin.style.display = "none"; fin.id = id;
       var fhint = document.createElement("div"); fhint.className = "hint";
       if (isMedia) fhint.textContent = "A photo or a video, up to " + mbText(cap) + ".";
+      else if (isFile) fhint.textContent = "A file, up to " + mbText(cap) + ".";
       wrap.appendChild(frow); wrap.appendChild(fin); wrap.appendChild(fhint);
       var fbtn = frow.querySelector(".file-btn"), fchk = frow.querySelector(".file-check"), fnm = frow.querySelector(".file-name");
       var overCap = false;
@@ -566,13 +570,15 @@
         // whether this works, and a person cannot see it any other way on a phone.
         fnm.textContent = file ? file.name + " · " + sizeText(file.size) : noneTxt;
         fchk.style.display = (file && !overCap) ? "flex" : "none";
-        fbtn.textContent = file ? (isMedia ? "Change file" : "Change photo") : pickTxt;
+        fbtn.textContent = file ? ((isMedia || isFile) ? "Change file" : "Change photo") : pickTxt;
         // Said now rather than after Submit: uploading 80 MB on shop wifi and being refused at
         // the end is the failure worth designing out.
         fhint.textContent = overCap
-          ? "That " + (isVideoFile(file) ? "video" : "photo") + " is " + sizeText(file.size) + " — the limit is " + mbText(cap) + "." +
-            (isVideoFile(file) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please choose a smaller one.")
-          : (isMedia ? "A photo or a video, up to " + mbText(cap) + "." : "");
+          ? (isFile
+              ? "That file is " + sizeText(file.size) + " — the limit is " + mbText(cap) + ". Please choose a smaller one."
+              : "That " + (isVideoFile(file) ? "video" : "photo") + " is " + sizeText(file.size) + " — the limit is " + mbText(cap) + "." +
+                (isVideoFile(file) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please choose a smaller one."))
+          : (isMedia ? "A photo or a video, up to " + mbText(cap) + "." : (isFile ? "A file, up to " + mbText(cap) + "." : ""));
         fhint.style.color = overCap ? "var(--danger)" : "";
         if (overCap) frow.classList.add("invalid"); else frow.classList.remove("invalid");
       });
