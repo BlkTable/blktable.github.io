@@ -7259,9 +7259,14 @@
     if (key === "custom") {
       if (!currentCustom) { closeRegen(); return; }
       var newSlug = slugify(currentCustom.table.name) + "-" + Math.random().toString(36).slice(2, 6);
-      db.from("app_tables").update({ slug: newSlug }).eq("id", currentCustom.table.id).then(function (res) {
+      // Regenerating is the "kill the old QR" action, so it also drops any forwarding aliases:
+      // once the link is rotated to shut a leaked code out, an old slug must not still resolve.
+      var cpub = Object.assign({}, currentCustom.table.config_public || {});
+      delete cpub.aliases;
+      db.from("app_tables").update({ slug: newSlug, config_public: cpub }).eq("id", currentCustom.table.id).then(function (res) {
         if (res.error) { msg.textContent = "Could not regenerate. Please try again."; return; }
         currentCustom.table.slug = newSlug;
+        currentCustom.table.config_public = cpub;
         var t = customTables.filter(function (x) { return x.id === currentCustom.table.id; })[0]; if (t) t.slug = newSlug;
         var clink = publicFormLink(newSlug);
         var ca = document.getElementById("custom-link-a"); if (ca) { ca.href = clink; ca.textContent = clink; }
