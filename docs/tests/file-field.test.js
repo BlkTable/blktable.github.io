@@ -47,7 +47,7 @@ function load(js, vars, fns) {
 // that task's red state, resolved by implementing the function.
 const A = load(APP,
   ['PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES', 'VIDEO_EXT', 'VIDEO_PLAYABLE', 'IMAGE_EXT', 'PLAY_SVG', 'FILE_SVG'],
-  ['isFileField', 'isFileType', 'uploadCap', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel']);
+  ['isFileField', 'isFileType', 'uploadCap', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel', 'esc', 'photoSectionHtml']);
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; } catch (e) { console.log('FAIL: ' + name + ' -> ' + e.message); process.exitCode = 1; } };
@@ -114,6 +114,37 @@ t('only the last extension counts', () => {
 t('there is a distinct file glyph to mark a document', () => {
   assert.ok(/<svg/.test(A.FILE_SVG), 'FILE_SVG must render something');
   assert.notStrictEqual(A.FILE_SVG, A.PLAY_SVG, 'a file must not be marked with the play glyph');
+});
+
+// ---- the record gallery --------------------------------------------------
+const G_PHOTO = { id: 'g1', label: 'Shelf photo', type: 'photo' };
+const G_FILE = { id: 'g2', label: 'CV', type: 'file' };
+
+t('a document answer is a download link, not a broken <img>', () => {
+  const h = A.photoSectionHtml([G_FILE], { g2: 'uuid_cv.pdf' });
+  assert.ok(/pc-file/.test(h), 'a document must be offered as a link');
+  assert.ok(/imp-file/.test(h), 'and must carry imp-file so its href gets resolved');
+  assert.ok(!/imp-thumb/.test(h) && !/<img/.test(h), 'never an <img> pointed at a PDF');
+  assert.ok(/cv\.pdf/.test(h), 'and should say what it is');
+});
+t('a photo answer is still a thumbnail', () => {
+  const h = A.photoSectionHtml([G_PHOTO], { g1: 'uuid_face.jpg' });
+  assert.ok(/imp-thumb/.test(h) && /data-path="uuid_face\.jpg"/.test(h));
+  assert.ok(!/pc-file/.test(h));
+});
+t('a documents-only gallery is headed Files', () => {
+  assert.ok(/File \(1\)/.test(A.photoSectionHtml([G_FILE], { g2: 'a.pdf' })));
+  assert.ok(/Files \(2\)/.test(A.photoSectionHtml(
+    [G_FILE, { id: 'g3', label: 'Second', type: 'file' }], { g2: 'a.pdf', g3: 'b.docx' })));
+});
+t('documents mixed with photos are headed Attachments', () => {
+  const h = A.photoSectionHtml([G_PHOTO, G_FILE], { g1: 'a.jpg', g2: 'b.pdf' });
+  assert.ok(/Attachments \(2\)/.test(h), 'a mix must not claim to be all photos');
+});
+// The document label is admin-typed and goes into markup.
+t('the document question label is escaped', () => {
+  const h = A.photoSectionHtml([{ id: 'g9', label: '<img src=x onerror=alert(1)>', type: 'file' }], { g9: 'a.pdf' });
+  assert.ok(!/<img src=x/.test(h) && /&lt;img/.test(h));
 });
 
 console.log(n + ' tests defined');

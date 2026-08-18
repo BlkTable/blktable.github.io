@@ -5018,22 +5018,28 @@
     });
     if (!shots.length) return "";
     var vids = shots.filter(function (f) { return isVideoPath(d[f.id]); }).length;
+    var docs = shots.filter(function (f) { return !isImagePath(d[f.id]) && !isVideoPath(d[f.id]); }).length;
     // The heading counts what is actually there. "Photos (3)" over two videos and a photo is
-    // a small lie that makes a reviewer think a video is missing.
-    var head = !vids ? "Photos (" + shots.length + ")"
-      : vids === shots.length ? (vids === 1 ? "Video (1)" : "Videos (" + vids + ")")
+    // a small lie that makes a reviewer think a video is missing. A pile of PDFs is "Files";
+    // a mix of files with photos or videos is honestly just "Attachments".
+    var head =
+        docs === shots.length ? (docs === 1 ? "File (1)" : "Files (" + docs + ")")
+      : docs ? "Attachments (" + shots.length + ")"
+      : !vids ? "Photos (" + shots.length + ")"
+      : vids === shots.length ? (vids === 1 ? "Video (1)" : "Videos (" + shots.length + ")")
       : "Photos and videos (" + shots.length + ")";
     return '<div class="photo-sec"><div class="ps-head">' + esc(head) + '</div><div class="photo-grid">' +
       shots.map(function (f) {
         var p = d[f.id], lab = '<span class="pc-lab">' + esc(f.label) + "</span>";
-        if (!isVideoPath(p)) {
+        if (isImagePath(p)) {
           return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(p) + '" alt="">' + lab + "</div>";
         }
-        // A format a browser will not play is still the person's answer: it is offered as a
-        // download rather than a player that would show a black rectangle and no explanation.
+        // A document, or a video format a browser will not play, is still the person's answer:
+        // it is offered as a download rather than a player that would show a black rectangle. A
+        // document gets the page glyph; an unplayable video keeps the play glyph.
         if (!isPlayableVideo(p)) {
           return '<div class="photo-cell"><a class="imp-file pc-file" data-path="' + esc(p) + '" href="#" target="_blank" rel="noopener">' +
-            PLAY_SVG + "<span>" + esc(fileLabel(p)) + "</span></a>" + lab + "</div>";
+            (isVideoPath(p) ? PLAY_SVG : FILE_SVG) + "<span>" + esc(fileLabel(p)) + "</span></a>" + lab + "</div>";
         }
         return '<div class="photo-cell"><button type="button" class="pc-video" data-vpath="' + esc(p) + '" title="Play">' +
           PLAY_SVG + "</button>" + lab + "</div>";

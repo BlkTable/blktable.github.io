@@ -50,8 +50,8 @@ function load(js, vars, fns) {
 }
 
 const A = load(APP,
-  ['VIDEO_EXT', 'VIDEO_PLAYABLE', 'PLAY_SVG', 'PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES'],
-  ['esc', 'isFileField', 'isFileType', 'isVideoPath', 'isPlayableVideo', 'fileLabel',
+  ['VIDEO_EXT', 'VIDEO_PLAYABLE', 'PLAY_SVG', 'IMAGE_EXT', 'PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES'],
+  ['esc', 'isFileField', 'isFileType', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel',
    'coverHtml', 'uploadCap', 'mbText', 'photoSectionHtml', 'ageText', 'otherKeyFor',
    'isChoiceField', 'isOtherChoice', 'customCellText']);
 
