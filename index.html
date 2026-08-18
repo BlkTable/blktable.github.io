@@ -3947,7 +3947,7 @@
   function isVideoPath(p) { return VIDEO_EXT.test(String(p || "")); }
   function isPlayableVideo(p) { return VIDEO_PLAYABLE.test(String(p || "")); }
   // The stored key carries no MIME, so an answer is classed from its filename alone. An image
-  // extension is an image; so is a key with no filename extension at all — every row written
+  // extension is an image; so is a key with no filename extension at all, every row written
   // before this type existed, and the importer keys, are photos. Any other extension (.pdf,
   // .docx, .zip) is a file to download, not a thumbnail. Checked after isVideoPath, so a video
   // never reaches here as an "image".

@@ -542,8 +542,8 @@
       controls.push({ f: f, el: local, validate: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return (!f.required && d === "") || sc.len.indexOf(d.length) !== -1; }, value: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + sc.cc + d : null; } });
     } else if (f.type === "photo" || f.type === "media" || f.type === "file") {
       // One branch, not three. A media question is a photo question with a wider accept and a
-      // bigger ceiling; a file question is a media question with any accept at all — splitting
-      // them would mean copies of the rules about what is chosen, what is too big and what is
+      // bigger ceiling; a file question is a media question with any accept at all. Splitting
+      // it further would mean copies of the rules about what is chosen, what is too big and what is
       // required, and they would drift.
       var isMedia = f.type === "media";
       var isFile = f.type === "file";
@@ -575,8 +575,8 @@
         // the end is the failure worth designing out.
         fhint.textContent = overCap
           ? (isFile
-              ? "That file is " + sizeText(file.size) + " — the limit is " + mbText(cap) + ". Please choose a smaller one."
-              : "That " + (isVideoFile(file) ? "video" : "photo") + " is " + sizeText(file.size) + " — the limit is " + mbText(cap) + "." +
+              ? "That file is " + sizeText(file.size) + ". The limit is " + mbText(cap) + ". Please choose a smaller one."
+              : "That " + (isVideoFile(file) ? "video" : "photo") + " is " + sizeText(file.size) + ". The limit is " + mbText(cap) + "." +
                 (isVideoFile(file) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please choose a smaller one."))
           : (isMedia ? "A photo or a video, up to " + mbText(cap) + "." : (isFile ? "A file, up to " + mbText(cap) + "." : ""));
         fhint.style.color = overCap ? "var(--danger)" : "";
