@@ -107,6 +107,11 @@
   .file-name { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-check { display: none; width: 22px; height: 22px; border-radius: 50%; background: var(--wa); color: #0a2e17; font-weight: 800; font-size: 0.78rem; align-items: center; justify-content: center; flex: 0 0 auto; }
   .file-row.invalid .file-btn { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
+  .form-link { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 8px;
+    background: var(--accent); color: #fff; font-weight: 600; font-size: 0.95rem; text-decoration: none;
+    transition: background 0.15s ease, transform 0.05s ease; }
+  .form-link:hover { background: var(--accent-hi); } .form-link:active { transform: translateY(1px); }
+  .form-link .ar { font-weight: 500; opacity: 0.85; }
   .submit { width: 100%; margin-top: 22px; padding: 14px 16px; border-radius: 8px; border: none;
     background: var(--accent); color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer;
     transition: background 0.15s ease, transform 0.05s ease; }
@@ -588,6 +593,18 @@
         validate: function () { return !overCap && (!f.required || fin.files.length > 0); },
         badMsg: function () { return overCap ? "That file is larger than " + mbText(cap) + ". Please choose a smaller one." : ""; }
       });
+    } else if (f.type === "link") {
+      // A read-only button that opens a URL. No answer is collected. Pair with show_if to
+      // reveal it only for a given answer (e.g. topic = "Job application"), the way Airtable
+      // surfaces a follow-up form link. The URL and button text live in app_fields.options.
+      var lo = f.options || {};
+      var a = document.createElement("a");
+      a.href = lo.url || "#"; a.target = "_blank"; a.rel = "noopener";
+      a.className = "form-link";
+      a.appendChild(document.createTextNode(lo.text || lo.url || "Open link"));
+      if (lo.text_ar) { var s = document.createElement("span"); s.className = "ar"; s.dir = "rtl"; s.textContent = " / " + lo.text_ar; a.appendChild(s); }
+      wrap.appendChild(a);
+      controls.push({ f: f, el: a, validate: function () { return true; }, value: function () { return null; } });
     } else {
       var inp2 = document.createElement("textarea"); inp2.id = id; inp2.rows = 1; growTextarea(inp2, true); wrap.appendChild(inp2);
       controls.push({ f: f, el: inp2, validate: function () { return !f.required || inp2.value.trim() !== ""; }, value: function () { return inp2.value.trim() || null; } });
