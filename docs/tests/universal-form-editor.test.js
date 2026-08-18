@@ -201,14 +201,23 @@ t('a built-in name is read from the table row, never printed as a literal', () =
   assert.strictEqual(literals, 1, 'found ' + literals + ' hard-coded "Job Applications" in the script');
   assert.strictEqual(API.BUILTIN_DEFAULT_NAME.job_applications, 'Job Applications');
 });
-t('the public heading is only overridden when an admin sets one', () => {
-  // pressing Save must not retitle a live form that 34,000 people have opened
-  assert.ok(/title: serializePublicTitle\(\)/.test(SRC));
-  assert.ok(/return \(en \|\| ar\) \? \{ en: en, ar: ar \} : null;/.test(SRC));
+t('the preview shows the heading a built-in page really prints, not its table name', () => {
+  // "Job Applications" is the name in the dashboard; the page prints "Job Application ·
+  // طلب توظيف". Renaming the table does not reach the page (config_public is a whitelisted
+  // generated column), so a preview built from the name would be showing something false.
+  assert.strictEqual(API.BUILTIN_PUBLIC_TITLE.job_applications.en, 'Job Application');
   [['apply/index.html', APPLY], ['cast/index.html', CAST]].forEach(function (p) {
-    assert.ok(/renderTitle\(res\.data\.title\)/.test(p[1]), p[0] + ' never reads config.title');
-    assert.ok(/if \(!en && !ar\) return;/.test(p[1]), p[0] + ' would blank its own heading when title is unset');
+    var h1 = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(p[1])[1].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ');
+    var key = /apply/.test(p[0]) ? 'job_applications' : 'casting';
+    var want = API.BUILTIN_PUBLIC_TITLE[key];
+    assert.ok(h1.indexOf(want.en) !== -1, p[0] + ' prints "' + h1.trim() + '", not "' + want.en + '"');
+    assert.ok(h1.indexOf(want.ar) !== -1, p[0] + ' does not print the Arabic "' + want.ar + '"');
   });
+});
+t('nothing writes an unreachable key into a built-in form config', () => {
+  // config_public is a whitelisted GENERATED column, so a key invented here never reaches
+  // the public page — a control that writes one would look like it worked and do nothing
+  assert.ok(/tableUpdate\.config = \{ hidden: hidden, intro: serializeIntro\(\) \};/.test(SRC));
 });
 t('a task table keeps its Form tab, because its fields still need editing', () => {
   assert.ok(!/custom-tab-form"\)\.style\.display = isTask \? "none" : ""/.test(SRC),

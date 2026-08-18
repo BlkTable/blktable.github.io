@@ -1805,16 +1805,6 @@
             <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
             <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
           </div>
-          <!-- Built-in forms only: their public page prints its own heading, which is not the
-               same string as the table's name ("Job Application" vs "Job Applications"). It is
-               editable here rather than left as the one thing about a form you cannot change. -->
-          <div id="bld-pubtitle-wrap" style="display:none;">
-            <div class="fp-label" id="bld-pubtitle-lab" style="margin: 12px 0 6px;">Heading on the public form</div>
-            <div class="bld-two">
-              <textarea id="bld-pubtitle" rows="1" placeholder="Heading (English)"></textarea>
-              <textarea id="bld-pubtitle-ar" rows="1" placeholder="العنوان (عربي)" dir="rtl"></textarea>
-            </div>
-          </div>
           <div class="fp-label" style="margin: 12px 0 6px;">Form intro <span style="color:var(--muted);font-weight:400;">— optional. Shown under the title on the public form.</span></div>
           <div class="bld-two">
             <textarea id="bld-intro" rows="2" placeholder="Intro (English)"></textarea>
@@ -5880,10 +5870,10 @@
     }
     host.className = "fprev";
     var cfg = face.config || {}, intro = cfg.intro || {};
-    // A built-in form prints its own heading, which config.title may override.
-    var title = face.builtinKey
-      ? (cfg.title && (cfg.title.en || cfg.title.ar) ? cfg.title : BUILTIN_PUBLIC_TITLE[face.builtinKey])
-      : { en: face.name, ar: face.nameAr };
+    // A table's public page prints its name; a built-in one prints a heading of its own that
+    // is not the name ("Job Application" vs "Job Applications"), so the preview shows the
+    // heading the page really prints rather than pretending the name reaches it.
+    var title = face.builtinKey ? BUILTIN_PUBLIC_TITLE[face.builtinKey] : { en: face.name, ar: face.nameAr };
     var h = '<img class="pv-logo" src="assets/blk-logo.svg" alt="BLK">' +
       '<div class="pv-h1">' + esc(title.en || "") + "</div>" +
       (title.ar ? '<div class="pv-ar">' + esc(title.ar) + "</div>" : "");
@@ -7625,14 +7615,12 @@
     bldGrow(el);
   }
   function growAllBld() {
-    ["bld-name", "bld-name-ar", "bld-pubtitle", "bld-pubtitle-ar", "bld-intro", "bld-intro-ar"]
+    ["bld-name", "bld-name-ar", "bld-intro", "bld-intro-ar"]
       .forEach(function (id) { bldGrow(document.getElementById(id)); });
     [].slice.call(bldHost().querySelectorAll("textarea")).forEach(bldGrow);
   }
   wireBldGrow(document.getElementById("bld-name"));
   wireBldGrow(document.getElementById("bld-name-ar"));
-  wireBldGrow(document.getElementById("bld-pubtitle"));
-  wireBldGrow(document.getElementById("bld-pubtitle-ar"));
   wireBldGrow(document.getElementById("bld-intro"), true);      // intro is multi-line — Enter must work
   wireBldGrow(document.getElementById("bld-intro-ar"), true);
   // config.intro = {en, ar} — the one intro standard, used by every public form (f/, apply/, cast/).
@@ -7644,23 +7632,6 @@
   function setIntroInputs(intro) {
     document.getElementById("bld-intro").value = (intro && intro.en) || "";
     document.getElementById("bld-intro-ar").value = (intro && intro.ar) || "";
-  }
-  // config.title = {en, ar} — the heading a built-in form's public page prints instead of its
-  // own hard-coded one. Left unset, the page keeps what it prints today, so pressing Save
-  // without touching this cannot quietly retitle a live form.
-  function serializePublicTitle() {
-    var en = (document.getElementById("bld-pubtitle").value || "").trim();
-    var ar = (document.getElementById("bld-pubtitle-ar").value || "").trim();
-    return (en || ar) ? { en: en, ar: ar } : null;
-  }
-  function setPublicTitleInputs(formKey, title) {
-    var def = BUILTIN_PUBLIC_TITLE[formKey] || { en: "", ar: "" };
-    var en = document.getElementById("bld-pubtitle"), ar = document.getElementById("bld-pubtitle-ar");
-    en.value = (title && title.en) || ""; en.placeholder = def.en || "Heading (English)";
-    ar.value = (title && title.ar) || ""; ar.placeholder = def.ar || "العنوان (عربي)";
-    var lab = document.getElementById("bld-pubtitle-lab");
-    if (lab) lab.innerHTML = 'Heading on the public form <span style="color:var(--muted);font-weight:400;">— ' +
-      "optional. Leave both empty to keep “" + esc(def.en) + (def.ar ? " · " + esc(def.ar) : "") + "”.</span>";
   }
   function addBuilderField(data) {
     var row = document.createElement("div"); row.className = "bld-field";
@@ -7755,7 +7726,6 @@
   function resetBuilder() {
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
     setIntroInputs(null);
-    document.getElementById("bld-pubtitle").value = ""; document.getElementById("bld-pubtitle-ar").value = "";
     bldHost().innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     document.getElementById("bld-stages").innerHTML = "";
     document.getElementById("bld-actions").innerHTML = "";
@@ -7779,7 +7749,6 @@
       (isBuiltin ? "how this form is named across the dashboard."
                  : "the title applicants read at the top of the form, and how it is named here.") + "</span>";
     var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
-    var pw = document.getElementById("bld-pubtitle-wrap"); if (pw) pw.style.display = isBuiltin ? "" : "none";
     var qlab = document.getElementById("bld-q-lab");
     if (qlab) qlab.innerHTML = isBuiltin
       ? 'Extra questions <span style="color:var(--muted);font-weight:400;">— added below the built-in ones. Use “show after” to place one mid-form.</span>'
@@ -7918,7 +7887,6 @@
     document.getElementById("bld-name").value = builtinName(formKey);
     document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
     setIntroInputs(null);
-    setPublicTitleInputs(formKey, null);
     msg.textContent = "Loading…";
     bldHost().innerHTML = "";
     return db.from("app_tables").select("name,name_ar,config").eq("id", editingTableId).single().then(function (cRes) {
@@ -7929,7 +7897,7 @@
       document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
       document.getElementById("bld-builtin-note").innerHTML = builtinFieldsHtml(formKey, cfg.hidden || []);
       setIntroInputs(cfg.intro);
-      setPublicTitleInputs(formKey, cfg.title);
+
       return db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true });
     }).then(function (res) {
       msg.textContent = "";
@@ -8162,7 +8130,7 @@
     if (builderMode === "builtin") {
       var hidden = [];
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
-      tableUpdate.config = { hidden: hidden, intro: serializeIntro(), title: serializePublicTitle() };
+      tableUpdate.config = { hidden: hidden, intro: serializeIntro() };
     } else {
       tableUpdate.config = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() };
     }

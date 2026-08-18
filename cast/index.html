@@ -98,7 +98,7 @@
     <div class="sheet">
       <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
       <div class="head">
-        <h1 id="form-title">BLK Casting <span style="color:var(--muted);font-weight:600;">· كاستنج</span></h1>
+        <h1>BLK Casting <span style="color:var(--muted);font-weight:600;">· كاستنج</span></h1>
         <p>Fill in your details below.</p>
       </div>
       <div class="intro" id="form-intro" style="display:none;"></div>
@@ -218,21 +218,6 @@
     var el = document.getElementById(id);
     return (el && el.closest) ? el.closest(".field") : null;
   }
-  // Optional heading override from config.title = {en, ar}; without it the page keeps the
-  // heading it prints, so saving the form in the dashboard cannot silently retitle it.
-  function renderTitle(title) {
-    var h1 = document.getElementById("form-title"); if (!h1) return;
-    var en = ((title && title.en) || "").trim(), ar = ((title && title.ar) || "").trim();
-    if (!en && !ar) return;
-    h1.textContent = en || ar;
-    if (en && ar) {
-      var s = document.createElement("span");
-      s.style.color = "var(--muted)"; s.style.fontWeight = "600";
-      s.textContent = " · " + ar;
-      h1.appendChild(s);
-    }
-    document.title = (en || ar) + " · BLK";
-  }
   function applyHidden() {
     Object.keys(hiddenCols).forEach(function (col) {
       var f = builtinWrap(col); if (f) f.style.display = "none";
@@ -251,7 +236,6 @@
   db.rpc("get_form_config", { p_key: "casting" }).then(function (res) {
     if (res && !res.error && res.data) {
       if (res.data.hidden) { res.data.hidden.forEach(function (c) { hiddenCols[c] = true; }); applyHidden(); }
-      renderTitle(res.data.title);
       renderIntro(res.data.intro);
     }
   }).catch(function () {});
