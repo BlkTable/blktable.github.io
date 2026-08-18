@@ -390,6 +390,25 @@
   .act-call { background: #4a9eff !important; color: #fff !important; }
   .act-email { background: var(--gold) !important; color: #0d0d0f !important; }
   /* builder: review-chain layers */
+  /* An alert rule: the trip on one line, then the message, then who hears about it. */
+  .bld-alert { border: 1px solid var(--field-border); border-radius: 10px; padding: 10px; margin-bottom: 10px; background: var(--bg-2, rgba(255,255,255,0.02)); }
+  .bld-alert .al-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bld-alert select, .bld-alert input, .bld-alert textarea { min-height: 38px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); outline: none; box-sizing: border-box; font-family: inherit; }
+  .bld-alert select.al-field { flex: 2 1 180px; min-width: 0; }
+  .bld-alert input.al-values, .bld-alert input.al-label { flex: 1 1 130px; min-width: 0; }
+  .bld-alert textarea { width: 100%; min-height: 56px; resize: vertical; font-size: var(--fs-3); margin-top: 8px; }
+  .bld-alert .rm { background: none; border: none; color: var(--danger); cursor: pointer; font-size: var(--fs-3); min-height: 0; padding: 0 4px; }
+  .bld-alert .al-hint { color: var(--muted); font-size: var(--fs-2); margin: 6px 0 0; }
+  .bld-alert .al-auto-lbl { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--field-border); font-weight: 700; font-size: var(--fs-3); cursor: pointer; }
+  .bld-alert .al-auto-lbl input { min-height: 0; }
+  .bld-alert .al-auto-box { margin-top: 8px; }
+  .bld-alert .al-p { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .bld-alert .al-p .ap-n { width: 34px; color: var(--muted); font: 700 0.72rem/1 var(--font-mono, monospace); flex: 0 0 auto; }
+  .bld-alert .al-p select.ap-field { flex: 2 1 160px; min-width: 0; }
+  .bld-alert .al-p input.ap-text { flex: 1 1 120px; min-width: 0; }
+  .bld-alert .al-sm { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .bld-alert .al-sm input { width: 80px; }
+  .bld-alert .al-sm label { color: var(--muted); font-size: var(--fs-2); display: flex; align-items: center; gap: 6px; }
   .bld-layer { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .bld-layer select, .bld-layer input.ly-label { min-height: 38px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); outline: none; box-sizing: border-box; }
   .bld-layer input.ly-label { flex: 1; min-width: 110px; }
@@ -1274,6 +1293,47 @@
   .flag-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
     background: var(--pink-soft); color: var(--pink-hi); border: 1px solid rgba(248,43,96,0.45);
     font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.04em; vertical-align: middle; }
+  /* An answer somebody has to be TOLD about, not merely notice. Same chip shape as the
+     flag, in the alarm colour, and it carries the reason with it. */
+  .alert-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+    background: rgba(255,107,107,0.16); color: var(--danger); border: 1px solid rgba(255,107,107,0.5);
+    font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.04em; vertical-align: middle; }
+  /* The banner on the record itself: what matched, and the one button that acts on it. */
+  .rec-alert { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0 4px;
+    padding: 10px 12px; border-radius: 10px; background: rgba(255,107,107,0.10);
+    border: 1px solid rgba(255,107,107,0.38); }
+  .rec-alert .ra-txt { flex: 1 1 200px; min-width: 0; }
+  .rec-alert .ra-h { font-weight: 800; color: var(--danger); font-size: var(--fs-3); }
+  .rec-alert .ra-s { color: var(--muted); font-size: var(--fs-2); margin-top: 2px; }
+  /* Notify picker: one line per person, each sent on its own so nothing is sent by accident. */
+  .na-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+  .na-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
+    background: var(--bg-3); border: 1px solid var(--field-border); }
+  .na-row .na-who { flex: 1 1 auto; min-width: 0; }
+  .na-row .na-name { font-weight: 700; }
+  .na-row .na-num { color: var(--muted); font-size: var(--fs-2); }
+  .na-row.sent { border-color: rgba(30,127,74,0.6); }
+  .na-row .na-done { color: #4ad991; font-weight: 800; font-size: var(--fs-2); }
+  .na-add { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .na-add input { flex: 1 1 auto; }
+  /* What the automation did: one line per message, in the record and in the table log. */
+  .nl-wrap { margin-top: 14px; }
+  .nl-h { font-weight: 800; font-size: var(--fs-3); margin-bottom: 8px; }
+  .nl-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px;
+    background: var(--bg-3); border: 1px solid var(--field-border); margin-bottom: 6px; }
+  .nl-row .nl-i { flex: 0 0 auto; font-size: var(--fs-3); line-height: 1.5; }
+  .nl-row .nl-b { flex: 1 1 auto; min-width: 0; }
+  .nl-row .nl-who { font-weight: 700; font-size: var(--fs-3); }
+  .nl-row .nl-meta { color: var(--muted); font-size: var(--fs-2); margin-top: 2px; word-break: break-word; }
+  .nl-row.st-failed { border-color: rgba(255,107,107,0.5); }
+  .nl-row.st-failed .nl-meta { color: var(--danger); }
+  .nl-row.st-sent { border-color: rgba(30,127,74,0.55); }
+  .nl-empty { color: var(--muted); font-size: var(--fs-2); }
+  .nl-test { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .nl-test input { flex: 1 1 180px; min-width: 0; }
+  .alertlog-chip { background: rgba(255,107,107,0.16); color: var(--danger); border: 1px solid rgba(255,107,107,0.5);
+    border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2); font-weight: 800; cursor: pointer; }
+  .alertlog-chip.quiet { background: rgba(214,218,222,0.10); color: var(--muted); border-color: var(--field-border); }
   .ja-card.is-mine, .ja-row.is-mine { box-shadow: inset 3px 0 0 var(--gold); }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
   .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: var(--bg-3) center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: var(--fs-7); }
@@ -1553,6 +1613,7 @@
             </nav>
             <div class="base-right">
               <span class="base-count" id="custom-count">—</span>
+              <button class="alertlog-chip" id="custom-alertlog" type="button" style="display:none;" title="What the alerts on this form have sent"></button>
               <button class="hd-btn" id="custom-refresh" title="Reload from the database" aria-label="Refresh"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v4h-4"></path></svg></button>
               <button class="btn-new" id="custom-new" style="display:none;" title="Add a record by hand">＋ New record</button>
               <button class="btn-share" id="custom-share">Share</button>
@@ -1778,6 +1839,41 @@
       </div>
     </div>
 
+    <!-- What the alerts on this form have done: queued, sent, failed -->
+    <div class="modal-overlay" id="alertlog-modal">
+      <div class="modal" style="max-width: 640px;">
+        <button class="modal-close" id="allog-close" aria-label="Close">&#10005;</button>
+        <div class="m-name">Alert messages</div>
+        <div class="m-sub" id="allog-sub"></div>
+        <div id="allog-body" style="margin-top:12px;"></div>
+        <div class="m-actions" style="margin-top:14px; gap:10px;">
+          <button class="linkbtn" id="allog-refresh" type="button">Refresh</button>
+          <button class="linkbtn" id="allog-done" type="button">Close</button>
+        </div>
+        <div class="m-msg" id="allog-msg"></div>
+      </div>
+    </div>
+
+    <!-- Notify on WhatsApp: the message is written here, the recipient is chosen here -->
+    <div class="modal-overlay" id="notify-modal">
+      <div class="modal" style="max-width: 520px;">
+        <button class="modal-close" id="na-close" aria-label="Close">&#10005;</button>
+        <div class="m-name" id="na-title">Send this record on WhatsApp</div>
+        <div class="m-sub" id="na-sub"></div>
+        <textarea id="na-text" rows="8" style="width:100%;margin-top:10px;"></textarea>
+        <div class="na-list" id="na-list"></div>
+        <div class="na-add">
+          <input id="na-other" type="tel" inputmode="tel" placeholder="Another number, e.g. +962791234567" autocomplete="off">
+          <button type="button" class="btn-wa" id="na-other-send">Send</button>
+        </div>
+        <div class="m-actions" style="margin-top:14px; gap:10px;">
+          <button class="linkbtn" id="na-copy" type="button">Copy message</button>
+          <button class="linkbtn" id="na-done" type="button">Close</button>
+        </div>
+        <div class="m-msg" id="na-msg"></div>
+      </div>
+    </div>
+
     <!-- Admin: share a table with accounts -->
     <div class="modal-overlay" id="share-modal">
       <div class="modal" style="max-width: 460px;">
@@ -1822,6 +1918,11 @@
             <div class="fp-label" style="margin: 16px 0 6px;">Record actions <span style="color:var(--muted);font-weight:400;">— optional. Buttons on each record: WhatsApp / Call / Email (uses the table's phone/email field).</span></div>
             <div id="bld-actions"></div>
             <button type="button" class="btn-save" id="bld-add-action" style="margin-top: 4px;">＋ Add action</button>
+          </div>
+          <div class="bld-alerts-wrap" id="bld-alerts-wrap">
+            <div class="fp-label" style="margin: 16px 0 6px;">Alerts <span style="color:var(--muted);font-weight:400;">— optional. When an answer becomes a certain value the record is marked in red and can send a WhatsApp on its own.</span></div>
+            <div id="bld-alerts"></div>
+            <button type="button" class="btn-save" id="bld-add-alert" style="margin-top: 4px;">＋ Add alert</button>
           </div>
           <div class="bld-layers-wrap" id="bld-layers-wrap">
             <div class="fp-label" style="margin: 16px 0 6px;">Review chain <span style="color:var(--muted);font-weight:400;">— optional. Ordered layers each record passes through; pick a type and who's assigned.</span></div>
@@ -3789,6 +3890,247 @@
       window.open("mailto:" + em, "_self");
     }
   }
+  // ---- What the automation did ---------------------------------------------------
+  // notify_outbox is written by a database trigger (whatsapp/02-notify-outbox.sql) and read
+  // here. Every read is allowed to fail quietly for one specific reason: the app is
+  // deployed before that SQL is applied, so on a database without the table PostgREST
+  // answers 404 and this whole section must simply not exist rather than throw.
+  var notifyTableMissing = false;
+  function notifyOutboxAvailable() { return !notifyTableMissing; }
+  function readOutbox(filter) {
+    if (notifyTableMissing) return Promise.resolve([]);
+    var q = db.from("notify_outbox")
+      .select("id,submission_id,table_id,rule_id,to_name,to_number,template,status,attempts,last_error,body_preview,reason,created_at,sent_at")
+      .order("created_at", { ascending: false }).limit(filter.limit || 20);
+    if (filter.submission) q = q.eq("submission_id", filter.submission);
+    if (filter.table) q = q.eq("table_id", filter.table);
+    return q.then(function (res) {
+      if (res && res.error) {
+        // 42P01 = the table does not exist yet. Anything else is a real error and is left
+        // to the console rather than dressed up as "no messages".
+        if (String(res.error.code) === "42P01" || /notify_outbox/.test(res.error.message || "")) notifyTableMissing = true;
+        else if (window.console) console.warn("notify_outbox read failed", res.error);
+        return [];
+      }
+      return res.data || [];
+    }).catch(function () { return []; });
+  }
+  var NOTIFY_ICON = { sent: "✓", queued: "⏳", sending: "⏳", failed: "✕", skipped: "⊘" };
+  function notifyRowLineHtml(r, withRecord) {
+    var who = (r.to_name ? r.to_name + " " : "") + (r.to_number && r.to_number !== "-" ? "+" + r.to_number : "");
+    var when = r.sent_at || r.created_at;
+    var bits = [];
+    if (withRecord) bits.push("record " + esc(String(r.submission_id).slice(0, 8)));
+    bits.push(esc(r.template || "—"));
+    if (r.status === "failed" || r.status === "skipped") bits.push(esc(r.last_error || "no reason recorded"));
+    else if (r.body_preview) bits.push(esc(r.body_preview));
+    if (r.attempts > 1) bits.push(r.attempts + " attempts");
+    return '<div class="nl-row st-' + esc(r.status) + '" data-id="' + esc(r.id) + '">' +
+      '<span class="nl-i">' + (NOTIFY_ICON[r.status] || "•") + "</span>" +
+      '<div class="nl-b"><div class="nl-who">' + (esc(who) || "—") +
+        ' <span style="color:var(--muted);font-weight:400;">· ' + esc(r.status) + " · " + fmtDate(when) + "</span></div>" +
+      '<div class="nl-meta">' + bits.join(" · ") + "</div></div>" +
+      ((r.status === "failed" || r.status === "skipped") ? '<button type="button" class="linkbtn nl-retry">Retry</button>' : "") +
+      "</div>";
+  }
+  function wireRetries(host, after) {
+    [].slice.call(host.querySelectorAll(".nl-retry")).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.closest(".nl-row").getAttribute("data-id");
+        b.disabled = true; b.textContent = "…";
+        db.rpc("notify_retry", { p_id: id }).then(function (res) {
+          if (res && res.error) { b.disabled = false; b.textContent = "Retry"; window.alert("Could not queue it again. " + (res.error.message || "")); return; }
+          if (after) after();
+        });
+      });
+    });
+  }
+  // On the record: every message this record produced, and — for a manager — a test send of
+  // a rule that is configured to send, so a rule can be proven before anybody relies on it.
+  function renderRecordNotify(s, fields) {
+    var host = document.getElementById("cd-notify");
+    if (!host || !s) return;
+    var table = currentCustom && currentCustom.table;
+    var autoRules = alertsFor(table, s.data).filter(function (r) { return r.send && r.send.template; });
+    readOutbox({ submission: s.id, limit: 20 }).then(function (rows) {
+      if (!rows.length && !autoRules.length) { host.innerHTML = ""; return; }
+      var html = '<div class="nl-wrap"><div class="nl-h">Alert messages</div>';
+      html += rows.length ? rows.map(function (r) { return notifyRowLineHtml(r, false); }).join("")
+        : '<div class="nl-empty">Nothing has been sent for this record yet.</div>';
+      if (autoRules.length && canManage(table.id)) {
+        html += '<div class="nl-test"><input id="nl-test-num" type="tel" inputmode="tel" placeholder="Test this alert on a number, e.g. +962791234567">' +
+          '<button type="button" class="linkbtn" id="nl-test-go" data-rule="' + esc(autoRules[0].id || autoRules[0].field) + '">Send a test</button></div>' +
+          '<div class="nl-empty" id="nl-test-msg"></div>';
+      }
+      html += "</div>";
+      host.innerHTML = html;
+      wireRetries(host, function () { renderRecordNotify(s, fields); refreshAlertLogChip(currentCustom && currentCustom.table, true); });
+      var go = document.getElementById("nl-test-go");
+      if (go) go.addEventListener("click", function () {
+        var num = document.getElementById("nl-test-num").value.trim();
+        var out = document.getElementById("nl-test-msg");
+        go.disabled = true; out.textContent = "Queueing…";
+        db.rpc("notify_test", { p_submission: s.id, p_rule: go.getAttribute("data-rule"), p_number: num })
+          .then(function (res) {
+            go.disabled = false;
+            if (res && res.error) { out.textContent = res.error.message || "Could not queue the test."; return; }
+            // Honest about which half is live: queued is not sent, and while the switch is
+            // off it will never be. Saying "sent" here would be the one lie that costs trust.
+            out.textContent = "Queued. It goes out on the next drain — and stays queued while sending is switched off.";
+            renderRecordNotify(s, fields);
+          });
+      });
+    });
+  }
+  // On the table: the last 50 messages whatever their state. During the queue-and-watch
+  // period before the WhatsApp API is live, this IS the dry run — every message that would
+  // have gone out, with the number it was addressed to.
+  // renderCustom runs on every keystroke in the search box, so the chip is refreshed once
+  // per table rather than once per render — a count of failed messages does not change while
+  // somebody types, and one read per letter typed would be a self-inflicted load.
+  var alertChipFor = null;
+  function refreshAlertLogChip(table, force) {
+    var chip = document.getElementById("custom-alertlog");
+    if (!chip || !table) return;
+    if (!alertRules(table).length || notifyTableMissing) { chip.style.display = "none"; return; }
+    if (!force && alertChipFor === table.id) return;
+    alertChipFor = table.id;
+    readOutbox({ table: table.id, limit: 50 }).then(function (rows) {
+      if (notifyTableMissing) { chip.style.display = "none"; return; }
+      var bad = rows.filter(function (r) { return r.status === "failed" || r.status === "skipped"; }).length;
+      var queued = rows.filter(function (r) { return r.status === "queued" || r.status === "sending"; }).length;
+      chip.style.display = "";
+      chip.className = "alertlog-chip" + (bad ? "" : " quiet");
+      chip.textContent = bad ? ("⚠ " + bad + " alert" + (bad === 1 ? "" : "s") + " not sent")
+        : (queued ? ("⏳ " + queued + " alert" + (queued === 1 ? "" : "s") + " waiting")
+                  : "Alert messages");
+    });
+  }
+  function openAlertLog(table) {
+    if (!table) return;
+    var body = document.getElementById("allog-body"), sub = document.getElementById("allog-sub");
+    document.getElementById("allog-msg").textContent = "";
+    sub.textContent = "Every alert message this form has produced, newest first.";
+    body.innerHTML = '<div class="nl-empty">Loading…</div>';
+    document.getElementById("alertlog-modal").classList.add("open");
+    var draw = function () {
+      readOutbox({ table: table.id, limit: 50 }).then(function (rows) {
+        body.innerHTML = rows.length
+          ? rows.map(function (r) { return notifyRowLineHtml(r, true); }).join("")
+          : '<div class="nl-empty">Nothing yet. A message appears here the moment an answer trips one of this form\u2019s alerts.</div>';
+        wireRetries(body, function () { draw(); refreshAlertLogChip(table, true); });
+      });
+    };
+    draw();
+    document.getElementById("allog-refresh").onclick = draw;
+  }
+  // ---- Notify on WhatsApp: compose here, choose who, send one at a time ----------
+  // Available on every record in every table, with or without an alert rule - the rule only
+  // decides whether the record shouts. The message stays editable before it is sent, because
+  // a rejected batch usually needs one line nobody could have templated.
+  var notifyCtx = null;   // { s: record, fields: [], rule: rule|null }
+  function waDigits(ph) { return String(ph || "").replace(/[^\d]/g, ""); }
+  // What the record says, in the order the form asks it. An upload is named, never linked: a
+  // signed R2 url dies in an hour, so pasting one into WhatsApp sends a link that is already
+  // dead by the time anybody taps it.
+  function notifyDefaultText(s, fields, rule) {
+    var d = s.data || {};
+    var t = currentCustom && currentCustom.table;
+    var lines = ["\u26a0 " + (rule ? alertLabel(rule) : "BLKTable") + (t && t.name ? " - " + t.name : ""), ""];
+    var shown = 0;
+    (fields || []).forEach(function (f) {
+      if (shown >= 8 || f.internal) return;
+      var v = d[f.id];
+      if (v == null || v === "") return;
+      var txt = isFileField(f) ? "(attached - open the record)" : customCellText(f, d);
+      if (txt === "\u2014") return;
+      if (String(txt).length > 70) txt = String(txt).slice(0, 67) + "\u2026";
+      lines.push(f.label + ": " + txt);
+      shown++;
+    });
+    lines.push("");
+    lines.push(recordNumber(s) + " \u00b7 " + fmtDate(s.created_at));
+    lines.push("Open it in BLKTable: https://blktable.blk.jo");
+    return lines.join("\n");
+  }
+  function notifyText(s, fields, rule) {
+    var tpl = rule && rule.template && String(rule.template).trim();
+    return tpl ? fillTemplate(tpl, s, fields) : notifyDefaultText(s, fields, rule);
+  }
+  function notifyRowHtml(c, i) {
+    return '<div class="na-row" data-i="' + i + '"><div class="na-who">' +
+      '<div class="na-name">' + esc(c.name || c.phone) + "</div>" +
+      (c.name ? '<div class="na-num">' + esc(c.phone) + "</div>" : "") +
+      '</div><button type="button" class="btn-wa na-send">Send</button></div>';
+  }
+  function openNotify(s, fields, rule) {
+    notifyCtx = { s: s, fields: fields, rule: rule || null };
+    var contacts = ((rule && rule.contacts) || []).filter(function (c) { return c && c.phone; });
+    document.getElementById("na-title").textContent = rule ? ("\u26a0 " + alertLabel(rule)) : "Send this record on WhatsApp";
+    document.getElementById("na-sub").textContent = contacts.length
+      ? "Edit the message if you need to, then send it to whoever should know. Each person is sent separately."
+      : "Edit the message if you need to, then type the number it goes to.";
+    document.getElementById("na-text").value = notifyText(s, fields, rule);
+    document.getElementById("na-list").innerHTML = contacts.map(notifyRowHtml).join("");
+    document.getElementById("na-other").value = "";
+    document.getElementById("na-msg").textContent = "";
+    [].slice.call(document.querySelectorAll("#na-list .na-send")).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var row = b.closest(".na-row");
+        var c = contacts[+row.getAttribute("data-i")];
+        if (notifySend(c.phone)) markNotified(row, c.name || c.phone);
+      });
+    });
+    document.getElementById("notify-modal").classList.add("open");
+  }
+  function markNotified(row, who) {
+    row.classList.add("sent");
+    var b = row.querySelector(".na-send");
+    if (b) { b.className = "linkbtn na-send"; b.textContent = "Send again"; }
+    if (!row.querySelector(".na-done")) row.insertAdjacentHTML("beforeend", '<span class="na-done">\u2713 opened</span>');
+    // Said plainly: the button opened WhatsApp, it did not prove delivery. Only the API phase
+    // can report that, and pretending otherwise would be the worst kind of comfort.
+    document.getElementById("na-msg").textContent = "WhatsApp opened for " + who + ". Press send there - this page cannot confirm it was delivered.";
+  }
+  function notifySend(ph) {
+    var digits = waDigits(ph);
+    if (digits.length < 8) { document.getElementById("na-msg").textContent = "That number does not look complete - include the country code, e.g. +962 7\u2026"; return false; }
+    var text = document.getElementById("na-text").value || "";
+    window.open("https://wa.me/" + digits + (text ? "?text=" + encodeURIComponent(text) : ""), "_blank");
+    return true;
+  }
+  function closeAlertLog() { document.getElementById("alertlog-modal").classList.remove("open"); }
+  document.getElementById("allog-close").addEventListener("click", closeAlertLog);
+  document.getElementById("allog-done").addEventListener("click", closeAlertLog);
+  document.getElementById("alertlog-modal").addEventListener("click", function (e) { if (e.target === this) closeAlertLog(); });
+  document.getElementById("custom-alertlog").addEventListener("click", function () {
+    if (currentCustom) openAlertLog(currentCustom.table);
+  });
+  function closeNotify() { document.getElementById("notify-modal").classList.remove("open"); notifyCtx = null; }
+  document.getElementById("na-close").addEventListener("click", closeNotify);
+  document.getElementById("na-done").addEventListener("click", closeNotify);
+  document.getElementById("notify-modal").addEventListener("click", function (e) { if (e.target === this) closeNotify(); });
+  document.getElementById("na-other-send").addEventListener("click", function () {
+    var inp = document.getElementById("na-other");
+    var num = inp.value.trim();
+    if (!notifySend(num)) return;
+    // The number joins the list, so a second person can be sent the same message without
+    // retyping the first, and so this session shows who has already been opened.
+    var list = document.getElementById("na-list");
+    list.insertAdjacentHTML("beforeend", notifyRowHtml({ phone: num }, -1));
+    var row = list.lastElementChild;
+    row.querySelector(".na-send").addEventListener("click", function () { if (notifySend(num)) markNotified(row, num); });
+    markNotified(row, num);
+    inp.value = "";
+  });
+  document.getElementById("na-copy").addEventListener("click", function () {
+    var b = this, text = document.getElementById("na-text").value || "";
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = "Copied \u2713"; setTimeout(function () { b.textContent = "Copy message"; }, 1600);
+      }).catch(function () { window.prompt("Copy this message:", text); });
+    } else { window.prompt("Copy this message:", text); }
+  });
   function deleteCasting(c) {
     if (!window.confirm("Delete this entry for " + (c.full_name || "this person") + "? This can't be undone.")) return;
     var done = function () { castingRows = castingRows.filter(function (x) { return x.id !== c.id; }); renderCasting(); };
@@ -4172,6 +4514,178 @@
       var id = r.getAttribute("data-layer-id") || ("L" + (i + 1) + "-" + Math.random().toString(36).slice(2, 6));
       return { id: id, type: r.querySelector(".ly-type").value, label: r.querySelector(".ly-label").value.trim() || null };
     });
+  }
+  // ---- Builder: alerts editor -------------------------------------------------
+  // Three things a person sets, and nothing else: WHICH question, WHICH answer, and WHO
+  // hears about it. Everything else about an alert is worked out.
+  //
+  // The pickers name questions by id (never by label), so renaming a question later cannot
+  // quietly break an alert — which matters more here than anywhere else in the builder,
+  // because a broken alert is silent by nature: nothing arrives, and nothing says why.
+  var bldAlertFields = [];       // the saved questions, filled in when the editor loads them
+  var WA_LANGS = [["en", "English"], ["ar", "العربية"], ["en_US", "English (US)"], ["ar_JO", "العربية (الأردن)"]];
+  function bldFieldOptionsHtml(selected, extra) {
+    var out = extra ? '<option value="__text">— fixed text —</option>' : '<option value="">— choose a question —</option>';
+    bldAlertFields.forEach(function (f) {
+      out += '<option value="' + esc(f.id) + '"' + (f.id === selected ? " selected" : "") + ">" +
+        esc(f.label || "(untitled)") + "</option>";
+    });
+    return out;
+  }
+  // "Ahmad - QC, +962791234567" per line. Split on the LAST comma, because a name can
+  // contain one and a number cannot.
+  function parseContactLines(text) {
+    var list = [], bad = [];
+    String(text || "").split(/\r?\n/).forEach(function (line) {
+      var t = line.trim();
+      if (!t) return;
+      var cut = t.lastIndexOf(",");
+      var name = cut === -1 ? "" : t.slice(0, cut).trim();
+      var phone = (cut === -1 ? t : t.slice(cut + 1)).trim();
+      if (waDigits(phone).length < 8) { bad.push(t); return; }
+      list.push({ name: name || null, phone: phone });
+    });
+    return { list: list, bad: bad };
+  }
+  function contactLinesText(list) {
+    return (list || []).map(function (c) {
+      return (c.name ? c.name + ", " : "") + (c.phone || "");
+    }).join("\n");
+  }
+  function renumberAlertParams(box) {
+    [].slice.call(box.querySelectorAll(".al-p .ap-n")).forEach(function (n, i) { n.textContent = "{{" + (i + 1) + "}}"; });
+  }
+  function addAlertParamRow(box, spec) {
+    spec = spec || {};
+    var row = document.createElement("div"); row.className = "al-p";
+    var isText = spec.text != null;
+    row.innerHTML = '<span class="ap-n"></span><select class="ap-field">' +
+      bldFieldOptionsHtml(spec.field, true) + '</select>' +
+      '<input class="ap-text" placeholder="Fixed text" style="display:none;">' +
+      '<button type="button" class="rm" title="Remove">✕</button>';
+    var sel = row.querySelector(".ap-field"), txt = row.querySelector(".ap-text");
+    if (isText) { sel.value = "__text"; txt.value = spec.text || ""; }
+    function syncKind() { txt.style.display = sel.value === "__text" ? "" : "none"; }
+    syncKind(); sel.addEventListener("change", syncKind);
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); renumberAlertParams(box); });
+    box.appendChild(row); renumberAlertParams(box);
+    return row;
+  }
+  function addAlertRow(data) {
+    data = data || {};
+    var send = data.send || null;
+    var row = document.createElement("div"); row.className = "bld-alert";
+    if (data.id) row.setAttribute("data-alert-id", data.id);
+    var langOpts = WA_LANGS.map(function (l) {
+      return '<option value="' + l[0] + '"' + ((send && send.lang) === l[0] ? " selected" : "") + ">" + esc(l[1]) + "</option>";
+    }).join("");
+    row.innerHTML =
+      '<div class="al-row">' +
+        '<select class="al-field">' + bldFieldOptionsHtml(data.field) + "</select>" +
+        '<input class="al-values" placeholder="becomes… e.g. Rejected, مرفوض">' +
+        '<input class="al-label" placeholder="Name of the alert">' +
+        '<button type="button" class="rm" title="Remove this alert">Remove</button>' +
+      "</div>" +
+      '<textarea class="al-tpl" placeholder="Message for the Notify button — use {Question name} to drop an answer in, e.g. Batch {Batch #} of {Product name} was rejected"></textarea>' +
+      '<textarea class="al-contacts" placeholder="People to offer on the Notify button — one per line: Ahmad - QC, +962791234567"></textarea>' +
+      '<label class="al-auto-lbl"><input type="checkbox" class="al-auto"> Send it automatically on WhatsApp</label>' +
+      '<div class="al-auto-box" style="display:none;">' +
+        '<div class="al-row">' +
+          '<input class="al-tmpl" placeholder="Approved template name, e.g. qc_result_rejected_v1" style="flex:2 1 220px;">' +
+          '<select class="al-lang" style="flex:1 1 120px;">' + langOpts + "</select>" +
+        "</div>" +
+        '<p class="al-hint">WhatsApp only allows a message the business starts if Meta has approved its wording. The values below fill its {{1}}, {{2}} … in order.</p>' +
+        '<div class="al-params"></div>' +
+        '<button type="button" class="linkbtn al-add-p">＋ Add a value</button>' +
+        '<textarea class="al-to" placeholder="Send to — one per line: Ahmad - QC, +962791234567"></textarea>' +
+        '<div class="al-sm">' +
+          '<label>don\u2019t repeat within <input type="number" class="al-dedupe" min="0" max="10080"> minutes</label>' +
+          '<label>ignore records older than <input type="number" class="al-stale" min="0" max="3650"> days</label>' +
+        "</div>" +
+        '<p class="al-hint al-state"></p>' +
+      "</div>";
+    row.querySelector(".al-values").value = (data.equals || []).join(", ");
+    row.querySelector(".al-label").value = data.label || "";
+    row.querySelector(".al-tpl").value = data.template || "";
+    row.querySelector(".al-contacts").value = contactLinesText(data.contacts);
+    var auto = row.querySelector(".al-auto"), box = row.querySelector(".al-auto-box");
+    var params = row.querySelector(".al-params");
+    row.querySelector(".al-tmpl").value = (send && send.template) || "";
+    row.querySelector(".al-to").value = contactLinesText(send && send.to && send.to.numbers);
+    row.querySelector(".al-dedupe").value = (send && send.dedupe_minutes != null) ? send.dedupe_minutes : 60;
+    row.querySelector(".al-stale").value = (send && send.stale_days != null) ? send.stale_days : 30;
+    ((send && send.params) || []).forEach(function (spec) { addAlertParamRow(params, spec); });
+    // A rule that sends by branch is set in SQL, not here — but it must survive a save
+    // made from this editor, so it is carried on the row rather than dropped.
+    if (send && send.to && send.to.by_branch) row.setAttribute("data-by-branch", JSON.stringify(send.to.by_branch));
+    auto.checked = !!(send && send.template);
+    function syncAuto() { box.style.display = auto.checked ? "" : "none"; }
+    syncAuto(); auto.addEventListener("change", syncAuto);
+    row.querySelector(".al-add-p").addEventListener("click", function () { addAlertParamRow(params); });
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); });
+    document.getElementById("bld-alerts").appendChild(row);
+    return row;
+  }
+  function renderAlertRows(table) {
+    var host = document.getElementById("bld-alerts");
+    if (!host) return;
+    host.innerHTML = "";
+    alertRules(table).forEach(function (r) { addAlertRow(r); });
+  }
+  // Serializing is where a half-finished rule is caught. A rule with no question or no
+  // trip value is dropped rather than saved as one that can never fire, and a number that
+  // is not a number is reported instead of being silently thrown away.
+  function serializeAlerts(problems) {
+    return [].slice.call(document.querySelectorAll("#bld-alerts .bld-alert")).map(function (r, i) {
+      var field = r.querySelector(".al-field").value;
+      var equals = r.querySelector(".al-values").value.split(",").map(function (x) { return x.trim(); })
+        .filter(function (x) { return !!x; });
+      var label = r.querySelector(".al-label").value.trim();
+      if (!field || !equals.length) {
+        if (field || equals.length || label) problems.push("Alert " + (i + 1) + " needs both a question and the answer that trips it.");
+        return null;
+      }
+      var contacts = parseContactLines(r.querySelector(".al-contacts").value);
+      contacts.bad.forEach(function (b) { problems.push("Alert " + (i + 1) + ": “" + b + "” has no usable number."); });
+      var out = {
+        id: r.getAttribute("data-alert-id") || ("A" + (i + 1) + "-" + Math.random().toString(36).slice(2, 6)),
+        field: field, equals: equals, label: label || "Alert",
+        template: r.querySelector(".al-tpl").value.trim() || null,
+        contacts: contacts.list,
+      };
+      if (r.querySelector(".al-auto").checked) {
+        var tmpl = r.querySelector(".al-tmpl").value.trim();
+        var to = parseContactLines(r.querySelector(".al-to").value);
+        to.bad.forEach(function (b) { problems.push("Alert " + (i + 1) + " (automatic): “" + b + "” has no usable number."); });
+        var byBranch = null;
+        try { byBranch = JSON.parse(r.getAttribute("data-by-branch") || "null"); } catch (e) { byBranch = null; }
+        if (!tmpl) {
+          problems.push("Alert " + (i + 1) + " is set to send automatically but has no approved template name.");
+        } else if (!to.list.length && !byBranch) {
+          problems.push("Alert " + (i + 1) + " is set to send automatically but has nobody to send to.");
+        } else {
+          var specs = [].slice.call(r.querySelectorAll(".al-params .al-p")).map(function (pr) {
+            var v = pr.querySelector(".ap-field").value;
+            if (v === "__text") {
+              var t = pr.querySelector(".ap-text").value.trim();
+              return t ? { text: t } : null;
+            }
+            return v ? { field: v } : null;
+          }).filter(Boolean);
+          var toObj = { numbers: to.list };
+          if (byBranch) toObj.by_branch = byBranch;
+          out.send = {
+            template: tmpl,
+            lang: r.querySelector(".al-lang").value || "en",
+            params: specs,
+            to: toObj,
+            dedupe_minutes: Math.max(0, parseInt(r.querySelector(".al-dedupe").value, 10) || 0),
+            stale_days: Math.max(0, parseInt(r.querySelector(".al-stale").value, 10) || 0),
+          };
+        }
+      }
+      return out;
+    }).filter(Boolean);
   }
   // Built-in forms (Job Applications, Casting) can carry admin-added extra questions
   var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
@@ -4700,6 +5214,7 @@
       (partial ? ("showing " + pool.length + " of " + scopeTotal)
                : (pool.length + (pool.length === 1 ? " entry" : " entries"))) +
       slotCountText(pool);
+    refreshAlertLogChip(currentCustom.table);
     var summary = summaryFields(currentCustom.table, fields);
     // What the cards wear, from the "Customize cards" panel: which file question is the cover
     // (none is a valid answer, and the old config.card_no_cover flag still means none), whether
@@ -4848,10 +5363,11 @@
       // kebab lands in the left slot and reads as a stray button. A row has no slots.
       var actions = '<div class="card-actions">' +
         (kcards ? '<span class="slot"></span>' + (moveHtml || "<span></span>") : moveHtml) +
-        recMenuHtml(tableActions.concat(slotActions(s, mayManageTbl)), mayManageTbl) + "</div>";
+        recMenuHtml(tableActions.concat(slotActions(s, mayManageTbl), notifyActions(currentCustom.table, s)), mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       tag += flagTagHtml(currentCustom.table, d);
+      tag += alertTagHtml(currentCustom.table, d);
       var tint = cardTint(d, fields);
       var el = document.createElement("div");
       // The title is the record's own name; the shop and the record number sit under it
@@ -4901,11 +5417,15 @@
       }
       wireStar(el, currentCustom.table.id, s.id);
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
-      var menuActions = tableActions.concat(slotActions(s, mayManageTbl));
+      var menuActions = tableActions.concat(slotActions(s, mayManageTbl), notifyActions(currentCustom.table, s));
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); },
         // A place move is not a WhatsApp/Call/Email template, so it is intercepted before the
         // template dispatcher rather than taught to it.
-        function (a) { if (a && a.type === "slot") moveSignup(s, a.slot, fields); else doRecordAction(a, s, fields); },
+        function (a) {
+          if (a && a.type === "slot") moveSignup(s, a.slot, fields);
+          else if (a && a.type === "notify") openNotify(s, fields, a.rule);
+          else doRecordAction(a, s, fields);
+        },
         menuActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
       kcont.appendChild(el);
@@ -5040,6 +5560,75 @@
     if (!hit) return "";
     return '<span class="flag-tag" title="' + esc(fl.label || "Flagged") + '">' +
       esc(fl.label || "Flagged") + "</span>";
+  }
+  // ---- Alerts: an answer somebody has to be TOLD about --------------------------
+  // Declared per table, so nothing here is Kitchen-food-safety-specific:
+  //
+  //   config.alerts = [ { field: '<field id>', equals: ['Rejected'],
+  //                       label: 'Rejected batch', template: '... {Product name} ...',
+  //                       contacts: [ { name: 'Ahmad - QC', phone: '+9627...' } ] } ]
+  //
+  // A flag (config.flag) marks a record worth noticing. An alert carries the same idea one
+  // step further: it also holds the message and the people, because "Rejected" only matters
+  // if somebody hears about it.
+  //
+  // Sending is deliberately a person pressing a button: WhatsApp opens with the message
+  // already written and they choose who receives it. Nothing leaves by itself until the
+  // WhatsApp API is in place (whatsapp/WHATSAPP-API-REQUEST.md, private folder).
+  function alertRules(table) {
+    var a = table && table.config && table.config.alerts;
+    return Array.isArray(a) ? a : [];
+  }
+  // A multi-select answer arrives as an array and an "other" answer as free text, so the
+  // match is over every part of the answer rather than over the whole of it as one string.
+  function answerHits(v, wants) {
+    if (v == null || v === "" || !wants || !wants.length) return false;
+    var parts = Array.isArray(v) ? v : String(v).split(",");
+    return parts.some(function (part) {
+      var pt = String(part).trim().toLowerCase();
+      if (!pt) return false;
+      return wants.some(function (w) { return String(w).trim().toLowerCase() === pt; });
+    });
+  }
+  function alertsFor(table, d) {
+    return alertRules(table).filter(function (r) {
+      return r && r.field && answerHits((d || {})[r.field], r.equals || []);
+    });
+  }
+  function alertLabel(r) { return (r && r.label) || "Alert"; }
+  function alertTagHtml(table, d) {
+    return alertsFor(table, d).map(function (r) {
+      return '<span class="alert-tag" title="Somebody needs to be told about this">&#9888; ' +
+        esc(alertLabel(r)) + "</span>";
+    }).join("");
+  }
+  // The record menu carries one entry per matched alert, and - on a record that matched
+  // nothing - a plain one, so any record in any table can be sent to somebody with no rule.
+  function notifyActions(table, s) {
+    var hits = alertsFor(table, (s || {}).data);
+    if (hits.length) {
+      return hits.map(function (r) { return { type: "notify", rule: r, label: "\u26a0 Notify: " + alertLabel(r) }; });
+    }
+    return [{ type: "notify", rule: null, label: "\ud83d\udcac Notify on WhatsApp" }];
+  }
+  // The banner on the record itself. One per matched rule, each with its own button, so a
+  // record that trips two rules does not collapse into one ambiguous "notify".
+  function alertBannerHtml(table, s) {
+    return alertsFor(table, (s || {}).data).map(function (r, i) {
+      var to = ((r.contacts || []).filter(function (c) { return c && c.phone; })).length;
+      return '<div class="rec-alert"><div class="ra-txt">' +
+        '<div class="ra-h">&#9888; ' + esc(alertLabel(r)) + "</div>" +
+        '<div class="ra-s">' + (to ? (to === 1 ? "1 contact is saved for this alert." : to + " contacts are saved for this alert.")
+                                   : "No contacts saved yet - you can type any number.") +
+        ' Nothing is sent until you press send.</div></div>' +
+        '<button type="button" class="btn-wa ra-go" data-ai="' + i + '">Notify on WhatsApp</button></div>';
+    }).join("");
+  }
+  function wireAlertBanner(s, fields) {
+    var hits = alertsFor(currentCustom && currentCustom.table, (s || {}).data);
+    [].slice.call(document.querySelectorAll("#modal-body .ra-go")).forEach(function (b) {
+      b.addEventListener("click", function () { openNotify(s, fields, hits[+b.getAttribute("data-ai")] || null); });
+    });
   }
   function scoreChipHtml(n) {
     return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' +
@@ -6649,7 +7238,8 @@
     if (!String(recTitle).trim()) recTitle = recBranch || "Record";
     var scoreHead = '<div class="rec-head">' +
       '<div class="rh-main"><div class="rh-title">' + esc(recTitle) +
-        flagTagHtml(currentCustom ? currentCustom.table : null, d) + " " +
+        flagTagHtml(currentCustom ? currentCustom.table : null, d) +
+        alertTagHtml(currentCustom ? currentCustom.table : null, d) + " " +
         (slotPillHtml(s) || phasePillHtml(parentPhase(currentCustom && currentCustom.table, s, kidCountsFor(s.id)))) + "</div>" +
       '<div class="rh-meta">' + esc(recordNumber(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
       (recBranch && String(recBranch).trim() !== String(recTitle).trim() ? " · " + esc(recBranch) : "") +
@@ -6754,10 +7344,11 @@
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
       // the header already carries the number, the date and the shop
-      body.innerHTML = scoreHead +
+      body.innerHTML = scoreHead + alertBannerHtml(currentCustom && currentCustom.table, s) +
         '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
-        '<div id="cd-kids"></div>' + moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
-      wireMoreLine(s, fields); wireLinkChips();
+        '<div id="cd-kids"></div>' + moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>' +
+        '<div id="cd-notify"></div>';
+      wireMoreLine(s, fields); wireLinkChips(); wireAlertBanner(s, fields); renderRecordNotify(s, fields);
       loadChildRows(s, childTableOf(currentCustom && currentCustom.table));
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
       document.getElementById("modal").classList.add("open");
@@ -6776,7 +7367,8 @@
     // link block, which is the permission record_share_token enforces anyway.
     var kidT = (currentCustom && currentCustom.table) ? childTableOf(currentCustom.table) : null;
     var childT = (kidT && canManage(currentCustom.table.id)) ? kidT : null;
-    body.innerHTML = scoreHead + recordLinkBlockHtml(childT) + '<div id="cd-kids"></div>' +
+    body.innerHTML = scoreHead + alertBannerHtml(currentCustom && currentCustom.table, s) +
+      recordLinkBlockHtml(childT) + '<div id="cd-kids"></div>' +
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub"><span id="ed-status" class="ed-status"></span></div>' +
@@ -6786,8 +7378,9 @@
       // review them. The header's own photo is skipped so it is not shown twice.
       '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d, photoPath ? photoFieldId : null) +
       moreLineHtml(d) +
-      '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
-    wireMoreLine(s, fields); wireLinkChips();
+      '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>' +
+      '<div id="cd-notify"></div>';
+    wireMoreLine(s, fields); wireLinkChips(); wireAlertBanner(s, fields); renderRecordNotify(s, fields);
     fillRecordLink(s, childT);
     loadChildRows(s, kidT);
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
@@ -7596,6 +8189,7 @@
   var builderMode = "create";   // "create" | "edit"
   var editingTableId = null;
   var editingFieldIds = [];      // field ids that existed when the editor opened
+  var editingTableConfig = null;  // the config it opened with, so a save merges instead of replacing
   // The editor is one widget with two homes: the builder modal (creating a table) and a
   // Form tab (editing one). The whole body is MOVED between them rather than copied — that
   // is why bld-name, bld-fields, bld-stages and the rest mean the same thing in both places,
@@ -7758,6 +8352,10 @@
     var sw = document.getElementById("bld-stages-wrap"); if (sw) sw.style.display = isBuiltin ? "none" : "";
     var aw = document.getElementById("bld-actions-wrap"); if (aw) aw.style.display = isBuiltin ? "none" : "";
     var lw = document.getElementById("bld-layers-wrap"); if (lw) lw.style.display = isBuiltin ? "none" : "";
+    // An alert names a question by id, and a form being created has no saved questions to
+    // name yet — so it is offered when editing, where the ids exist.
+    var alw = document.getElementById("bld-alerts-wrap"); if (alw) alw.style.display = (mode === "edit") ? "" : "none";
+    if (isCreate) { bldAlertFields = []; var ah = document.getElementById("bld-alerts"); if (ah) ah.innerHTML = ""; }
     var del = document.getElementById("bld-delete"); if (del) del.style.display = (mode === "edit") ? "inline-block" : "none";
     var fdel = document.getElementById("fform-delete"); if (fdel) fdel.style.display = (mode === "edit") ? "inline-block" : "none";
   }
@@ -7881,7 +8479,7 @@
   function openBuiltinEdit(formKey, msgEl) {
     var msg = msgEl || document.getElementById("bld-msg");
     builtinEditKey = formKey;
-    editingTableId = BUILTIN_PLACEHOLDER[formKey]; editingFieldIds = [];
+    editingTableId = BUILTIN_PLACEHOLDER[formKey]; editingFieldIds = []; editingTableConfig = null;
     setBuilderChrome("builtin", builtinName(formKey));
     document.getElementById("bld-builtin-note").innerHTML = "";
     document.getElementById("bld-name").value = builtinName(formKey);
@@ -7892,6 +8490,7 @@
     return db.from("app_tables").select("name,name_ar,config").eq("id", editingTableId).single().then(function (cRes) {
       var row = (cRes && cRes.data) || {};
       var cfg = row.config || {};
+      editingTableConfig = cfg;
       builtinTable[formKey] = { id: editingTableId, name: row.name, name_ar: row.name_ar, config: cfg };
       document.getElementById("bld-name").value = builtinName(formKey);
       document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
@@ -7911,7 +8510,7 @@
     useBuilderHost();               // claim the editor back from any Form tab it is sitting in
     formEditFor = null;             // and make that tab reload it rather than show an empty box
     builtinEditKey = null;
-    editingTableId = null; editingFieldIds = [];
+    editingTableId = null; editingFieldIds = []; editingTableConfig = null;
     setBuilderChrome("create");
     document.getElementById("bld-msg").textContent = "";
     var d = loadDraft();
@@ -7949,6 +8548,7 @@
     var msg = msgEl || document.getElementById("bld-msg");
     builtinEditKey = null;
     editingTableId = table.id; editingFieldIds = [];
+    editingTableConfig = table.config || {};
     setBuilderChrome("edit");
     msg.textContent = "Loading…";
     document.getElementById("bld-name").value = table.name || "";
@@ -7965,6 +8565,11 @@
     return db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
+      // An alert points at a question by id, so its pickers can only be built once the
+      // questions are known — which is why the rows are filled in here and not with the
+      // stages and actions above.
+      bldAlertFields = fields.slice();
+      renderAlertRows(table);
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
@@ -7992,6 +8597,7 @@
   document.getElementById("bld-add-stage").addEventListener("click", function () { addStageRow(); });
   document.getElementById("bld-add-action").addEventListener("click", function () { addActionRow(); });
   document.getElementById("bld-add-layer").addEventListener("click", function () { addLayerRow(); });
+  document.getElementById("bld-add-alert").addEventListener("click", function () { addAlertRow(); });
   // ---- Delete whole table (admin, math-gated) ----
   var delTableId = null, delTableAns = 0;
   function openDeleteTable(id, name) {
@@ -8127,12 +8733,26 @@
     var toDelete = editingFieldIds.filter(function (id) { return keptIds.indexOf(id) === -1; });
     var toInsert = [];
     var tableUpdate = { name: name, name_ar: nameAr || null };
+    // config is MERGED, never replaced. The editor writes five keys; a table's config also
+    // holds parent, flag, capacity, scoring, card layout, column order, filters, payroll,
+    // colour and icon — set elsewhere in the app or in SQL. Replacing the object wiped all
+    // of them every time somebody edited a question, silently, and an alert rule with the
+    // numbers in it would have been the next thing to go.
+    var prevCfg = editingTableConfig || {};
     if (builderMode === "builtin") {
       var hidden = [];
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
-      tableUpdate.config = { hidden: hidden, intro: serializeIntro() };
+      tableUpdate.config = Object.assign({}, prevCfg, { hidden: hidden, intro: serializeIntro() });
     } else {
-      tableUpdate.config = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() };
+      var alertProblems = [];
+      var alerts = serializeAlerts(alertProblems);
+      // A rule that cannot fire, or a number nobody can be reached on, is worth stopping
+      // for: the whole point of an alert is that somebody hears about it.
+      if (alertProblems.length) { msg.set(alertProblems[0], "err"); return; }
+      tableUpdate.config = Object.assign({}, prevCfg, {
+        statuses: serializeStages(), actions: serializeActions(),
+        layers: serializeLayers(), intro: serializeIntro(), alerts: alerts,
+      });
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {

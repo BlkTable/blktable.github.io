@@ -82,9 +82,16 @@ t('every action carries a label, so the menu never renders a blank row', () => {
 });
 t('a place move is intercepted before the WhatsApp/Call/Email dispatcher', () => {
   // it is carried as an ordinary record action to reuse the menu, so the handler MUST branch
-  // on the type or "Move to backup" would try to send a message
-  assert.ok(/if \(a && a\.type === "slot"\) moveSignup\(s, a\.slot, fields\); else doRecordAction/.test(SRC),
+  // on the type or "Move to backup" would try to send a message. Notify (2026-08-18) rides in
+  // the same menu the same way, so the check is on the ORDER of the branches rather than on
+  // one exact line — adding a third pseudo-action must not be able to silently reorder them.
+  const m = SRC.match(/function \(a\) \{[\s\S]{0,400}?doRecordAction\(a, s, fields\);/);
+  assert.ok(m, 'the record-menu dispatcher was not found');
+  const body = m[0], send = body.indexOf('doRecordAction');
+  assert.ok(body.includes('a.type === "slot"') && body.indexOf('a.type === "slot"') < send,
     'the slot action is not intercepted before doRecordAction');
+  assert.ok(body.includes('a.type === "notify"') && body.indexOf('a.type === "notify"') < send,
+    'the notify action is not intercepted before doRecordAction');
 });
 
 // ---- the count line ----
