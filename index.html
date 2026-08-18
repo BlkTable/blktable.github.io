@@ -353,6 +353,10 @@
   /* A video answer has no thumbnail to paint, so the cover says "video" rather than sitting empty. */
   .ja-card .photo.is-video { color: var(--silver-lo); background: var(--bg-3); }
   .ja-card .photo.is-file { color: var(--silver-lo); background: var(--bg-3); }
+  /* Airtable's two cover shapes: crop fills the square and loses the edges, fit shows the
+     whole picture and leaves ground around it. A receipt or an ID photographed portrait is
+     unreadable cropped, which is why the shape is a choice and not a constant. */
+  .ja-card .photo.fit { background-size: contain; }
   /* per-record ⋯ actions menu */
   .rec-menu { position: relative; flex: 0 0 auto; }
   .ja-card .card-actions { justify-content: center; }
@@ -1116,9 +1120,31 @@
   .cols-panel.open { display: block; }
   .cols-panel label { display: flex; gap: 8px; align-items: center; padding: 5px 4px; font-weight: 400;
     font-size: var(--fs-3); cursor: pointer; margin: 0; }
+  /* `input` is styled page-wide at width:100% for the form fields, which inside a flex label
+     stretches a tick box to the width of the panel and shoves its wording to the far right.
+     Every panel on this toolbar reads that way today; a tick box is 13px wide, always. */
+  .cols-panel input[type="checkbox"], .cols-panel input[type="radio"] { width: auto; flex: 0 0 auto; }
   .cols-panel label:hover { background: rgba(255,255,255,0.05); border-radius: 6px; }
   .cols-panel .cols-head { display: flex; justify-content: space-between; align-items: center; gap: 8px;
     margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  /* Customize cards: a chosen field is a row, so its reorder arrows sit at the end of it.
+     The arrows appear only on the chosen ones — order means nothing for a field that is off. */
+  .card-fld { display: flex; align-items: center; gap: 6px; }
+  .card-fld label { flex: 1 1 auto; min-width: 0; }
+  /* Only the field's own name is allowed to run out of room; the title tag beside it is two
+     inches of meaning and must not be the thing that gets clipped to "T...". */
+  .cf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card-fld label > *:not(.cf-name) { flex: 0 0 auto; }
+  .card-ord { flex: 0 0 auto; display: flex; gap: 2px; }
+  .card-ord .linkbtn { padding: 1px 6px; font-size: var(--fs-1); line-height: 1.4; }
+  .card-ord .linkbtn[disabled] { opacity: 0.3; cursor: default; }
+  .card-title-tag { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+  .card-fit { display: flex; gap: 6px; margin: 6px 0 2px; }
+  .card-fit .linkbtn { padding: 3px 10px; }
+  /* the shape in use is marked, because Crop and Fit look identical on a card with no picture yet */
+  .cols-panel .linkbtn.on { color: var(--text); border-color: var(--silver); background: rgba(255,255,255,0.06); }
+  .card-names { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px !important; }
   /* per-form ⋯ menu (sidebar) */
   #form-menu { position: fixed; z-index: 300; min-width: 190px; margin: 0; padding: 6px; list-style: none;
     background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;
@@ -1534,6 +1560,15 @@
                  dropped in the toolbar rewrite, which lost Cards and List entirely. -->
             <div class="seg viewtoggle" id="custom-viewtoggle"><button type="button" data-v="cards">Cards</button><button type="button" data-v="list">List</button><button type="button" data-v="table" class="active">Grid</button></div>
             <div class="tb-sep"></div>
+            <!-- Cards and List draw a record from a handful of fields; this is where those are
+                 chosen, the way Airtable's gallery has "Customize cards". Hidden in the grid,
+                 which has its own column picker beside it. -->
+            <div class="cols-wrap" id="card-wrap" style="display:none;">
+              <button class="tb-btn" id="card-btn" type="button" title="Choose the cover picture and the fields a card shows">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 14l4-4 4 4 3-3 4 4"></path><circle cx="9" cy="8" r="1.4"></circle></svg>Customize cards
+              </button>
+              <div class="cols-panel" id="card-panel"></div>
+            </div>
             <div class="cols-wrap" id="cols-wrap" style="display:none;">
               <button class="tb-btn" id="cols-btn" type="button" title="Show or hide fields">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.5"></circle><path d="M4 20L20 4"></path></svg>Hide fields
@@ -3988,10 +4023,13 @@
   // A card cover for one uploaded answer. An image gets the usual lazily-painted thumbnail;
   // a video gets a play mark, because it has no thumbnail to paint and an empty grey box
   // reads as a card that failed to load rather than a card holding a video.
-  function coverHtml(path) {
+  // `fit` is the cover shape chosen for the table — "crop" (the default, and what every card
+  // did before this) or "fit". It only means anything for an image: the play mark and the file
+  // mark are centred glyphs with nothing to crop.
+  function coverHtml(path, fit) {
     return isVideoPath(path) ? '<div class="photo is-video">' + PLAY_SVG + "</div>"
       : !isImagePath(path) ? '<div class="photo is-file">' + FILE_SVG + "</div>"
-      : '<div class="photo"></div>';
+      : '<div class="photo' + (fit === "fit" ? " fit" : "") + '"></div>';
   }
   // The same two ceilings the public form uses, and for the same reason: a video is a
   // different order of size from a photo. Both are enforced again in the r2 edge function —
@@ -4610,8 +4648,11 @@
                : (pool.length + (pool.length === 1 ? " entry" : " entries"))) +
       slotCountText(pool);
     var summary = summaryFields(currentCustom.table, fields);
-    // config.card_no_cover opts a table out of the photo cover entirely (e.g. Complaints, where most records have no screenshot).
-    var photoField = (currentCustom.table.config && currentCustom.table.config.card_no_cover) ? null : fields.filter(isFileField)[0];
+    // What the cards wear, from the "Customize cards" panel: which file question is the cover
+    // (none is a valid answer, and the old config.card_no_cover flag still means none), whether
+    // it is cropped or fitted, and whether field names show above the answers.
+    var cardCfg = cardPrefs(currentCustom.table, fields);
+    var photoField = cardCfg.cover ? fields.filter(function (f) { return f.id === cardCfg.cover; })[0] : null;
     // pipeline tabs
     if (stages.length) {
       if (!currentCustom.stage || !stages.some(function (x) { return x.key === currentCustom.stage; })) currentCustom.stage = stages[0].key;
@@ -4652,10 +4693,14 @@
     if (sortWrap) sortWrap.style.display = "";        // sort is available in all views
     var colorWrap = document.getElementById("color-wrap");
     if (colorWrap) colorWrap.style.display = customView === "table" ? "none" : ""; // color tints cards/rows
+    // Cards and List are both drawn from the chosen fields, so both get the panel; the grid
+    // shows every column and has "Hide fields" instead.
+    var cardWrap = document.getElementById("card-wrap");
+    if (cardWrap) cardWrap.style.display = customView === "table" ? "none" : "";
     var rowhBtn = document.getElementById("rowh-btn");
     if (rowhBtn) rowhBtn.style.display = customView === "table" ? "" : "none"; // row height is a grid idea
     renderSortPanel(currentCustom.table, fields);
-    if (customView !== "table") renderColorPanel(currentCustom.table, fields);
+    if (customView !== "table") { renderColorPanel(currentCustom.table, fields); renderCardPanel(currentCustom.table, fields); }
     updateSortLabel();
     var expBtn = document.getElementById("custom-export");
     if (expBtn) {
@@ -4711,14 +4756,18 @@
           return true;
         })
         .map(function (f) {
+          // With field names off the answers stand alone, the way an Airtable card does when
+          // you switch "Show field names" off — the label div is left out rather than hidden,
+          // so the gap it occupied goes with it.
+          var kHtml = cardCfg.labels ? '<div class="k">' + esc(f.label) + '</div>' : '';
           if (f.id === "__branch" || f.id === "__created") {
             var pv = f.id === "__branch" ? branchPillHtml(s.branch) : esc(fmtDate(s.created_at));
-            return '<div class="rec-fld"><div class="k">' + esc(f.label) + '</div>' +
+            return '<div class="rec-fld">' + kHtml +
               '<div class="v">' + pv + '</div></div>';
           }
           var v = cellValueHtml(f, d, s);
           var isLong = f.type === "long_text";
-          return '<div class="rec-fld"><div class="k">' + esc(f.label) + '</div>' +
+          return '<div class="rec-fld">' + kHtml +
             '<div class="v' + (isLong ? ' clamp3' : '') + (hasArabic(customCellText(f, d)) ? ' rtl' : '') + '">' + v + '</div></div>';
         }).join("");
       // Cards get the score as a labelled figure, rows keep the compact chip: a 34px
@@ -4776,7 +4825,7 @@
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
         if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
         el.innerHTML =
-          (photoField && d[photoField.id] ? coverHtml(d[photoField.id]) : '') +
+          (photoField && d[photoField.id] ? coverHtml(d[photoField.id], cardCfg.fit) : '') +
           '<div class="body" style="text-align:left">' +
             threadHtml + headHtml + fldsHtml +
             '<div class="card-foot">' + (scoreStat || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
@@ -5471,6 +5520,129 @@
   }
   var customColorField = null;
   function colorableCols(fields) { return fields.filter(function (f) { return isChoiceField(f) || f.type === 'yesno'; }); }
+  // The panel itself: cover, cover shape, which fields and in what order, field names.
+  // The chosen fields are listed in their chosen order with arrows, because the order is
+  // meaningful — the first one is the card's title, the way Airtable's primary field is.
+  function renderCardPanel(t, fields) {
+    var panel = document.getElementById("card-panel");
+    if (!panel || !t) return;
+    var p = cardPrefs(t, fields);
+    var files = (fields || []).filter(isFileField);
+    var all = cardChoosable(fields);
+    var chosen = summaryFields(t, fields).map(function (f) { return f.id; });
+    var rest = all.filter(function (f) { return chosen.indexOf(f.id) === -1; });
+    var label = function (id) {
+      var f = all.filter(function (x) { return x.id === id; })[0];
+      return f ? f.label : id;
+    };
+    var coverBlock = !files.length ? "" :
+      '<div class="cols-head"><b>Cover image</b></div>' +
+      '<label><input type="radio" name="cardcov" value=""' + (p.cover ? "" : " checked") + "> None</label>" +
+      files.map(function (f) {
+        return '<label><input type="radio" name="cardcov" value="' + esc(f.id) + '"' +
+          (p.cover === f.id ? " checked" : "") + "> " + esc(f.label) + "</label>";
+      }).join("") +
+      (p.cover ? '<div class="card-fit"><button type="button" class="linkbtn' + (p.fit === "crop" ? " on" : "") +
+        '" data-fit="crop">Crop</button><button type="button" class="linkbtn' + (p.fit === "fit" ? " on" : "") +
+        '" data-fit="fit">Fit</button></div>' : "");
+    panel.innerHTML =
+      '<div class="cols-head"><b>Customize cards</b>' +
+      '<span><button class="linkbtn" id="card-reset" type="button">Reset</button>' +
+      (isAdmin ? '<button class="linkbtn" id="card-save" type="button">Save for everyone</button>' : "") +
+      "</span></div>" +
+      coverBlock +
+      '<div class="cols-head"><b>Fields</b></div>' +
+      chosen.map(function (id, i) {
+        return '<div class="card-fld">' +
+          '<label><input type="checkbox" data-cf="' + esc(id) + '" checked><span class="cf-name">' + esc(label(id)) + "</span>" +
+          (i === 0 ? '<span class="card-title-tag">title</span>' : "") + "</label>" +
+          '<span class="card-ord">' +
+          '<button type="button" class="linkbtn" data-up="' + esc(id) + '"' + (i === 0 ? " disabled" : "") + '>&#9650;</button>' +
+          '<button type="button" class="linkbtn" data-down="' + esc(id) + '"' + (i === chosen.length - 1 ? " disabled" : "") + '>&#9660;</button>' +
+          "</span></div>";
+      }).join("") +
+      rest.map(function (f) {
+        return '<div class="card-fld"><label><input type="checkbox" data-cf="' + esc(f.id) + '"><span class="cf-name">' + esc(f.label) + "</span>" +
+          (f.internal ? '<span style="color:var(--muted);font-size:var(--fs-2);">(staff)</span>' : "") + "</label></div>";
+      }).join("") +
+      '<label class="card-names"><input type="checkbox" id="card-labels"' + (p.labels ? " checked" : "") +
+      "> Show field names</label>";
+    // Every control writes the whole list back in its current order and redraws the records.
+    // renderCustom() rebuilds this panel on its way through, so the order on screen is always
+    // the order that was stored rather than the order the arrows left the DOM in.
+    var apply = function (ids) {
+      cardSave(t, { fields: ids });
+      renderCustom();
+    };
+    panel.querySelectorAll("input[data-cf]").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var id = cb.getAttribute("data-cf");
+        var ids = chosen.slice();
+        if (cb.checked) { if (ids.indexOf(id) === -1) ids.push(id); }
+        else ids = ids.filter(function (x) { return x !== id; });
+        // A card with no fields has no title and no content — it would read as an empty box
+        // you cannot get out of, since the panel would then have nothing to tick back on.
+        if (!ids.length) { renderCardPanel(t, fields); return; }
+        apply(ids);
+      });
+    });
+    panel.querySelectorAll("[data-up],[data-down]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var up = b.hasAttribute("data-up");
+        var id = b.getAttribute(up ? "data-up" : "data-down");
+        var ids = chosen.slice();
+        var i = ids.indexOf(id), j = up ? i - 1 : i + 1;
+        if (i === -1 || j < 0 || j >= ids.length) return;
+        ids[i] = ids[j]; ids[j] = id;
+        apply(ids);
+      });
+    });
+    panel.querySelectorAll('input[name="cardcov"]').forEach(function (r) {
+      r.addEventListener("change", function () {
+        cardSave(t, { cover: r.value });   // "" is None, and is a choice, not an absence
+        renderCustom();
+      });
+    });
+    panel.querySelectorAll("[data-fit]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        cardSave(t, { fit: b.getAttribute("data-fit") });
+        renderCustom();
+      });
+    });
+    var lab = document.getElementById("card-labels");
+    if (lab) lab.addEventListener("change", function () {
+      cardSave(t, { labels: lab.checked });
+      renderCustom();
+    });
+    var rb = document.getElementById("card-reset");
+    if (rb) rb.addEventListener("click", function (e) {
+      e.stopPropagation();
+      // Reset drops YOUR choice, back to whatever the table's saved default is — it does not
+      // touch the default itself, which only "Save for everyone" writes.
+      try { localStorage.removeItem(cardKey(t)); } catch (err) {}
+      renderCustom();
+    });
+    var sb = document.getElementById("card-save");
+    if (sb) sb.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var now = cardPrefs(t, fields);
+      var cfg = Object.assign({}, t.config || {}, {
+        card_fields: summaryFields(t, fields).map(function (f) { return f.id; }),
+        card_cover: now.cover || "",
+        card_cover_fit: now.fit,
+        card_labels: now.labels
+      });
+      // card_no_cover said the same thing as card_cover:"" and only one of the two can be
+      // the answer, so writing the new key retires the old one on that table.
+      delete cfg.card_no_cover;
+      db.from("app_tables").update({ config: cfg }).eq("id", t.id).then(function (r) {
+        if (r.error) { window.alert("Could not save: " + (r.error.message || "")); return; }
+        t.config = cfg; sb.textContent = "Saved ✓";
+      });
+    });
+  }
   function renderColorPanel(t, fields) {
     var panel = document.getElementById('color-panel');
     var cols = colorableCols(fields);
@@ -5495,8 +5667,71 @@
   // shop appears under several spellings. The record's branch column is the reconciled
   // one, and it is what the sidebar, grouping and CSV already use — so a card may name
   // "__branch" (or "__created") to show the column instead of the raw answer.
+  // ---- Customize cards: what a card shows, and what it wears -------------------
+  // Airtable's gallery lets you pick the cover picture, whether it is cropped or fitted,
+  // which fields the card carries and in what order, and whether their names show. All of
+  // that lived here as constants — the first file question was always the cover, the first
+  // three answers were always the fields — with `config.card_fields` readable but settable
+  // by nobody, since no screen in the app wrote it. This is that choice, made in the UI.
+  //
+  // Two levels, exactly like the column picker next to it: your own choice is remembered in
+  // this browser, and an admin can press "Save for everyone" to write it into the table's
+  // config as the default every other account opens with. Table-agnostic on purpose —
+  // nothing below names a table or a field, so the 226 tables that exist and the ones made
+  // next month all get it without a line of per-table wiring.
+  function cardKey(t) { return "blk_card_" + (t && t.id); }
+  function cardLocal(t) {
+    if (!t) return null;
+    try { return JSON.parse(localStorage.getItem(cardKey(t)) || "null"); } catch (e) { return null; }
+  }
+  // "the key is present" is not "the value is truthy" here: cover = "" means somebody chose
+  // no cover, and that has to outrank the default rather than read as nothing chosen.
+  function cardHas(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
+  // Resolves the three levels — this browser, the table's saved default, the built-in
+  // behaviour — into the one answer the cards, the list rows and the panel all read. Kept
+  // pure (it takes the table and its fields, touches no DOM) so it can be tested and so
+  // there is exactly one place where "what does this card show" is decided.
+  function cardPrefs(t, fields) {
+    var cfg = (t && t.config) || {};
+    var mine = cardLocal(t) || {};
+    // An empty list reads as "nothing chosen", not "show no fields": a card with no fields
+    // has no title either, and the panel refuses to leave you with none.
+    var flds = (mine.fields && mine.fields.length) ? mine.fields
+             : (cfg.card_fields && cfg.card_fields.length) ? cfg.card_fields : null;
+    // A cover can only be a file question. Which one was hard-coded as "the first", and that
+    // stays the default so no card in any table changes shape until somebody chooses.
+    var files = (fields || []).filter(isFileField);
+    var want = cardHas(mine, "cover") ? mine.cover
+             : cardHas(cfg, "card_cover") ? cfg.card_cover
+             : cfg.card_no_cover ? "" : undefined;   // the old opt-out flag, still honoured
+    var cover;
+    if (want === "") cover = null;                                    // chosen: no cover
+    else if (want == null) cover = files.length ? files[0].id : null; // nothing chosen yet
+    else {
+      var hit = files.filter(function (f) { return f.id === want; })[0];
+      // A cover naming a question that has since been deleted — or is no longer a file
+      // question — falls back to the default rather than to nothing. An empty cover reads as
+      // a card that failed to load, and "None" is a choice somebody makes on purpose.
+      cover = hit ? hit.id : (files.length ? files[0].id : null);
+    }
+    var fit = mine.fit || cfg.card_cover_fit || "crop";
+    var labels = typeof mine.labels === "boolean" ? mine.labels
+               : typeof cfg.card_labels === "boolean" ? cfg.card_labels : true;
+    return { fields: flds, cover: cover, fit: fit === "fit" ? "fit" : "crop", labels: labels };
+  }
+  function cardSave(t, patch) {
+    var mine = cardLocal(t) || {};
+    Object.keys(patch).forEach(function (k) { mine[k] = patch[k]; });
+    try { localStorage.setItem(cardKey(t), JSON.stringify(mine)); } catch (e) {}
+  }
+  // The pseudo-fields a card may carry that are columns on the record rather than answers
+  // in it. summaryFields already understands both; the panel has to offer them.
+  function cardChoosable(fields) {
+    return (fields || []).filter(function (f) { return !isFileField(f); })
+      .concat([{ id: "__branch", label: "Branch" }, { id: "__created", label: "Submitted" }]);
+  }
   function summaryFields(table, fields) {
-    var cardIds = (table && table.config && table.config.card_fields) || null;
+    var cardIds = cardPrefs(table, fields).fields;
     if (cardIds && cardIds.length) {
       return cardIds.map(function (id) {
         if (id === "__branch") return { id: "__branch", label: "Branch" };
@@ -8012,6 +8247,10 @@
     e.stopPropagation();
     document.getElementById("cols-panel").classList.toggle("open");
   });
+  document.getElementById("card-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("card-panel").classList.toggle("open");
+  });
   document.getElementById("group-btn").addEventListener("click", function (e) {
     e.stopPropagation();
     document.getElementById("group-panel").classList.toggle("open");
@@ -8031,6 +8270,10 @@
   document.addEventListener("click", function (e) {
     var w = document.getElementById("cols-wrap");
     if (w && !w.contains(e.target)) document.getElementById("cols-panel").classList.remove("open");
+  });
+  document.addEventListener("click", function (e) {
+    var cardW = document.getElementById("card-wrap");
+    if (cardW && !cardW.contains(e.target)) document.getElementById("card-panel").classList.remove("open");
   });
   document.addEventListener("click", function (e) {
     var sw = document.getElementById("sort-wrap");
