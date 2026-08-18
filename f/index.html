@@ -755,19 +755,17 @@
     // Ask for named columns, not "*": the public key may only read what a form needs to
     // draw itself. `config` as a whole carries the review chain, the stage list and the
     // WhatsApp templates, so anon is given `config_public` — intro, colour, icon — instead.
-    // An old slug can outlive a rename: a printed QR code points at it forever. A form may keep
-    // such a slug working by listing it in config_public.aliases and we forward the visitor to the
-    // form's current link. This is deliberate, never automatic. Aliases are set by hand, and
-    // Regenerate wipes them, so "regenerate a new QR to disable the old one" still fully applies.
+    // An old slug can outlive a rename: a printed QR code points at it forever. A retired slug is
+    // kept alive by mapping it here to the form's current slug, and /f/ forwards the visitor. Kept
+    // in code, not the DB, on purpose: it is set by hand one line at a time, and Regenerating a
+    // form to a fresh random slug leaves the mapped target dead, so a rotated-away QR stops working
+    // (which is the point of Regenerate). config_public cannot hold this: it is a generated column.
+    var SLUG_FORWARDS = { "franchise-syria-0ha2": "franchise-apply" };
     function resolveAliasOrNotFound() {
-      db.from("app_tables").select("slug").eq("is_active", true)
-        .contains("config_public", { aliases: [slug] }).limit(1).maybeSingle()
-        .then(function (aRes) {
-          var to = (aRes && !aRes.error && aRes.data) ? aRes.data.slug : null;
-          if (to && to !== slug) {
-            location.replace("/f/?t=" + encodeURIComponent(to) + (parentToken ? "&e=" + encodeURIComponent(parentToken) : ""));
-          } else { notFound(); }
-        }).catch(function () { notFound(); });
+      var to = SLUG_FORWARDS[slug];
+      if (to && to !== slug) {
+        location.replace("/f/?t=" + encodeURIComponent(to) + (parentToken ? "&e=" + encodeURIComponent(parentToken) : ""));
+      } else { notFound(); }
     }
     db.from("app_tables").select("id,name,name_ar,slug,is_active,kind,config_public").eq("slug", slug).eq("is_active", true).single().then(function (tRes) {
       if (tRes.error || !tRes.data) { resolveAliasOrNotFound(); return; }
