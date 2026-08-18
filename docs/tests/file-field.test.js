@@ -37,7 +37,7 @@ function load(js, vars, fns) {
   const code = vars.map(v => grabVar(js, v)).join('\n') + '\n' + fns.map(f => grab(js, f)).join('\n');
   const ctx = { console };
   vm.createContext(ctx);
-  new vm.Script('(function(){' + code + '\n this.API={' + fns.join(',') + '};}).call(this)').runInContext(ctx);
+  new vm.Script('(function(){' + code + '\n this.API={' + vars.concat(fns).join(',') + '};}).call(this)').runInContext(ctx);
   return ctx.API;
 }
 
@@ -46,8 +46,8 @@ function load(js, vars, fns) {
 // first red. A later task that names a not-yet-written function makes load() throw — which is
 // that task's red state, resolved by implementing the function.
 const A = load(APP,
-  ['PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES'],
-  ['isFileField', 'isFileType', 'uploadCap']);
+  ['PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES', 'VIDEO_EXT', 'VIDEO_PLAYABLE', 'IMAGE_EXT', 'PLAY_SVG', 'FILE_SVG'],
+  ['isFileField', 'isFileType', 'uploadCap', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel']);
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; } catch (e) { console.log('FAIL: ' + name + ' -> ' + e.message); process.exitCode = 1; } };
@@ -84,6 +84,36 @@ t('photo and ordinary fields keep the 10 MB ceiling', () => {
 t('the field-type picker offers File', () => {
   assert.ok(/\{\s*v:\s*["']file["'],\s*label:\s*["']File["']\s*\}/.test(APP_SRC),
     'File must be a choice in FIELD_TYPES or nobody can create the question');
+});
+
+// ---- image or file, decided from the key alone ---------------------------
+t('an image extension reads as an image', () => {
+  ['a.jpg', 'a.jpeg', 'a.png', 'a.gif', 'a.webp', 'a.heic', 'a.bmp', 'a.svg', 'a.tiff', 'a.avif'].forEach(p => {
+    assert.ok(A.isImagePath('uuid_' + p), p + ' should read as an image');
+  });
+});
+// Every answer written before this type existed is a photo, and importer keys often carry no
+// filename extension at all. Those must stay images, exactly as they render today.
+t('a key with no filename extension reads as an image', () => {
+  assert.ok(A.isImagePath('9d3f2a1b-0000-0000-0000-000000000000_web'));
+  assert.ok(A.isImagePath('avatars/somebody'));
+});
+t('a document extension does not read as an image', () => {
+  ['a.pdf', 'a.docx', 'a.xlsx', 'a.csv', 'a.txt', 'a.zip', 'a.pptx', 'a.pages'].forEach(p => {
+    assert.ok(!A.isImagePath('uuid_' + p), p + ' should read as a file, not an image');
+  });
+});
+t('a video is never an image', () => {
+  ['a.mp4', 'a.mov', 'a.avi', 'a.mkv'].forEach(p => assert.ok(!A.isImagePath('uuid_' + p), p));
+});
+// "report.pdf.jpg" is a JPEG; only the last extension counts, same rule as isVideoPath.
+t('only the last extension counts', () => {
+  assert.ok(A.isImagePath('uuid_report.pdf.jpg'));
+  assert.ok(!A.isImagePath('uuid_holiday.jpg.pdf'));
+});
+t('there is a distinct file glyph to mark a document', () => {
+  assert.ok(/<svg/.test(A.FILE_SVG), 'FILE_SVG must render something');
+  assert.notStrictEqual(A.FILE_SVG, A.PLAY_SVG, 'a file must not be marked with the play glyph');
 });
 
 console.log(n + ' tests defined');

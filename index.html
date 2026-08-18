@@ -3942,6 +3942,19 @@
   var VIDEO_PLAYABLE = /\.(mp4|m4v|mov|qt|webm|ogv|ogg)(\?|#|$)/i;
   function isVideoPath(p) { return VIDEO_EXT.test(String(p || "")); }
   function isPlayableVideo(p) { return VIDEO_PLAYABLE.test(String(p || "")); }
+  // The stored key carries no MIME, so an answer is classed from its filename alone. An image
+  // extension is an image; so is a key with no filename extension at all — every row written
+  // before this type existed, and the importer keys, are photos. Any other extension (.pdf,
+  // .docx, .zip) is a file to download, not a thumbnail. Checked after isVideoPath, so a video
+  // never reaches here as an "image".
+  var IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|bmp|svg|tiff?|avif|ico)(\?|#|$)/i;
+  function isImagePath(p) {
+    p = String(p || "");
+    if (isVideoPath(p)) return false;
+    if (IMAGE_EXT.test(p)) return true;
+    var name = p.split(/[?#]/)[0].split("/").pop() || "";
+    return name.indexOf(".") === -1;   // no extension we can name -> a legacy photo
+  }
   // The file's own name, for a link that has to say what it points at. The stored key is
   // "<uuid>_name.mp4"; the uuid is noise to a reader.
   function fileLabel(p) {
@@ -3950,6 +3963,10 @@
   }
   var PLAY_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">' +
     '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.6 6.2 5.2 3.3a.6.6 0 0 1 0 1l-5.2 3.3a.6.6 0 0 1-.9-.5V8.7a.6.6 0 0 1 .9-.5z"/></svg>';
+  // A document has no thumbnail and is not a video; it is marked with a page glyph so a
+  // grid cell or card cover reads as "there is a file here" rather than a failed image.
+  var FILE_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">' +
+    '<path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6zm7 1.5L18.5 9H13V3.5z"/></svg>';
   // A card cover for one uploaded answer. An image gets the usual lazily-painted thumbnail;
   // a video gets a play mark, because it has no thumbnail to paint and an empty grey box
   // reads as a card that failed to load rather than a card holding a video.
