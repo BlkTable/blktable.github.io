@@ -1274,6 +1274,29 @@
   .flag-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
     background: var(--pink-soft); color: var(--pink-hi); border: 1px solid rgba(248,43,96,0.45);
     font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.04em; vertical-align: middle; }
+  /* An answer somebody has to be TOLD about, not merely notice. Same chip shape as the
+     flag, in the alarm colour, and it carries the reason with it. */
+  .alert-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+    background: rgba(255,107,107,0.16); color: var(--danger); border: 1px solid rgba(255,107,107,0.5);
+    font-size: var(--fs-1); font-weight: 800; letter-spacing: 0.04em; vertical-align: middle; }
+  /* The banner on the record itself: what matched, and the one button that acts on it. */
+  .rec-alert { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 0 4px;
+    padding: 10px 12px; border-radius: 10px; background: rgba(255,107,107,0.10);
+    border: 1px solid rgba(255,107,107,0.38); }
+  .rec-alert .ra-txt { flex: 1 1 200px; min-width: 0; }
+  .rec-alert .ra-h { font-weight: 800; color: var(--danger); font-size: var(--fs-3); }
+  .rec-alert .ra-s { color: var(--muted); font-size: var(--fs-2); margin-top: 2px; }
+  /* Notify picker: one line per person, each sent on its own so nothing is sent by accident. */
+  .na-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px; }
+  .na-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px;
+    background: var(--bg-3); border: 1px solid var(--field-border); }
+  .na-row .na-who { flex: 1 1 auto; min-width: 0; }
+  .na-row .na-name { font-weight: 700; }
+  .na-row .na-num { color: var(--muted); font-size: var(--fs-2); }
+  .na-row.sent { border-color: rgba(30,127,74,0.6); }
+  .na-row .na-done { color: #4ad991; font-weight: 800; font-size: var(--fs-2); }
+  .na-add { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .na-add input { flex: 1 1 auto; }
   .ja-card.is-mine, .ja-row.is-mine { box-shadow: inset 3px 0 0 var(--gold); }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
   .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: var(--bg-3) center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: var(--fs-7); }
@@ -1775,6 +1798,26 @@
           <button class="linkbtn" id="deltbl-cancel2" type="button">Cancel</button>
         </div>
         <div class="m-msg" id="deltbl-msg"></div>
+      </div>
+    </div>
+
+    <!-- Notify on WhatsApp: the message is written here, the recipient is chosen here -->
+    <div class="modal-overlay" id="notify-modal">
+      <div class="modal" style="max-width: 520px;">
+        <button class="modal-close" id="na-close" aria-label="Close">&#10005;</button>
+        <div class="m-name" id="na-title">Send this record on WhatsApp</div>
+        <div class="m-sub" id="na-sub"></div>
+        <textarea id="na-text" rows="8" style="width:100%;margin-top:10px;"></textarea>
+        <div class="na-list" id="na-list"></div>
+        <div class="na-add">
+          <input id="na-other" type="tel" inputmode="tel" placeholder="Another number, e.g. +962791234567" autocomplete="off">
+          <button type="button" class="btn-wa" id="na-other-send">Send</button>
+        </div>
+        <div class="m-actions" style="margin-top:14px; gap:10px;">
+          <button class="linkbtn" id="na-copy" type="button">Copy message</button>
+          <button class="linkbtn" id="na-done" type="button">Close</button>
+        </div>
+        <div class="m-msg" id="na-msg"></div>
       </div>
     </div>
 
@@ -3789,6 +3832,106 @@
       window.open("mailto:" + em, "_self");
     }
   }
+  // ---- Notify on WhatsApp: compose here, choose who, send one at a time ----------
+  // Available on every record in every table, with or without an alert rule - the rule only
+  // decides whether the record shouts. The message stays editable before it is sent, because
+  // a rejected batch usually needs one line nobody could have templated.
+  var notifyCtx = null;   // { s: record, fields: [], rule: rule|null }
+  function waDigits(ph) { return String(ph || "").replace(/[^\d]/g, ""); }
+  // What the record says, in the order the form asks it. An upload is named, never linked: a
+  // signed R2 url dies in an hour, so pasting one into WhatsApp sends a link that is already
+  // dead by the time anybody taps it.
+  function notifyDefaultText(s, fields, rule) {
+    var d = s.data || {};
+    var t = currentCustom && currentCustom.table;
+    var lines = ["\u26a0 " + (rule ? alertLabel(rule) : "BLKTable") + (t && t.name ? " - " + t.name : ""), ""];
+    var shown = 0;
+    (fields || []).forEach(function (f) {
+      if (shown >= 8 || f.internal) return;
+      var v = d[f.id];
+      if (v == null || v === "") return;
+      var txt = isFileField(f) ? "(attached - open the record)" : customCellText(f, d);
+      if (txt === "\u2014") return;
+      if (String(txt).length > 70) txt = String(txt).slice(0, 67) + "\u2026";
+      lines.push(f.label + ": " + txt);
+      shown++;
+    });
+    lines.push("");
+    lines.push(recordNumber(s) + " \u00b7 " + fmtDate(s.created_at));
+    lines.push("Open it in BLKTable: https://blktable.blk.jo");
+    return lines.join("\n");
+  }
+  function notifyText(s, fields, rule) {
+    var tpl = rule && rule.template && String(rule.template).trim();
+    return tpl ? fillTemplate(tpl, s, fields) : notifyDefaultText(s, fields, rule);
+  }
+  function notifyRowHtml(c, i) {
+    return '<div class="na-row" data-i="' + i + '"><div class="na-who">' +
+      '<div class="na-name">' + esc(c.name || c.phone) + "</div>" +
+      (c.name ? '<div class="na-num">' + esc(c.phone) + "</div>" : "") +
+      '</div><button type="button" class="btn-wa na-send">Send</button></div>';
+  }
+  function openNotify(s, fields, rule) {
+    notifyCtx = { s: s, fields: fields, rule: rule || null };
+    var contacts = ((rule && rule.contacts) || []).filter(function (c) { return c && c.phone; });
+    document.getElementById("na-title").textContent = rule ? ("\u26a0 " + alertLabel(rule)) : "Send this record on WhatsApp";
+    document.getElementById("na-sub").textContent = contacts.length
+      ? "Edit the message if you need to, then send it to whoever should know. Each person is sent separately."
+      : "Edit the message if you need to, then type the number it goes to.";
+    document.getElementById("na-text").value = notifyText(s, fields, rule);
+    document.getElementById("na-list").innerHTML = contacts.map(notifyRowHtml).join("");
+    document.getElementById("na-other").value = "";
+    document.getElementById("na-msg").textContent = "";
+    [].slice.call(document.querySelectorAll("#na-list .na-send")).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var row = b.closest(".na-row");
+        var c = contacts[+row.getAttribute("data-i")];
+        if (notifySend(c.phone)) markNotified(row, c.name || c.phone);
+      });
+    });
+    document.getElementById("notify-modal").classList.add("open");
+  }
+  function markNotified(row, who) {
+    row.classList.add("sent");
+    var b = row.querySelector(".na-send");
+    if (b) { b.className = "linkbtn na-send"; b.textContent = "Send again"; }
+    if (!row.querySelector(".na-done")) row.insertAdjacentHTML("beforeend", '<span class="na-done">\u2713 opened</span>');
+    // Said plainly: the button opened WhatsApp, it did not prove delivery. Only the API phase
+    // can report that, and pretending otherwise would be the worst kind of comfort.
+    document.getElementById("na-msg").textContent = "WhatsApp opened for " + who + ". Press send there - this page cannot confirm it was delivered.";
+  }
+  function notifySend(ph) {
+    var digits = waDigits(ph);
+    if (digits.length < 8) { document.getElementById("na-msg").textContent = "That number does not look complete - include the country code, e.g. +962 7\u2026"; return false; }
+    var text = document.getElementById("na-text").value || "";
+    window.open("https://wa.me/" + digits + (text ? "?text=" + encodeURIComponent(text) : ""), "_blank");
+    return true;
+  }
+  function closeNotify() { document.getElementById("notify-modal").classList.remove("open"); notifyCtx = null; }
+  document.getElementById("na-close").addEventListener("click", closeNotify);
+  document.getElementById("na-done").addEventListener("click", closeNotify);
+  document.getElementById("notify-modal").addEventListener("click", function (e) { if (e.target === this) closeNotify(); });
+  document.getElementById("na-other-send").addEventListener("click", function () {
+    var inp = document.getElementById("na-other");
+    var num = inp.value.trim();
+    if (!notifySend(num)) return;
+    // The number joins the list, so a second person can be sent the same message without
+    // retyping the first, and so this session shows who has already been opened.
+    var list = document.getElementById("na-list");
+    list.insertAdjacentHTML("beforeend", notifyRowHtml({ phone: num }, -1));
+    var row = list.lastElementChild;
+    row.querySelector(".na-send").addEventListener("click", function () { if (notifySend(num)) markNotified(row, num); });
+    markNotified(row, num);
+    inp.value = "";
+  });
+  document.getElementById("na-copy").addEventListener("click", function () {
+    var b = this, text = document.getElementById("na-text").value || "";
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = "Copied \u2713"; setTimeout(function () { b.textContent = "Copy message"; }, 1600);
+      }).catch(function () { window.prompt("Copy this message:", text); });
+    } else { window.prompt("Copy this message:", text); }
+  });
   function deleteCasting(c) {
     if (!window.confirm("Delete this entry for " + (c.full_name || "this person") + "? This can't be undone.")) return;
     var done = function () { castingRows = castingRows.filter(function (x) { return x.id !== c.id; }); renderCasting(); };
@@ -4848,10 +4991,11 @@
       // kebab lands in the left slot and reads as a stray button. A row has no slots.
       var actions = '<div class="card-actions">' +
         (kcards ? '<span class="slot"></span>' + (moveHtml || "<span></span>") : moveHtml) +
-        recMenuHtml(tableActions.concat(slotActions(s, mayManageTbl)), mayManageTbl) + "</div>";
+        recMenuHtml(tableActions.concat(slotActions(s, mayManageTbl), notifyActions(currentCustom.table, s)), mayManageTbl) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       tag += flagTagHtml(currentCustom.table, d);
+      tag += alertTagHtml(currentCustom.table, d);
       var tint = cardTint(d, fields);
       var el = document.createElement("div");
       // The title is the record's own name; the shop and the record number sit under it
@@ -4901,11 +5045,15 @@
       }
       wireStar(el, currentCustom.table.id, s.id);
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
-      var menuActions = tableActions.concat(slotActions(s, mayManageTbl));
+      var menuActions = tableActions.concat(slotActions(s, mayManageTbl), notifyActions(currentCustom.table, s));
       wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); },
         // A place move is not a WhatsApp/Call/Email template, so it is intercepted before the
         // template dispatcher rather than taught to it.
-        function (a) { if (a && a.type === "slot") moveSignup(s, a.slot, fields); else doRecordAction(a, s, fields); },
+        function (a) {
+          if (a && a.type === "slot") moveSignup(s, a.slot, fields);
+          else if (a && a.type === "notify") openNotify(s, fields, a.rule);
+          else doRecordAction(a, s, fields);
+        },
         menuActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
       kcont.appendChild(el);
@@ -5040,6 +5188,75 @@
     if (!hit) return "";
     return '<span class="flag-tag" title="' + esc(fl.label || "Flagged") + '">' +
       esc(fl.label || "Flagged") + "</span>";
+  }
+  // ---- Alerts: an answer somebody has to be TOLD about --------------------------
+  // Declared per table, so nothing here is Kitchen-food-safety-specific:
+  //
+  //   config.alerts = [ { field: '<field id>', equals: ['Rejected'],
+  //                       label: 'Rejected batch', template: '... {Product name} ...',
+  //                       contacts: [ { name: 'Ahmad - QC', phone: '+9627...' } ] } ]
+  //
+  // A flag (config.flag) marks a record worth noticing. An alert carries the same idea one
+  // step further: it also holds the message and the people, because "Rejected" only matters
+  // if somebody hears about it.
+  //
+  // Sending is deliberately a person pressing a button: WhatsApp opens with the message
+  // already written and they choose who receives it. Nothing leaves by itself until the
+  // WhatsApp API is in place (whatsapp/WHATSAPP-API-REQUEST.md, private folder).
+  function alertRules(table) {
+    var a = table && table.config && table.config.alerts;
+    return Array.isArray(a) ? a : [];
+  }
+  // A multi-select answer arrives as an array and an "other" answer as free text, so the
+  // match is over every part of the answer rather than over the whole of it as one string.
+  function answerHits(v, wants) {
+    if (v == null || v === "" || !wants || !wants.length) return false;
+    var parts = Array.isArray(v) ? v : String(v).split(",");
+    return parts.some(function (part) {
+      var pt = String(part).trim().toLowerCase();
+      if (!pt) return false;
+      return wants.some(function (w) { return String(w).trim().toLowerCase() === pt; });
+    });
+  }
+  function alertsFor(table, d) {
+    return alertRules(table).filter(function (r) {
+      return r && r.field && answerHits((d || {})[r.field], r.equals || []);
+    });
+  }
+  function alertLabel(r) { return (r && r.label) || "Alert"; }
+  function alertTagHtml(table, d) {
+    return alertsFor(table, d).map(function (r) {
+      return '<span class="alert-tag" title="Somebody needs to be told about this">&#9888; ' +
+        esc(alertLabel(r)) + "</span>";
+    }).join("");
+  }
+  // The record menu carries one entry per matched alert, and - on a record that matched
+  // nothing - a plain one, so any record in any table can be sent to somebody with no rule.
+  function notifyActions(table, s) {
+    var hits = alertsFor(table, (s || {}).data);
+    if (hits.length) {
+      return hits.map(function (r) { return { type: "notify", rule: r, label: "\u26a0 Notify: " + alertLabel(r) }; });
+    }
+    return [{ type: "notify", rule: null, label: "\ud83d\udcac Notify on WhatsApp" }];
+  }
+  // The banner on the record itself. One per matched rule, each with its own button, so a
+  // record that trips two rules does not collapse into one ambiguous "notify".
+  function alertBannerHtml(table, s) {
+    return alertsFor(table, (s || {}).data).map(function (r, i) {
+      var to = ((r.contacts || []).filter(function (c) { return c && c.phone; })).length;
+      return '<div class="rec-alert"><div class="ra-txt">' +
+        '<div class="ra-h">&#9888; ' + esc(alertLabel(r)) + "</div>" +
+        '<div class="ra-s">' + (to ? (to === 1 ? "1 contact is saved for this alert." : to + " contacts are saved for this alert.")
+                                   : "No contacts saved yet - you can type any number.") +
+        ' Nothing is sent until you press send.</div></div>' +
+        '<button type="button" class="btn-wa ra-go" data-ai="' + i + '">Notify on WhatsApp</button></div>';
+    }).join("");
+  }
+  function wireAlertBanner(s, fields) {
+    var hits = alertsFor(currentCustom && currentCustom.table, (s || {}).data);
+    [].slice.call(document.querySelectorAll("#modal-body .ra-go")).forEach(function (b) {
+      b.addEventListener("click", function () { openNotify(s, fields, hits[+b.getAttribute("data-ai")] || null); });
+    });
   }
   function scoreChipHtml(n) {
     return '<span class="scorechip ' + scoreTone(n) + '"><span class="pct">' +
@@ -6649,7 +6866,8 @@
     if (!String(recTitle).trim()) recTitle = recBranch || "Record";
     var scoreHead = '<div class="rec-head">' +
       '<div class="rh-main"><div class="rh-title">' + esc(recTitle) +
-        flagTagHtml(currentCustom ? currentCustom.table : null, d) + " " +
+        flagTagHtml(currentCustom ? currentCustom.table : null, d) +
+        alertTagHtml(currentCustom ? currentCustom.table : null, d) + " " +
         (slotPillHtml(s) || phasePillHtml(parentPhase(currentCustom && currentCustom.table, s, kidCountsFor(s.id)))) + "</div>" +
       '<div class="rh-meta">' + esc(recordNumber(s)) + " · Submitted " + esc(fmtDate(s.created_at)) +
       (recBranch && String(recBranch).trim() !== String(recTitle).trim() ? " · " + esc(recBranch) : "") +
@@ -6754,10 +6972,10 @@
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
       // the header already carries the number, the date and the shop
-      body.innerHTML = scoreHead +
+      body.innerHTML = scoreHead + alertBannerHtml(currentCustom && currentCustom.table, s) +
         '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
         '<div id="cd-kids"></div>' + moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>';
-      wireMoreLine(s, fields); wireLinkChips();
+      wireMoreLine(s, fields); wireLinkChips(); wireAlertBanner(s, fields);
       loadChildRows(s, childTableOf(currentCustom && currentCustom.table));
       renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
       document.getElementById("modal").classList.add("open");
@@ -6776,7 +6994,8 @@
     // link block, which is the permission record_share_token enforces anyway.
     var kidT = (currentCustom && currentCustom.table) ? childTableOf(currentCustom.table) : null;
     var childT = (kidT && canManage(currentCustom.table.id)) ? kidT : null;
-    body.innerHTML = scoreHead + recordLinkBlockHtml(childT) + '<div id="cd-kids"></div>' +
+    body.innerHTML = scoreHead + alertBannerHtml(currentCustom && currentCustom.table, s) +
+      recordLinkBlockHtml(childT) + '<div id="cd-kids"></div>' +
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub"><span id="ed-status" class="ed-status"></span></div>' +
@@ -6787,7 +7006,7 @@
       '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d, photoPath ? photoFieldId : null) +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>';
-    wireMoreLine(s, fields); wireLinkChips();
+    wireMoreLine(s, fields); wireLinkChips(); wireAlertBanner(s, fields);
     fillRecordLink(s, childT);
     loadChildRows(s, kidT);
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
