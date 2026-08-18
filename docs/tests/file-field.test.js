@@ -181,4 +181,19 @@ t('the in-record editor accepts any file for a file question', () => {
     'the editor must leave accept empty (any type) for a file question');
 });
 
+// ---- the header skip never swallows a document ---------------------------
+// The editable record detail names its header field as skipId so the same answer is not
+// shown twice. The header can only ever be an IMAGE (openCustomDetail picks with isImagePath),
+// so the gallery must skip only an image named as the header — a document named as skipId is
+// still someone's answer and must appear as a download tile, never vanish.
+t('a document named as the header skipId still appears in the gallery', () => {
+  const h = A.photoSectionHtml([{ id: 'h1', label: 'CV', type: 'file' }], { h1: 'uuid_cv.pdf' }, 'h1');
+  assert.ok(/pc-file/.test(h), 'a document must survive even if named as the header');
+  assert.ok(/cv\.pdf/.test(h));
+});
+t('an image named as the header skipId is not repeated in the gallery', () => {
+  const h = A.photoSectionHtml([{ id: 'h2', label: 'Shelf', type: 'photo' }], { h2: 'uuid_face.jpg' }, 'h2');
+  assert.strictEqual(h, '', 'the header image must not appear a second time');
+});
+
 console.log(n + ' tests defined');

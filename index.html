@@ -5020,7 +5020,7 @@
       // Skip only a still image. The caller only ever names an image today, but that depends
       // on how the header is chosen a few hundred lines away — and if that ever changes, the
       // failure is a video nobody can play, which is the bug this whole section exists to fix.
-      return !(f.id === skipId && !isVideoPath(d[f.id]));
+      return !(f.id === skipId && isImagePath(d[f.id]));
     });
     if (!shots.length) return "";
     var vids = shots.filter(function (f) { return isVideoPath(d[f.id]); }).length;
@@ -6302,7 +6302,7 @@
     fields.forEach(function (f) {
       if (!isFileField(f)) return;
       if (photoFieldId == null) photoFieldId = f.id;
-      if (photoPath == null && d[f.id] && !isVideoPath(d[f.id])) { photoPath = d[f.id]; photoFieldId = f.id; }
+      if (photoPath == null && d[f.id] && isImagePath(d[f.id])) { photoPath = d[f.id]; photoFieldId = f.id; }
     });
     // The score lives in the record's header, on the right of the record's own identity.
     var scoreSlot = "";
