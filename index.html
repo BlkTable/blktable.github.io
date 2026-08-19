@@ -4585,29 +4585,45 @@
     var langOpts = WA_LANGS.map(function (l) {
       return '<option value="' + l[0] + '"' + ((send && send.lang) === l[0] ? " selected" : "") + ">" + esc(l[1]) + "</option>";
     }).join("");
+    var initChannel = (send && send.slack_channel != null) ? "slack" : "whatsapp";
     row.innerHTML =
       '<div class="al-row">' +
         '<select class="al-field">' + bldFieldOptionsHtml(data.field) + "</select>" +
         '<input class="al-values" placeholder="becomes… e.g. Rejected, مرفوض">' +
         '<input class="al-label" placeholder="Name of the alert">' +
+        '<label class="al-every-lbl"><input type="checkbox" class="al-every"> on every submission</label>' +
         '<button type="button" class="rm" title="Remove this alert">Remove</button>' +
       "</div>" +
       '<textarea class="al-tpl" placeholder="Message for the Notify button — use {Question name} to drop an answer in, e.g. Batch {Batch #} of {Product name} was rejected"></textarea>' +
       '<textarea class="al-contacts" placeholder="People to offer on the Notify button — one per line: Ahmad - QC, +962791234567"></textarea>' +
-      '<label class="al-auto-lbl"><input type="checkbox" class="al-auto"> Send it automatically on WhatsApp</label>' +
+      '<label class="al-auto-lbl"><input type="checkbox" class="al-auto"> Send it automatically</label>' +
       '<div class="al-auto-box" style="display:none;">' +
         '<div class="al-row">' +
-          '<input class="al-tmpl" placeholder="Approved template name, e.g. qc_result_rejected_v1" style="flex:2 1 220px;">' +
-          '<select class="al-lang" style="flex:1 1 120px;">' + langOpts + "</select>" +
-        "</div>" +
-        '<p class="al-hint">WhatsApp only allows a message the business starts if Meta has approved its wording. The values below fill its {{1}}, {{2}} … in order.</p>' +
+          '<label>Send via <select class="al-channel">' +
+            '<option value="whatsapp"' + (initChannel === "whatsapp" ? " selected" : "") + '>WhatsApp</option>' +
+            '<option value="slack"' + (initChannel === "slack" ? " selected" : "") + '>Slack</option>' +
+          '</select></label>' +
+        '</div>' +
+        '<div class="al-wa-fields">' +
+          '<div class="al-row">' +
+            '<input class="al-tmpl" placeholder="Approved template name, e.g. qc_result_rejected_v1" style="flex:2 1 220px;">' +
+            '<select class="al-lang" style="flex:1 1 120px;">' + langOpts + "</select>" +
+          "</div>" +
+          '<p class="al-hint">WhatsApp only allows a message the business starts if Meta has approved its wording. The values below fill its {{1}}, {{2}} … in order.</p>' +
+        '</div>' +
+        '<div class="al-slack-fields" style="display:none;">' +
+          '<input class="al-slack-channel" placeholder="Slack channel name or ID, e.g. #alerts or C0..." style="width:100%;box-sizing:border-box;">' +
+          '<p class="al-hint">The bot must be invited to the channel before it can post. /invite @BLKTable in Slack.</p>' +
+        '</div>' +
         '<div class="al-params"></div>' +
         '<button type="button" class="linkbtn al-add-p">＋ Add a value</button>' +
-        '<textarea class="al-to" placeholder="Send to — one per line: Ahmad - QC, +962791234567"></textarea>' +
-        '<div class="al-sm">' +
-          '<label>don\u2019t repeat within <input type="number" class="al-dedupe" min="0" max="10080"> minutes</label>' +
-          '<label>ignore records older than <input type="number" class="al-stale" min="0" max="3650"> days</label>' +
-        "</div>" +
+        '<div class="al-wa-recip">' +
+          '<textarea class="al-to" placeholder="Send to — one per line: Ahmad - QC, +962791234567"></textarea>' +
+          '<div class="al-sm">' +
+            '<label>don\u2019t repeat within <input type="number" class="al-dedupe" min="0" max="10080"> minutes</label>' +
+            '<label>ignore records older than <input type="number" class="al-stale" min="0" max="3650"> days</label>' +
+          "</div>" +
+        '</div>' +
         '<p class="al-hint al-state"></p>' +
       "</div>";
     row.querySelector(".al-values").value = (data.equals || []).join(", ");
@@ -4627,6 +4643,27 @@
     auto.checked = !!(send && send.template);
     function syncAuto() { box.style.display = auto.checked ? "" : "none"; }
     syncAuto(); auto.addEventListener("change", syncAuto);
+    var everyChk = row.querySelector(".al-every");
+    everyChk.checked = data.when === "always";
+    var alField = row.querySelector(".al-field"), alValues = row.querySelector(".al-values");
+    function syncEvery() {
+      var hide = everyChk.checked;
+      alField.style.display = hide ? "none" : "";
+      alValues.style.display = hide ? "none" : "";
+    }
+    syncEvery(); everyChk.addEventListener("change", syncEvery);
+    var channel = row.querySelector(".al-channel");
+    var waFields = row.querySelector(".al-wa-fields");
+    var slackFields = row.querySelector(".al-slack-fields");
+    var waRecip = row.querySelector(".al-wa-recip");
+    if (send && send.slack_channel) row.querySelector(".al-slack-channel").value = send.slack_channel;
+    function syncChannel() {
+      var isSlack = channel.value === "slack";
+      waFields.style.display = isSlack ? "none" : "";
+      slackFields.style.display = isSlack ? "" : "none";
+      waRecip.style.display = isSlack ? "none" : "";
+    }
+    syncChannel(); channel.addEventListener("change", syncChannel);
     row.querySelector(".al-add-p").addEventListener("click", function () { addAlertParamRow(params); });
     row.querySelector(".rm").addEventListener("click", function () { row.remove(); });
     document.getElementById("bld-alerts").appendChild(row);
@@ -4647,7 +4684,8 @@
       var equals = r.querySelector(".al-values").value.split(",").map(function (x) { return x.trim(); })
         .filter(function (x) { return !!x; });
       var label = r.querySelector(".al-label").value.trim();
-      if (!field || !equals.length) {
+      var every = r.querySelector(".al-every").checked;
+      if (!every && (!field || !equals.length)) {
         if (field || equals.length || label) problems.push("Alert " + (i + 1) + " needs both a question and the answer that trips it.");
         return null;
       }
@@ -4655,39 +4693,62 @@
       contacts.bad.forEach(function (b) { problems.push("Alert " + (i + 1) + ": “" + b + "” has no usable number."); });
       var out = {
         id: r.getAttribute("data-alert-id") || ("A" + (i + 1) + "-" + Math.random().toString(36).slice(2, 6)),
-        field: field, equals: equals, label: label || "Alert",
+        label: label || "Alert",
         template: r.querySelector(".al-tpl").value.trim() || null,
         contacts: contacts.list,
       };
+      if (every) { out.when = "always"; } else { out.field = field; out.equals = equals; }
       if (r.querySelector(".al-auto").checked) {
-        var tmpl = r.querySelector(".al-tmpl").value.trim();
-        var to = parseContactLines(r.querySelector(".al-to").value);
-        to.bad.forEach(function (b) { problems.push("Alert " + (i + 1) + " (automatic): “" + b + "” has no usable number."); });
-        var byBranch = null;
-        try { byBranch = JSON.parse(r.getAttribute("data-by-branch") || "null"); } catch (e) { byBranch = null; }
-        if (!tmpl) {
-          problems.push("Alert " + (i + 1) + " is set to send automatically but has no approved template name.");
-        } else if (!to.list.length && !byBranch) {
-          problems.push("Alert " + (i + 1) + " is set to send automatically but has nobody to send to.");
+        var chSel = r.querySelector(".al-channel");
+        var channel = chSel ? chSel.value : "whatsapp";
+        if (channel === "slack") {
+          var slackCh = r.querySelector(".al-slack-channel").value.trim();
+          if (!slackCh) {
+            problems.push("Alert " + (i + 1) + " is set to send to Slack but has no channel.");
+          } else {
+            var slackSpecs = [].slice.call(r.querySelectorAll(".al-params .al-p")).map(function (pr) {
+              var v = pr.querySelector(".ap-field").value;
+              if (v === "__text") {
+                var t = pr.querySelector(".ap-text").value.trim();
+                return t ? { text: t } : null;
+              }
+              var sel = pr.querySelector(".ap-field");
+              var lbl = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : v;
+              return v ? { field: v, label: lbl } : null;
+            }).filter(Boolean);
+            out.channel = "slack";
+            out.send = { slack_channel: slackCh, params: slackSpecs };
+          }
         } else {
-          var specs = [].slice.call(r.querySelectorAll(".al-params .al-p")).map(function (pr) {
-            var v = pr.querySelector(".ap-field").value;
-            if (v === "__text") {
-              var t = pr.querySelector(".ap-text").value.trim();
-              return t ? { text: t } : null;
-            }
-            return v ? { field: v } : null;
-          }).filter(Boolean);
-          var toObj = { numbers: to.list };
-          if (byBranch) toObj.by_branch = byBranch;
-          out.send = {
-            template: tmpl,
-            lang: r.querySelector(".al-lang").value || "en",
-            params: specs,
-            to: toObj,
-            dedupe_minutes: Math.max(0, parseInt(r.querySelector(".al-dedupe").value, 10) || 0),
-            stale_days: Math.max(0, parseInt(r.querySelector(".al-stale").value, 10) || 0),
-          };
+          var tmpl = r.querySelector(".al-tmpl").value.trim();
+          var to = parseContactLines(r.querySelector(".al-to").value);
+          to.bad.forEach(function (b) { problems.push("Alert " + (i + 1) + " (automatic): “" + b + "” has no usable number."); });
+          var byBranch = null;
+          try { byBranch = JSON.parse(r.getAttribute("data-by-branch") || "null"); } catch (e) { byBranch = null; }
+          if (!tmpl) {
+            problems.push("Alert " + (i + 1) + " is set to send automatically but has no approved template name.");
+          } else if (!to.list.length && !byBranch) {
+            problems.push("Alert " + (i + 1) + " is set to send automatically but has nobody to send to.");
+          } else {
+            var specs = [].slice.call(r.querySelectorAll(".al-params .al-p")).map(function (pr) {
+              var v = pr.querySelector(".ap-field").value;
+              if (v === "__text") {
+                var t = pr.querySelector(".ap-text").value.trim();
+                return t ? { text: t } : null;
+              }
+              return v ? { field: v } : null;
+            }).filter(Boolean);
+            var toObj = { numbers: to.list };
+            if (byBranch) toObj.by_branch = byBranch;
+            out.send = {
+              template: tmpl,
+              lang: r.querySelector(".al-lang").value || "en",
+              params: specs,
+              to: toObj,
+              dedupe_minutes: Math.max(0, parseInt(r.querySelector(".al-dedupe").value, 10) || 0),
+              stale_days: Math.max(0, parseInt(r.querySelector(".al-stale").value, 10) || 0),
+            };
+          }
         }
       }
       return out;
