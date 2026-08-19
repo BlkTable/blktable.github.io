@@ -2077,7 +2077,8 @@
     loadRole(session.user.id);
     loadApps();
     loadBranchTints();
-    loadCustomTables();
+    // keep the promise so a pending deeplink can fire once tables are ready
+    var tablesP = loadCustomTables();
     loadBuiltinTokens();
     loadBuiltinExtra();
     loadStars();
@@ -2088,6 +2089,10 @@
     loadMyAssigned();
     paintSharedCount();
     showView("home");
+    if (pendingDeeplink) {
+      var dl = pendingDeeplink; pendingDeeplink = null;
+      tablesP.then(function () { openDeeplink(dl); });
+    }
   }
   var assignUsers = [];
   function loadAssignUsers() {
@@ -4526,6 +4531,7 @@
   var WA_LANGS = [["en", "English"], ["ar", "العربية"], ["en_US", "English (US)"], ["ar_JO", "العربية (الأردن)"]];
   function bldFieldOptionsHtml(selected, extra) {
     var out = extra ? '<option value="__text">— fixed text —</option>' : '<option value="">— choose a question —</option>';
+    if (extra) out += '<option value="__record_link"' + (selected === "__record_link" ? " selected" : "") + ">Record link</option>";
     bldAlertFields.forEach(function (f) {
       out += '<option value="' + esc(f.id) + '"' + (f.id === selected ? " selected" : "") + ">" +
         esc(f.label || "(untitled)") + "</option>";
@@ -9705,6 +9711,37 @@
     });
     inp.addEventListener("blur", function () { if (!inp.value) w.classList.remove("open"); });
   });
+
+  // ---- Deep-link: #rec=<tableId>:<recordId> ----
+  // Parse once at boot, stored until tables are loaded. Cleared on open so a refresh
+  // does not re-trap. Persisted across a login step via pendingDeeplink.
+  function parseRecHash(hash) {
+    var m = String(hash || "").match(/^#rec=([^:]+):(.+)$/);
+    if (!m) return null;
+    return { tableId: m[1], recordId: m[2] };
+  }
+  var pendingDeeplink = parseRecHash(location.hash);
+
+  function openDeeplink(dl) {
+    if (!dl) return;
+    var t = (customTables || []).filter(function (x) { return x.id === dl.tableId; })[0];
+    if (!t) return;   // no access or unknown table, fall through to home
+    openCustomTable(t);
+    db.from("app_submissions").select("*").eq("id", dl.recordId).limit(1)
+      .then(function (r) {
+        var row = r && r.data && r.data[0];
+        if (!row) return;
+        return db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true })
+          .then(function (fr) {
+            currentCustom = { table: t, fields: fr.data || [], subs: row ? [row] : [], branch: null };
+            openCustomDetail(row, fr.data || []);
+          });
+      })
+      .catch(function () {});
+    if (window.history && window.history.replaceState) {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  }
 
   // ---- On load: restore session if present ----
   db.auth.getSession().then(function (res) {
