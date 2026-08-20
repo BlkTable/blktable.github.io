@@ -328,37 +328,32 @@ git commit -m "feat(branch): pure helpers for canonical branch options + field d
 
 **Files:** Modify `index.html` in `runBuilderSave` (the create branch, ~line 8410)
 
-- [ ] **Step 1: Update the create insert to set config.branch_field**
+- [ ] **Step 1: Capture the inserted field rows so their ids are available**
 
-Find (index.html create path):
+The field ids do not exist until `app_fields` are inserted. Reuse the `detectBranchFieldId` helper (added in B5) against the rows returned from the insert, then patch `config.branch_field`. Change the `app_fields` insert to select its rows back.
 
-```js
-    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() } }).select().single().then(function (tRes) {
-```
-
-The field ids do not exist until `app_fields` are inserted, so set `config.branch_field` in a follow-up update after the fields are written. Inside the `.then` that has `tid` and inserted fields, after the `app_fields` insert resolves, add:
+Find (index.html create path, ~line 8412):
 
 ```js
-      var brIdx = fields.findIndex(function (f) { return f.type === "dropdown" && /branch|الفرع/i.test(f.label || ""); });
+      return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields); })
+        .then(function () { return tRes.data; });
 ```
 
-Then, after `writePendingConds(tid, fields)` resolves and the real field rows are known, resolve the branch field id and patch config. Simplest reliable approach: re-read the inserted dropdown branch field id and update config:
+Replace with (capture inserted rows, then designate the branch field via the shared helper):
 
 ```js
-      .then(function () {
-        if (brIdx < 0) return tRes.data;
-        return db.from("app_fields").select("id").eq("table_id", tid).eq("position", fields[brIdx].position).single()
-          .then(function (r) {
-            if (r && r.data) {
-              var cfg = tRes.data.config || {}; cfg.branch_field = r.data.id;
-              return db.from("app_tables").update({ config: cfg }).eq("id", tid).then(function () {
-                tRes.data.config = cfg; return tRes.data;
-              });
-            }
-            return tRes.data;
-          });
-      })
+      return db.from("app_fields").insert(toInsert).select().then(function (fRes) { if (fRes.error) throw fRes.error;
+        return writePendingConds(tid, fields).then(function () {
+          var brId = detectBranchFieldId(fRes.data);
+          if (!brId) return tRes.data;
+          var cfg = tRes.data.config || {}; cfg.branch_field = brId;
+          return db.from("app_tables").update({ config: cfg }).eq("id", tid)
+            .then(function () { tRes.data.config = cfg; return tRes.data; });
+        });
+      });
 ```
+
+This keeps the branch-field detection logic in one place (`detectBranchFieldId`) rather than duplicating the label regex inline.
 
 - [ ] **Step 2: Manual smoke (no unit test — DB round-trip)**
 
