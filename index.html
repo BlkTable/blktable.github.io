@@ -8787,7 +8787,7 @@
           if (!brId) return tRes.data;
           var cfg = tRes.data.config || {}; cfg.branch_field = brId;
           return db.from("app_tables").update({ config: cfg }).eq("id", tid)
-            .then(function () { tRes.data.config = cfg; return tRes.data; });
+            .then(function (uRes) { if (uRes.error) throw uRes.error; tRes.data.config = cfg; return tRes.data; });
         });
       });
     }).then(function (t) {
