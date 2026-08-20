@@ -5583,6 +5583,18 @@
       })
       .catch(function () {});
   }
+  function branchDropdownOptions(rows, listKey) {
+    var key = listKey || "jo";
+    return (rows || []).filter(function (b) { return (b.list_key || "jo") === key; })
+      .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
+      .map(function (b) { return { en: b.name, ar: b.name_ar || "" }; });
+  }
+  function detectBranchFieldId(fields) {
+    var hit = (fields || []).find(function (f) {
+      return f.type === "dropdown" && /branch|الفرع/i.test(f.label || "");
+    });
+    return hit ? hit.id : null;
+  }
   function hasArabic(s) { return /[؀-ۿ]/.test(String(s || "")); }
   // ---- Scores ------------------------------------------------------------------
   // A percentage is stored as a fraction (0.9444) exactly as Airtable stores it, and
