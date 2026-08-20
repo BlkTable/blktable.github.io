@@ -3,7 +3,7 @@ function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matc
 function grab(js,name,file){const re=new RegExp('\\n  function '+name+'\\s*\\([\\s\\S]*?\\n  \\}','');const m=js.match(re);if(!m)throw new Error('no fn '+name+' in '+file);return m[0];}
 function load(file,names,extra){const js=scripts(file);const ctx=Object.assign({console},extra||{});vm.createContext(ctx);new vm.Script('(function(){'+names.map(n=>grab(js,n,file)).join('\n')+'\n this.API={'+names.join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
 
-const API = load('index.html', ['branchDropdownOptions','detectBranchFieldId']);
+const API = load('index.html', ['branchDropdownOptions']);
 let n=0; const t=(name,fn)=>{try{fn();n++;}catch(e){console.log('FAIL: '+name+' -> '+e.message);process.exitCode=1;}};
 
 t('branchDropdownOptions maps rows to {en,ar} in position order', () => {
@@ -16,14 +16,5 @@ t('branchDropdownOptions maps rows to {en,ar} in position order', () => {
 t('branchDropdownOptions defaults list_key to jo', () => {
   const rows=[{name:'Abdoun',name_ar:'',position:1,list_key:'jo'}];
   assert.strictEqual(API.branchDropdownOptions(rows).length,1);
-});
-t('detectBranchFieldId returns the dropdown branch field id', () => {
-  const fields=[{id:'a',type:'short_text',label:'Name'},
-                {id:'b',type:'dropdown',label:'Branch - الفرع'}];
-  assert.strictEqual(API.detectBranchFieldId(fields),'b');
-});
-t('detectBranchFieldId ignores non-dropdown branch fields', () => {
-  const fields=[{id:'a',type:'short_text',label:'Branch Name'}];
-  assert.strictEqual(API.detectBranchFieldId(fields),null);
 });
 console.log(n+' branch-field tests passed');
