@@ -3455,6 +3455,7 @@
     else if (f.type === "number") inner = edNum(id, v);
     else if (f.type === "phone") inner = edPhone(id, v);
     else if (f.type === "country") inner = edSelect(id, v, [""].concat(COUNTRY_NAMES));
+    else if (f.type === "branch") inner = edSelect(id, v, [""].concat(branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; })));
     else if (f.type === "link") { var lo = f.options || {}; inner = lo.url ? '<a href="' + esc(lo.url) + '" target="_blank" rel="noopener">' + esc(lo.text || lo.url) + "</a>" : '<span style="color:var(--silver);">No link set</span>'; }
     else inner = edText(id, v, false);
     // Only the create panel marks what must be answered; the record panel is autosave and
@@ -3507,6 +3508,7 @@
       if (f.type === "long_text") inner = edText(id, v, true);
       else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
       else if (f.type === "dropdown") inner = edSelect(id, v, [""].concat((f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })));
+      else if (f.type === "branch") inner = edSelect(id, v, [""].concat(branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; })));
       else if (f.type === "date") inner = edDate(id, v);
       else if (f.type === "number") inner = edNum(id, v);
       else inner = edText(id, v, false);
@@ -5526,6 +5528,7 @@
   // because there the colour carries meaning rather than identity.
   var TINT_N = 20;
   var branchTint = {};       // canonical branch name (lowercased) -> tint, from `branches`
+  var allBranches = [];
   function hashTint(s) {
     var h = 0;
     for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -5570,9 +5573,10 @@
   // real branch list across the palette by position beats hashing 38 names into 20 slots,
   // where luck decides how many collide.
   function loadBranchTints() {
-    db.from("branches").select("name,position").order("position", { ascending: true })
+    db.from("branches").select("name,name_ar,position,list_key").order("position", { ascending: true })
       .then(function (res) {
         if (!res || res.error || !res.data) return;
+        allBranches = res.data;
         var map = {};
         res.data.forEach(function (b, i) {
           if (b && b.name) map[String(b.name).trim().toLowerCase()] = i % TINT_N;

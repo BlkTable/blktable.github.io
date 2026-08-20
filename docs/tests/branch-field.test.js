@@ -17,4 +17,20 @@ t('branchDropdownOptions defaults list_key to jo', () => {
   const rows=[{name:'Abdoun',name_ar:'',position:1,list_key:'jo'}];
   assert.strictEqual(API.branchDropdownOptions(rows).length,1);
 });
+t('branchDropdownOptions filters by franchise list_key', () => {
+  const rows=[
+    {name:'Abdoun',name_ar:'عبدون',position:1,list_key:'jo'},
+    {name:'Basra',name_ar:'البصرة',position:0,list_key:'iraq'},
+    {name:'Zarqa',name_ar:'الزرقاء',position:2,list_key:'jo'},
+    {name:'Baghdad',name_ar:'بغداد',position:1,list_key:'iraq'}
+  ];
+  const iraq=API.branchDropdownOptions(rows,'iraq');
+  assert.strictEqual(iraq.length,2);
+  assert.strictEqual(iraq[0].en,'Basra');
+  assert.strictEqual(iraq[1].en,'Baghdad');
+  const jo=API.branchDropdownOptions(rows,'jo');
+  assert.strictEqual(jo.length,2);
+  assert.strictEqual(jo[0].en,'Abdoun');
+  assert.strictEqual(jo[1].en,'Zarqa');
+});
 console.log(n+' branch-field tests passed');
