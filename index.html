@@ -8781,15 +8781,8 @@
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if }; });
-      return db.from("app_fields").insert(toInsert).select().then(function (fRes) { if (fRes.error) throw fRes.error;
-        return writePendingConds(tid, fields).then(function () {
-          var brId = detectBranchFieldId(fRes.data);
-          if (!brId) return tRes.data;
-          var cfg = tRes.data.config || {}; cfg.branch_field = brId;
-          return db.from("app_tables").update({ config: cfg }).eq("id", tid)
-            .then(function (uRes) { if (uRes.error) throw uRes.error; tRes.data.config = cfg; return tRes.data; });
-        });
-      });
+      return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields); })
+        .then(function () { return tRes.data; });
     }).then(function (t) {
       clearDraft(); closeBuilder(); loadCustomTables();
       setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
