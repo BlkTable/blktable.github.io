@@ -2138,7 +2138,7 @@
     return (row.actor_name || "Someone") + " " + verb + " " + (row.table_name || "a table");
   }
   function loadRole(userId) {
-    db.from("profiles").select("role, full_name, avatar_path").eq("id", userId).single()
+    db.from("profiles").select("role, full_name, avatar_path, can_create_tables").eq("id", userId).single()
       .then(function (res) {
         var role = (res.data && res.data.role) || "reviewer";
         var nm = (res.data && res.data.full_name) || document.getElementById("pf-name").textContent;
@@ -2148,7 +2148,7 @@
         var av = document.getElementById("pf-avatar"); av.textContent = (nm || "?").charAt(0).toUpperCase();
         if (res.data && res.data.avatar_path) getThumbUrl(res.data.avatar_path).then(function (u) { if (u) { av.style.background = "url(" + u + ") center/cover"; av.textContent = ""; } });
         isAdmin = role === "admin";
-        document.getElementById("side-create").style.display = isAdmin ? "flex" : "none";
+        document.getElementById("side-create").style.display = canCreateTablesFrom(res.data) ? "flex" : "none";
         document.getElementById("pf-users").style.display = isAdmin ? "block" : "none";
         if (isAdmin) loadBuilderUsers();
         ["ja-qr-regen", "cast-qr-regen", "custom-qr-regen"].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = isAdmin ? "inline-block" : "none"; });
@@ -4305,7 +4305,7 @@
   // Turn a form's public link on or off — the is_active control the app never had. Kept
   // separate from archiving on purpose (archiving hides the table but keeps the link live).
   function setFormLive(t, on) {
-    if (!t || !isAdmin) return;
+    if (!t || !mayModifyTable(t, myUserId, isAdmin)) return;
     db.from("app_tables").update({ is_active: on }).eq("id", t.id).then(function (r) {
       if (r && r.error) {
         window.alert("Could not turn the public link " + (on ? "on" : "off") + ".\n\n" +
@@ -5044,11 +5044,11 @@
       var live = linkLive(t), tog = document.getElementById("custom-qr-toggle");
       ca.style.opacity = live ? "" : "0.45";
       document.getElementById("custom-link-off").style.display = (live || isTask) ? "none" : "";
-      tog.style.display = (isAdmin && !isTask) ? "" : "none";
+      tog.style.display = (mayModifyTable(t, myUserId, isAdmin) && !isTask) ? "" : "none";
       tog.textContent = live ? "Turn link off" : "Turn link on";
     }
-    document.getElementById("custom-edit").style.display = isAdmin ? "inline-flex" : "none";
-    document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
+    document.getElementById("custom-edit").style.display = mayModifyTable(t, myUserId, isAdmin) ? "inline-flex" : "none";
+    document.getElementById("custom-share").style.display = mayModifyTable(t, myUserId, isAdmin) ? "" : "none";
     // Adding a record by hand is an edit, so it follows can_edit rather than admin — the same
     // permission that lets someone change an answer already on file.
     document.getElementById("custom-new").style.display = canEdit(t.id) ? "" : "none";
