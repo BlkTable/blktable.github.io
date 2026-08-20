@@ -230,6 +230,7 @@
   }
   var controls = []; // {f, wrap, validate(), value(), isPhoto, file()}
   var currentTable = null;
+  var BRANCHES = [];
   var submitDevice = null;   // set once the form declares it is one-per-browser
   var visible = {};  // field id -> is this question being asked right now
 
@@ -528,6 +529,18 @@
         otherKey: hasOther ? f.id + "__other" : null,
         otherValue: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v]) ? (otherInp.value.trim() || null) : null; }
       });
+    } else if (f.type === "branch") {
+      var listKey = (f.options && f.options.list) || "jo";
+      var dopts = BRANCHES.filter(function (b) { return (b.list_key || "jo") === listKey; })
+        .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
+        .map(function (b) { return { value: b.name, label: b.name + (b.name_ar ? " / " + b.name_ar : "") }; });
+      var combo = buildCombo(f, dopts, function (v) { applyConditions(); });
+      wrap.appendChild(combo.wrap);
+      controls.push({
+        f: f, el: combo.input,
+        validate: function () { return !f.required || !!combo.getValue(); },
+        value: function () { return combo.getValue(); }
+      });
     } else if (f.type === "yesno") {
       var sel = document.createElement("select"); sel.id = id;
       var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Select… / اختر"; sel.appendChild(opt0);
@@ -824,7 +837,10 @@
           showClosed(al.head, al.body);
           return;
         }
-        db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (fRes) {
+        var fieldsReady = db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true });
+        var branchesReady = db.from("branches").select("name,name_ar,position,list_key").order("position", { ascending: true }).then(function (r) { BRANCHES = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
+        Promise.all([fieldsReady, branchesReady]).then(function (results) {
+          var fRes = results[0];
           if (fRes.error) { notFound(); return; }
           var st = slotsText(slots);
           if (st && st.blocked) {
