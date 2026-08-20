@@ -1958,6 +1958,9 @@
         <div class="m-row" style="margin-top:4px;"><label>Role</label>
           <select id="u-role"><option value="reviewer">Reviewer (view only)</option><option value="admin">Admin (full access)</option></select>
         </div>
+        <div class="m-row" id="u-create-tables-wrap" style="margin-top:4px;"><label>Tables</label>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:normal;"><input type="checkbox" id="u-create-tables"> Can create and own their own tables</label>
+        </div>
         <div id="u-tables-wrap">
           <div class="fp-label" style="margin: 8px 0 6px;">Tables this user can view</div>
           <div id="u-tables" class="u-tables"></div>
@@ -8947,7 +8950,7 @@
     var listEl = document.getElementById("users-list"), emptyEl = document.getElementById("users-empty");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     Promise.all([
-      db.from("profiles").select("id,email,role,created_at,full_name,avatar_path").order("created_at", { ascending: true }),
+      db.from("profiles").select("id,email,role,created_at,full_name,avatar_path,can_create_tables").order("created_at", { ascending: true }),
       db.from("table_access").select("user_id,table_key,can_edit,can_manage,scope")
     ]).then(function (r) {
       var profs = (r[0] && r[0].data) || [], acc = (r[1] && r[1].data) || [];
@@ -8963,7 +8966,7 @@
         row.innerHTML =
           '<div class="ja-thumb">' + esc((display || "?").charAt(0).toUpperCase()) + "</div>" +
           '<div class="info"><div class="name">' + esc(display) + (me ? ' <span style="color:var(--muted);font-size:var(--fs-2);">(you)</span>' : "") + "</div>" +
-          '<div class="sub">' + esc(p.email || "") + " · " + esc(p.role) + " · " + esc(tnames) + "</div></div>" +
+          '<div class="sub">' + esc(p.email || "") + " · " + esc(p.role) + (p.role !== "admin" && p.can_create_tables ? " · can create tables" : "") + " · " + esc(tnames) + "</div></div>" +
           '<div class="row-actions"><div class="card-actions"><button class="btn-view u-edit">Edit</button>' + (me ? "" : '<button class="btn-del u-del">Delete</button>') + "</div></div>";
         row.querySelector(".u-edit").addEventListener("click", function () { openUserModal(p, access); });
         var dl = row.querySelector(".u-del"); if (dl) dl.addEventListener("click", function () { deleteUser(p); });
@@ -8985,7 +8988,10 @@
     document.getElementById("u-role").value = user ? user.role : "reviewer";
     document.getElementById("u-create").textContent = user ? "Save changes" : "Create account";
     document.getElementById("u-msg").textContent = "";
-    document.getElementById("u-tables-wrap").style.display = document.getElementById("u-role").value === "admin" ? "none" : "block";
+    document.getElementById("u-create-tables").checked = !!(user && user.can_create_tables);
+    var uShow = document.getElementById("u-role").value === "admin" ? "none" : "block";
+    document.getElementById("u-tables-wrap").style.display = uShow;
+    document.getElementById("u-create-tables-wrap").style.display = uShow;
     renderUserTables();
     if (user && accessList) accessList.forEach(function (a) {
       var acc = document.querySelector('#u-tables .u-acc[value="' + a.table_key + '"]');
@@ -9019,10 +9025,10 @@
     var path = "avatars/" + id + "_" + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : String(Date.now())) + "_" + safe;
     return db.storage.from("photos").upload(path, file, { upsert: false }).then(function (r) { if (r.error) throw r.error; return r.data.path; });
   }
-  function saveProfileExtras(id, name, file) {
+  function saveProfileExtras(id, name, file, canCreate) {
     var p = file ? uploadAvatar(id, file) : Promise.resolve(null);
     return p.then(function (path) {
-      var patch = { full_name: name || null };
+      var patch = { full_name: name || null, can_create_tables: !!canCreate };
       if (path) patch.avatar_path = path;
       return db.from("profiles").update(patch).eq("id", id).then(function (r) { if (r.error) throw r.error; });
     });
@@ -9030,12 +9036,13 @@
   document.getElementById("users-new").addEventListener("click", function () { openUserModal(null); });
   document.getElementById("users-close").addEventListener("click", function () { usersModal.classList.remove("open"); });
   usersModal.addEventListener("click", function (e) { if (e.target === this) usersModal.classList.remove("open"); });
-  document.getElementById("u-role").addEventListener("change", function () { document.getElementById("u-tables-wrap").style.display = this.value === "admin" ? "none" : "block"; });
+  document.getElementById("u-role").addEventListener("change", function () { var s = this.value === "admin" ? "none" : "block"; document.getElementById("u-tables-wrap").style.display = s; document.getElementById("u-create-tables-wrap").style.display = s; });
   document.getElementById("u-create").addEventListener("click", function () {
     var msg = document.getElementById("u-msg");
     var email = document.getElementById("u-email").value.trim();
     var pass = document.getElementById("u-pass").value;
     var role = document.getElementById("u-role").value;
+    var canCreate = role !== "admin" && document.getElementById("u-create-tables").checked;
     var name = document.getElementById("u-name").value.trim();
     if (!name) { msg.textContent = "Enter a name."; return; }
     if (!email) { msg.textContent = "Enter an email."; return; }
@@ -9056,7 +9063,7 @@
       db.functions.invoke("admin-users", { body: { email: email, password: pass, role: role } }).then(function (res) {
         var e = invokeErr(res); if (e) throw new Error(e);
         var newId = res.data && res.data.id; if (!newId) throw new Error("no id returned");
-        return saveProfileExtras(newId, name, uPhotoFile).then(function () {
+        return saveProfileExtras(newId, name, uPhotoFile, canCreate).then(function () {
           if (role !== "admin" && access.length) return db.from("table_access").insert(access.map(function (a) { return { user_id: newId, table_key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage, scope: a.scope }; }));
           return { error: null };
         });
@@ -9076,7 +9083,7 @@
       var chain = Promise.resolve();
       if (Object.keys(patch).length) chain = chain.then(function () { return db.functions.invoke("admin-users", { body: Object.assign({ action: "update", id: id }, patch) }).then(function (res) { var e = invokeErr(res); if (e) throw new Error(e); }); });
       chain = chain.then(function () { return db.from("profiles").update({ role: role }).eq("id", id).then(function (r) { if (r.error) throw r.error; }); });
-      chain = chain.then(function () { return saveProfileExtras(id, name, uPhotoFile); });
+      chain = chain.then(function () { return saveProfileExtras(id, name, uPhotoFile, canCreate); });
       chain = chain.then(function () { return db.from("table_access").delete().eq("user_id", id).then(function (r) { if (r.error) throw r.error; }); });
       if (role !== "admin" && access.length) chain = chain.then(function () { return db.from("table_access").insert(access.map(function (a) { return { user_id: id, table_key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage, scope: a.scope }; })).then(function (r) { if (r.error) throw r.error; }); });
       chain.then(function () { usersModal.classList.remove("open"); loadUsers(); window.alert("Saved."); }).catch(function (err) { msg.textContent = "Could not save. " + errText(err); if (window.console) console.error(err); });
