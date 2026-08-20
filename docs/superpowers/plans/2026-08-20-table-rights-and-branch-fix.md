@@ -82,62 +82,71 @@ If `branches` has no `name_ar`, drop `ar` from generated options (use `''`). If 
 
 ---
 
-## PART B — Branch normalization (ship first)
+## PART B — Branch as a first-class field type (ship first)
+
+Design pivot (2026-08-20, after inspection): the branch field is on ~80 tables, most internal/imported and already populated, and the `%branch%` label match has many false positives. So instead of a fragile "detect a dropdown labelled branch + config.branch_field" heuristic, `branch` becomes a real field TYPE. A `type='branch'` field renders as a dropdown fed live from the `branches` table filtered by a `list` key (jo/iraq/lebanon for franchises). The DB trigger copies the `type='branch'` field's answer into `app_submissions.branch`. Existing genuine single-branch pickers are converted to the new type via a CURATED list (reviewed before running), never a blanket label match.
+
+Inspection facts to build against: `is_admin()` takes NO args; auth reads gated by `can_access(text)`; `profiles.role` is enum `user_role`; `branches` has columns id, name, name_ar, is_active, position, created_at, code (NO list_key yet); `app_submissions.branch` column exists; public form keys answers by field UUID (`data[fieldId]`).
 
 ### File structure (Part B)
-- `~/Documents/blktable-migration/branch-01-list-key.sql` — add `branches.list_key`, seed domestic `jo`.
-- `~/Documents/blktable-migration/branch-02-designate-and-trigger.sql` — set `config.branch_field` per table, create the populate trigger.
-- `~/Documents/blktable-migration/branch-03-backfill.sql` — backfill existing rows + report mismatches.
-- `~/Documents/blktable-migration/branch-04-type-and-options.sql` — convert free-text branch fields to dropdown, regenerate divergent option lists from canonical.
-- `index.html` — add `detectBranchFieldId`, `branchDropdownOptions`; wire `config.branch_field` on table create.
-- `docs/tests/branch-field.test.js` — tests for the two pure helpers.
+- `~/Documents/blktable-migration/branch-01-list-key-and-anon.sql` — add `branches.list_key`, seed jo, anon SELECT on branches.
+- `~/Documents/blktable-migration/branch-02-trigger.sql` — trigger populating `app_submissions.branch` from the `type='branch'` field.
+- `~/Documents/blktable-migration/branch-03-convert-candidates.sql` — READ-ONLY candidate list of fields to convert (for Yazan review).
+- `~/Documents/blktable-migration/branch-04-convert-and-backfill.sql` — convert approved fields to `type='branch'` + backfill branch column.
+- `index.html` — FIELD_TYPES, typeUsesOpts/optsPlaceholder, serialize, edit-render, full `allBranches` load; reuse `branchDropdownOptions`.
+- `f/index.html` — load branches, render `type='branch'` via buildCombo.
+- `docs/tests/branch-field.test.js` — extend for the field-type rendering helpers.
 
-### Task B1 (D): branches.list_key
+### Task B1 (D): branches.list_key + seed + anon read
 
-**Files:** Create `~/Documents/blktable-migration/branch-01-list-key.sql`
+**Files:** Create `~/Documents/blktable-migration/branch-01-list-key-and-anon.sql`
 
 - [ ] **Step 1: Write the SQL**
 
 ```sql
 begin;
 alter table public.branches add column if not exists list_key text not null default 'jo';
--- domestic shops stay 'jo' (the default). Franchise lists are seeded later per country.
-\echo 'VERIFY: every existing branch is jo unless already tagged'
+
+-- Public forms (anon) must read the preset list to render a branch dropdown. Names are
+-- already embedded in every existing branch dropdown, so this exposes nothing new.
+grant select on public.branches to anon, authenticated;
+alter table public.branches enable row level security;
+drop policy if exists branches_anon_read on public.branches;
+create policy branches_anon_read on public.branches for select to anon, authenticated using (true);
+
+\echo 'VERIFY: list_key present, all jo, anon can see rows'
 select list_key, count(*) from public.branches group by 1 order by 1;
+select policyname, cmd, roles from pg_policies where schemaname='public' and tablename='branches';
 commit;
 ```
 
 - [ ] **Step 2: Yazan applies + pastes verify**
 
-Run: `docker exec -i supabase-db psql -U postgres -d postgres < ~/Documents/blktable-migration/branch-01-list-key.sql`
-Expected: one row `jo | <branch_rows>` matching the count from Task 0.
+Run: `ssh ali@2.28.1.141 'docker exec -i supabase-db psql -U postgres -d postgres' < ~/Documents/blktable-migration/branch-01-list-key-and-anon.sql`
+Expected: one row `jo | 38`; a `branches_anon_read` SELECT policy for {anon,authenticated}.
 
-### Task B2 (D): designate branch field + populate trigger
+- [ ] **Step 3: Franchise lists (needs Yazan's data)**
 
-**Files:** Create `~/Documents/blktable-migration/branch-02-designate-and-trigger.sql`
+When Yazan provides Iraq/Lebanon branch names, insert them with `list_key='iraq'` / `'lebanon'`. Until then, jo is the only list; contact-us-iraq/lebanon branch fields will show an empty list, which is acceptable (0 submissions today).
+
+### Task B2 (D): trigger populating the branch column from the branch field
+
+**Files:** Create `~/Documents/blktable-migration/branch-02-trigger.sql`
 
 - [ ] **Step 1: Write the SQL**
 
 ```sql
 begin;
--- Designate the branch field per table: the dropdown whose label names the branch.
--- type='dropdown' excludes the stray short_text and the pf-* link fields.
-update public.app_tables t
-set config = jsonb_set(coalesce(t.config,'{}'::jsonb), '{branch_field}', to_jsonb(f.id::text))
-from public.app_fields f
-where f.table_id = t.id
-  and f.type = 'dropdown'
-  and (f.label ilike '%branch%' or f.label like '%الفرع%');
-
--- Single choke point: every write path (submit RPC, create_record, inline edit) passes here.
+-- The branch field is identified by TYPE. There is at most one per table. Copy its answer
+-- (keyed by field id in the data blob) into the structured branch column on every write.
 create or replace function public.app_submissions_set_branch()
-returns trigger
-language plpgsql
-as $$
+returns trigger language plpgsql as $$
 declare v_field text;
 begin
-  select t.config->>'branch_field' into v_field
-  from public.app_tables t where t.id = new.table_id;
+  select f.id::text into v_field
+  from public.app_fields f
+  where f.table_id = new.table_id and f.type = 'branch'
+  order by f.position limit 1;
   if v_field is not null and (new.data ? v_field) then
     new.branch := nullif(new.data->>v_field, '');
   end if;
@@ -149,224 +158,118 @@ create trigger trg_app_submissions_set_branch
   before insert or update of data on public.app_submissions
   for each row execute function public.app_submissions_set_branch();
 
-\echo 'VERIFY: tables now carrying a branch_field'
-select slug, config->>'branch_field' as branch_field
-from public.app_tables where config ? 'branch_field' order by slug;
+\echo 'VERIFY: trigger exists'
+select tgname from pg_trigger where tgname = 'trg_app_submissions_set_branch';
 commit;
 ```
 
 - [ ] **Step 2: Yazan applies + pastes verify**
 
-Expected: contact-us, customer-complaints, customer-praise, feedback-fad-fed each show a non-null `branch_field`. content-creators will NOT appear yet (still short_text — fixed in B4, which re-runs the designate step).
+Expected: `trg_app_submissions_set_branch` listed. No data changes yet (no field is `type='branch'` until B4).
 
-### Task B3 (D): backfill existing rows
+### Task B3 (D): produce the curated conversion candidate list (READ ONLY)
 
-**Files:** Create `~/Documents/blktable-migration/branch-03-backfill.sql`
+**Files:** Create `~/Documents/blktable-migration/branch-03-convert-candidates.sql`
 
-- [ ] **Step 1: Write the SQL**
-
-```sql
-begin;
-update public.app_submissions s
-set branch = nullif(s.data->>(t.config->>'branch_field'), '')
-from public.app_tables t
-where t.id = s.table_id
-  and t.config ? 'branch_field'
-  and s.branch is null
-  and s.data ? (t.config->>'branch_field');
-
-\echo 'VERIFY: branch fill rate per table after backfill'
-select t.slug,
-       count(*) as rows,
-       count(s.branch) as with_branch
-from public.app_tables t
-join public.app_submissions s on s.table_id=t.id
-where t.config ? 'branch_field'
-group by t.slug order by t.slug;
-
-\echo 'REPORT: branch values not matching a canonical branch name (manual cleanup list)'
-select t.slug, s.branch, count(*)
-from public.app_tables t
-join public.app_submissions s on s.table_id=t.id
-where t.config ? 'branch_field' and s.branch is not null
-  and not exists (select 1 from public.branches b where b.name = s.branch)
-group by 1,2 order by 1,3 desc;
-commit;
-```
-
-- [ ] **Step 2: Yazan applies + pastes verify**
-
-Expected: `with_branch` jumps toward `rows` (allowing for conditional fields like contact-us where branch only applies to Complaint submissions). Save the REPORT list; hand it to Yazan for manual cleanup. Because branch is a dropdown going forward, this list can only contain pre-existing values and will not grow.
-
-### Task B4 (D): free-text → dropdown + canonical option lists
-
-**Files:** Create `~/Documents/blktable-migration/branch-04-type-and-options.sql`
-
-- [ ] **Step 1: Write the SQL** (drop `name_ar` per Task 0 if `branches` has no such column)
+- [ ] **Step 1: Write the SQL** — surfaces genuine single-branch pickers on active public forms and EXCLUDES the false-positive categories.
 
 ```sql
-begin;
--- Canonical options for the domestic list, built once.
-create temporary table _canon_jo as
-select jsonb_agg(jsonb_build_object('en', b.name, 'ar', coalesce(b.name_ar,'')) order by b.position) as opts
-from public.branches b where b.list_key = 'jo';
-
--- 1) Convert free-text branch fields to dropdown with the canonical list.
-update public.app_fields f
-set type = 'dropdown', options = (select opts from _canon_jo)
-where f.type in ('short_text','text')
-  and (f.label ilike '%branch%' or f.label like '%الفرع%');
-
--- 2) Regenerate the divergent/duplicated existing branch dropdowns from canonical.
-update public.app_fields f
-set options = (select opts from _canon_jo)
-where f.type = 'dropdown'
-  and (f.label ilike '%branch%' or f.label like '%الفرع%');
-
--- 3) Re-run designation so newly-converted fields get config.branch_field.
-update public.app_tables t
-set config = jsonb_set(coalesce(t.config,'{}'::jsonb), '{branch_field}', to_jsonb(f.id::text))
-from public.app_fields f
-where f.table_id = t.id and f.type='dropdown'
+-- READ ONLY. Lists fields proposed for conversion to type='branch'.
+-- Include: dropdown/short_text branch selectors on active public forms.
+-- Exclude: link/number/yesno/long_text/multi_select, Airtable lookup "(from ...)" cols,
+--          dual source/destination, bank branch, area/location free-text.
+select t.slug, t.name, t.is_active, f.id, f.label, f.type,
+  (select count(*) from app_submissions s where s.table_id=t.id) rows,
+  (select count(*) from app_submissions s where s.table_id=t.id and s.branch is not null) with_branch
+from app_tables t
+join app_fields f on f.table_id = t.id
+where t.kind = 'form' and t.is_active = true
+  and f.type in ('dropdown','short_text')
   and (f.label ilike '%branch%' or f.label like '%الفرع%')
-  and not (t.config ? 'branch_field');
+  and f.label not ilike '%(from %'          -- Airtable lookup columns
+  and f.label not ilike '%bank%'            -- "which bank/branch"
+  and f.label not ilike '%location%'        -- area/location pickers
+  and f.label not ilike '%tawjihi%'         -- education branch
+  and f.label not ilike '%source%'
+  and f.label not ilike '%destination%'
+  and f.label not ilike '%origin%'
+order by t.slug, f.type;
+```
 
-\echo 'VERIFY: no branch field is still free-text'
-select slug, f.label, f.type from public.app_tables t
-join public.app_fields f on f.table_id=t.id
-where (f.label ilike '%branch%' or f.label like '%الفرع%') and f.type in ('short_text','text');
-\echo 'VERIFY: content-creators now has a branch_field'
-select slug, config->>'branch_field' from public.app_tables where slug='content-creators';
+- [ ] **Step 2: Yazan runs it; together we finalize the id list**
+
+Yazan pastes the output. The controller reviews each row and produces the final approved id list for B4 (dropping any Yazan vetoes, tagging each with its `list` key: jo, or iraq/lebanon for the franchise contact-us forms). Content-creators "Branch Name" (short_text) is a definite include; contact-us JO/Iraq/Lebanon are definite includes with their respective list keys.
+
+### Task B4 (D): convert approved fields + backfill
+
+**Files:** Create `~/Documents/blktable-migration/branch-04-convert-and-backfill.sql` (ids filled from B3 review)
+
+- [ ] **Step 1: Write the SQL** — `<IDS_JO>` / `<IDS_IRAQ>` / `<IDS_LEBANON>` are the approved field-id lists from B3.
+
+```sql
+begin;
+-- Convert approved pickers to the branch field type, tagging which preset list to show.
+update public.app_fields set type='branch', options = jsonb_build_object('list','jo')
+  where id in (<IDS_JO>);
+update public.app_fields set type='branch', options = jsonb_build_object('list','iraq')
+  where id in (<IDS_IRAQ>);
+update public.app_fields set type='branch', options = jsonb_build_object('list','lebanon')
+  where id in (<IDS_LEBANON>);
+
+-- Backfill the branch column from each converted field's existing answers (trigger does it
+-- going forward). Only fills where currently null so already-populated rows are untouched.
+update public.app_submissions s
+set branch = nullif(s.data->>f.id::text, '')
+from public.app_fields f
+where f.table_id = s.table_id and f.type = 'branch'
+  and s.branch is null and (s.data ? f.id::text);
+
+\echo 'VERIFY: converted fields + fill rate'
+select t.slug, f.label, f.options->>'list' as list,
+  (select count(*) from app_submissions s where s.table_id=t.id) rows,
+  (select count(*) from app_submissions s where s.table_id=t.id and s.branch is not null) with_branch
+from app_tables t join app_fields f on f.table_id=t.id where f.type='branch' order by t.slug;
+
+\echo 'REPORT: branch values not matching a canonical branch (manual cleanup, will not recur)'
+select s.branch, count(*) from app_submissions s
+join app_fields f on f.table_id=s.table_id and f.type='branch'
+where s.branch is not null and not exists (select 1 from branches b where b.name=s.branch)
+group by 1 order by 2 desc;
 commit;
 ```
 
 - [ ] **Step 2: Yazan applies + pastes verify**
 
-Expected: first VERIFY returns zero rows (no free-text branch fields remain); second shows content-creators with a branch_field. Then re-run **branch-03-backfill.sql** so the newly-dropdown tables backfill too.
+Expected: converted fields listed with their list key; fill rate rises on the target forms. Save the REPORT for one-time manual cleanup.
 
-- [ ] **Step 3: Franchise lists (only if Yazan supplies franchise branches now)**
+### Task B5 (F): DONE — `branchDropdownOptions` helper
 
-If franchise shop names are provided, insert them with their own `list_key` (e.g. `iraq`) and set the relevant form's branch dropdown options from that list_key instead of `jo`. Otherwise defer — the `list_key` column is already in place for later.
+Already implemented and committed (`66880b0`), obsolete `detectBranchFieldId` removed. `branchDropdownOptions(rows, listKey)` returns `[{en,ar}]` for a list. Reused by B6/B7.
 
-### Task B5 (F): pure helper `branchDropdownOptions` + failing test
+### Task B6 (F): builder offers the `branch` field type
 
-**Files:**
-- Modify: `index.html` (add helper near `loadBranchTints`, ~line 5590)
-- Test: `docs/tests/branch-field.test.js`
+**Files:** Modify `index.html`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Add to FIELD_TYPES** (index.html ~4219): add `{ v: "branch", label: "Branch" }`.
+- [ ] **Step 2: typeUsesOpts** (~4230): add `|| v === "branch"`. **optsPlaceholder** (~4231): branch case returns `"Branch list: jo, iraq, or lebanon (default jo)"`.
+- [ ] **Step 3: serialize** (runBuilderSave, ~8734, in the per-type options branch): add
+  `else if (type === "branch") { var lk = (rows[i].querySelector(".opts").value.trim() || "jo").toLowerCase(); options = { list: lk }; }`
+- [ ] **Step 4:** Run `for f in docs/tests/*.test.js; do node "$f" >/dev/null 2>&1 || echo "FAIL $f"; done` — only the pre-existing universal-form-editor failure may show; no new failures.
+- [ ] **Step 5: Commit** `feat(branch): add 'branch' field type to the form builder`.
 
-```js
-const fs = require('fs'), vm = require('vm'), assert = require('assert');
-function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');}
-function grab(js,name,file){const re=new RegExp('\\n  function '+name+'\\s*\\([\\s\\S]*?\\n  \\}','');const m=js.match(re);if(!m)throw new Error('no fn '+name+' in '+file);return m[0];}
-function load(file,names,extra){const js=scripts(file);const ctx=Object.assign({console},extra||{});vm.createContext(ctx);new vm.Script('(function(){'+names.map(n=>grab(js,n,file)).join('\n')+'\n this.API={'+names.join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
+### Task B7 (F): render the `branch` field type (dashboard + public form)
 
-const API = load('index.html', ['branchDropdownOptions','detectBranchFieldId']);
-let n=0; const t=(name,fn)=>{try{fn();n++;}catch(e){console.log('FAIL: '+name+' -> '+e.message);process.exitCode=1;}};
+**Files:** Modify `index.html` and `f/index.html`, extend `docs/tests/branch-field.test.js`.
 
-t('branchDropdownOptions maps rows to {en,ar} in position order', () => {
-  const rows=[{name:'Abdoun',name_ar:'عبدون',position:1,list_key:'jo'},
-              {name:'Khalda',name_ar:'خلدا',position:0,list_key:'jo'},
-              {name:'Basra',name_ar:'',position:0,list_key:'iraq'}];
-  const opts=API.branchDropdownOptions(rows,'jo');
-  assert.deepStrictEqual(opts,[{en:'Khalda',ar:'خلدا'},{en:'Abdoun',ar:'عبدون'}]);
-});
-t('branchDropdownOptions defaults list_key to jo', () => {
-  const rows=[{name:'Abdoun',name_ar:'',position:1,list_key:'jo'}];
-  assert.strictEqual(API.branchDropdownOptions(rows).length,1);
-});
-t('detectBranchFieldId returns the dropdown branch field id', () => {
-  const fields=[{id:'a',type:'short_text',label:'Name'},
-                {id:'b',type:'dropdown',label:'Branch - الفرع'}];
-  assert.strictEqual(API.detectBranchFieldId(fields),'b');
-});
-t('detectBranchFieldId ignores non-dropdown branch fields', () => {
-  const fields=[{id:'a',type:'short_text',label:'Branch Name'}];
-  assert.strictEqual(API.detectBranchFieldId(fields),null);
-});
-console.log(n+' branch-field tests passed');
-```
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `node docs/tests/branch-field.test.js`
-Expected: throws `no fn branchDropdownOptions in index.html`.
-
-- [ ] **Step 3: Implement the helpers in index.html**
-
-Add after `loadBranchTints` (keep 2-space indent to match the file so `grab`'s regex matches):
-
-```js
-  function branchDropdownOptions(rows, listKey) {
-    var key = listKey || "jo";
-    return (rows || []).filter(function (b) { return (b.list_key || "jo") === key; })
-      .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
-      .map(function (b) { return { en: b.name, ar: b.name_ar || "" }; });
-  }
-  function detectBranchFieldId(fields) {
-    var hit = (fields || []).find(function (f) {
-      return f.type === "dropdown" && /branch|الفرع/i.test(f.label || "");
-    });
-    return hit ? hit.id : null;
-  }
-```
-
-- [ ] **Step 4: Run to verify it passes**
-
-Run: `node docs/tests/branch-field.test.js`
-Expected: `4 branch-field tests passed`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add index.html docs/tests/branch-field.test.js
-git commit -m "feat(branch): pure helpers for canonical branch options + field detection"
-```
-
-### Task B6 (F): wire config.branch_field on table create
-
-**Files:** Modify `index.html` in `runBuilderSave` (the create branch, ~line 8410)
-
-- [ ] **Step 1: Capture the inserted field rows so their ids are available**
-
-The field ids do not exist until `app_fields` are inserted. Reuse the `detectBranchFieldId` helper (added in B5) against the rows returned from the insert, then patch `config.branch_field`. Change the `app_fields` insert to select its rows back.
-
-Find (index.html create path, ~line 8412):
-
-```js
-      return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields); })
-        .then(function () { return tRes.data; });
-```
-
-Replace with (capture inserted rows, then designate the branch field via the shared helper):
-
-```js
-      return db.from("app_fields").insert(toInsert).select().then(function (fRes) { if (fRes.error) throw fRes.error;
-        return writePendingConds(tid, fields).then(function () {
-          var brId = detectBranchFieldId(fRes.data);
-          if (!brId) return tRes.data;
-          var cfg = tRes.data.config || {}; cfg.branch_field = brId;
-          return db.from("app_tables").update({ config: cfg }).eq("id", tid)
-            .then(function () { tRes.data.config = cfg; return tRes.data; });
-        });
-      });
-```
-
-This keeps the branch-field detection logic in one place (`detectBranchFieldId`) rather than duplicating the label regex inline.
-
-- [ ] **Step 2: Manual smoke (no unit test — DB round-trip)**
-
-This path writes to the live DB and has no pure-function seam. Verify during Phase-B live check (Task V1): create a table with a dropdown field named "Branch", submit the public form choosing a branch, confirm the record's branch column and sidebar grouping populate.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add index.html
-git commit -m "feat(branch): auto-designate branch_field when a new table has a branch dropdown"
-```
-
----
+- [ ] **Step 1 (index.html): full branches load.** Expand `loadBranchTints` (~5572) to also populate a module-global `allBranches` array of `{name,name_ar,position,list_key}` (select `name,name_ar,position,list_key` ordered by position; keep building `branchTint` as today).
+- [ ] **Step 2 (index.html): edit/display render.** In `edFieldRowHtml` (~3445 dropdown case) and `edExtraRows` (~3509), add a branch case that renders a select from the branch list:
+  `else if (f.type === "branch") inner = edSelect(id, v, [""].concat(branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function(o){return o.en;})));`
+- [ ] **Step 3 (f/index.html): load branches at form init** (near where form metadata loads, ~770-827): `db.from("branches").select("name,name_ar,position,list_key").order("position",{ascending:true})` into a global `BRANCHES` array (default `[]` on error).
+- [ ] **Step 4 (f/index.html): render branch in buildField** (~530, after dropdown/country): 
+  `else if (f.type === "branch") { var list=(f.options&&f.options.list)||"jo"; var src=BRANCHES.filter(function(b){return (b.list_key||"jo")===list;}).sort(function(a,b){return (a.position||0)-(b.position||0);}); var dopts=src.map(function(b){var v=b.name; var arv=b.name_ar||""; return {value:v,label:v+(arv?" / "+arv:"")};}); var combo=buildCombo(f, dopts, ...same args as dropdown...); ... }` — mirror the dropdown branch exactly, only the option source differs.
+- [ ] **Step 5: test.** Extend `branch-field.test.js` with a pure helper if one is extracted, or assert `branchDropdownOptions` filtering used by both. At minimum keep the 2 passing tests green and add one asserting franchise filtering (list='iraq' returns only iraq rows). Run `node docs/tests/branch-field.test.js`.
+- [ ] **Step 6: Commit** `feat(branch): render branch field type as a live preset dropdown`.
+- [ ] **Step 7:** Manual live check deferred to Phase V: add a Branch question to a test form, confirm the public form shows the preset list and a submission lands in the branch column + sidebar grouping.
 
 ## PART A — Create-table rights, ownership, audit log (ship second)
 
