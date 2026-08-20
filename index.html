@@ -5048,7 +5048,7 @@
       tog.textContent = live ? "Turn link off" : "Turn link on";
     }
     document.getElementById("custom-edit").style.display = mayModifyTable(t, myUserId, isAdmin) ? "inline-flex" : "none";
-    document.getElementById("custom-share").style.display = mayModifyTable(t, myUserId, isAdmin) ? "" : "none";
+    document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
     // Adding a record by hand is an edit, so it follows can_edit rather than admin — the same
     // permission that lets someone change an answer already on file.
     document.getElementById("custom-new").style.display = canEdit(t.id) ? "" : "none";
@@ -9677,7 +9677,7 @@
   // the base-name menu and the grid's "+" column. One door, so the two built-in forms
   // cannot end up with a lesser editor than a table's.
   function openFormEditor(target, presetType) {
-    if (!isAdmin) return;
+    if (!mayModifyTable((typeof target === "string") ? null : target, myUserId, isAdmin)) return;
     var scope = (typeof target === "string") ? target : "custom";
     function go() {
       setBasePane(scope, "form");
