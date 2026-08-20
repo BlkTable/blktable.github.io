@@ -1430,6 +1430,7 @@
         <!-- Footer + the one blue button, pinned to the bottom of the rail -->
         <div class="side-foot">
           <button class="side-item side-nav-item" id="side-forms"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg><span class="side-label">Public forms</span></button>
+          <button class="side-item side-nav-item" id="side-history" style="display:none;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l3 2"></path></svg><span class="side-label">History</span></button>
           <button class="side-item side-nav-item" id="side-help"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.6v.4"></path><circle cx="12" cy="17" r="0.6" fill="currentColor"></circle></svg><span class="side-label">Help &amp; shortcuts</span></button>
           <span id="side-archive-slot"></span>
           <button class="side-create" id="side-create" style="display:none;">＋ Create</button>
@@ -2150,6 +2151,7 @@
         isAdmin = role === "admin";
         document.getElementById("side-create").style.display = canCreateTablesFrom(res.data) ? "flex" : "none";
         document.getElementById("pf-users").style.display = isAdmin ? "block" : "none";
+        var histBtn = document.getElementById("side-history"); if (histBtn) histBtn.style.display = isAdmin ? "flex" : "none";
         if (isAdmin) loadBuilderUsers();
         ["ja-qr-regen", "cast-qr-regen", "custom-qr-regen"].forEach(function (id) { var b = document.getElementById(id); if (b) b.style.display = isAdmin ? "inline-block" : "none"; });
         // Sharing a table out is an admin act, so the pink button is admin-only.
@@ -9519,6 +9521,26 @@
         return '<div class="m-field full"><div class="k">' + esc(r.name) + '</div><div class="v">' + v + "</div></div>";
       }).join("") : '<div class="m-sub">No forms yet.</div>');
     document.getElementById("modal").classList.add("open");
+  });
+
+  document.getElementById("side-history").addEventListener("click", function () {
+    var body = document.getElementById("modal-body");
+    body.innerHTML = '<div class="m-name">History</div><div class="m-sub">Loading…</div>';
+    document.getElementById("modal").classList.add("open");
+    db.from("table_audit").select("actor,action,table_name,created_at").order("created_at", { ascending: false }).limit(200)
+      .then(function (res) {
+        var rows = (res && res.data) || [];
+        var ids = rows.map(function (r) { return r.actor; }).filter(Boolean);
+        return db.from("profiles").select("id,full_name,email").in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]).then(function (pRes) {
+          var nm = {}; ((pRes && pRes.data) || []).forEach(function (p) { nm[p.id] = p.full_name || p.email; });
+          body.innerHTML = '<div class="m-name">History</div><div class="m-sub">Table and access changes, newest first.</div>' +
+            (rows.length ? rows.map(function (r) {
+              r.actor_name = nm[r.actor] || "Someone";
+              return '<div class="m-field full"><div class="k">' + esc(auditLine(r)) + '</div><div class="v">' + esc(agoText(r.created_at)) + '</div></div>';
+            }).join("") : '<div class="m-sub">Nothing logged yet.</div>');
+        });
+      })
+      .catch(function () { body.innerHTML = '<div class="m-name">History</div><div class="m-sub" style="color:var(--danger);">Could not load history.</div>'; });
   });
 
   // ---- The blue Create button ---------------------------------------------
