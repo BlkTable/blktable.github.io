@@ -2125,6 +2125,18 @@
     loginWrap.style.display = "flex";
   }
 
+  function canCreateTablesFrom(profile) {
+    return !!(profile && (profile.role === "admin" || profile.can_create_tables));
+  }
+  function mayModifyTable(table, myUserId, isAdminFlag) {
+    return !!(isAdminFlag || (table && table.created_by && table.created_by === myUserId));
+  }
+  function auditLine(row) {
+    var verb = { table_created: "created", table_edited: "edited", table_deleted: "deleted",
+      table_activated: "reactivated", table_deactivated: "archived",
+      access_granted: "shared", access_revoked: "unshared" }[row.action] || row.action;
+    return (row.actor_name || "Someone") + " " + verb + " " + (row.table_name || "a table");
+  }
   function loadRole(userId) {
     db.from("profiles").select("role, full_name, avatar_path").eq("id", userId).single()
       .then(function (res) {
