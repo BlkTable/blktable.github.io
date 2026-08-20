@@ -838,7 +838,7 @@
           return;
         }
         var fieldsReady = db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true });
-        var branchesReady = db.from("branches").select("name,name_ar,position,list_key").order("position", { ascending: true }).then(function (r) { BRANCHES = (r && !r.error && r.data) ? r.data : []; }).catch(function () {});
+        var branchesReady = db.from("branches").select("name,name_ar,position,list_key").order("position", { ascending: true }).then(function (r) { BRANCHES = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
         Promise.all([fieldsReady, branchesReady]).then(function (results) {
           var fRes = results[0];
           if (fRes.error) { notFound(); return; }

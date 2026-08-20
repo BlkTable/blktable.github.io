@@ -3455,7 +3455,11 @@
     else if (f.type === "number") inner = edNum(id, v);
     else if (f.type === "phone") inner = edPhone(id, v);
     else if (f.type === "country") inner = edSelect(id, v, [""].concat(COUNTRY_NAMES));
-    else if (f.type === "branch") inner = edSelect(id, v, [""].concat(branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; })));
+    else if (f.type === "branch") {
+      var brOpts = branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; });
+      if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
+      inner = edSelect(id, v, [""].concat(brOpts));
+    }
     else if (f.type === "link") { var lo = f.options || {}; inner = lo.url ? '<a href="' + esc(lo.url) + '" target="_blank" rel="noopener">' + esc(lo.text || lo.url) + "</a>" : '<span style="color:var(--silver);">No link set</span>'; }
     else inner = edText(id, v, false);
     // Only the create panel marks what must be answered; the record panel is autosave and
@@ -3508,7 +3512,11 @@
       if (f.type === "long_text") inner = edText(id, v, true);
       else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
       else if (f.type === "dropdown") inner = edSelect(id, v, [""].concat((f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })));
-      else if (f.type === "branch") inner = edSelect(id, v, [""].concat(branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; })));
+      else if (f.type === "branch") {
+        var brOpts = branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; });
+        if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
+        inner = edSelect(id, v, [""].concat(brOpts));
+      }
       else if (f.type === "date") inner = edDate(id, v);
       else if (f.type === "number") inner = edNum(id, v);
       else inner = edText(id, v, false);
@@ -8607,6 +8615,7 @@
   }
   function optsToString(options) {
     if (!options) return "";
+    if (!Array.isArray(options) && options.list) return options.list;
     // A link field's options is an object, not a choice list: rebuild "url | text | text_ar".
     if (!Array.isArray(options) && options.url) {
       return options.url + (options.text ? " | " + options.text : "") + (options.text_ar ? " | " + options.text_ar : "");
@@ -8753,6 +8762,7 @@
         options = { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" };
       } else if (type === "branch") {
         var lk = (rows[i].querySelector(".opts").value.trim() || "jo").toLowerCase();
+        if (["jo","iraq","lebanon"].indexOf(lk) === -1) { msg.set("Branch list must be jo, iraq, or lebanon.", "err"); return; }
         options = { list: lk };
       }
       var afterSel = rows[i].querySelector(".fafter");
