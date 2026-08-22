@@ -6372,7 +6372,7 @@
       e.stopPropagation();
       // Reset drops YOUR choice, back to whatever the table's saved default is — it does not
       // touch the default itself, which only "Save for everyone" writes.
-      try { localStorage.removeItem(cardKey(t)); } catch (err) {}
+      cardReset(t);
       renderCustom();
     });
     var sb = document.getElementById("card-save");
@@ -6490,6 +6490,19 @@
           .upsert({ user_id: uid, table_id: t.id, prefs: mine, updated_at: new Date().toISOString() },
                   { onConflict: "user_id,table_id" })
           .then(function () {}, function () {});   // best-effort: localStorage already holds it
+      }
+    }
+  }
+  // Reset drops YOUR choice back to the table default: clear this browser's copy, the in-memory
+  // account copy, and the saved account row. It never touches the table default itself.
+  function cardReset(t) {
+    if (!t) return;
+    try { localStorage.removeItem(cardKey(t)); } catch (e) {}
+    if (t.id) {
+      delete cardServerPrefs[t.id];
+      var uid = typeof myUserId !== "undefined" ? myUserId : null;
+      if (uid && typeof db !== "undefined") {
+        db.from("user_card_prefs").delete().eq("table_id", t.id).then(function () {}, function () {});
       }
     }
   }
