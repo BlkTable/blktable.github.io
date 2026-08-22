@@ -6428,6 +6428,14 @@
     if (!t) return null;
     try { return JSON.parse(localStorage.getItem(cardKey(t)) || "null"); } catch (e) { return null; }
   }
+  // The account's saved prefs (from user_card_prefs, loaded at login) are the answer wherever
+  // they exist; the localStorage copy is only this browser's cache and is used when the account
+  // has none. An empty object from the server is still an answer ("reset to default"), so it is
+  // returned rather than falling through to the browser copy.
+  function cardMine(server, local) {
+    if (server && typeof server === "object") return server;
+    return local && typeof local === "object" ? local : {};
+  }
   // "the key is present" is not "the value is truthy" here: cover = "" means somebody chose
   // no cover, and that has to outrank the default rather than read as nothing chosen.
   function cardHas(o, k) { return !!o && Object.prototype.hasOwnProperty.call(o, k); }
