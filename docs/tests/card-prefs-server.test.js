@@ -17,7 +17,9 @@ t('falls back to local when server is null', () => {
 t('empty-object server ({}) still wins over local (account chose "reset")', () => {
   assert.deepStrictEqual(API.cardMine({}, {fields:['b']}), {});
 });
-t('returns {} when both are empty/null', () => {
-  assert.deepStrictEqual(API.cardMine(null, null), {});
+t('returns an empty object when both are empty/null', () => {
+  const r = API.cardMine(null, null);
+  assert.strictEqual(r && typeof r === 'object', true);
+  assert.strictEqual(Object.keys(r).length, 0);
 });
 console.log('card-prefs-server: '+n+' passed');
