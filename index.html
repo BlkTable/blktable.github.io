@@ -2086,6 +2086,7 @@
     var tablesP = loadCustomTables();
     loadBuiltinTokens();
     loadBuiltinExtra();
+    loadCardServerPrefs();
     loadStars();
     // your record stars, once, for every table — the built-in tables render before any
     // custom table is opened, so this cannot wait for applyCustomSubs
@@ -2181,6 +2182,11 @@
       if (accessKeys["casting"]) castBtn.style.display = "flex";
       renderHome(); renderStarred();
     });
+  }
+  function loadCardServerPrefs() {
+    return db.from("user_card_prefs").select("table_id, prefs").then(function (r) {
+      (r.data || []).forEach(function (row) { cardServerPrefs[row.table_id] = row.prefs || {}; });
+    }).catch(function () { /* offline / signed out: fall back to localStorage cache */ });
   }
   function ensureDefaultView() { renderHome(); renderStarred(); }
 
@@ -6476,6 +6482,16 @@
     var mine = cardLocal(t) || {};
     Object.keys(patch).forEach(function (k) { mine[k] = patch[k]; });
     try { localStorage.setItem(cardKey(t), JSON.stringify(mine)); } catch (e) {}
+    if (t && t.id) {
+      var uid = typeof myUserId !== "undefined" ? myUserId : null;
+      if (uid && typeof db !== "undefined") {
+        cardServerPrefs[t.id] = mine;
+        db.from("user_card_prefs")
+          .upsert({ user_id: uid, table_id: t.id, prefs: mine, updated_at: new Date().toISOString() },
+                  { onConflict: "user_id,table_id" })
+          .then(function () {}, function () {});   // best-effort: localStorage already holds it
+      }
+    }
   }
   // The pseudo-fields a card may carry that are columns on the record rather than answers
   // in it. summaryFields already understands both; the panel has to offer them.
