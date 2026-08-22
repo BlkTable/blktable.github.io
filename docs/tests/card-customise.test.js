@@ -46,14 +46,14 @@ function load(file, vars, fns) {
   const code = vars.map(v => grabVar(js, v)).join('\n') + '\n' + fns.map(f => grab(js, f)).join('\n');
   const ctx = { console, localStorage };
   vm.createContext(ctx);
-  new vm.Script('(function(){' + code + '\n this.API={' + fns.join(',') + '};}).call(this)').runInContext(ctx);
+  new vm.Script('(function(){var cardServerPrefs={};\n' + code + '\n this.API={' + fns.join(',') + '};}).call(this)').runInContext(ctx);
   return ctx.API;
 }
 
 const { cardPrefs, summaryFields, cardChoosable, cardSave, cardKey, coverHtml } =
   load('index.html',
        ['VIDEO_EXT', 'IMAGE_EXT', 'PLAY_SVG', 'FILE_SVG'],
-       ['cardPrefs', 'cardLocal', 'cardHas', 'cardKey', 'cardSave', 'cardChoosable',
+       ['cardPrefs', 'cardLocal', 'cardMine', 'cardHas', 'cardKey', 'cardSave', 'cardChoosable',
         'summaryFields', 'isFileField', 'coverHtml', 'isVideoPath', 'isImagePath']);
 
 let n = 0;

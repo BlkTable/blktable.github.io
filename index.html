@@ -2054,6 +2054,7 @@
   var editKeys = {}; // table_key -> true when this user may edit that table's records
   var manageKeys = {}; // table_key -> true when this user is a form manager (drive the review chain)
   var accessKeys = {}; // table_key -> true when this user can see that table
+  var cardServerPrefs = {};   // table_id -> {cover,fit,fields,labels} loaded from user_card_prefs at login
   var stars = {};      // table_key -> true when starred by this user
   var homeView = "cards";
   var shareKey = null;
@@ -6445,7 +6446,7 @@
   // there is exactly one place where "what does this card show" is decided.
   function cardPrefs(t, fields) {
     var cfg = (t && t.config) || {};
-    var mine = cardLocal(t) || {};
+    var mine = cardMine(cardServerPrefs[t && t.id], cardLocal(t));
     // An empty list reads as "nothing chosen", not "show no fields": a card with no fields
     // has no title either, and the panel refuses to leave you with none.
     var flds = (mine.fields && mine.fields.length) ? mine.fields
