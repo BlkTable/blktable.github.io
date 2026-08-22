@@ -6502,7 +6502,7 @@
       delete cardServerPrefs[t.id];
       var uid = typeof myUserId !== "undefined" ? myUserId : null;
       if (uid && typeof db !== "undefined") {
-        db.from("user_card_prefs").delete().eq("table_id", t.id).then(function () {}, function () {});
+        db.from("user_card_prefs").delete().eq("user_id", uid).eq("table_id", t.id).then(function () {}, function () {});
       }
     }
   }
