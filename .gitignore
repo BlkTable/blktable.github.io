@@ -13,3 +13,6 @@ operate-import/
 INCIDENT-*.md
 *OUTAGE*.md
 HANDOFF-*.md
+
+# Git worktrees for feature work. Local only, never serve these publicly.
+.worktrees/
