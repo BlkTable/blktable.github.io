@@ -8833,6 +8833,14 @@
       optsInp.style.display = typeUsesOpts(sel.value) ? "" : "none";
       optsInp.placeholder = optsPlaceholder(sel.value);
       optsInp.value = data.opts || "";
+      // A linked record's options were set by the importer and name a table by id. They are
+      // carried on the row so the save can put them back untouched, and the box is made
+      // read-only because the text in it is a description, not a value anyone can retype.
+      if (data.linkRec) {
+        row.setAttribute("data-linkrec", JSON.stringify(data.linkRec));
+        optsInp.readOnly = true;
+        optsInp.title = "Set when this table was imported — it links to another table's records.";
+      }
       row.querySelector(".freq").checked = data.required !== false;
       row.querySelector(".fint").checked = !!data.internal;
       // resolved once every row exists — the question this one depends on may be below it
@@ -9084,7 +9092,7 @@
     }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
-      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, afterField: f.after_field, showIf: f.show_if }); });
+      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if }); });
       resolveCondPending();
       requestAnimationFrame(growAllBld);
     }).catch(function () { msg.textContent = ""; });
@@ -9111,9 +9119,27 @@
     builder.classList.add("open");
     requestAnimationFrame(growAllBld);
   }
+  // Two different questions share the type `link`, which is the trap this exists to close:
+  // a **link button** the builder makes (`{url, text, text_ar}` — three of them), and a
+  // **linked record** the Airtable importer made (`{links_to_name, links_to_table}` — two
+  // hundred of them, across 103 tables), which shows the linked record's own name and opens
+  // it. The editor only ever knew about the first, so a linked record fell through to the
+  // URL rule and took the whole table's save down with it.
+  //
+  // Matched on `links_to_table` alone: a half-written one that has lost its name is still a
+  // linked record, and treating it as a URL button is exactly the failure being fixed.
+  function linkRecordOptions(options) {
+    if (!options || typeof options !== "object" || Array.isArray(options)) return null;
+    return options.links_to_table ? options : null;
+  }
   function optsToString(options) {
     if (!options) return "";
     if (!Array.isArray(options) && options.list) return options.list;
+    // Not something anyone types — the importer set it and the box is read-only — so this
+    // is a description rather than a round-trippable value. What goes back to the database
+    // is the stored object itself, carried on the row (see addBuilderField).
+    var lr = linkRecordOptions(options);
+    if (lr) return "Linked records → " + (lr.links_to_name || "another table");
     // A link field's options is an object, not a choice list: rebuild "url | text | text_ar".
     if (!Array.isArray(options) && options.url) {
       return options.url + (options.text ? " | " + options.text : "") + (options.text_ar ? " | " + options.text_ar : "");
@@ -9157,7 +9183,7 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, showIf: f.show_if });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), showIf: f.show_if });
       });
       resolveCondPending();
       if (presetType) {
@@ -9325,12 +9351,27 @@
           return o;
         }).filter(function (o) { return o.en; });
       } else if (type === "link") {
-        // A link field stores its URL and button text in options: "url | text | text_ar".
-        var lraw = rows[i].querySelector(".opts").value.trim();
-        var kv = lraw.split("|");
-        var url = (kv[0] || "").trim();
-        if (!/^https?:\/\//i.test(url)) { msg.set("A link field needs a URL starting with http:// or https://", "err"); return; }
-        options = { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" };
+        // A LINKED RECORD comes first, and the ordering is the fix. This branch used to
+        // demand a URL out of a box that was empty for all 200 of them, fail the check and
+        // `return` — abandoning the save of the whole table, with a message about a URL for
+        // a question that has nothing to do with URLs. The metadata was put on the row when
+        // the editor opened; it goes back exactly as it came, because nothing in this editor
+        // can meaningfully change which table a link points at.
+        //
+        // Read only while the question is still a link: switch its type to Short text and
+        // the attribute is ignored, so `links_to_table` does not outlive the link.
+        var lrec = rows[i].getAttribute("data-linkrec");
+        if (lrec) {
+          try { options = JSON.parse(lrec); }
+          catch (e) { msg.set("Could not read the linked-record settings for “" + lab + "”.", "err"); return; }
+        } else {
+          // A link BUTTON stores its URL and button text in options: "url | text | text_ar".
+          var lraw = rows[i].querySelector(".opts").value.trim();
+          var kv = lraw.split("|");
+          var url = (kv[0] || "").trim();
+          if (!/^https?:\/\//i.test(url)) { msg.set("A link field needs a URL starting with http:// or https://", "err"); return; }
+          options = { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" };
+        }
       } else if (type === "branch") {
         // One question may now offer the shops of several countries: "jo, lebanon". The
         // lists are checked against the countries actually on file rather than a hard-coded
