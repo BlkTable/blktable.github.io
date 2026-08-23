@@ -235,6 +235,9 @@
     .view-body { padding: 16px 14px 40px; }
   }
   .section-title { font-size: var(--fs-2); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  .cty-row { padding: 3px 0; }
+  .cty-row .muted { opacity: .6; }
+  .admin-section { margin-top: 28px; }
   .empty {
     background:
       var(--card);
@@ -1761,6 +1764,7 @@
             </div>
             <div id="users-list" class="ja-list"></div>
             <div id="users-empty" class="empty" style="display:none;"><h2>No users yet</h2></div>
+            <div class="admin-section"><div class="section-title">Countries</div><div id="countries-mgr"></div></div>
           </div>
         </section>
 
@@ -9059,6 +9063,40 @@
       host.appendChild(row);
     });
   }
+  function renderCountriesManager() {
+    var box = document.getElementById("countries-mgr"); if (!box) return;
+    box.innerHTML = COUNTRY_LIST.map(function (c) {
+      return '<div class="cty-row" data-code="' + esc(c.code) + '">' +
+        '<b>' + esc(c.name_en) + '</b> <span class="muted">' + esc(c.code) + (c.dial ? " · " + esc(c.dial) : "") + '</span></div>';
+    }).join("") +
+      '<div class="cty-add" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+        '<input id="cty-code" placeholder="code (e.g. ksa)" style="width:120px;">' +
+        '<input id="cty-en" placeholder="English name" style="width:150px;">' +
+        '<input id="cty-ar" placeholder="Arabic name" style="width:150px;">' +
+        '<input id="cty-dial" placeholder="+966" style="width:90px;">' +
+        '<input id="cty-aliases" placeholder="aliases, comma-separated" style="width:220px;">' +
+        '<button type="button" id="cty-add-btn">Add country</button>' +
+      '</div>';
+    var btn = document.getElementById("cty-add-btn");
+    if (btn) btn.addEventListener("click", addCountry);
+  }
+  function addCountry() {
+    var code = (document.getElementById("cty-code").value || "").trim().toLowerCase();
+    var en = (document.getElementById("cty-en").value || "").trim();
+    if (!code || !en) { window.alert("Code and English name are required."); return; }
+    var ar = (document.getElementById("cty-ar").value || "").trim();
+    var dial = (document.getElementById("cty-dial").value || "").trim();
+    var aliasesRaw = (document.getElementById("cty-aliases").value || "");
+    var aliases = aliasesRaw.split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    aliases = aliases.concat([code, en.toLowerCase()]);
+    if (dial) aliases.push(dial);
+    var sort = (COUNTRY_LIST.reduce(function (m, c) { return Math.max(m, c.sort || 0); }, 0)) + 1;
+    db.from("countries").insert({ code: code, name_en: en, name_ar: ar || null, dial: dial || null, aliases: aliases, active: true, sort: sort })
+      .then(function (r) {
+        if (r.error) { window.alert("Could not add: " + r.error.message); return; }
+        loadCountries().then(renderCountriesManager);
+      });
+  }
   function loadUsers() {
     var listEl = document.getElementById("users-list"), emptyEl = document.getElementById("users-empty");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
@@ -9296,7 +9334,7 @@
     if (id === "home") renderHome();
     if (id === "job_applications") { markOpened(id); setBasePane("job_applications", "data"); buildFilterPanel(jobFV); }
     if (id === "casting") { markOpened(id); setBasePane("casting", "data"); if (!castingLoaded) loadCasting(); else buildFilterPanel(castingFV); }
-    if (id === "users") loadUsers();
+    if (id === "users") { loadUsers(); renderCountriesManager(); }
     // the Starred entry is a filter on Home, so it lights up only while that filter is on
     var st = document.getElementById("side-starred-nav");
     if (st) st.classList.toggle("active", id === "home" && homeStarredOnly);
