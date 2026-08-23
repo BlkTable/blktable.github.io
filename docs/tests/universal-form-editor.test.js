@@ -273,10 +273,20 @@ t('nothing writes an unreachable key into a built-in form config', () => {
   assert.ok(/Object\.assign\(\s*\{\}\s*,\s*prevCfg\s*,/.test(write[1]),
     'the built-in config is replaced rather than merged onto what is already there: ' + write[1]);
 
-  // and exactly the two keys that reach anything
+  // and every key it writes must actually be READ by the pages it is written for. This used
+  // to be a hard-coded list of two, which meant adding a legitimate third key (`title`, when
+  // the public heading became editable) failed a test about unreachable keys. Asserting the
+  // rule instead of the list cannot go stale, and it still catches the thing that matters:
+  // a control that writes a key nobody reads looks like it worked and does nothing.
   const keys = (write[1].match(/(\w+)\s*:/g) || []).map(function (k) { return k.replace(/\s*:$/, ''); });
-  assert.deepStrictEqual(keys.sort(), ['hidden', 'intro'],
-    'the built-in branch writes ' + keys.join(', ') + ' — a key beyond hidden/intro cannot reach the public page');
+  assert.ok(keys.length, 'the built-in branch writes no keys at all');
+  keys.forEach(function (k) {
+    [['apply/index.html', APPLY], ['cast/index.html', CAST]].forEach(function (p) {
+      assert.ok(p[1].indexOf('res.data.' + k) !== -1,
+        'the editor writes config.' + k + ' but ' + p[0] + ' never reads it — ' +
+        'a control that writes a key nobody reads looks like it worked and does nothing');
+    });
+  });
 });
 t('a task table keeps its Form tab, because its fields still need editing', () => {
   assert.ok(!/custom-tab-form"\)\.style\.display = isTask \? "none" : ""/.test(SRC),

@@ -98,7 +98,7 @@
     <div class="sheet">
       <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
       <div class="head">
-        <h1>BLK Casting <span style="color:var(--muted);font-weight:600;">· كاستنج</span></h1>
+        <h1 id="form-heading">BLK Casting <span style="color:var(--muted);font-weight:600;">· كاستنج</span></h1>
         <p>Fill in your details below.</p>
       </div>
       <div class="intro" id="form-intro" style="display:none;"></div>
@@ -233,10 +233,26 @@
     if (ar) { var pa = document.createElement("p"); pa.className = "ar"; pa.setAttribute("dir", "rtl"); pa.textContent = ar; box.appendChild(pa); }
     box.style.display = "block";
   }
+  // See the same block in apply/index.html: the heading is its own setting rather than the
+  // table's name, because the page prints something the dashboard never shows. Each half
+  // falls back on its own, no title leaves the served markup untouched, and the text is set
+  // with textContent because it comes from the database.
+  function applyHeading(title) {
+    var h = document.getElementById("form-heading");
+    if (!h || !title) return;
+    var en = (title.en || "").trim(), ar = (title.ar || "").trim();
+    if (!en && !ar) return;
+    var span = h.querySelector("span");
+    var dflt = { en: "BLK Casting", ar: "كاستنج" };
+    h.firstChild.nodeValue = (en || dflt.en) + " ";
+    if (span) span.textContent = "· " + (ar || dflt.ar);
+    document.title = (en || dflt.en) + " — " + (ar || dflt.ar);
+  }
   db.rpc("get_form_config", { p_key: "casting" }).then(function (res) {
     if (res && !res.error && res.data) {
       if (res.data.hidden) { res.data.hidden.forEach(function (c) { hiddenCols[c] = true; }); applyHidden(); }
       renderIntro(res.data.intro);
+      applyHeading(res.data.title);
     }
   }).catch(function () {});
 
