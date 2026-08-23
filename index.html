@@ -8913,6 +8913,10 @@
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if }; });
+      // Every new table collects a Country, so a builder that did not add one gets it appended.
+      if (!toInsert.some(function (r) { return r.type === "country"; })) {
+        toInsert.push({ table_id: tid, position: toInsert.length, label: "Country", label_ar: "الدولة", type: "country", required: false, internal: false, options: null, show_if: null });
+      }
       return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields); })
         .then(function () { return tRes.data; });
     }).then(function (t) {
