@@ -2082,6 +2082,8 @@
     loadRole(session.user.id);
     loadApps();
     loadBranchTints();
+    loadCountries();
+    loadBranchCountry();
     // keep the promise so a pending deeplink can fire once tables are ready
     var tablesP = loadCustomTables();
     loadBuiltinTokens();
@@ -3130,6 +3132,45 @@
     var p = String(phone).replace(/[^\d+]/g, "");
     for (var i = 0; i < COUNTRIES.length; i++) { if (p.indexOf("+" + COUNTRIES[i].dial) === 0) return COUNTRIES[i]; }
     return null;
+  }
+
+  // Admin-managed country list drives the Country field, the share picker, and canonical
+  // folding. Seeded with the operating four so the app works before loadCountries() runs and
+  // under test; loadCountries() replaces COUNTRY_LIST from the DB and rebuilds COUNTRY_INDEX.
+  var DEFAULT_COUNTRIES = [
+    { code:"jo", name_en:"Jordan", name_ar:"الأردن", dial:"+962", aliases:["jo","jordan","الأردن","962","+962"], sort:1 },
+    { code:"lebanon", name_en:"Lebanon", name_ar:"لبنان", dial:"+961", aliases:["lebanon","lb","لبنان","961","+961"], sort:2 },
+    { code:"iraq", name_en:"Iraq", name_ar:"العراق", dial:"+964", aliases:["iraq","iq","العراق","964","+964"], sort:3 },
+    { code:"syria", name_en:"Syria", name_ar:"سوريا", dial:"+963", aliases:["syria","sy","سوريا","963","+963"], sort:4 }
+  ];
+  var COUNTRY_LIST = DEFAULT_COUNTRIES.slice();
+  var COUNTRY_INDEX = {};
+  function rebuildCountryIndex() {
+    COUNTRY_INDEX = {};
+    COUNTRY_LIST.forEach(function (c) {
+      COUNTRY_INDEX[c.code] = c.code;
+      (c.aliases || []).forEach(function (a) { COUNTRY_INDEX[String(a).trim().toLowerCase()] = c.code; });
+      if (c.name_en) COUNTRY_INDEX[c.name_en.trim().toLowerCase()] = c.code;
+      if (c.name_ar) COUNTRY_INDEX[c.name_ar.trim().toLowerCase()] = c.code;
+    });
+  }
+  function canonicalCountry(x) {
+    if (x == null) return null;
+    var k = String(x).trim().toLowerCase();
+    if (!k) return null;
+    return COUNTRY_INDEX[k] || null;
+  }
+  function loadCountries() {
+    return db.from("countries").select("code,name_en,name_ar,dial,aliases,active,sort")
+      .eq("active", true).order("sort").then(function (r) {
+        if (r.data && r.data.length) COUNTRY_LIST = r.data;
+        rebuildCountryIndex();
+      }).catch(function () { rebuildCountryIndex(); });
+  }
+  rebuildCountryIndex();
+  function countryLabel(code) {
+    var c = COUNTRY_LIST.filter(function (x) { return x.code === code; })[0];
+    return c ? c.name_en : code;
   }
 
   function calcAge(dob) {
@@ -6539,6 +6580,34 @@
     return f ? String(d[f.id]) : "";
   }
 
+  // branch -> country (branch is a child of country). Filled at login by loadBranchCountry()
+  // from the same branch_country table the DB trigger uses, so client and server agree.
+  var BRANCH_COUNTRY = {};
+  function recordCountry(s, fields) {
+    if (s && s.country) return canonicalCountry(s.country) || String(s.country);
+    var d = (s && s.data) || {};
+    var cf = (fields || []).filter(function (x) {
+      return x.type === "country" && d[x.id] != null && d[x.id] !== "";
+    })[0];
+    if (cf) { var c = canonicalCountry(d[cf.id]); if (c) return c; }
+    var b = recordBranch(s, fields);
+    if (b) { var bc = BRANCH_COUNTRY[String(b).trim().toLowerCase()]; if (bc) return bc; }
+    return "";
+  }
+  function loadBranchCountry() {
+    return db.from("branch_country").select("branch_key,country").then(function (r) {
+      (r.data || []).forEach(function (row) { BRANCH_COUNTRY[row.branch_key] = row.country; });
+    }).catch(function () {});
+  }
+  function countryFacets(rows, fields) {
+    var out = {};
+    (rows || []).forEach(function (s) {
+      var c = recordCountry(s, fields) || "__none";
+      out[c] = (out[c] || 0) + 1;
+    });
+    return out;
+  }
+
   // ---- A record's number --------------------------------------------------
   // Every record now carries `seq`: its number within its table, 1-based, in the order
   // records were created (workspaces/03-record-number-and-stars.sql). That is the number
@@ -8953,10 +9022,18 @@
   }
   function scopeFromPrefix(prefix) { return prefix ? { phone_prefix: prefix } : null; }
   function prefixFromScope(scope) { return (scope && scope.phone_prefix) ? scope.phone_prefix : ""; }
+  function scopeFromCountries(arr) {
+    var xs = (arr || []).map(canonicalCountry).filter(Boolean);
+    return xs.length ? { country: xs } : null;
+  }
+  function countriesFromScope(scope) {
+    if (!scope) return [];
+    if (scope.country && scope.country.length) return scope.country.map(canonicalCountry).filter(Boolean);
+    if (scope.phone_prefix) { var c = canonicalCountry(scope.phone_prefix); return c ? [c] : []; }
+    return [];
+  }
   function scopeLabel(scope) {
-    var p = prefixFromScope(scope); if (!p) return "";
-    var m = SCOPE_COUNTRIES.filter(function (co) { return co.prefix === p; })[0];
-    return m ? m.label : p + " only";
+    return countriesFromScope(scope).map(countryLabel).join(", ");
   }
   function invokeErr(res) { return (res && res.data && res.data.error) || (res && res.error && (res.error.message || res.error)) || null; }
   function errText(err) { return (err && err.message) ? err.message : (typeof err === "string" ? err : ""); }
