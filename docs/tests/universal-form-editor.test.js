@@ -34,6 +34,23 @@ function grabObj(js, name, file, indent) {
   return m[0];
 }
 
+// Comments removed, quote-aware so a URL inside a string is not mistaken for one. Used by
+// the "never printed as a literal" test, which is about what the app prints and must not be
+// tripped by a comment that happens to quote a name.
+function stripComments(js) {
+  return js.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(function (line) {
+    var q = null;
+    for (var i = 0; i < line.length; i++) {
+      var c = line[i];
+      if (q) { if (c === '\\') i++; else if (c === q) q = null; continue; }
+      if (c === '"' || c === "'" || c === '`') { q = c; continue; }
+      if (c === '\\') { i++; continue; }            // an escaped slash in a regex, not a comment
+      if (c === '/' && line[i + 1] === '/') return line.slice(0, i);
+    }
+    return line;
+  }).join('\n');
+}
+
 const SRC = scripts('index.html');
 const APPLY = fs.readFileSync('apply/index.html', 'utf8');
 const CAST = fs.readFileSync('cast/index.html', 'utf8');
@@ -196,10 +213,31 @@ t('the name is editable for a built-in form too', () => {
   assert.ok(/document\.getElementById\("bld-name"\)\.value = builtinName\(formKey\)/.test(SRC));
 });
 t('a built-in name is read from the table row, never printed as a literal', () => {
-  const literals = (SRC.match(/"Job Applications"/g) || []).length;
-  // only BUILTIN_DEFAULT_NAME may still carry it
-  assert.strictEqual(literals, 1, 'found ' + literals + ' hard-coded "Job Applications" in the script');
+  // Counted with COMMENTS REMOVED. This used to scan the raw script, so a comment
+  // explaining why "Job Application" and "Job Applications" differ counted as a hard-coded
+  // name and failed a test about what the app PRINTS. A mention in a comment is
+  // documentation; the thing worth forbidding is a literal the user can end up reading.
+  const code = stripComments(SRC);
+  // the stripper must not have eaten the line the assertion depends on, or this passes for
+  // the wrong reason
+  assert.ok(/var BUILTIN_DEFAULT_NAME = \{/.test(code), 'comment stripping removed real code');
+  const lines = code.split('\n')
+    .map((l, i) => [i + 1, l])
+    .filter(([, l]) => l.indexOf('"Job Applications"') !== -1);
+  assert.strictEqual(lines.length, 1,
+    'hard-coded "Job Applications" on line(s) ' + lines.map(([n]) => n).join(', ') +
+    ' — read it from the table row with builtinName() instead');
+  // and the one that is allowed is the default, not a print
+  assert.ok(/BUILTIN_DEFAULT_NAME/.test(lines[0][1]),
+    'the surviving literal is not BUILTIN_DEFAULT_NAME: ' + lines[0][1].trim());
   assert.strictEqual(API.BUILTIN_DEFAULT_NAME.job_applications, 'Job Applications');
+  // The markup carries the name too, as the label before anything has loaded. That is fine
+  // *because* it is repainted from the table row — which is the part worth asserting.
+  const html = fs.readFileSync('index.html', 'utf8');
+  assert.ok(/data-view="job_applications"[^>]*>[\s\S]*?Job Applications/.test(html),
+    'the sidebar no longer carries a pre-load label');
+  assert.ok(/function paintBuiltinNames\(\)[\s\S]*?lab\.textContent = builtinName\(k\)/.test(SRC),
+    'nothing repaints the sidebar label from the table row, so a rename would not reach it');
 });
 t('the preview shows the heading a built-in page really prints, not its table name', () => {
   // "Job Applications" is the name in the dashboard; the page prints "Job Application ·
@@ -216,8 +254,29 @@ t('the preview shows the heading a built-in page really prints, not its table na
 });
 t('nothing writes an unreachable key into a built-in form config', () => {
   // config_public is a whitelisted GENERATED column, so a key invented here never reaches
-  // the public page — a control that writes one would look like it worked and do nothing
-  assert.ok(/tableUpdate\.config = \{ hidden: hidden, intro: serializeIntro\(\) \};/.test(SRC));
+  // the public page — a control that writes one would look like it worked and do nothing.
+  //
+  // This used to pin the line byte for byte:
+  //     tableUpdate.config = { hidden: hidden, intro: serializeIntro() };
+  // and so went red when that line was correctly changed to MERGE onto the existing config
+  // instead of replacing it. Replacing wiped parent, capacity, scoring, alerts, card layout
+  // and column order every time somebody edited a question. A test that pins a literal line
+  // fails the next honest fix to it, so this asserts the rule instead: which keys, and
+  // merged rather than replaced.
+  const at = SRC.indexOf('if (builderMode === "builtin") {');
+  assert.ok(at > -1, 'the built-in branch of the save has moved');
+  const branch = SRC.slice(at, SRC.indexOf('\n    } else {', at));
+  const write = /tableUpdate\.config = ([\s\S]*?);/.exec(branch);
+  assert.ok(write, 'the built-in branch no longer writes tableUpdate.config');
+
+  // merged, never replaced — the bug that wiped every key the editor does not know about
+  assert.ok(/Object\.assign\(\s*\{\}\s*,\s*prevCfg\s*,/.test(write[1]),
+    'the built-in config is replaced rather than merged onto what is already there: ' + write[1]);
+
+  // and exactly the two keys that reach anything
+  const keys = (write[1].match(/(\w+)\s*:/g) || []).map(function (k) { return k.replace(/\s*:$/, ''); });
+  assert.deepStrictEqual(keys.sort(), ['hidden', 'intro'],
+    'the built-in branch writes ' + keys.join(', ') + ' — a key beyond hidden/intro cannot reach the public page');
 });
 t('a task table keeps its Form tab, because its fields still need editing', () => {
   assert.ok(!/custom-tab-form"\)\.style\.display = isTask \? "none" : ""/.test(SRC),
