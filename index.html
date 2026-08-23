@@ -9008,7 +9008,7 @@
   var usersModal = document.getElementById("users-modal");
   var editingUser = null;
   // Per-reviewer country restriction. Enforced in the DB (RLS) via table_access.scope.
-  function isScopable(_key) { return true; }   // country scope applies to any table; RLS is the gate
+  // Every table is scopable; the checkboxes only record the grant, the RLS is the real gate.
   function scopeSelectHtml(key) {
     return '<span class="u-scope" data-key="' + esc(key) + '">' +
       COUNTRY_LIST.map(function (c) {
