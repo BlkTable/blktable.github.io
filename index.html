@@ -5152,12 +5152,14 @@
   // Shopper alone is 6,235, and task tables will add ~2,000/day), so the view
   // loads one branch at a time and gets its counts from the database.
   var CUSTOM_PAGE = 500, CUSTOM_RENDER_STEP = 300, CUSTOM_FIRST = 150;
-  var customFacets = { branches: {}, statuses: {}, total: 0, all_total: 0 };
+  var customFacets = { branches: {}, countries: {}, statuses: {}, total: 0, all_total: 0 };
   var customRenderCap = CUSTOM_RENDER_STEP;
   function subsQuery(t, from, to) {
     var q = db.from("app_submissions").select("*").eq("table_id", t.id);
     if (currentCustom.branch === "__none") q = q.is("branch", null);
     else if (currentCustom.branch) q = q.eq("branch", currentCustom.branch);
+    if (currentCustom.country === "__none") q = q.is("country", null);
+    else if (currentCustom.country) q = q.eq("country", currentCustom.country);
     return q.order("created_at", { ascending: false }).range(from, to);
   }
   function applyCustomSubs(rows, rebuildFilter) {
@@ -5185,11 +5187,12 @@
       var rows = (out[0] && out[0].data) || [];
       applyCustomSubs(rows, true);
       if (rows.length < CUSTOM_FIRST) return;   // that was the whole table already
-      var tid = t.id, br = currentCustom.branch;
+      var tid = t.id, br = currentCustom.branch, co = currentCustom.country;
       subsQuery(t, CUSTOM_FIRST, CUSTOM_PAGE - 1).then(function (r2) {
         // the user may have moved to another table or branch while this was in flight
         if (!currentCustom || !currentCustom.table || currentCustom.table.id !== tid) return;
         if (currentCustom.branch !== br) return;
+        if (currentCustom.country !== co) return;
         if (r2.error || !r2.data || !r2.data.length) return;
         applyCustomSubs(currentCustom.subs.concat(r2.data), false);
       });
@@ -5217,9 +5220,26 @@
             '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
         }).join("");
     }
+    // country is the parent of branch, so its list renders above the branch list
+    var co = customFacets.countries || {};
+    var codes = Object.keys(co).sort(function (a, b) { return co[b] - co[a]; });
+    var countryMeaningful = codes.filter(function (c) { return c !== "__none"; }).length > 1;
+    var countryHtml = "";
+    if (countryMeaningful) {
+      var clabel = function (c) { return c === "__none" ? "No country" : countryLabel(c); };
+      countryHtml = '<div class="kid-head">Countries</div>' +
+        '<button class="side-kid' + (currentCustom.country ? "" : " active") +
+        '" data-c=""><span>All countries</span><span class="kid-n">' +
+        (customFacets.all_total || 0) + "</span></button>" +
+        codes.map(function (c) {
+          return '<button class="side-kid' + (currentCustom.country === c ? " active" : "") +
+            '" data-c="' + esc(c) + '"><span>' + esc(clabel(c)) + '</span><span class="kid-n">' + co[c] + "</span></button>";
+        }).join("");
+    }
     var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
     if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
     kids.innerHTML = viewsHtml() +
+      (countryHtml ? '<div class="side-kid-countries"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + countryHtml + "</div>" : "") +
       (branchHtml ? '<div class="side-kid-branches"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + branchHtml + "</div>" : "");
     kids.style.display = "flex";
   }
@@ -7535,7 +7555,7 @@
                       var t = tr.data && tr.data[0];
                       if (!t) { b.disabled = false; return; }
                       // switch the open table context so the panel reads the right config
-                      currentCustom = { table: t, fields: fr.data || [], subs: [], branch: null };
+                      currentCustom = { table: t, fields: fr.data || [], subs: [], branch: null, country: null };
                       openCustomDetail(row, fr.data || []);
                     });
                 });
@@ -8225,6 +8245,13 @@
     if (del) { e.stopPropagation(); deleteView(del.closest("[data-view-id]").getAttribute("data-view-id")); return; }
     var vk = e.target.closest("[data-view-id]");
     if (vk) { applyView(customViews.filter(function (x) { return x.id === vk.getAttribute("data-view-id"); })[0]); return; }
+    var c = e.target.closest(".side-kid[data-c]");
+    if (c && currentCustom) {
+      currentCustom.country = c.getAttribute("data-c") || null;
+      document.getElementById("custom-search").value = "";
+      loadCustomSubs();
+      return;
+    }
     var b = e.target.closest(".side-kid[data-b]"); if (!b || !currentCustom) return;
     currentCustom.branch = b.getAttribute("data-b") || null;
     document.getElementById("custom-search").value = "";
@@ -8237,9 +8264,11 @@
     if (currentCustom && currentCustom.table.id === item.getAttribute("data-custom")) {
       customKidsOpen = !customKidsOpen;
       try { localStorage.setItem("blk_custom_kids", customKidsOpen ? "1" : "0"); } catch (err) {}
-      // only the branch half folds away — the view rail belongs to the open table
+      // only the branch and country halves fold away — the view rail belongs to the open table
       var br = document.querySelector("#custom-kids .side-kid-branches");
       if (br) br.style.display = customKidsOpen ? "" : "none";
+      var cy = document.querySelector("#custom-kids .side-kid-countries");
+      if (cy) cy.style.display = customKidsOpen ? "" : "none";
     } else {
       customKidsOpen = true;   // opening a different table shows its branches
     }
@@ -10014,7 +10043,7 @@
         if (!row) return;
         return db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true })
           .then(function (fr) {
-            currentCustom = { table: t, fields: fr.data || [], subs: row ? [row] : [], branch: null };
+            currentCustom = { table: t, fields: fr.data || [], subs: row ? [row] : [], branch: null, country: null };
             openCustomDetail(row, fr.data || []);
           });
       })
