@@ -514,7 +514,17 @@
   .side-cat { color: var(--muted); font-size: var(--fs-3); letter-spacing: .04em; text-transform: uppercase; }
   .side-cat .side-cat-n { margin-left: auto; opacity: .7; font-size: var(--fs-2); }
   .side-cat-items { display: block; }
-  .side-cat-items .side-item .side-label { padding-left: 14px; }
+  .side-cat-items .side-item { padding-left: 26px; }
+  /* The fold arrow sits in the same 20px slot a table's emblem does, so every row in the
+     sidebar starts at the same x whether it is a table, a category or a workspace. It was
+     text inside the label before, which left group headings half a character out of line
+     with everything under them. */
+  .side-fold { flex: 0 0 auto; width: 20px; height: 20px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: var(--fs-3); opacity: .75;
+    transition: transform .12s ease; }
+  .side-fold.open { transform: rotate(90deg); }
+  .dup-opt { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: var(--fs-3); }
+  .dup-opt input { width: 16px; height: 16px; flex: 0 0 auto; }
   .home-group-title { color: var(--muted); font-size: var(--fs-3); letter-spacing: .06em; text-transform: uppercase;
     margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
   .home-groups > .home-group-title:first-child { margin-top: 0; }
@@ -1937,6 +1947,25 @@
       </div>
     </div>
 
+    <!-- Admin: duplicate a table. Separate from "Restart form…", which retires the
+         original and hands the copy its public link; this leaves the original alone. -->
+    <div class="modal-overlay" id="duptbl-modal">
+      <div class="modal" style="max-width: 460px;">
+        <button class="modal-close" id="duptbl-cancel" aria-label="Close">✕</button>
+        <div class="m-name">Duplicate this table</div>
+        <div class="m-sub">A second, independent table with the same questions, stages, review chain and access. <b id="duptbl-name">This table</b> is not touched, and the copy gets its own public link.</div>
+        <label class="sched-label" for="duptbl-input">Name for the copy</label>
+        <input id="duptbl-input" type="text" autocomplete="off">
+        <label class="dup-opt"><input type="checkbox" id="duptbl-records"> <span>Copy the <b id="duptbl-recn">records</b> too</span></label>
+        <div class="m-sub" style="margin-top:2px;">Leave this off for a fresh, empty copy of the form — which is what duplicating a form is usually for.</div>
+        <div class="m-actions" style="margin-top:16px; gap:10px;">
+          <button class="btn-wa" id="duptbl-confirm" type="button">Duplicate</button>
+          <button class="linkbtn" id="duptbl-cancel2" type="button">Cancel</button>
+        </div>
+        <div class="m-msg" id="duptbl-msg"></div>
+      </div>
+    </div>
+
     <!-- What the alerts on this form have done: queued, sent, failed -->
     <div class="modal-overlay" id="alertlog-modal">
       <div class="modal" style="max-width: 640px;">
@@ -2374,10 +2403,26 @@
 
   // ---- Category grouping (table-agnostic: any table with app_tables.category is grouped) ----
   // Uncategorised tables come first under no heading, then categories A→Z.
+  //
+  // A GROUP OF ONE IS NOT A GROUP. The migration made one category per Airtable base, and
+  // 37 of those bases hold a single table — so the sidebar showed a fold arrow, the base's
+  // name and the count "1", and opening it revealed one table usually named the same thing.
+  // Two rows, two clicks and no emblem to recognise it by, for one form. Those tables are
+  // listed directly instead, exactly like a table that never had a category. The category
+  // itself is untouched in the database: it still says where the table came from, and it
+  // starts grouping again by itself the moment a second table joins it.
   function groupByCategory(list) {
+    // counted first, so a lone table keeps its place in the flat list instead of being
+    // moved out of a group and appended after everything else
+    var n = {};
+    (list || []).forEach(function (t) {
+      var c = (t.category || "").trim();
+      if (c) n[c] = (n[c] || 0) + 1;
+    });
     var order = [], byName = {};
     (list || []).forEach(function (t) {
       var c = (t.category || "").trim();
+      if (n[c] === 1) c = "";
       if (!byName[c]) { byName[c] = { name: c, items: [] }; order.push(c); }
       byName[c].items.push(t);
     });
@@ -3701,7 +3746,7 @@
     else if (f.type === "phone") inner = edPhone(id, v);
     else if (f.type === "country") inner = edSelect(id, v, [""].concat(COUNTRY_LIST.map(function (c) { return c.name_en; })));
     else if (f.type === "branch") {
-      var brOpts = branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; });
+      var brOpts = branchDropdownOptions(allBranches, branchListKeys(f)).map(function (o) { return o.en; });
       if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
       inner = edSelect(id, v, [""].concat(brOpts));
     }
@@ -3758,7 +3803,7 @@
       else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
       else if (f.type === "dropdown") inner = edSelect(id, v, [""].concat((f.options || []).map(function (o) { return typeof o === "string" ? o : o.en; })));
       else if (f.type === "branch") {
-        var brOpts = branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; });
+        var brOpts = branchDropdownOptions(allBranches, branchListKeys(f)).map(function (o) { return o.en; });
         if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
         inner = edSelect(id, v, [""].concat(brOpts));
       }
@@ -4481,7 +4526,7 @@
   function typeUsesOpts(v) { return v === "dropdown" || v === "multi_select" || v === "link" || v === "branch"; }
   function optsPlaceholder(v) {
     if (v === "link") return "URL | Button text (English) | نص الزر (عربي), e.g. https://airtable.com/… | Apply now | قدّم الآن";
-    if (v === "branch") return "Branch list: jo, iraq, or lebanon (default jo)";
+    if (v === "branch") return "Branch lists: jo, lebanon, iraq — name more than one to ask for shops in several countries (default jo)";
     return "Options, one per line (or comma-separated): English|عربي, add |other to a choice to open a free-text box";
   }
   var customTables = [];
@@ -5142,7 +5187,8 @@
           var wrap = document.createElement("span");
           wrap.className = "side-cat-items"; wrap.style.display = collapsed ? "none" : "block";
           function paint() {
-            head.innerHTML = '<span class="side-label">' + (collapsed ? "▸" : "▾") + "&nbsp;&nbsp;" + esc(g.name) +
+            head.innerHTML = '<span class="side-fold' + (collapsed ? "" : " open") + '">▸</span>' +
+              '<span class="side-label">' + esc(g.name) +
               '</span><span class="side-cat-n">' + g.items.length + "</span>";
           }
           paint();
@@ -5170,8 +5216,9 @@
           var wrap = document.createElement("span");
           wrap.className = "side-cat-items"; wrap.style.display = collapsed ? "none" : "block";
           function paintWs() {
-            head.innerHTML = '<span class="side-label">' + (collapsed ? "▸" : "▾") + "&nbsp;&nbsp;" +
-              esc(ws.name) + '</span><span class="side-cat-n">' + ws.items.length + "</span>";
+            head.innerHTML = '<span class="side-fold' + (collapsed ? "" : " open") + '">▸</span>' +
+              '<span class="side-label">' + esc(ws.name) +
+              '</span><span class="side-cat-n">' + ws.items.length + "</span>";
           }
           paintWs();
           head.addEventListener("click", function () {
@@ -5615,7 +5662,7 @@
       expBtn.style.display = "";
       expBtn.onclick = function () {
         exportCustomCsv(rows, customCols(currentCustom.table, fields)
-          .concat([{ id: "__branch", label: "Branch" }, { id: "__created", label: "Submitted" }]),
+          .concat(pseudoCols()),
           currentCustom.table);
       };
     }
@@ -5666,8 +5713,10 @@
           // you switch "Show field names" off — the label div is left out rather than hidden,
           // so the gap it occupied goes with it.
           var kHtml = cardCfg.labels ? '<div class="k">' + esc(f.label) + '</div>' : '';
-          if (f.id === "__branch" || f.id === "__created") {
-            var pv = f.id === "__branch" ? branchPillHtml(s.branch) : esc(fmtDate(s.created_at));
+          if (isPseudoCol(f.id)) {
+            var pv = f.id === "__branch" ? branchPillHtml(s.branch)
+                   : f.id === "__country" ? esc(recordCountryText(s, fields))
+                   : esc(fmtDate(s.created_at));
             return '<div class="rec-fld">' + kHtml +
               '<div class="v">' + pv + '</div></div>';
           }
@@ -5830,11 +5879,33 @@
     if (!t) return "—";
     return '<span class="pill ' + tintClass(t) + '" dir="auto">' + esc(t) + "</span>";
   }
-  // the plain text behind a card field, including the two that are columns on the
+  // ---- Country as a column (all tables + future ones) ----------------------
+  // Branch has always been a column on the record rather than an answer inside it, so it
+  // can be sorted, grouped, filtered, put on a card and exported without every table
+  // agreeing on a field name. Country is exactly the same shape — the database has
+  // stamped app_submissions.country since country scoping went in, and the sidebar has
+  // listed the counts — but there was no COLUMN, so a table covering more than one
+  // country could be counted by country and not read by it. These three are now the
+  // pseudo-columns, and everything that offered two offers three.
+  function pseudoCols() {
+    return [{ id: "__branch", label: "Branch" },
+            { id: "__country", label: "Country" },
+            { id: "__created", label: "Submitted" }];
+  }
+  function isPseudoCol(id) { return id === "__branch" || id === "__country" || id === "__created"; }
+  // The country reads as its name, not its code: "Lebanon", not "lebanon". Falls back to
+  // deriving it when the column is empty — a row written before the country trigger
+  // existed still has a branch that says where it is.
+  function recordCountryText(s, fields) {
+    var c = (s && s.country) ? (canonicalCountry(s.country) || s.country) : recordCountry(s, fields);
+    return c ? countryLabel(c) : "";
+  }
+  // the plain text behind a card field, including the ones that are columns on the
   // record rather than answers in it
   function cardText(f, d, s) {
     if (!f) return "";
     if (f.id === "__branch") return (s && s.branch) || "";
+    if (f.id === "__country") return recordCountryText(s, currentCustom && currentCustom.fields);
     if (f.id === "__created") return s ? fmtDate(s.created_at) : "";
     return customCellText(f, d);
   }
@@ -5856,11 +5927,41 @@
       })
       .catch(function () {});
   }
+  // A branch question names one or MORE branch lists: options.list = "jo" or "jo, lebanon".
+  // One list per form meant one country per form, so a table covering both needed two
+  // tables, two links and two sets of submissions to reconcile. Empty means Jordan, which
+  // is what every field written before this said.
+  function branchListKeys(f) {
+    var raw = (f && f.options && f.options.list) || "";
+    var xs = String(raw).split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    return xs.length ? xs : ["jo"];
+  }
+  // Accepts a single key or a list of them. When more than one country is offered, the
+  // options carry the list they came from so the picker can head them by country — 38
+  // Jordanian shops and 4 Lebanese ones in one flat alphabetical list is not a list
+  // anybody can use.
   function branchDropdownOptions(rows, listKey) {
-    var key = listKey || "jo";
-    return (rows || []).filter(function (b) { return (b.list_key || "jo") === key; })
-      .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
-      .map(function (b) { return { en: b.name, ar: b.name_ar || "" }; });
+    var keys = Array.isArray(listKey) ? listKey : String(listKey || "jo").split(",");
+    keys = keys.map(function (s) { return String(s).trim().toLowerCase(); }).filter(Boolean);
+    if (!keys.length) keys = ["jo"];
+    var out = [];
+    keys.forEach(function (k) {
+      (rows || []).filter(function (b) { return (b.list_key || "jo") === k; })
+        .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
+        .forEach(function (b) { out.push({ en: b.name, ar: b.name_ar || "", list: k }); });
+    });
+    return out;
+  }
+  // The country a branch belongs to, read off the shop rather than off the question —
+  // which is the whole point of letting one question offer several lists.
+  function branchCountry(rows, name) {
+    if (!name) return null;
+    var want = String(name).trim().toLowerCase();
+    var hit = (rows || []).filter(function (b) {
+      return String(b.name || "").trim().toLowerCase() === want ||
+             String(b.name_ar || "").trim().toLowerCase() === want;
+    })[0];
+    return hit ? canonicalCountry(hit.list_key || "jo") : null;
   }
   function hasArabic(s) { return /[؀-ۿ]/.test(String(s || "")); }
   // ---- Scores ------------------------------------------------------------------
@@ -6121,6 +6222,7 @@
     if (!c) return "";
     if (c.id === "__created") return s.created_at || "";
     if (c.id === "__branch") return s.branch || "";
+    if (c.id === "__country") return recordCountryText(s, currentCustom && currentCustom.fields);
     return customCellText(c, s.data || {});
   }
   function compareRows(a, b, cols) {
@@ -6194,6 +6296,7 @@
     var d = s.data || {};
     if (f.id === "__created") return esc(fmtDate(s.created_at));
     if (f.id === "__branch") return branchPillHtml(s.branch);
+    if (f.id === "__country") return esc(recordCountryText(s, currentCustom && currentCustom.fields));
     if (isFileField(f)) {
       var p = d[f.id];
       if (!p) return "";
@@ -6225,6 +6328,7 @@
     var order = [], byKey = {};
     rows.forEach(function (s) {
       var k = col.id === "__branch" ? (s.branch || "—")
+            : col.id === "__country" ? (recordCountryText(s, currentCustom && currentCustom.fields) || "—")
             : col.id === "__created" ? String(s.created_at || "").slice(0, 10)
             : (customCellText(col, s.data || {}) || "—");
       k = String(k);
@@ -6237,7 +6341,7 @@
   // A column summarises as a total when it holds numbers, otherwise as how many rows
   // actually answered it — the two things Airtable's summary bar is used for.
   function summarise(col, rows) {
-    if (col.id === "__created" || col.id === "__branch") return "";
+    if (isPseudoCol(col.id)) return "";
     var nums = [], filled = 0;
     rows.forEach(function (s) {
       var v = customCellText(col, s.data || {});
@@ -6266,6 +6370,7 @@
       return cols.map(function (c) {
         if (c.id === "__created") return csvCell(fmtDate(s.created_at));
         if (c.id === "__branch") return csvCell(s.branch || "");
+        if (c.id === "__country") return csvCell(recordCountryText(s, currentCustom && currentCustom.fields));
         return csvCell(customCellText(c, s.data || {}));
       }).join(",");
     }).join("\n");
@@ -6451,7 +6556,8 @@
   function renderGroupPanel(t, fields) {
     var panel = document.getElementById("group-panel");
     if (!panel) return;
-    var opts = [{ id: "", label: "No grouping" }, { id: "__branch", label: "Branch" }]
+    var opts = [{ id: "", label: "No grouping" }, { id: "__branch", label: "Branch" },
+                { id: "__country", label: "Country" }]
       .concat(customCols(t, fields).filter(function (c) {
         // grouping only makes sense where values repeat
         return c.type === "dropdown" || c.type === "yesno" || c.type === "multi_select"
@@ -6471,7 +6577,8 @@
   }
   function sortableCols(t, fields) {
     return fields.filter(function (f) { return !f.internal && !isFileField(f); })
-      .concat([{ id: "__created", label: "Submitted" }, { id: "__branch", label: "Branch" }]);
+      .concat([{ id: "__created", label: "Submitted" }, { id: "__branch", label: "Branch" },
+               { id: "__country", label: "Country" }]);
   }
   function renderSortPanel(t, fields) {
     var panel = document.getElementById("sort-panel");
@@ -6747,14 +6854,13 @@
   // in it. summaryFields already understands both; the panel has to offer them.
   function cardChoosable(fields) {
     return (fields || []).filter(function (f) { return !isFileField(f); })
-      .concat([{ id: "__branch", label: "Branch" }, { id: "__created", label: "Submitted" }]);
+      .concat(pseudoCols());
   }
   function summaryFields(table, fields) {
     var cardIds = cardPrefs(table, fields).fields;
     if (cardIds && cardIds.length) {
       return cardIds.map(function (id) {
-        if (id === "__branch") return { id: "__branch", label: "Branch" };
-        if (id === "__created") return { id: "__created", label: "Submitted" };
+        if (isPseudoCol(id)) return pseudoCols().filter(function (p) { return p.id === id; })[0];
         return (fields || []).filter(function (f) { return f.id === id; })[0];
       }).filter(Boolean);
     }
@@ -6793,7 +6899,19 @@
       return x.type === "country" && d[x.id] != null && d[x.id] !== "";
     })[0];
     if (cf) { var c = canonicalCountry(d[cf.id]); if (c) return c; }
-    if (recordBranch(s, fields)) { var lc = branchListCountry(fields); if (lc) return lc; }
+    var br = recordBranch(s, fields);
+    if (br) {
+      // The shop that was answered decides, not the question — a question may now offer
+      // the shops of several countries, and then its own list cannot say. Falls back to
+      // the field's list for a branch typed in free text or imported under a name the
+      // branches table has never seen, which is what an import produces. Same order as
+      // app_submissions_set_country() in the database, for the same reason condMet is
+      // written twice: the two must not disagree about where a record is.
+      var bc = branchCountry(allBranches, br);
+      if (bc) return bc;
+      var lc = branchListCountry(fields);
+      if (lc) return lc;
+    }
     return "";
   }
   function countryFacets(rows, fields) {
@@ -6942,7 +7060,7 @@
     if (!currentCustom) return;
     var picked = customSel, fields = currentCustom.fields || [], t = currentCustom.table;
     exportCustomCsv((currentCustom.subs || []).filter(function (s) { return picked[s.id]; }),
-      customCols(t, fields).concat([{ id: "__branch", label: "Branch" }, { id: "__created", label: "Submitted" }]), t);
+      customCols(t, fields).concat(pseudoCols()), t);
   });
 
   // Deleting a selection, for every table the app has and every one it will have. Three
@@ -7025,10 +7143,25 @@
   }
   document.getElementById("sel-delete").addEventListener("click", deleteSelectedRecords);
 
+  // Whether this table has more than one country in it. Branch is always a grid column
+  // because every table might have branches; country is only a column when the answer can
+  // actually differ, because a Country column reading "Jordan" on all 1,066 rows of a
+  // Jordan-only form is a column that costs width and says nothing. It appears the moment
+  // the form offers a second branch list, asks a Country question, or has collected a
+  // record from somewhere else — and it stays available in the column, sort, group and
+  // card pickers either way.
+  function tableSpansCountries(t, fields) {
+    if ((fields || []).some(function (f) { return f.type === "country"; })) return true;
+    var bf = (fields || []).filter(function (f) { return f.type === "branch"; })[0];
+    if (bf && branchListKeys(bf).length > 1) return true;
+    var co = (customFacets && customFacets.countries) || {};
+    return Object.keys(co).filter(function (c) { return c !== "__none"; }).length > 1;
+  }
   function renderCustomGrid(listEl, rows, fields, t) {
     var cols = customCols(t, fields);
-    var allCols = [{ id: "__branch", label: "Branch", type: "short_text" }].concat(cols,
-      [{ id: "__created", label: "Submitted", type: "date" }]);
+    var allCols = [{ id: "__branch", label: "Branch", type: "short_text" }]
+      .concat(tableSpansCountries(t, fields) ? [{ id: "__country", label: "Country", type: "short_text" }] : [],
+      cols, [{ id: "__created", label: "Submitted", type: "date" }]);
     if (customSort.length) {
       rows = rows.slice().sort(function (a, b) { return compareRows(a, b, allCols); });
     }
@@ -8107,12 +8240,22 @@
     }
     db.rpc("record_share_token", { p_record: rec.id, p_rotate: false }).then(function (r) {
       if (r.error || !r.data) {
-        // A viewer who cannot manage the table has no business handing out its links, and
-        // the code may simply be ahead of the migration — say which, do not fail silently.
-        bar.innerHTML = '<span class="lbl">' +
-          (/record_share_token|PGRST202/i.test(String((r.error && r.error.message) || ""))
+        // Three different failures used to read as one sentence, and the sentence was a
+        // guess. "You cannot share records of this table" was shown for ANY error, so
+        // when record_share_token could not resolve gen_random_bytes — pgcrypto lives in
+        // `extensions` and the function's search_path is `public` — an admin was told
+        // they lacked a permission they had. Only the database can say which of these it
+        // is, so only the refusal it actually raises is reported as a refusal, and
+        // anything else is repeated in the database's own words.
+        var msg = String((r.error && r.error.message) || "");
+        bar.innerHTML = '<span class="lbl">' + esc(
+          /record_share_token|PGRST202/i.test(msg)
             ? "Needs the database migration (10-parent-scoped-form-links.sql)."
-            : "You cannot share records of this table.") + "</span>";
+            : /cannot share records/i.test(msg)
+              ? "You cannot share records of this table."
+              : msg
+                ? "The link could not be made: " + msg
+                : "The link could not be made.") + "</span>";
         if (r.error && window.console) console.error(r.error);
         return;
       }
@@ -9069,6 +9212,79 @@
       showView("home");
     }).catch(function (err) { msg.textContent = "Could not delete. " + (err.message || ""); if (window.console) console.error(err); });
   }
+  // ---- Duplicate a whole table (admin, every table current and future) ----
+  // Building a second form shaped like one you already have meant retyping every
+  // question, or using "Restart form…" — which is a different thing: it retires the
+  // original and hands the copy its public link. This leaves the original exactly as it
+  // is and puts an independent copy beside it, which is what "duplicate" means everywhere
+  // else. One DB call (duplicate_table), because a table is a row, its questions, the ids
+  // those questions are referenced by, its access grants and — if asked — its records,
+  // and a failure halfway through would leave half a table in the sidebar.
+  var dupTable = null;
+  function openDuplicateTable(t) {
+    if (!t || !isAdmin) return;
+    dupTable = t;
+    document.getElementById("duptbl-name").textContent = t.name;
+    document.getElementById("duptbl-input").value = t.name + " (copy)";
+    document.getElementById("duptbl-records").checked = false;
+    // The count is what makes "copy the records too" a real decision rather than a
+    // checkbox nobody reads — 28,000 rows and 6 rows are not the same click.
+    var recn = document.getElementById("duptbl-recn");
+    recn.textContent = "records";
+    db.from("app_submissions").select("id", { count: "exact", head: true }).eq("table_id", t.id)
+      .then(function (r) {
+        if (dupTable !== t || r.error) return;
+        var n = r.count || 0;
+        recn.textContent = n === 1 ? "1 record" : n.toLocaleString() + " records";
+      });
+    document.getElementById("duptbl-msg").textContent = "";
+    document.getElementById("duptbl-modal").classList.add("open");
+    setTimeout(function () { document.getElementById("duptbl-input").focus(); }, 50);
+  }
+  function closeDuplicateTable() {
+    document.getElementById("duptbl-modal").classList.remove("open");
+    dupTable = null;
+  }
+  function doDuplicateTable() {
+    var t = dupTable; if (!t) return;
+    var withRecs = document.getElementById("duptbl-records").checked;
+    var msg = document.getElementById("duptbl-msg");
+    var btn = document.getElementById("duptbl-confirm");
+    msg.textContent = withRecs ? "Copying the form and its records…" : "Copying…";
+    btn.disabled = true;
+    db.rpc("duplicate_table", {
+      p_table: t.id,
+      p_name: document.getElementById("duptbl-input").value.trim() || null,
+      p_with_records: withRecs
+    }).then(function (r) {
+      btn.disabled = false;
+      if (r.error || !r.data) {
+        msg.textContent = /duplicate_table|PGRST202/i.test(String((r.error && r.error.message) || ""))
+          ? "Needs the database migration (workspaces/19-duplicate-table.sql)."
+          : "Could not duplicate. " + ((r.error && r.error.message) || "");
+        if (r.error && window.console) console.error(r.error);
+        return;
+      }
+      var newId = r.data;
+      closeDuplicateTable(); closeBuilder();
+      // opened straight away, because the copy is what you asked for and hunting for it
+      // in a sidebar of 272 entries is not the end of the action
+      loadCustomTables().then(function () {
+        var nt = customTables.filter(function (x) { return x.id === newId; })[0];
+        if (nt) openCustomTable(nt);
+      });
+    }).catch(function (err) {
+      btn.disabled = false;
+      msg.textContent = "Could not duplicate. " + (err.message || "");
+      if (window.console) console.error(err);
+    });
+  }
+  document.getElementById("duptbl-cancel").addEventListener("click", closeDuplicateTable);
+  document.getElementById("duptbl-cancel2").addEventListener("click", closeDuplicateTable);
+  document.getElementById("duptbl-modal").addEventListener("click", function (e) { if (e.target === this) closeDuplicateTable(); });
+  document.getElementById("duptbl-confirm").addEventListener("click", doDuplicateTable);
+  document.getElementById("duptbl-input").addEventListener("keydown", function (e) { if (e.key === "Enter") doDuplicateTable(); });
+
   document.getElementById("bld-delete").addEventListener("click", function () { openDeleteTable(editingTableId, document.getElementById("bld-name").value.trim()); });
   document.getElementById("deltbl-cancel").addEventListener("click", closeDeleteTable);
   document.getElementById("deltbl-cancel2").addEventListener("click", closeDeleteTable);
@@ -9116,9 +9332,22 @@
         if (!/^https?:\/\//i.test(url)) { msg.set("A link field needs a URL starting with http:// or https://", "err"); return; }
         options = { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" };
       } else if (type === "branch") {
-        var lk = (rows[i].querySelector(".opts").value.trim() || "jo").toLowerCase();
-        if (["jo","iraq","lebanon"].indexOf(lk) === -1) { msg.set("Branch list must be jo, iraq, or lebanon.", "err"); return; }
-        options = { list: lk };
+        // One question may now offer the shops of several countries: "jo, lebanon". The
+        // lists are checked against the countries actually on file rather than a hard-coded
+        // three, so adding a country in the Countries manager is enough to be able to ask
+        // for its branches. Duplicates are dropped so "jo, jo" cannot list Amman twice.
+        var lks = (rows[i].querySelector(".opts").value.trim() || "jo").toLowerCase()
+          .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+        var known = COUNTRY_LIST.map(function (c) { return c.code; });
+        var seen = {}, clean = [];
+        for (var lki = 0; lki < lks.length; lki++) {
+          if (known.indexOf(lks[lki]) === -1) {
+            msg.set('Branch list "' + lks[lki] + '" is not a country we have. Use one or more of: ' + known.join(", ") + ".", "err");
+            return;
+          }
+          if (!seen[lks[lki]]) { seen[lks[lki]] = 1; clean.push(lks[lki]); }
+        }
+        options = { list: clean.join(", ") };
       }
       var afterSel = rows[i].querySelector(".fafter");
       // "ask only if" points at another row. If that row is already a saved field the
@@ -9610,6 +9839,7 @@
       items.push('<li data-a="edit">Edit form</li>');
       items.push('<li data-a="share">Who can see it…</li>');
       if (t.kind !== "task") items.push('<li data-a="link">Copy public link</li>');
+      items.push('<li data-a="duplicate">Duplicate table…</li>');
       // Archive sits above the separator, with Delete below it: finishing with a table is
       // the ordinary ending and should be the one that is easy to reach.
       items.push(isArchived(t)
@@ -9665,6 +9895,8 @@
           navigator.clipboard.writeText(link).catch(function () { window.prompt("Copy this link:", link); });
         } else { window.prompt("Copy this link:", link); }
       }
+    } else if (act === "duplicate" && ctx.table) {
+      openDuplicateTable(ctx.table);
     } else if (act === "archive" && ctx.table) {
       if (window.confirm(archiveConfirmText(ctx.table))) setTableArchived(ctx.table, true);
     } else if (act === "unarchive" && ctx.table) {
@@ -10193,6 +10425,7 @@
       // One editor now holds the questions AND the stages, actions and review chain, so
       // these two used to go to different places and now go to the same one.
       items.push({ label: "Edit the form", hint: "name, questions, stages, chain", on: function () { openFormEditor(t); } });
+      items.push({ label: "Duplicate table…", hint: "an independent copy", on: function () { openDuplicateTable(t); } });
       items.push({ label: "Share…", on: function () { openShare(t.id, t.name); } });
       if (isArchived(t)) {
         items.push({ label: "Restore from archive", hint: "back in the sidebar", on: function () { setTableArchived(t, false); } });

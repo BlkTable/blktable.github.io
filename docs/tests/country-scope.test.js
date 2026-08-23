@@ -6,7 +6,7 @@ function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matc
 function grab(js,name){const at=js.search(new RegExp('\\bfunction\\s+'+name+'\\s*\\('));if(at===-1)throw new Error('no fn '+name);const open=js.indexOf('{',at);let d=0;for(let i=open;i<js.length;i++){if(js[i]==='{')d++;else if(js[i]==='}'){d--;if(!d)return js.slice(at,i+1);}}throw new Error('unbalanced '+name);}
 function grabVar(js,name){const m=js.match(new RegExp('\\n  var '+name+' = [\\s\\S]*?;(?=\\r?\\n)'));if(!m)throw new Error('no var '+name);return m[0];}
 function load(names,vars){const js=scripts('index.html');const body=(vars||[]).map(v=>grabVar(js,v)).join('\n')+'\n'+names.map(n=>grab(js,n)).join('\n');const ctx={console};vm.createContext(ctx);new vm.Script('(function(){'+body+'\nthis.API={'+names.concat(vars||[]).join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
-const API = load(['rebuildCountryIndex','canonicalCountry','recordBranch','branchListCountry','recordCountry','scopeFromCountries','countriesFromScope','scopeLabel','countryFacets','countryLabel'], ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','BRANCH_RE']);
+const API = load(['rebuildCountryIndex','canonicalCountry','recordBranch','branchListCountry','branchCountry','branchListKeys','recordCountry','scopeFromCountries','countriesFromScope','scopeLabel','countryFacets','countryLabel'], ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','BRANCH_RE','allBranches']);
 API.rebuildCountryIndex();
 // Objects/arrays built inside the vm sandbox use its own Array/Object intrinsics, so a raw
 // deepStrictEqual against a host-realm literal fails on prototype identity. asWritten normalizes
@@ -55,6 +55,42 @@ t('recordCountry derives lebanon from a lebanon-list branch field, and parses st
 });
 t('recordCountry returns "" when nothing resolves', () => {
   assert.strictEqual(API.recordCountry({data:{}}, []), '');
+});
+
+// ---- A form offering more than one country's shops -------------------------
+// The field can no longer say which country a record is in, because it offers several.
+// The SHOP that was answered says, which is also what app_submissions_set_country() does
+// in the database — the two are written twice on purpose and must not disagree.
+const MIXED_BRANCHES=[
+  {name:'Abdoun',name_ar:'عبدون',position:1,list_key:'jo'},
+  {name:'Beirut',name_ar:'بيروت',position:0,list_key:'lebanon'}
+];
+t('branchCountry reads the country off the shop, by English or Arabic name', () => {
+  assert.strictEqual(API.branchCountry(MIXED_BRANCHES,'Beirut'), 'lebanon');
+  assert.strictEqual(API.branchCountry(MIXED_BRANCHES,'  abdoun '), 'jo');
+  assert.strictEqual(API.branchCountry(MIXED_BRANCHES,'بيروت'), 'lebanon');
+});
+t('branchCountry says nothing about a shop it does not know, rather than guessing', () => {
+  assert.strictEqual(API.branchCountry(MIXED_BRANCHES,'Nowhere'), null);
+  assert.strictEqual(API.branchCountry(MIXED_BRANCHES,''), null);
+  assert.strictEqual(API.branchCountry([], 'Beirut'), null);
+});
+t('a two-list question takes the country from the branch answered, not from the question', () => {
+  API.allBranches.length = 0; MIXED_BRANCHES.forEach(b => API.allBranches.push(b));
+  const fields=[{id:'b1', label:'Branch', type:'branch', options:{list:'jo, lebanon'}}];
+  assert.strictEqual(API.recordCountry({data:{b1:'Beirut'}}, fields), 'lebanon');
+  assert.strictEqual(API.recordCountry({data:{b1:'Abdoun'}}, fields), 'jo');
+  API.allBranches.length = 0;
+});
+t('branchListCountry declines to answer for a question naming several lists', () => {
+  // "jo, lebanon" is not a country, and pretending it is one is how every Lebanese
+  // record on a mixed form would have been filed under Jordan.
+  assert.strictEqual(API.branchListCountry([{id:'b1',type:'branch',options:{list:'jo, lebanon'}}]), null);
+});
+t('the single-list rule is unchanged: the field still answers when the shop is unknown', () => {
+  // Which is what an import produces — a branch name the branches table never had.
+  const fields=[{id:'b1', label:'Branch', type:'branch', options:{list:'lebanon'}}];
+  assert.strictEqual(API.recordCountry({data:{b1:'Some old spelling'}}, fields), 'lebanon');
 });
 
 t('scopeFromCountries builds {country:[...]}, empty => null (all)', () => {
