@@ -1257,8 +1257,9 @@
   .u-trow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 6px; }
   .u-editopt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: var(--fs-2); cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
   .u-editopt input { width: auto; height: auto; }
-  .u-trow .u-scope { height: 30px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-2); padding: 0 6px; color-scheme: dark; font-family: inherit; }
-  .u-trow .u-scope:disabled { opacity: 0.5; }
+  .u-trow .u-scope { display: inline-flex; flex-wrap: wrap; align-items: center; }
+  .u-co { display: inline-flex; align-items: center; gap: 4px; margin: 2px 8px 2px 0; font-size: 13px; color: var(--muted); }
+  .u-co input { width: auto; height: auto; }
   /* top-right profile menu */
   .profile-menu { position: relative; }
   .profile-btn { display: flex; align-items: center; gap: 9px; background: var(--card); border: 1px solid var(--field-border); border-radius: 999px; padding: 5px 12px 5px 6px; color: var(--text); cursor: pointer; font-family: inherit; }
@@ -9006,22 +9007,15 @@
   // ---- Admin: users management (list, create, edit, delete, reassign) ----
   var usersModal = document.getElementById("users-modal");
   var editingUser = null;
-  // Per-reviewer country restriction. Enforced in the DB (RLS ja_scope_ok) for tables in SCOPABLE.
-  var SCOPE_COUNTRIES = [
-    { prefix: "", label: "All countries" },
-    { prefix: "+961", label: "Lebanon only" },
-    { prefix: "+962", label: "Jordan only" },
-    { prefix: "+963", label: "Syria only" },
-    { prefix: "+964", label: "Iraq only" }
-  ];
-  var SCOPABLE = { job_applications: true }; // tables whose access can be limited by country (phone code)
+  // Per-reviewer country restriction. Enforced in the DB (RLS) via table_access.scope.
+  function isScopable(_key) { return true; }   // country scope applies to any table; RLS is the gate
   function scopeSelectHtml(key) {
-    if (!SCOPABLE[key]) return "";
-    return '<select class="u-scope" data-key="' + esc(key) + '" title="Limit which applications this reviewer can see" disabled>' +
-      SCOPE_COUNTRIES.map(function (co) { return '<option value="' + co.prefix + '">' + esc(co.label) + "</option>"; }).join("") + "</select>";
+    return '<span class="u-scope" data-key="' + esc(key) + '">' +
+      COUNTRY_LIST.map(function (c) {
+        return '<label class="u-co"><input type="checkbox" class="u-co-box" value="' + esc(c.code) + '" disabled> ' +
+          esc(c.name_en) + '</label>';
+      }).join('') + '</span>';
   }
-  function scopeFromPrefix(prefix) { return prefix ? { phone_prefix: prefix } : null; }
-  function prefixFromScope(scope) { return (scope && scope.phone_prefix) ? scope.phone_prefix : ""; }
   function scopeFromCountries(arr) {
     var xs = (arr || []).map(canonicalCountry).filter(Boolean);
     return xs.length ? { country: xs } : null;
@@ -9055,8 +9049,12 @@
         scopeSelectHtml(t.key);
       var acc = row.querySelector(".u-acc"), ce = row.querySelector(".u-can-edit"), cm = row.querySelector(".u-can-manage"), sc = row.querySelector(".u-scope");
       acc.addEventListener("change", function () {
-        ce.disabled = !acc.checked; cm.disabled = !acc.checked; if (sc) sc.disabled = !acc.checked;
-        if (!acc.checked) { ce.checked = false; cm.checked = false; if (sc) sc.value = ""; }
+        ce.disabled = !acc.checked; cm.disabled = !acc.checked;
+        if (sc) sc.querySelectorAll('.u-co-box').forEach(function (b) { b.disabled = !acc.checked; });
+        if (!acc.checked) {
+          ce.checked = false; cm.checked = false;
+          if (sc) sc.querySelectorAll('.u-co-box').forEach(function (b) { b.checked = false; });
+        }
       });
       host.appendChild(row);
     });
@@ -9114,7 +9112,11 @@
         acc.checked = true;
         var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + a.table_key + '"]'); if (ce) { ce.disabled = false; ce.checked = !!a.can_edit; }
         var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + a.table_key + '"]'); if (cm) { cm.disabled = false; cm.checked = !!a.can_manage; }
-        var sc = document.querySelector('#u-tables .u-scope[data-key="' + a.table_key + '"]'); if (sc) { sc.disabled = false; sc.value = prefixFromScope(a.scope); }
+        var sc = document.querySelector('#u-tables .u-scope[data-key="' + a.table_key + '"]');
+        if (sc) {
+          var codes = countriesFromScope(a.scope);
+          sc.querySelectorAll('.u-co-box').forEach(function (b) { b.disabled = false; b.checked = codes.indexOf(b.value) > -1; });
+        }
       }
     });
     usersModal.classList.add("open");
@@ -9167,7 +9169,8 @@
         var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + c.value + '"]');
         var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + c.value + '"]');
         var sc = document.querySelector('#u-tables .u-scope[data-key="' + c.value + '"]');
-        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked), can_manage: !!(cm && cm.checked), scope: sc ? scopeFromPrefix(sc.value) : null });
+        var picked = sc ? Array.prototype.slice.call(sc.querySelectorAll('.u-co-box:checked')).map(function (b) { return b.value; }) : [];
+        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked), can_manage: !!(cm && cm.checked), scope: scopeFromCountries(picked) });
       });
       if (!access.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
     }
