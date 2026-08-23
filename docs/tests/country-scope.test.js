@@ -5,9 +5,13 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert');
 function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');}
 function grab(js,name){const at=js.search(new RegExp('\\bfunction\\s+'+name+'\\s*\\('));if(at===-1)throw new Error('no fn '+name);const open=js.indexOf('{',at);let d=0;for(let i=open;i<js.length;i++){if(js[i]==='{')d++;else if(js[i]==='}'){d--;if(!d)return js.slice(at,i+1);}}throw new Error('unbalanced '+name);}
 function grabVar(js,name){const m=js.match(new RegExp('\\n  var '+name+' = [\\s\\S]*?;(?=\\r?\\n)'));if(!m)throw new Error('no var '+name);return m[0];}
-function load(names,vars){const js=scripts('index.html');const body=(vars||[]).map(v=>grabVar(js,v)).join('\n')+'\n'+names.map(n=>grab(js,n)).join('\n');const holder={};vm.runInThisContext('(function(API){'+body+'\nObject.assign(API,{'+names.concat(vars||[]).join(',')+'});})')(holder);return holder;}
+function load(names,vars){const js=scripts('index.html');const body=(vars||[]).map(v=>grabVar(js,v)).join('\n')+'\n'+names.map(n=>grab(js,n)).join('\n');const ctx={console};vm.createContext(ctx);new vm.Script('(function(){'+body+'\nthis.API={'+names.concat(vars||[]).join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
 const API = load(['rebuildCountryIndex','canonicalCountry','recordBranch','recordCountry','scopeFromCountries','countriesFromScope','scopeLabel','countryFacets','countryLabel'], ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','BRANCH_RE','BRANCH_COUNTRY']);
 API.rebuildCountryIndex();
+// Objects/arrays built inside the vm sandbox use its own Array/Object intrinsics, so a raw
+// deepStrictEqual against a host-realm literal fails on prototype identity. asWritten normalizes
+// both sides to plain host JSON before comparing — same convention as archive.test.js.
+const asWritten = o => JSON.parse(JSON.stringify(o));
 let n=0; const t=(name,fn)=>{try{fn();n++;}catch(e){console.log('FAIL: '+name+' -> '+e.message);process.exitCode=1;}};
 
 t('code passes through', () => {
@@ -51,15 +55,15 @@ t('recordCountry returns "" when nothing resolves', () => {
 });
 
 t('scopeFromCountries builds {country:[...]}, empty => null (all)', () => {
-  assert.deepStrictEqual(API.scopeFromCountries(['jo','lebanon']), {country:['jo','lebanon']});
+  assert.deepStrictEqual(asWritten(API.scopeFromCountries(['jo','lebanon'])), {country:['jo','lebanon']});
   assert.strictEqual(API.scopeFromCountries([]), null);
 });
 t('countriesFromScope reads the new shape', () => {
-  assert.deepStrictEqual(API.countriesFromScope({country:['iraq']}), ['iraq']);
-  assert.deepStrictEqual(API.countriesFromScope(null), []);
+  assert.deepStrictEqual(asWritten(API.countriesFromScope({country:['iraq']})), ['iraq']);
+  assert.deepStrictEqual(asWritten(API.countriesFromScope(null)), []);
 });
 t('countriesFromScope back-compat: legacy {phone_prefix} maps to a country', () => {
-  assert.deepStrictEqual(API.countriesFromScope({phone_prefix:'+961'}), ['lebanon']);
+  assert.deepStrictEqual(asWritten(API.countriesFromScope({phone_prefix:'+961'})), ['lebanon']);
 });
 t('scopeLabel summarises', () => {
   assert.strictEqual(API.scopeLabel(null), '');
@@ -68,6 +72,6 @@ t('scopeLabel summarises', () => {
 t('countryFacets counts by resolved country, blanks under __none', () => {
   const fields=[{id:'q',label:'Country',type:'country'}];
   const rows=[{data:{q:'Jordan'}},{data:{q:'jordan'}},{data:{q:''}}];
-  assert.deepStrictEqual(API.countryFacets(rows, fields), {jo:2, __none:1});
+  assert.deepStrictEqual(asWritten(API.countryFacets(rows, fields)), {jo:2, __none:1});
 });
 console.log('country-scope: '+n+' passed');
