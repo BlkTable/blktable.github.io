@@ -1380,6 +1380,18 @@
        the right edge can never run past the viewport. max-width wins over min-width. */
     .rec-actions, .at-menu { max-width: calc(100vw - 16px); }
   }
+
+  /* ===== Mobile overhaul Task 5: wrapping toolbars/filters + 44px tap targets (phone only) ===== */
+  @media (max-width: 720px) {
+    /* Toolbars wrap and their controls go full width. */
+    .toolbar { flex-wrap: wrap; }
+    .toolbar input[type="search"], .toolbar select { width: 100%; min-width: 0; }
+    /* Record edit + filter + builder-preview field inputs: full width, 44px tap target. */
+    .ed-in { min-height: 44px; }
+    .fp-select, .fp-age input, #fp-gender, #fp-country { min-height: 44px; height: auto; }
+    .fprev .pv-box { width: 100%; min-height: 44px; height: auto; }
+    .fprev .pv-submit { min-height: 44px; }
+  }
 </style>
 </head>
 <body>
