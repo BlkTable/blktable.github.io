@@ -50,11 +50,11 @@ function load(file, vars, fns) {
   return ctx.API;
 }
 
-const { cardPrefs, summaryFields, cardChoosable, cardSave, cardKey, coverHtml } =
+const { cardPrefs, summaryFields, cardChoosable, cardSave, cardKey, coverHtml, pseudoCols } =
   load('index.html',
        ['VIDEO_EXT', 'IMAGE_EXT', 'PLAY_SVG', 'FILE_SVG'],
        ['cardPrefs', 'cardLocal', 'cardMine', 'cardHas', 'cardKey', 'cardSave', 'cardChoosable',
-        'summaryFields', 'isFileField', 'coverHtml', 'isVideoPath', 'isImagePath']);
+        'summaryFields', 'isFileField', 'coverHtml', 'isVideoPath', 'isImagePath', 'pseudoCols', 'isPseudoCol']);
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; } catch (e) { console.log('FAIL: ' + name + ' -> ' + e.message); process.exitCode = 1; } };
@@ -217,6 +217,23 @@ t('Branch and Submitted are offered, and survive being chosen', () => {
   assert.deepStrictEqual(ids(got), ['__branch', 'f-name', '__created']);
   assert.strictEqual(got[0].label, 'Branch');
   assert.strictEqual(got[2].label, 'Submitted');
+});
+// Country is the third of them. The database has stamped app_submissions.country since
+// country scoping went in and the sidebar has listed the counts, but there was no COLUMN —
+// so a table covering more than one country could be counted by country and not read by it.
+t('Country is offered beside Branch and Submitted, and survives being chosen', () => {
+  reset();
+  const offered = cardChoosable(FIELDS).map(f => f.id);
+  assert.ok(offered.includes('__country'), 'got: ' + offered.join(','));
+  const tt = { id: 'tbl-17', config: { card_fields: ['__country', 'f-name'] } };
+  const got = summaryFields(tt, FIELDS);
+  assert.deepStrictEqual(ids(got), ['__country', 'f-name']);
+  assert.strictEqual(got[0].label, 'Country');
+});
+t('the three pseudo-columns are defined in one place, so nothing can offer two of them', () => {
+  // They used to be written out as a literal pair in five separate places; adding a third
+  // meant finding all five. This is the check that a sixth caller cannot be missed.
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(pseudoCols().map(c => c.id))), ['__branch', '__country', '__created']);
 });
 // A file question is the cover, not a line of text on the card — offering it as a field would
 // print an R2 object key under the picture it is already showing.

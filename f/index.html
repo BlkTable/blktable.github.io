@@ -320,6 +320,9 @@
   var controls = []; // {f, wrap, validate(), value(), isPhoto, file()}
   var currentTable = null;
   var BRANCHES = [];
+  // Only used to name a branch's country when a question offers more than one list.
+  // Empty is fine: the label falls back to the list key, which is still readable.
+  var COUNTRY_ROWS = [];
   var submitDevice = null;   // set once the form declares it is one-per-browser
   var visible = {};  // field id -> is this question being asked right now
 
@@ -478,6 +481,13 @@
     if (singleLine) el.addEventListener("keydown", function (e) { if (e.key === "Enter") e.preventDefault(); });
   }
 
+  // "lebanon" -> "Lebanon / لبنان". Falls back to the key itself, so a list added to the
+  // branches table before its country row exists still reads as something.
+  function countryNameFor(code) {
+    var c = COUNTRY_ROWS.filter(function (x) { return x.code === code; })[0];
+    if (!c) return code;
+    return c.name_en + (c.name_ar ? " / " + c.name_ar : "");
+  }
   // Searchable single-select. options: [{value,label}]. onChange(value) fires whenever the choice settles.
   // Returns {wrap, input, getValue, setValue}.
   function buildCombo(f, options, onChange) {
@@ -619,10 +629,27 @@
         otherValue: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v]) ? (otherInp.value.trim() || null) : null; }
       });
     } else if (f.type === "branch") {
-      var listKey = (f.options && f.options.list) || "jo";
-      var dopts = BRANCHES.filter(function (b) { return (b.list_key || "jo") === listKey; })
-        .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
-        .map(function (b) { return { value: b.name, label: b.name + (b.name_ar ? " / " + b.name_ar : "") }; });
+      // A branch question may name more than one list — "jo, lebanon" — so one form can
+      // ask for shops in several countries instead of needing one form per country.
+      // Empty still means Jordan, which is what every question written before this said.
+      var listKeys = String((f.options && f.options.list) || "jo").split(",")
+        .map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+      if (!listKeys.length) listKeys = ["jo"];
+      var multi = listKeys.length > 1;
+      var dopts = [];
+      listKeys.forEach(function (lk) {
+        // The country is put in the LABEL rather than in a heading, because this control is
+        // a type-to-search box: with the country in the text, typing "leb" narrows to
+        // Lebanon's shops. A heading would be invisible the moment anyone typed. A form
+        // offering one list is untouched, so all 226 existing forms render as they did.
+        var cn = multi ? countryNameFor(lk) : "";
+        BRANCHES.filter(function (b) { return (b.list_key || "jo") === lk; })
+          .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
+          .forEach(function (b) {
+            dopts.push({ value: b.name,
+                         label: b.name + (b.name_ar ? " / " + b.name_ar : "") + (cn ? " — " + cn : "") });
+          });
+      });
       var combo = buildCombo(f, dopts, function (v) { applyConditions(); });
       wrap.appendChild(combo.wrap);
       controls.push({
@@ -947,7 +974,10 @@
         }
         var fieldsReady = db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true });
         var branchesReady = db.from("branches").select("name,name_ar,position,list_key").order("position", { ascending: true }).then(function (r) { BRANCHES = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
-        Promise.all([fieldsReady, branchesReady]).then(function (results) {
+        // Names the country a branch list belongs to, for a question offering several of
+        // them. Never blocks the form: a failure leaves the list keys as their own labels.
+        var countriesReady = db.from("countries").select("code,name_en,name_ar").then(function (r) { COUNTRY_ROWS = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
+        Promise.all([fieldsReady, branchesReady, countriesReady]).then(function (results) {
           var fRes = results[0];
           if (fRes.error) { notFound(); return; }
           var st = slotsText(slots);
