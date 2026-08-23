@@ -5181,7 +5181,7 @@
     customRenderCap = CUSTOM_RENDER_STEP;
     var first = prefetch || subsQuery(t, 0, CUSTOM_FIRST - 1);
     var facets = db.rpc("table_facets", { p_table: t.id, p_branch: currentCustom.branch || null })
-      .then(function (r) { if (!r.error && r.data) customFacets = r.data; })
+      .then(function (r) { if (!r.error && r.data) customFacets = Object.assign({ branches: {}, countries: {}, statuses: {}, total: 0, all_total: 0 }, r.data); })
       .catch(function () {});
     return Promise.all([first, facets]).then(function (out) {
       var rows = (out[0] && out[0].data) || [];
