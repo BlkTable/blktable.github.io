@@ -7962,6 +7962,19 @@
       applyConds();
     }
 
+    // A record whose table has a per-record child form (an Event has a signup form) gets its own
+    // public link. Surface it right after creation so the creator can share it without digging
+    // into the record. Only managers can mint it; anyone else just doesn't see the offer.
+    function offerNewRecordLink(t, recId) {
+      if (!t || !recId) return;
+      var child = childTableOf(t);
+      if (!child || !canManage(t.id)) return;
+      db.rpc("record_share_token", { p_record: recId, p_rotate: false }).then(function (r) {
+        if (r.error || !r.data) { if (window.console && r.error) console.warn("record link not available yet:", r.error.message); return; }
+        window.prompt("Record created. Its shareable link (one per record):", recordFormLink(child.slug, r.data));
+      });
+    }
+
     var btn = document.getElementById("nr-save"), msg = document.getElementById("nr-msg");
     function say(text, ok) { msg.textContent = text; msg.className = "nr-msg" + (ok ? " ok" : ""); }
     btn.addEventListener("click", function () {
@@ -7994,7 +8007,9 @@
       }).then(function (res) {
         if (res && res.error) throw res.error;
         document.getElementById("modal").classList.remove("open");
+        var newId = res && res.data;
         if (currentCustom && currentCustom.table && currentCustom.table.id === t.id) openCustomTable(t);
+        offerNewRecordLink(t, newId);
       }).catch(function (err) {
         btn.disabled = false;
         var m = String((err && (err.message || err.hint)) || "");
