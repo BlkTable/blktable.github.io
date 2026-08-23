@@ -1407,6 +1407,31 @@
     .side-kid-countries { min-width: 0; }
     #fp-country, #fp-country button { width: 100%; }
   }
+
+  /* ===== Mobile overhaul Task 3: stack list rows into cards, contain dense grids (phone only) ===== */
+  @media (max-width: 720px) {
+    /* Submissions LIST view (.ja-row): the flex row already truncates .sub, but a long
+       record title beside its number+star had no width limit and could push the row wider
+       than the viewport. Let the title wrap and let the row itself wrap its actions onto
+       their own line here rather than waiting for the old 560px breakpoint. */
+    .ja-row { flex-wrap: wrap; }
+    .ja-row .info { flex: 1 1 100%; min-width: 0; }
+    .ja-row .name { overflow-wrap: anywhere; word-break: break-word; }
+    .ja-row .row-actions { width: 100%; margin-left: 0; justify-content: flex-end; }
+    .ja-row .card-actions { width: 100%; }
+    /* The score chip is a flex sibling of .info; on one wrapped column give it its own
+       row so it cannot squeeze the title. */
+    .ja-row > .score-pill.big { margin-left: 0; }
+
+    /* Submissions CARDS view (.ja-cards): the auto-fill min column of 170px is fine at
+       360px, but pin it so a single card never demands more than the viewport. */
+    .ja-cards { grid-template-columns: 1fr; }
+
+    /* Dense grid (renderCustomGrid -> table.grid inside .grid-wrap): the wrapper already
+       scrolls (overflow:auto), so ONLY it scrolls, never the page. Cap its width to the
+       viewport so the wide table is contained rather than widening the layout. */
+    .grid-wrap { max-width: 100%; -webkit-overflow-scrolling: touch; }
+  }
 </style>
 </head>
 <body>
