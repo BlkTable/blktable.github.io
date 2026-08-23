@@ -2090,7 +2090,14 @@
     return fetch(R2_FN + "/" + action, { method: "POST", headers: h, body: isForm ? body : JSON.stringify(body) })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) throw new Error(j.error ? j.error + (j.detail ? ": " + j.detail : "") : "r2_" + action + "_" + r.status);
+          if (!r.ok) {
+            // The status rides on the error, not only inside its message: uploadWithRetry has
+            // to tell a server that is throttling us from a file it will never accept.
+            var e = new Error(j.error ? j.error + (j.detail ? ": " + j.detail : "") : "r2_" + action + "_" + r.status);
+            e.status = r.status;
+            e.retryAfterMs = retryAfterMs(r);
+            throw e;
+          }
           return j;
         });
       });
@@ -2113,6 +2120,83 @@
     var path = (folder ? folder + "/" : "") + photoUploadName(file.name);
     return db.storage.from("photos").upload(path, file, { upsert: false })
       .then(function (r) { if (r.error) throw r.error; return r.data.path; });
+  }
+
+  // ---- Uploading many photos at once ----
+  // The same queue the public form uses, and for the same reason: a record can carry dozens of
+  // photos (the shop QC check asks for 52), the API gateway throttles uploads per IP, and "an
+  // IP" is a whole shop behind one office connection. So uploads go up a few at a time, a
+  // refusal is waited out rather than surfaced, and a file already in the bucket is never
+  // uploaded twice. Both copies are read by docs/tests/upload-queue.test.js, which fails if
+  // they drift apart.
+  var UPLOAD_LANES = 3;
+  var UPLOAD_TRIES = 4;
+  // A minute bucket is worth waiting out. An hour bucket is not, so the caller is told instead.
+  var UPLOAD_MAX_WAIT_MS = 65000;
+  function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+  // How long the server itself says its bucket needs. Its own number beats any guess of ours,
+  // and the window is a clock minute rather than a sliding one, so the reset is exact.
+  function retryAfterMs(r) {
+    var pick = function (name) {
+      var v = r && r.headers && r.headers.get ? r.headers.get(name) : null;
+      var n = parseInt(v, 10);
+      return isFinite(n) && n >= 0 ? n : -1;
+    };
+    var s = pick("Retry-After");
+    if (s < 0) s = pick("RateLimit-Reset");
+    if (s < 0) return 0;
+    return Math.min(s, UPLOAD_MAX_WAIT_MS / 1000) * 1000;
+  }
+  // Worth trying again: the server refused because of load, or the upload never arrived. 408
+  // is the gateway giving up on a slow body on shop wifi, and a fetch that rejects outright
+  // (signal dropped mid-photo) carries no status at all. A 400 or a 413 is a file that will
+  // never be accepted, and retrying it only makes somebody wait for the same answer.
+  function worthRetry(err) {
+    var s = err && err.status;
+    return !s || s === 408 || s === 425 || s === 429 || (s >= 500 && s < 600);
+  }
+  function uploadWithRetry(file, tries) {
+    return storageUpload(file).catch(function (err) {
+      if (tries <= 1 || !worthRetry(err)) throw err;
+      // A little jitter on top, so photos queued behind the same refusal do not all come back
+      // in the same instant and refuse each other again.
+      var base = err && err.retryAfterMs ? err.retryAfterMs : (UPLOAD_TRIES - tries + 1) * 3000;
+      return wait(base + Math.round(Math.random() * 800)).then(function () { return uploadWithRetry(file, tries - 1); });
+    });
+  }
+  // A file that is already in the bucket, keyed by the File the person chose. This is what
+  // makes a second press of Save cost only the photos that have not gone up yet, instead of
+  // being the thing that keeps the shop over its limit. Weak, so nothing is held once the
+  // chosen file itself is gone.
+  var UPLOADED = new WeakMap();
+  // Runs the chosen files up a few lanes and reports progress as each one lands. Takes
+  // { id, file } and returns { id, path } in the order it was given, whichever lane finished
+  // first, so a caller can index answers by question id.
+  function uploadAll(items, onProgress) {
+    var results = [], done = 0, next = 0;
+    if (onProgress) onProgress(0, items.length);
+    function lane() {
+      if (next >= items.length) return Promise.resolve();
+      var i = next++, it = items[i], file = it.file;
+      // The upload in flight is what is remembered, not the path it ends with, so one photo
+      // answering two questions is sent once rather than racing itself.
+      var step = UPLOADED.get(file);
+      if (!step) {
+        step = uploadWithRetry(file, UPLOAD_TRIES);
+        UPLOADED.set(file, step);
+        // A failure is not remembered: the next press of Save has to be able to try it again,
+        // not replay the same rejection for ever.
+        step.catch(function () { UPLOADED.delete(file); });
+      }
+      return step.then(function (p) {
+        results[i] = { id: it.id, path: p };
+        if (onProgress) onProgress(++done, items.length);
+        return lane();
+      });
+    }
+    var lanes = [];
+    for (var n = 0; n < Math.min(UPLOAD_LANES, items.length); n++) lanes.push(lane());
+    return Promise.all(lanes).then(function () { return results; });
   }
   function storageSignedUrl(path) {
     if (STORAGE_MODE === "r2") {
@@ -8180,9 +8264,12 @@
       }
       btn.disabled = true; say("Saving…", true);
       var shots = asked.filter(function (f) { return isFileField(f) && fileFor(f); });
-      Promise.all(shots.map(function (f) {
-        return storageUpload(fileFor(f)).then(function (p) { return { id: f.id, path: p }; });
-      })).then(function (ups) {
+      uploadAll(shots.map(function (f) { return { id: f.id, file: fileFor(f) }; }), function (upDone, upTotal) {
+        // A record with forty photos sits on "Saving…" for minutes and looks stuck, and
+        // pressing Save again is what turns a slow save into one that never lands.
+        if (upTotal > 1 && upDone < upTotal) say("Uploading photo " + (upDone + 1) + " of " + upTotal + "…", true);
+        else say("Saving…", true);
+      }).then(function (ups) {
         var photos = {};
         ups.forEach(function (u) { photos[u.id] = u.path; });
         return db.rpc("create_record", { p_table: t.id, p_data: newRecordData(asked, cur, photos, othersNow()) });
@@ -8213,6 +8300,13 @@
               ? "The file server is not accepting videos yet — the r2 function needs its update."
           : /too_large/i.test(m)
               ? "The file server refused that file as too large."
+          // The photo queue already waited this out four times before giving up, so what is
+          // left to say is that nothing is lost: the files already in the bucket are not
+          // uploaded again, so pressing Save in a minute costs only what is left.
+          : err && err.status === 429
+              ? "Too many photos are going up from this office at the moment. Wait a minute and press Save again: the photos already uploaded are not sent twice."
+          : err && err.status === 408
+              ? "A photo stopped uploading, most likely the connection. Press Save again: the photos already uploaded are not sent twice."
           : "Not saved — " + (m || "try again") + ".");
         if (window.console) console.error(err);
       });

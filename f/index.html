@@ -166,7 +166,15 @@
         body: fd
       }).then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
-          if (!r.ok) throw new Error(j.error ? j.error + (j.detail ? ": " + j.detail : "") : "upload_failed_" + r.status);
+          if (!r.ok) {
+            // The status is carried on the error, not only baked into its message, because the
+            // difference between "the server is throttling us" and "this file will never be
+            // accepted" decides whether waiting and trying again is worth anything.
+            var e = new Error(j.error ? j.error + (j.detail ? ": " + j.detail : "") : "upload_failed_" + r.status);
+            e.status = r.status;
+            e.retryAfterMs = retryAfterMs(r);
+            throw e;
+          }
           return j.path;
         });
       });
@@ -174,6 +182,87 @@
     var path = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.round(Math.random() * 1e9)) + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
     return db.storage.from("photos").upload(path, file, { upsert: false })
       .then(function (r) { if (r.error) throw r.error; return r.data.path; });
+  }
+
+  // ---- Uploading many photos from one form ----
+  // A form can ask for dozens of photos (the shop QC check asks for 52), and the API gateway
+  // throttles uploads per IP, where "an IP" is a whole shop behind one office connection. So
+  // uploads go up a few at a time, a refusal is waited out rather than surfaced, and a photo
+  // that is already stored is never uploaded twice.
+  //
+  // That last rule is the one that matters most. Firing every photo at once and failing the
+  // whole submission on the first refusal made pressing Submit again re-upload everything,
+  // refilling the very bucket that had just overflowed, so the form could not recover: on
+  // 2026-08-23 one shop pressed Submit through about 1,100 uploads and 262 refusals over eight
+  // minutes and not one submission landed.
+  var UPLOAD_LANES = 3;
+  var UPLOAD_TRIES = 4;
+  // A minute bucket is worth waiting out. An hour bucket is not, so the caller is told instead.
+  var UPLOAD_MAX_WAIT_MS = 65000;
+  function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+  // How long the server itself says its bucket needs. Its own number beats any guess of ours,
+  // and the window is a clock minute rather than a sliding one, so the reset is exact.
+  function retryAfterMs(r) {
+    var pick = function (name) {
+      var v = r && r.headers && r.headers.get ? r.headers.get(name) : null;
+      var n = parseInt(v, 10);
+      return isFinite(n) && n >= 0 ? n : -1;
+    };
+    var s = pick("Retry-After");
+    if (s < 0) s = pick("RateLimit-Reset");
+    if (s < 0) return 0;
+    return Math.min(s, UPLOAD_MAX_WAIT_MS / 1000) * 1000;
+  }
+  // Worth trying again: the server refused because of load, or the upload never arrived. 408
+  // is the gateway giving up on a slow body on shop wifi, and a fetch that rejects outright
+  // (signal dropped mid-photo) carries no status at all. A 400 or a 413 is a file this form
+  // will never accept, and retrying it only makes somebody wait for the same answer.
+  function worthRetry(err) {
+    var s = err && err.status;
+    return !s || s === 408 || s === 425 || s === 429 || (s >= 500 && s < 600);
+  }
+  function uploadWithRetry(file, tries) {
+    return storageUpload(file).catch(function (err) {
+      if (tries <= 1 || !worthRetry(err)) throw err;
+      // A little jitter on top, so photos queued behind the same refusal do not all come back
+      // in the same instant and refuse each other again.
+      var base = err && err.retryAfterMs ? err.retryAfterMs : (UPLOAD_TRIES - tries + 1) * 3000;
+      return wait(base + Math.round(Math.random() * 800)).then(function () { return uploadWithRetry(file, tries - 1); });
+    });
+  }
+  // A file that is already in the bucket, keyed by the File the person chose. This is what
+  // makes a second press of Submit cost only the photos that have not gone up yet, instead of
+  // being the thing that keeps the shop over its limit. Weak, so nothing is held once the
+  // chosen file itself is gone.
+  var UPLOADED = new WeakMap();
+  // Runs the chosen files up a few lanes and reports progress as each one lands. Takes
+  // { id, file } and returns { id, path } in the order it was given, whichever lane finished
+  // first, so a caller can index answers by question id.
+  function uploadAll(items, onProgress) {
+    var results = [], done = 0, next = 0;
+    if (onProgress) onProgress(0, items.length);
+    function lane() {
+      if (next >= items.length) return Promise.resolve();
+      var i = next++, it = items[i], file = it.file;
+      // The upload in flight is what is remembered, not the path it ends with, so one photo
+      // answering two questions is sent once rather than racing itself.
+      var step = UPLOADED.get(file);
+      if (!step) {
+        step = uploadWithRetry(file, UPLOAD_TRIES);
+        UPLOADED.set(file, step);
+        // A failure is not remembered: the next press of Submit has to be able to try it
+        // again, not replay the same rejection for ever.
+        step.catch(function () { UPLOADED.delete(file); });
+      }
+      return step.then(function (p) {
+        results[i] = { id: it.id, path: p };
+        if (onProgress) onProgress(++done, items.length);
+        return lane();
+      });
+    }
+    var lanes = [];
+    for (var n = 0; n < Math.min(UPLOAD_LANES, items.length); n++) lanes.push(lane());
+    return Promise.all(lanes).then(function () { return results; });
   }
   // A photo question and a media question have different ceilings, because a video is a
   // different order of size: a phone photo is 2-4 MB, ten seconds of 1080p is 20-30 MB.
@@ -679,14 +768,24 @@
 
     btn.disabled = true; btn.textContent = "Submitting…";
     var photoCtls = controls.filter(function (c) { return c.isPhoto && ctlVisible(c) && c.file(); });
-    var uploads = photoCtls.map(function (c) {
-      var file = c.file();
+    // Checked before anything is uploaded, not per lane: a file over the ceiling is refused at
+    // the end whatever we do, so there is no reason to spend the other uploads first.
+    var tooBig = null;
+    photoCtls.forEach(function (c) {
       var cap = c.cap || MAX_BYTES;   // a media question allows more than a photo question
-      if (file.size > cap) return Promise.reject({ tooBig: true, cap: cap });
-      return storageUpload(file).then(function (p) { return { id: c.f.id, path: p }; });
+      if (!tooBig && c.file().size > cap) tooBig = { tooBig: true, cap: cap };
     });
 
-    Promise.all(uploads).then(function (results) {
+    var toUpload = photoCtls.map(function (c) { return { id: c.f.id, file: c.file() }; });
+
+    (tooBig ? Promise.reject(tooBig) : uploadAll(toUpload, function (upDone, upTotal) {
+      // A phone sending forty photos over shop wifi sits on "Submitting…" for minutes and
+      // looks stuck. The count is the difference between waiting and pressing Submit again,
+      // and pressing again is what turned a slow submission into one that never landed.
+      btn.textContent = (upTotal > 1 && upDone < upTotal)
+        ? "Uploading photo " + (upDone + 1) + " of " + upTotal + "…"
+        : "Submitting…";
+    })).then(function (results) {
       var data = {};
       controls.forEach(function (c) {
         if (c.isPhoto) return;
@@ -744,7 +843,16 @@
       // been deployed against a function that has not. Naming them means the person is told
       // what to do instead of "try again" on something that will never work.
       var m = String((err && err.message) || "");
+      // A throttled or dropped upload is the third thing the person can act on, and the one
+      // worth saying plainly: pressing Submit again after a short wait now costs only the
+      // photos that have not gone up yet, so telling them to wait is telling them something
+      // true. Saying "try again" with no wait is what produced the 2026-08-23 retry storm.
+      var upStatus = err && err.status;
       msg.textContent = err && err.tooBig ? "A file is larger than " + mbText(err.cap || MAX_BYTES) + ". Please choose a smaller one."
+        : (upStatus === 429 || /upload_failed_429/.test(m)) ? "Too many photos are going up from here at the moment. Wait a minute, then press Submit again: the photos that already uploaded are not sent twice."
+        // Only when there were photos: a submission with no upload in it that fails on the
+        // network must not be reported as a photo problem.
+        : (toUpload.length && (upStatus === 408 || (!upStatus && /upload|fetch|network|load failed/i.test(m)))) ? "A photo stopped uploading, most likely the connection. Press Submit again when the signal is better: the photos that already uploaded are not sent twice."
         : /images_only/i.test(m) ? "Videos can't be uploaded on this form yet. Please choose a photo, or tell whoever sent you this link."
         : /too_large/i.test(m) ? "That file is too large to upload. Please choose a smaller one, or a shorter video."
         : /is full/i.test(m) ? "The last place was taken while you were filling this in. Nothing was submitted."
