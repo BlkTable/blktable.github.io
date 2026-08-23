@@ -1392,6 +1392,21 @@
     .fprev .pv-box { width: 100%; min-height: 44px; height: auto; }
     .fprev .pv-submit { min-height: 44px; }
   }
+
+  /* ===== Mobile overhaul Task 6: stacked QR/sharing + responsive country views (phone only) ===== */
+  @media (max-width: 720px) {
+    /* Stacked sharing / QR. */
+    .qr-bar { flex-direction: column; align-items: stretch; }
+    .qr-bar .qr-side { min-width: 0; }
+    /* Long share URLs wrap instead of widening the page. */
+    .link-bar a, .qr-bar a { overflow-wrap: anywhere; word-break: break-word; }
+    /* Country views: keep the users-panel scope checkboxes and the sidebar country
+       group inside their containers, and make the country dropdown full width. */
+    .u-trow .u-scope { flex-wrap: wrap; }
+    .u-co { flex-wrap: wrap; }
+    .side-kid-countries { min-width: 0; }
+    #fp-country, #fp-country button { width: 100%; }
+  }
 </style>
 </head>
 <body>
