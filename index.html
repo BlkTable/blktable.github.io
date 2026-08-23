@@ -1359,6 +1359,27 @@
   .ja-card.is-mine, .ja-row.is-mine { box-shadow: inset 3px 0 0 var(--gold); }
   .u-photo-row { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
   .u-photo-preview { width: 56px; height: 56px; border-radius: 50%; background: var(--bg-3) center/cover no-repeat; flex: 0 0 auto; border: 1px solid var(--field-border); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: var(--fs-7); }
+
+  /* ===== Mobile overhaul Task 4: full-width modal sheet + clamped popups (phone only) ===== */
+  @media (max-width: 720px) {
+    /* Full-width modal sheet: zero the overlay padding and let the card fill the viewport
+       and scroll internally (#modal .modal already caps its own height). */
+    .modal-overlay { padding: 0; align-items: stretch; }
+    .modal { max-width: 100%; width: 100%; margin: 0; border-radius: 0; }
+    #modal .modal { max-height: 100vh; max-height: 100dvh; }
+    /* Record detail grid collapses to a single column. */
+    .m-grid { grid-template-columns: 1fr; }
+    /* Clamp the two absolutely-positioned popups (their left/right are CSS-driven,
+       so a symmetric inset is safe and keeps them inside the viewport). */
+    .cc-menu, .filter-panel {
+      left: 8px; right: 8px; width: auto; max-width: calc(100vw - 16px);
+    }
+    .filter-panel.fp-cond { width: auto; max-width: calc(100vw - 16px); }
+    /* .rec-actions and .at-menu are position:fixed and get an inline left/top from JS.
+       Don't set left/right here or we fight the inline placement; only cap the width so
+       the right edge can never run past the viewport. max-width wins over min-width. */
+    .rec-actions, .at-menu { max-width: calc(100vw - 16px); }
+  }
 </style>
 </head>
 <body>
