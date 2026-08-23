@@ -131,7 +131,7 @@
     <div class="sheet">
       <img class="brand-logo" src="../assets/blk-logo.svg" alt="BLK قهوة">
       <div class="head">
-        <h1>Job Application <span style="color:var(--muted);font-weight:600;">· طلب توظيف</span></h1>
+        <h1 id="form-heading">Job Application <span style="color:var(--muted);font-weight:600;">· طلب توظيف</span></h1>
         <p>Fill in your details below and we'll be in touch.</p>
       </div>
       <div class="intro" id="form-intro" style="display:none;"></div>
@@ -325,10 +325,32 @@
     if (ar) { var pa = document.createElement("p"); pa.className = "ar"; pa.setAttribute("dir", "rtl"); pa.textContent = ar; box.appendChild(pa); }
     box.style.display = "block";
   }
+  // The heading this page prints, when an admin has set one. Renaming the table in the
+  // dashboard does NOT reach here and is not meant to — the table is called "Job
+  // Applications" and the page says "Job Application · طلب توظيف" — so the heading is its
+  // own setting (config.title), carried by get_form_config, which returns the built-in
+  // table's config as it is.
+  //
+  // Each half falls back on its own, so setting only the English does not blank the Arabic,
+  // and no title at all leaves the markup exactly as it was served. Text is set with
+  // textContent, never innerHTML: this string comes from the database and is typed by a
+  // person. The dashboard applies the same rule in builtinPublicTitle().
+  function applyHeading(title) {
+    var h = document.getElementById("form-heading");
+    if (!h || !title) return;
+    var en = (title.en || "").trim(), ar = (title.ar || "").trim();
+    if (!en && !ar) return;
+    var span = h.querySelector("span");
+    var dflt = { en: "Job Application", ar: "طلب توظيف" };
+    h.firstChild.nodeValue = (en || dflt.en) + " ";
+    if (span) span.textContent = "· " + (ar || dflt.ar);
+    document.title = (en || dflt.en) + " — " + (ar || dflt.ar) + " | BLK";
+  }
   db.rpc("get_form_config", { p_key: "job_applications" }).then(function (res) {
     if (res && !res.error && res.data) {
       if (res.data.hidden) { res.data.hidden.forEach(function (c) { hiddenCols[c] = true; }); applyHidden(); }
       renderIntro(res.data.intro);
+      applyHeading(res.data.title);
     }
   }).catch(function () {});
 

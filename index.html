@@ -2028,6 +2028,14 @@
             <textarea id="bld-name" rows="1" placeholder="Table name (English)"></textarea>
             <textarea id="bld-name-ar" rows="1" placeholder="اسم الجدول (عربي)" dir="rtl"></textarea>
           </div>
+          <!-- Built-in forms only. A custom form's public page prints its NAME, so the row
+               above is already its heading; /apply and /cast print a heading of their own
+               ("Job Application · طلب توظيف") that is deliberately not the dashboard name. -->
+          <div class="fp-label" id="bld-ptitle-lab" style="margin: 12px 0 6px; display:none;">Public page heading <span style="color:var(--muted);font-weight:400;">— what applicants read at the top of the form itself. Leave blank to keep the one shown.</span></div>
+          <div class="bld-two" id="bld-ptitle-row" style="display:none;">
+            <textarea id="bld-ptitle-en" rows="1" placeholder="Heading (English)"></textarea>
+            <textarea id="bld-ptitle-ar" rows="1" placeholder="العنوان (عربي)" dir="rtl"></textarea>
+          </div>
           <div class="fp-label" style="margin: 12px 0 6px;">Form intro <span style="color:var(--muted);font-weight:400;">— optional. Shown under the title on the public form.</span></div>
           <div class="bld-two">
             <textarea id="bld-intro" rows="2" placeholder="Intro (English)"></textarea>
@@ -6984,9 +6992,11 @@
     host.className = "fprev";
     var cfg = face.config || {}, intro = cfg.intro || {};
     // A table's public page prints its name; a built-in one prints a heading of its own that
-    // is not the name ("Job Application" vs "Job Applications"), so the preview shows the
-    // heading the page really prints rather than pretending the name reaches it.
-    var title = face.builtinKey ? BUILTIN_PUBLIC_TITLE[face.builtinKey] : { en: face.name, ar: face.nameAr };
+    // is not the name ("Job Application" vs "Job Applications"). That heading is editable
+    // now, so the preview reads the configured one and falls back to what the page prints
+    // untouched. Reading the NAME here would show something the applicant never sees.
+    var title = face.builtinKey ? builtinPublicTitle(face.builtinKey, cfg)
+                                : { en: face.name, ar: face.nameAr };
     var h = '<img class="pv-logo" src="assets/blk-logo.svg" alt="BLK">' +
       '<div class="pv-h1">' + esc(title.en || "") + "</div>" +
       (title.ar ? '<div class="pv-ar">' + esc(title.ar) + "</div>" : "");
@@ -8806,6 +8816,27 @@
     var ar = (document.getElementById("bld-intro-ar").value || "").trim();
     return (en || ar) ? { en: en, ar: ar } : null;
   }
+  // The heading /apply and /cast print, which is NOT the dashboard name — the page says
+  // "Job Application · طلب توظيف" while the table is called "Job Applications". Renaming the
+  // table therefore could not reach the page, and this is what carries it: config.title,
+  // returned to the public page by get_form_config, which hands back the built-in table's
+  // config as it is. Blank means "keep the heading the page already prints", so a form that
+  // has never set one is untouched.
+  function serializePublicTitle() {
+    var en = (document.getElementById("bld-ptitle-en").value || "").trim();
+    var ar = (document.getElementById("bld-ptitle-ar").value || "").trim();
+    return (en || ar) ? { en: en, ar: ar } : null;
+  }
+  function setPublicTitleInputs(title, formKey) {
+    var en = document.getElementById("bld-ptitle-en"), ar = document.getElementById("bld-ptitle-ar");
+    en.value = (title && title.en) || "";
+    ar.value = (title && title.ar) || "";
+    // The placeholder is the heading the page prints today, so an admin can see what they
+    // would be replacing instead of guessing at an empty box.
+    var dflt = BUILTIN_PUBLIC_TITLE[formKey] || { en: "", ar: "" };
+    en.placeholder = dflt.en || "Heading (English)";
+    ar.placeholder = dflt.ar || "العنوان (عربي)";
+  }
   function setIntroInputs(intro) {
     document.getElementById("bld-intro").value = (intro && intro.en) || "";
     document.getElementById("bld-intro-ar").value = (intro && intro.ar) || "";
@@ -8934,6 +8965,12 @@
       (isBuiltin ? "how this form is named across the dashboard."
                  : "the title applicants read at the top of the form, and how it is named here.") + "</span>";
     var bn = document.getElementById("bld-builtin-note"); if (bn) bn.style.display = isBuiltin ? "block" : "none";
+    // Offered for the two hand-coded forms only: a custom form's public page prints its
+    // name, so the row above already is its heading and a second box would be two controls
+    // for one thing.
+    ["bld-ptitle-lab", "bld-ptitle-row"].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.style.display = isBuiltin ? "" : "none";
+    });
     var qlab = document.getElementById("bld-q-lab");
     if (qlab) qlab.innerHTML = isBuiltin
       ? 'Extra questions <span style="color:var(--muted);font-weight:400;">— added below the built-in ones. Use “show after” to place one mid-form.</span>'
@@ -8996,6 +9033,16 @@
     job_applications: { en: "Job Application", ar: "طلب توظيف" },
     casting: { en: "BLK Casting", ar: "كاستنج" }
   };
+  // What the page really prints: the heading an admin set, else the one built into the page.
+  // Each half falls back on its own, so setting only the English does not blank the Arabic —
+  // the same rule /apply and /cast apply, written twice because the two must not disagree
+  // about what the applicant is looking at.
+  function builtinPublicTitle(formKey, cfg) {
+    var dflt = BUILTIN_PUBLIC_TITLE[formKey] || { en: "", ar: "" };
+    var t = (cfg && cfg.title) || null;
+    return { en: (t && (t.en || "").trim()) || dflt.en,
+             ar: (t && (t.ar || "").trim()) || dflt.ar };
+  }
   function builtinFieldsHtml(formKey, hidden) {
     var defs = BUILTIN_SCHEMA[formKey] || [];
     var rows = defs.map(function (d) {
@@ -9076,6 +9123,7 @@
     document.getElementById("bld-name").value = builtinName(formKey);
     document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
     setIntroInputs(null);
+    setPublicTitleInputs(null, formKey);
     msg.textContent = "Loading…";
     bldHost().innerHTML = "";
     return db.from("app_tables").select("name,name_ar,config").eq("id", editingTableId).single().then(function (cRes) {
@@ -9087,6 +9135,7 @@
       document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
       document.getElementById("bld-builtin-note").innerHTML = builtinFieldsHtml(formKey, cfg.hidden || []);
       setIntroInputs(cfg.intro);
+      setPublicTitleInputs(cfg.title, formKey);
 
       return db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true });
     }).then(function (res) {
@@ -9461,7 +9510,12 @@
     if (builderMode === "builtin") {
       var hidden = [];
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
-      tableUpdate.config = Object.assign({}, prevCfg, { hidden: hidden, intro: serializeIntro() });
+      // `title` joins hidden and intro as a key that actually reaches the public page:
+      // get_form_config hands the built-in table's config back as it is, so /apply and
+      // /cast can read it. (That is not true of a CUSTOM form, whose public page reads the
+      // whitelisted config_public column instead — which is why this control is offered for
+      // the two built-in forms only.)
+      tableUpdate.config = Object.assign({}, prevCfg, { hidden: hidden, intro: serializeIntro(), title: serializePublicTitle() });
     } else {
       var alertProblems = [];
       var alerts = serializeAlerts(alertProblems);
