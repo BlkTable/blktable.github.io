@@ -6,7 +6,7 @@ function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matc
 function grab(js,name){const at=js.search(new RegExp('\\bfunction\\s+'+name+'\\s*\\('));if(at===-1)throw new Error('no fn '+name);const open=js.indexOf('{',at);let d=0;for(let i=open;i<js.length;i++){if(js[i]==='{')d++;else if(js[i]==='}'){d--;if(!d)return js.slice(at,i+1);}}throw new Error('unbalanced '+name);}
 function grabVar(js,name){const m=js.match(new RegExp('\\n  var '+name+' = [\\s\\S]*?;(?=\\r?\\n)'));if(!m)throw new Error('no var '+name);return m[0];}
 function load(names,vars){const js=scripts('index.html');const body=(vars||[]).map(v=>grabVar(js,v)).join('\n')+'\n'+names.map(n=>grab(js,n)).join('\n');const ctx={console};vm.createContext(ctx);new vm.Script('(function(){'+body+'\nthis.API={'+names.concat(vars||[]).join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
-const API = load(['rebuildCountryIndex','canonicalCountry','recordBranch','recordCountry','scopeFromCountries','countriesFromScope','scopeLabel','countryFacets','countryLabel'], ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','BRANCH_RE','BRANCH_COUNTRY']);
+const API = load(['rebuildCountryIndex','canonicalCountry','recordBranch','branchListCountry','recordCountry','scopeFromCountries','countriesFromScope','scopeLabel','countryFacets','countryLabel'], ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','BRANCH_RE']);
 API.rebuildCountryIndex();
 // Objects/arrays built inside the vm sandbox use its own Array/Object intrinsics, so a raw
 // deepStrictEqual against a host-realm literal fails on prototype identity. asWritten normalizes
@@ -38,7 +38,6 @@ t('unknown / empty returns null', () => {
   assert.strictEqual(API.canonicalCountry(null), null);
 });
 
-API.BRANCH_COUNTRY.amman = 'jo';
 t('recordCountry prefers the normalized country column', () => {
   assert.strictEqual(API.recordCountry({country:'lebanon', data:{}}, []), 'lebanon');
 });
@@ -46,9 +45,13 @@ t('recordCountry reads an explicit country question when column empty', () => {
   const fields=[{id:'q1', label:'Country', type:'country'}];
   assert.strictEqual(API.recordCountry({data:{q1:'Iraq'}}, fields), 'iraq');
 });
-t('recordCountry derives country from the branch answer', () => {
-  const fields=[{id:'b1', label:'Branch', type:'branch'}];
+t('recordCountry derives country from the branch field list (jo)', () => {
+  const fields=[{id:'b1', label:'Branch', type:'branch', options:{list:'jo'}}];
   assert.strictEqual(API.recordCountry({data:{b1:'Amman'}}, fields), 'jo');
+});
+t('recordCountry derives lebanon from a lebanon-list branch field, and parses string options', () => {
+  const fields=[{id:'b1', label:'Branch', type:'branch', options:'{"list":"lebanon"}'}];
+  assert.strictEqual(API.recordCountry({data:{b1:'Jal el Deeb'}}, fields), 'lebanon');
 });
 t('recordCountry returns "" when nothing resolves', () => {
   assert.strictEqual(API.recordCountry({data:{}}, []), '');

@@ -2088,7 +2088,6 @@
     loadApps();
     loadBranchTints();
     loadCountries();
-    loadBranchCountry();
     // keep the promise so a pending deeplink can fire once tables are ready
     var tablesP = loadCustomTables();
     loadBuiltinTokens();
@@ -6581,9 +6580,16 @@
     return f ? String(d[f.id]) : "";
   }
 
-  // branch -> country (branch is a child of country). Filled at login by loadBranchCountry()
-  // from the same branch_country table the DB trigger uses, so client and server agree.
-  var BRANCH_COUNTRY = {};
+  // branch -> country: a branch field is scoped to one country's franchise list, carried on the
+  // field as options.list ("jo"/"lebanon"), so a branch answer implies that country. The DB
+  // trigger derives the same way (from the table's branch field), so client and server agree.
+  function branchListCountry(fields) {
+    var bf = (fields || []).filter(function (x) { return x.type === "branch"; })[0];
+    if (!bf || !bf.options) return null;
+    var o = bf.options;
+    if (typeof o === "string") { try { o = JSON.parse(o); } catch (e) { return null; } }
+    return o && o.list ? canonicalCountry(o.list) : null;
+  }
   function recordCountry(s, fields) {
     if (s && s.country) return canonicalCountry(s.country) || String(s.country);
     var d = (s && s.data) || {};
@@ -6591,14 +6597,8 @@
       return x.type === "country" && d[x.id] != null && d[x.id] !== "";
     })[0];
     if (cf) { var c = canonicalCountry(d[cf.id]); if (c) return c; }
-    var b = recordBranch(s, fields);
-    if (b) { var bc = BRANCH_COUNTRY[String(b).trim().toLowerCase()]; if (bc) return bc; }
+    if (recordBranch(s, fields)) { var lc = branchListCountry(fields); if (lc) return lc; }
     return "";
-  }
-  function loadBranchCountry() {
-    return db.from("branch_country").select("branch_key,country").then(function (r) {
-      (r.data || []).forEach(function (row) { BRANCH_COUNTRY[row.branch_key] = row.country; });
-    }).catch(function () {});
   }
   function countryFacets(rows, fields) {
     var out = {};
