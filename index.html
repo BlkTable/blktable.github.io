@@ -253,6 +253,9 @@
     .view-body { padding: 16px 14px 40px; }
   }
   .section-title { font-size: var(--fs-2); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  .cty-row { padding: 3px 0; }
+  .cty-row .muted { opacity: .6; }
+  .admin-section { margin-top: 28px; }
   .empty {
     background:
       var(--card);
@@ -1275,8 +1278,9 @@
   .u-trow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 6px; }
   .u-editopt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: var(--fs-2); cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
   .u-editopt input { width: auto; height: auto; }
-  .u-trow .u-scope { height: 30px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-2); padding: 0 6px; color-scheme: dark; font-family: inherit; }
-  .u-trow .u-scope:disabled { opacity: 0.5; }
+  .u-trow .u-scope { display: inline-flex; flex-wrap: wrap; align-items: center; }
+  .u-co { display: inline-flex; align-items: center; gap: 4px; margin: 2px 8px 2px 0; font-size: 13px; color: var(--muted); }
+  .u-co input { width: auto; height: auto; }
   /* top-right profile menu */
   .profile-menu { position: relative; }
   .profile-btn { display: flex; align-items: center; gap: 9px; background: var(--card); border: 1px solid var(--field-border); border-radius: 999px; padding: 5px 12px 5px 6px; color: var(--text); cursor: pointer; font-family: inherit; }
@@ -1779,6 +1783,7 @@
             </div>
             <div id="users-list" class="ja-list"></div>
             <div id="users-empty" class="empty" style="display:none;"><h2>No users yet</h2></div>
+            <div class="admin-section"><div class="section-title">Countries</div><div id="countries-mgr"></div></div>
           </div>
         </section>
 
@@ -2101,6 +2106,7 @@
     loadRole(session.user.id);
     loadApps();
     loadBranchTints();
+    loadCountries();
     // keep the promise so a pending deeplink can fire once tables are ready
     var tablesP = loadCustomTables();
     loadBuiltinTokens();
@@ -3151,6 +3157,45 @@
     return null;
   }
 
+  // Admin-managed country list drives the Country field, the share picker, and canonical
+  // folding. Seeded with the operating four so the app works before loadCountries() runs and
+  // under test; loadCountries() replaces COUNTRY_LIST from the DB and rebuilds COUNTRY_INDEX.
+  var DEFAULT_COUNTRIES = [
+    { code:"jo", name_en:"Jordan", name_ar:"الأردن", dial:"+962", aliases:["jo","jordan","الأردن","962","+962"], sort:1 },
+    { code:"lebanon", name_en:"Lebanon", name_ar:"لبنان", dial:"+961", aliases:["lebanon","lb","لبنان","961","+961"], sort:2 },
+    { code:"iraq", name_en:"Iraq", name_ar:"العراق", dial:"+964", aliases:["iraq","iq","العراق","964","+964"], sort:3 },
+    { code:"syria", name_en:"Syria", name_ar:"سوريا", dial:"+963", aliases:["syria","sy","سوريا","963","+963"], sort:4 }
+  ];
+  var COUNTRY_LIST = DEFAULT_COUNTRIES.slice();
+  var COUNTRY_INDEX = {};
+  function rebuildCountryIndex() {
+    COUNTRY_INDEX = {};
+    COUNTRY_LIST.forEach(function (c) {
+      COUNTRY_INDEX[c.code] = c.code;
+      (c.aliases || []).forEach(function (a) { COUNTRY_INDEX[String(a).trim().toLowerCase()] = c.code; });
+      if (c.name_en) COUNTRY_INDEX[c.name_en.trim().toLowerCase()] = c.code;
+      if (c.name_ar) COUNTRY_INDEX[c.name_ar.trim().toLowerCase()] = c.code;
+    });
+  }
+  function canonicalCountry(x) {
+    if (x == null) return null;
+    var k = String(x).trim().toLowerCase();
+    if (!k) return null;
+    return COUNTRY_INDEX[k] || null;
+  }
+  function loadCountries() {
+    return db.from("countries").select("code,name_en,name_ar,dial,aliases,active,sort")
+      .eq("active", true).order("sort").then(function (r) {
+        if (r.data && r.data.length) COUNTRY_LIST = r.data;
+        rebuildCountryIndex();
+      }).catch(function () { rebuildCountryIndex(); });
+  }
+  rebuildCountryIndex();
+  function countryLabel(code) {
+    var c = COUNTRY_LIST.filter(function (x) { return x.code === code; })[0];
+    return c ? c.name_en : code;
+  }
+
   function calcAge(dob) {
     if (!dob) return null;
     var d = new Date(dob);
@@ -3497,7 +3542,7 @@
     else if (f.type === "time") inner = edTime(id, v);
     else if (f.type === "number") inner = edNum(id, v);
     else if (f.type === "phone") inner = edPhone(id, v);
-    else if (f.type === "country") inner = edSelect(id, v, [""].concat(COUNTRY_NAMES));
+    else if (f.type === "country") inner = edSelect(id, v, [""].concat(COUNTRY_LIST.map(function (c) { return c.name_en; })));
     else if (f.type === "branch") {
       var brOpts = branchDropdownOptions(allBranches, (f.options && f.options.list) || "jo").map(function (o) { return o.en; });
       if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
@@ -4274,10 +4319,6 @@
     { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
     { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "file", label: "File" }, { v: "email", label: "Email" }, { v: "country", label: "Country" }, { v: "link", label: "Link (button)" }, { v: "branch", label: "Branch" }
   ];
-  // The "country" field type is a dropdown with a built-in, searchable country list, so it
-  // needs no options entered by the builder. Stored value is the English country name.
-  // NB: named COUNTRY_NAMES, not COUNTRIES — a phone-dial `COUNTRIES` already exists above.
-  var COUNTRY_NAMES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Brazzaville)","Congo (Kinshasa)","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czechia","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
   // Which field types use the free-text "options" box, and what it should say when they do.
   // Choice fields list their choices there; a link field puts its URL and button text there.
   function typeUsesOpts(v) { return v === "dropdown" || v === "multi_select" || v === "link" || v === "branch"; }
@@ -5130,12 +5171,14 @@
   // Shopper alone is 6,235, and task tables will add ~2,000/day), so the view
   // loads one branch at a time and gets its counts from the database.
   var CUSTOM_PAGE = 500, CUSTOM_RENDER_STEP = 300, CUSTOM_FIRST = 150;
-  var customFacets = { branches: {}, statuses: {}, total: 0, all_total: 0 };
+  var customFacets = { branches: {}, countries: {}, statuses: {}, total: 0, all_total: 0 };
   var customRenderCap = CUSTOM_RENDER_STEP;
   function subsQuery(t, from, to) {
     var q = db.from("app_submissions").select("*").eq("table_id", t.id);
     if (currentCustom.branch === "__none") q = q.is("branch", null);
     else if (currentCustom.branch) q = q.eq("branch", currentCustom.branch);
+    if (currentCustom.country === "__none") q = q.is("country", null);
+    else if (currentCustom.country) q = q.eq("country", currentCustom.country);
     return q.order("created_at", { ascending: false }).range(from, to);
   }
   function applyCustomSubs(rows, rebuildFilter) {
@@ -5157,17 +5200,18 @@
     customRenderCap = CUSTOM_RENDER_STEP;
     var first = prefetch || subsQuery(t, 0, CUSTOM_FIRST - 1);
     var facets = db.rpc("table_facets", { p_table: t.id, p_branch: currentCustom.branch || null })
-      .then(function (r) { if (!r.error && r.data) customFacets = r.data; })
+      .then(function (r) { if (!r.error && r.data) customFacets = Object.assign({ branches: {}, countries: {}, statuses: {}, total: 0, all_total: 0 }, r.data); })
       .catch(function () {});
     return Promise.all([first, facets]).then(function (out) {
       var rows = (out[0] && out[0].data) || [];
       applyCustomSubs(rows, true);
       if (rows.length < CUSTOM_FIRST) return;   // that was the whole table already
-      var tid = t.id, br = currentCustom.branch;
+      var tid = t.id, br = currentCustom.branch, co = currentCustom.country;
       subsQuery(t, CUSTOM_FIRST, CUSTOM_PAGE - 1).then(function (r2) {
         // the user may have moved to another table or branch while this was in flight
         if (!currentCustom || !currentCustom.table || currentCustom.table.id !== tid) return;
         if (currentCustom.branch !== br) return;
+        if (currentCustom.country !== co) return;
         if (r2.error || !r2.data || !r2.data.length) return;
         applyCustomSubs(currentCustom.subs.concat(r2.data), false);
       });
@@ -5195,9 +5239,26 @@
             '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
         }).join("");
     }
+    // country is the parent of branch, so its list renders above the branch list
+    var co = customFacets.countries || {};
+    var codes = Object.keys(co).sort(function (a, b) { return co[b] - co[a]; });
+    var countryMeaningful = codes.filter(function (c) { return c !== "__none"; }).length > 1;
+    var countryHtml = "";
+    if (countryMeaningful) {
+      var clabel = function (c) { return c === "__none" ? "No country" : countryLabel(c); };
+      countryHtml = '<div class="kid-head">Countries</div>' +
+        '<button class="side-kid' + (currentCustom.country ? "" : " active") +
+        '" data-c=""><span>All countries</span><span class="kid-n">' +
+        (customFacets.all_total || 0) + "</span></button>" +
+        codes.map(function (c) {
+          return '<button class="side-kid' + (currentCustom.country === c ? " active" : "") +
+            '" data-c="' + esc(c) + '"><span>' + esc(clabel(c)) + '</span><span class="kid-n">' + co[c] + "</span></button>";
+        }).join("");
+    }
     var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
     if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
     kids.innerHTML = viewsHtml() +
+      (countryHtml ? '<div class="side-kid-countries"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + countryHtml + "</div>" : "") +
       (branchHtml ? '<div class="side-kid-branches"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + branchHtml + "</div>" : "");
     kids.style.display = "flex";
   }
@@ -6558,6 +6619,35 @@
     return f ? String(d[f.id]) : "";
   }
 
+  // branch -> country: a branch field is scoped to one country's franchise list, carried on the
+  // field as options.list ("jo"/"lebanon"), so a branch answer implies that country. The DB
+  // trigger derives the same way (from the table's branch field), so client and server agree.
+  function branchListCountry(fields) {
+    var bf = (fields || []).filter(function (x) { return x.type === "branch"; })[0];
+    if (!bf || !bf.options) return null;
+    var o = bf.options;
+    if (typeof o === "string") { try { o = JSON.parse(o); } catch (e) { return null; } }
+    return o && o.list ? canonicalCountry(o.list) : null;
+  }
+  function recordCountry(s, fields) {
+    if (s && s.country) return canonicalCountry(s.country) || String(s.country);
+    var d = (s && s.data) || {};
+    var cf = (fields || []).filter(function (x) {
+      return x.type === "country" && d[x.id] != null && d[x.id] !== "";
+    })[0];
+    if (cf) { var c = canonicalCountry(d[cf.id]); if (c) return c; }
+    if (recordBranch(s, fields)) { var lc = branchListCountry(fields); if (lc) return lc; }
+    return "";
+  }
+  function countryFacets(rows, fields) {
+    var out = {};
+    (rows || []).forEach(function (s) {
+      var c = recordCountry(s, fields) || "__none";
+      out[c] = (out[c] || 0) + 1;
+    });
+    return out;
+  }
+
   // ---- A record's number --------------------------------------------------
   // Every record now carries `seq`: its number within its table, 1-based, in the order
   // records were created (workspaces/03-record-number-and-stars.sql). That is the number
@@ -7484,7 +7574,7 @@
                       var t = tr.data && tr.data[0];
                       if (!t) { b.disabled = false; return; }
                       // switch the open table context so the panel reads the right config
-                      currentCustom = { table: t, fields: fr.data || [], subs: [], branch: null };
+                      currentCustom = { table: t, fields: fr.data || [], subs: [], branch: null, country: null };
                       openCustomDetail(row, fr.data || []);
                     });
                 });
@@ -7981,6 +8071,19 @@
       applyConds();
     }
 
+    // A record whose table has a per-record child form (an Event has a signup form) gets its own
+    // public link. Surface it right after creation so the creator can share it without digging
+    // into the record. Only managers can mint it; anyone else just doesn't see the offer.
+    function offerNewRecordLink(t, recId) {
+      if (!t || !recId) return;
+      var child = childTableOf(t);
+      if (!child || !canManage(t.id)) return;
+      db.rpc("record_share_token", { p_record: recId, p_rotate: false }).then(function (r) {
+        if (r.error || !r.data) { if (window.console && r.error) console.warn("record link not available yet:", r.error.message); return; }
+        window.prompt("Record created. Its shareable link (one per record):", recordFormLink(child.slug, r.data));
+      });
+    }
+
     var btn = document.getElementById("nr-save"), msg = document.getElementById("nr-msg");
     function say(text, ok) { msg.textContent = text; msg.className = "nr-msg" + (ok ? " ok" : ""); }
     btn.addEventListener("click", function () {
@@ -8013,7 +8116,9 @@
       }).then(function (res) {
         if (res && res.error) throw res.error;
         document.getElementById("modal").classList.remove("open");
+        var newId = res && res.data;
         if (currentCustom && currentCustom.table && currentCustom.table.id === t.id) openCustomTable(t);
+        offerNewRecordLink(t, newId);
       }).catch(function (err) {
         btn.disabled = false;
         var m = String((err && (err.message || err.hint)) || "");
@@ -8174,6 +8279,13 @@
     if (del) { e.stopPropagation(); deleteView(del.closest("[data-view-id]").getAttribute("data-view-id")); return; }
     var vk = e.target.closest("[data-view-id]");
     if (vk) { applyView(customViews.filter(function (x) { return x.id === vk.getAttribute("data-view-id"); })[0]); return; }
+    var c = e.target.closest(".side-kid[data-c]");
+    if (c && currentCustom) {
+      currentCustom.country = c.getAttribute("data-c") || null;
+      document.getElementById("custom-search").value = "";
+      loadCustomSubs();
+      return;
+    }
     var b = e.target.closest(".side-kid[data-b]"); if (!b || !currentCustom) return;
     currentCustom.branch = b.getAttribute("data-b") || null;
     document.getElementById("custom-search").value = "";
@@ -8186,9 +8298,11 @@
     if (currentCustom && currentCustom.table.id === item.getAttribute("data-custom")) {
       customKidsOpen = !customKidsOpen;
       try { localStorage.setItem("blk_custom_kids", customKidsOpen ? "1" : "0"); } catch (err) {}
-      // only the branch half folds away — the view rail belongs to the open table
+      // only the branch and country halves fold away — the view rail belongs to the open table
       var br = document.querySelector("#custom-kids .side-kid-branches");
       if (br) br.style.display = customKidsOpen ? "" : "none";
+      var cy = document.querySelector("#custom-kids .side-kid-countries");
+      if (cy) cy.style.display = customKidsOpen ? "" : "none";
     } else {
       customKidsOpen = true;   // opening a different table shows its branches
     }
@@ -8866,6 +8980,10 @@
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       var toInsert = fields.map(function (f) { return { table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if }; });
+      // Every new table collects a Country, so a builder that did not add one gets it appended.
+      if (!toInsert.some(function (r) { return r.type === "country"; })) {
+        toInsert.push({ table_id: tid, position: toInsert.length, label: "Country", label_ar: "الدولة", type: "country", required: false, internal: false, options: null, show_if: null });
+      }
       return db.from("app_fields").insert(toInsert).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields); })
         .then(function () { return tRes.data; });
     }).then(function (t) {
@@ -8956,26 +9074,27 @@
   // ---- Admin: users management (list, create, edit, delete, reassign) ----
   var usersModal = document.getElementById("users-modal");
   var editingUser = null;
-  // Per-reviewer country restriction. Enforced in the DB (RLS ja_scope_ok) for tables in SCOPABLE.
-  var SCOPE_COUNTRIES = [
-    { prefix: "", label: "All countries" },
-    { prefix: "+961", label: "Lebanon only" },
-    { prefix: "+962", label: "Jordan only" },
-    { prefix: "+963", label: "Syria only" },
-    { prefix: "+964", label: "Iraq only" }
-  ];
-  var SCOPABLE = { job_applications: true }; // tables whose access can be limited by country (phone code)
+  // Per-reviewer country restriction. Enforced in the DB (RLS) via table_access.scope.
+  // Every table is scopable; the checkboxes only record the grant, the RLS is the real gate.
   function scopeSelectHtml(key) {
-    if (!SCOPABLE[key]) return "";
-    return '<select class="u-scope" data-key="' + esc(key) + '" title="Limit which applications this reviewer can see" disabled>' +
-      SCOPE_COUNTRIES.map(function (co) { return '<option value="' + co.prefix + '">' + esc(co.label) + "</option>"; }).join("") + "</select>";
+    return '<span class="u-scope" data-key="' + esc(key) + '">' +
+      COUNTRY_LIST.map(function (c) {
+        return '<label class="u-co"><input type="checkbox" class="u-co-box" value="' + esc(c.code) + '" disabled> ' +
+          esc(c.name_en) + '</label>';
+      }).join('') + '</span>';
   }
-  function scopeFromPrefix(prefix) { return prefix ? { phone_prefix: prefix } : null; }
-  function prefixFromScope(scope) { return (scope && scope.phone_prefix) ? scope.phone_prefix : ""; }
+  function scopeFromCountries(arr) {
+    var xs = (arr || []).map(canonicalCountry).filter(Boolean);
+    return xs.length ? { country: xs } : null;
+  }
+  function countriesFromScope(scope) {
+    if (!scope) return [];
+    if (scope.country && scope.country.length) return scope.country.map(canonicalCountry).filter(Boolean);
+    if (scope.phone_prefix) { var c = canonicalCountry(scope.phone_prefix); return c ? [c] : []; }
+    return [];
+  }
   function scopeLabel(scope) {
-    var p = prefixFromScope(scope); if (!p) return "";
-    var m = SCOPE_COUNTRIES.filter(function (co) { return co.prefix === p; })[0];
-    return m ? m.label : p + " only";
+    return countriesFromScope(scope).map(countryLabel).join(", ");
   }
   function invokeErr(res) { return (res && res.data && res.data.error) || (res && res.error && (res.error.message || res.error)) || null; }
   function errText(err) { return (err && err.message) ? err.message : (typeof err === "string" ? err : ""); }
@@ -8997,11 +9116,49 @@
         scopeSelectHtml(t.key);
       var acc = row.querySelector(".u-acc"), ce = row.querySelector(".u-can-edit"), cm = row.querySelector(".u-can-manage"), sc = row.querySelector(".u-scope");
       acc.addEventListener("change", function () {
-        ce.disabled = !acc.checked; cm.disabled = !acc.checked; if (sc) sc.disabled = !acc.checked;
-        if (!acc.checked) { ce.checked = false; cm.checked = false; if (sc) sc.value = ""; }
+        ce.disabled = !acc.checked; cm.disabled = !acc.checked;
+        if (sc) sc.querySelectorAll('.u-co-box').forEach(function (b) { b.disabled = !acc.checked; });
+        if (!acc.checked) {
+          ce.checked = false; cm.checked = false;
+          if (sc) sc.querySelectorAll('.u-co-box').forEach(function (b) { b.checked = false; });
+        }
       });
       host.appendChild(row);
     });
+  }
+  function renderCountriesManager() {
+    var box = document.getElementById("countries-mgr"); if (!box) return;
+    box.innerHTML = COUNTRY_LIST.map(function (c) {
+      return '<div class="cty-row" data-code="' + esc(c.code) + '">' +
+        '<b>' + esc(c.name_en) + '</b> <span class="muted">' + esc(c.code) + (c.dial ? " · " + esc(c.dial) : "") + '</span></div>';
+    }).join("") +
+      '<div class="cty-add" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+        '<input id="cty-code" placeholder="code (e.g. ksa)" style="width:120px;">' +
+        '<input id="cty-en" placeholder="English name" style="width:150px;">' +
+        '<input id="cty-ar" placeholder="Arabic name" style="width:150px;">' +
+        '<input id="cty-dial" placeholder="+966" style="width:90px;">' +
+        '<input id="cty-aliases" placeholder="aliases, comma-separated" style="width:220px;">' +
+        '<button type="button" id="cty-add-btn">Add country</button>' +
+      '</div>';
+    var btn = document.getElementById("cty-add-btn");
+    if (btn) btn.addEventListener("click", addCountry);
+  }
+  function addCountry() {
+    var code = (document.getElementById("cty-code").value || "").trim().toLowerCase();
+    var en = (document.getElementById("cty-en").value || "").trim();
+    if (!code || !en) { window.alert("Code and English name are required."); return; }
+    var ar = (document.getElementById("cty-ar").value || "").trim();
+    var dial = (document.getElementById("cty-dial").value || "").trim();
+    var aliasesRaw = (document.getElementById("cty-aliases").value || "");
+    var aliases = aliasesRaw.split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    aliases = aliases.concat([code, en.toLowerCase()]);
+    if (dial) aliases.push(dial);
+    var sort = (COUNTRY_LIST.reduce(function (m, c) { return Math.max(m, c.sort || 0); }, 0)) + 1;
+    db.from("countries").insert({ code: code, name_en: en, name_ar: ar || null, dial: dial || null, aliases: aliases, active: true, sort: sort })
+      .then(function (r) {
+        if (r.error) { window.alert("Could not add: " + r.error.message); return; }
+        loadCountries().then(renderCountriesManager);
+      });
   }
   function loadUsers() {
     var listEl = document.getElementById("users-list"), emptyEl = document.getElementById("users-empty");
@@ -9056,7 +9213,11 @@
         acc.checked = true;
         var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + a.table_key + '"]'); if (ce) { ce.disabled = false; ce.checked = !!a.can_edit; }
         var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + a.table_key + '"]'); if (cm) { cm.disabled = false; cm.checked = !!a.can_manage; }
-        var sc = document.querySelector('#u-tables .u-scope[data-key="' + a.table_key + '"]'); if (sc) { sc.disabled = false; sc.value = prefixFromScope(a.scope); }
+        var sc = document.querySelector('#u-tables .u-scope[data-key="' + a.table_key + '"]');
+        if (sc) {
+          var codes = countriesFromScope(a.scope);
+          sc.querySelectorAll('.u-co-box').forEach(function (b) { b.disabled = false; b.checked = codes.indexOf(b.value) > -1; });
+        }
       }
     });
     usersModal.classList.add("open");
@@ -9109,7 +9270,8 @@
         var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + c.value + '"]');
         var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + c.value + '"]');
         var sc = document.querySelector('#u-tables .u-scope[data-key="' + c.value + '"]');
-        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked), can_manage: !!(cm && cm.checked), scope: sc ? scopeFromPrefix(sc.value) : null });
+        var picked = sc ? Array.prototype.slice.call(sc.querySelectorAll('.u-co-box:checked')).map(function (b) { return b.value; }) : [];
+        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked), can_manage: !!(cm && cm.checked), scope: scopeFromCountries(picked) });
       });
       if (!access.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
     }
@@ -9235,7 +9397,7 @@
     if (id === "home") renderHome();
     if (id === "job_applications") { markOpened(id); setBasePane("job_applications", "data"); buildFilterPanel(jobFV); }
     if (id === "casting") { markOpened(id); setBasePane("casting", "data"); if (!castingLoaded) loadCasting(); else buildFilterPanel(castingFV); }
-    if (id === "users") loadUsers();
+    if (id === "users") { loadUsers(); renderCountriesManager(); }
     // the Starred entry is a filter on Home, so it lights up only while that filter is on
     var st = document.getElementById("side-starred-nav");
     if (st) st.classList.toggle("active", id === "home" && homeStarredOnly);
@@ -9933,7 +10095,7 @@
         if (!row) return;
         return db.from("app_fields").select("*").eq("table_id", t.id).order("position", { ascending: true })
           .then(function (fr) {
-            currentCustom = { table: t, fields: fr.data || [], subs: row ? [row] : [], branch: null };
+            currentCustom = { table: t, fields: fr.data || [], subs: row ? [row] : [], branch: null, country: null };
             openCustomDetail(row, fr.data || []);
           });
       })
