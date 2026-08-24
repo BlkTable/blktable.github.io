@@ -6597,6 +6597,332 @@
     }
     return next(0);
   }
+  // ---- Assigning: who voted for this event, and who is already busy ---------
+  // `config.assign` on a table means "let a manager pick, from another table's answers,
+  // who goes on each of MY records". A half-written config is treated as no config: a
+  // panel that knew where to read candidates but not where to write them would lose the
+  // roster it had just been given.
+  function assignConfig(t) {
+    var a = t && t.config && t.config.assign;
+    return (a && a.from && a.match && a.roster && a.name) ? a : null;
+  }
+  // One person, spelled once. The SAME rule payrollRows uses — if these two ever
+  // disagree, the roster and the money disagree about who somebody is.
+  function assignPersonKey(name) { return String(name == null ? "" : name).trim().toLowerCase(); }
+
+  // Everyone whose LATEST vote ticks this event. Latest and not all, because a barista
+  // fills a ballot in again whenever a new link arrives: counting every submission would
+  // list one person five times and, worse, would honour a tick they had since withdrawn.
+  //
+  // Matched on the EVENT id, so it does not matter which poll the vote was cast in — an
+  // event can sit on more than one link and every vote for it counts.
+  function assignCandidates(availRows, eventId, cfg) {
+    if (!cfg || !eventId) return [];
+    var latest = {};
+    (availRows || []).forEach(function (r) {
+      var k = assignPersonKey((r.data || {})[cfg.name]);
+      var prev = latest[k];
+      // created_at decides, never the order the array happens to arrive in.
+      if (!prev || String(r.created_at || "") > String(prev.created_at || "")) latest[k] = r;
+    });
+    var out = [];
+    Object.keys(latest).forEach(function (k) {
+      var r = latest[k];
+      var ticked = String(((r.data || {})[cfg.match]) || "").split(",")
+        .map(function (s) { return s.trim(); }).filter(Boolean);
+      if (ticked.indexOf(String(eventId)) === -1) return;   // exact: e-1 never matches e-12
+      out.push({
+        key: k,
+        name: String(((r.data || {})[cfg.name]) || "").trim() || "(no name)",
+        phone: String(((r.data || {})[cfg.phone]) || "").trim(),
+        at: r.created_at || null
+      });
+    });
+    return out.sort(function (a, b) { return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0); });
+  }
+
+  // How many events each person already has in one month, so the work can be spread
+  // instead of the same four people getting everything. By month because that is the
+  // period Zamel thinks in and the one payroll is run over.
+  function assignMonthCount(rosterRows, eventsById, monthKey, nameField) {
+    var out = {};
+    (rosterRows || []).forEach(function (r) {
+      var ev = eventsById && eventsById[r.parent_id];
+      if (!ev) return;                                     // an event since deleted counts nowhere
+      if (String(ev.date || "").slice(0, 7) !== String(monthKey || "")) return;
+      var k = assignPersonKey((r.data || {})[nameField]);
+      if (!k) return;
+      out[k] = (out[k] || 0) + 1;
+    });
+    return out;
+  }
+
+  // Do two events collide in time? Half-open on purpose: 10–16 and 16–20 are two shifts
+  // one person can work, not a clash. A missing end is the end of the day and an end
+  // before its own start is too — the same reading eventPhase already uses, because two
+  // rules about one pair of times that disagree is how an event comes to read as over
+  // before it began.
+  function eventsOverlap(a, b) {
+    if (!a || !b) return false;
+    var ad = String(a.date || "").slice(0, 10), bd = String(b.date || "").slice(0, 10);
+    if (!ad || !bd || ad !== bd) return false;
+    var tm = function (v, dflt) {
+      var s = String(v == null ? "" : v).slice(0, 5);
+      return /^\d{2}:\d{2}$/.test(s) ? s : dflt;
+    };
+    var as = tm(a.start, "00:00"), ae = tm(a.end, "23:59");
+    var bs = tm(b.start, "00:00"), be = tm(b.end, "23:59");
+    if (ae <= as) ae = "23:59";
+    if (be <= bs) be = "23:59";
+    return as < be && bs < ae;
+  }
+  // Who on this event's candidate list is already booked somewhere overlapping, and
+  // where. Named rather than counted: "clashes with Brunch" is actionable, "1 clash"
+  // sends Zamel hunting.
+  function assignClashes(rosterRows, event, eventsById, nameField) {
+    var out = {};
+    (rosterRows || []).forEach(function (r) {
+      if (!event || r.parent_id === event.id) return;       // its own roster is not a clash
+      var other = eventsById && eventsById[r.parent_id];
+      if (!other || !eventsOverlap(event, other)) return;
+      var k = assignPersonKey((r.data || {})[nameField]);
+      if (!k) return;
+      out[k] = out[k] || [];
+      var nm = String(other.name || "").trim() || "(untitled)";
+      if (out[k].indexOf(nm) === -1) out[k].push(nm);
+    });
+    return out;
+  }
+  // What changed between the roster already on the event and the boxes just ticked.
+  // Four buckets, and the difference between them is the difference between a quiet save
+  // and messaging the whole team a second time:
+  //
+  //   insert — newly added. ONLY these are messaged, because the notify trigger is
+  //            INSERT-only, so the guarantee is structural rather than remembered.
+  //   update — same person, different slot. An update and NOT delete+insert, because
+  //            delete+insert re-fires that trigger and tells somebody twice.
+  //   remove — the tick was cleared, plus any duplicate row for one person.
+  //   keep   — unchanged. No write of any kind.
+  //
+  // A missing slot counts as confirmed on both sides, or every older row would look
+  // changed and generate an update nobody asked for.
+  function assignDiff(existing, ticked) {
+    var first = {}, dupes = [];
+    (existing || []).forEach(function (r) {
+      var k = assignPersonKey(r.name);
+      if (!first[k]) first[k] = r; else dupes.push(r);
+    });
+    var want = {};
+    (ticked || []).forEach(function (p) { want[assignPersonKey(p.name)] = p; });
+    var slotOf = function (s) { return String(s || "confirmed"); };
+    var insert = [], remove = dupes.slice(), update = [], keep = [];
+    Object.keys(want).forEach(function (k) {
+      var row = first[k], p = want[k];
+      if (!row) { insert.push(p); return; }
+      if (slotOf(p.slot) !== slotOf(row.slot)) update.push({ id: row.id, slot: slotOf(p.slot), name: p.name });
+      else keep.push(row);
+    });
+    Object.keys(first).forEach(function (k) { if (!want[k]) remove.push(first[k]); });
+    return { insert: insert, remove: remove, update: update, keep: keep };
+  }
+
+  // Writes one event's roster. Deletes, then slot moves, then inserts — and a failure at
+  // any stage stops the rest rather than leaving half a roster behind.
+  //
+  // Inserts go LAST on purpose: an insert is what queues a message, so nobody is told
+  // anything until the removals and moves have actually landed.
+  //
+  // Slot is written as the NATIVE app_submissions column, never into `data`. payrollRows
+  // filters on `s.slot`; a slot living inside an answer leaves that column null, drops
+  // every row from `only_slot:'confirmed'`, and makes every payroll export read "nothing
+  // in that range" — which is exactly how the export broke on 2026-08-17.
+  //
+  // It deliberately does not touch the event's status and does not enforce capacity.
+  function submitAssignments(ctx) {
+    var db = ctx.db, rcfg = ctx.rosterCfg || {};
+    // Normalised to {id, name, slot} so the diff stays pure and the real field ids live
+    // in exactly one place.
+    var norm = (ctx.existing || []).map(function (r) {
+      return { id: r.id, slot: r.slot, name: (r.data || {})[rcfg.assign_name] };
+    });
+    var d = assignDiff(norm, ctx.ticked || []);
+    var step = Promise.resolve();
+    if (d.remove.length) {
+      step = step.then(function () {
+        return db.from("app_submissions").delete()
+          .in("id", d.remove.map(function (r) { return r.id; }))
+          .then(function (res) { if (res && res.error) throw res.error; });
+      });
+    }
+    d.update.forEach(function (u) {
+      step = step.then(function () {
+        return db.from("app_submissions").update({ slot: u.slot }).eq("id", u.id)
+          .then(function (res) { if (res && res.error) throw res.error; });
+      });
+    });
+    if (d.insert.length) {
+      step = step.then(function () {
+        var rows = d.insert.map(function (p) {
+          var data = {};
+          data[rcfg.assign_name] = p.name;
+          if (p.phone) data[rcfg.assign_phone] = p.phone;
+          return { table_id: ctx.rosterTableId, parent_id: ctx.eventId,
+                   slot: String(p.slot || "confirmed"), data: data };
+        });
+        return db.from("app_submissions").insert(rows)
+          .then(function (res) { if (res && res.error) throw res.error; });
+      });
+    }
+    return step.then(function () { return d; });
+  }
+  // The roster panel for one event: everybody who voted for it, how loaded they already
+  // are that month, whether they are double-booked, and one Submit.
+  function openAssign(t, evRec) {
+    var cfg = assignConfig(t);
+    if (!cfg || !canManage(t.id) || !evRec) return;
+    clearAutosave();
+    var body = document.getElementById("modal-body");
+    // The event's own card fields are the readable name of it, the same as everywhere else.
+    var cardF = (t.config || {}).card_fields || [];
+    var head = recordOptsLabel(evRec, cardF);
+    body.innerHTML =
+      '<div class="rec-head"><div class="rh-main"><div class="rh-title">Assign baristas</div>' +
+      '<div class="rh-meta">' + esc(head || evName || "this event") + "</div></div></div>" +
+      '<div id="as-count" class="m-sub" style="margin-top:12px;">Loading…</div>' +
+      '<div id="as-list"></div>' +
+      '<div class="nr-foot"><button type="button" class="btn-new" id="as-go" disabled>Submit</button>' +
+      '<span class="nr-msg" id="as-msg"></span></div>';
+    document.getElementById("modal").classList.add("open");
+
+    var cands = [], mine = [], rosterId = null, rosterCfg = {}, places = null;
+    function say(text, ok) {
+      var m = document.getElementById("as-msg");
+      if (m) { m.textContent = text || ""; m.className = "nr-msg" + (ok ? " ok" : ""); }
+    }
+    var availP  = db.from("app_tables").select("id").eq("slug", cfg.from).single();
+    var rosterP = db.from("app_tables").select("id,config").eq("slug", cfg.roster).single();
+
+    Promise.all([availP, rosterP]).then(function (out) {
+      if (out[0].error || out[1].error) { say("Could not open the roster."); return; }
+      rosterId = out[1].data.id;
+      rosterCfg = out[1].data.config || {};
+      // The whole roster across every event, not just this one: the clash warning and the
+      // month count are both about what a person is doing ELSEWHERE. Paged, because a
+      // roster read one page deep hides exactly the bookings that would have warned.
+      return Promise.all([
+        fetchAllRows(out[0].data.id, "id,data,created_at,parent_id"),
+        fetchAllRows(rosterId, "id,data,slot,parent_id"),
+        fetchAllRows(t.id, "id,data")
+      ]).then(function (res) {
+        var avail = res[0], roster = res[1], events = res[2];
+        var evById = {};
+        events.forEach(function (e) {
+          // The three time questions are named in config.assign. Nothing here looks a
+          // question up by its label, and the date falls back to the one payroll already
+          // names — they are the same question, and payroll's is verified by its export.
+          evById[e.id] = {
+            id: e.id,
+            name: recordOptsLabel(e, cardF),
+            date:  (e.data || {})[cfg.date || ((rosterCfg.payroll || {}).date)] || null,
+            start: cfg.start ? (e.data || {})[cfg.start] : null,
+            end:   cfg.end   ? (e.data || {})[cfg.end]   : null
+          };
+        });
+        var me = evById[evRec.id] || { id: evRec.id };
+        cands = assignCandidates(avail, evRec.id, cfg);
+        mine = roster.filter(function (r) { return r.parent_id === evRec.id; });
+        places = Number((evRec.data || {})[cfg.capacity]);
+        if (!isFinite(places)) places = null;
+        var month = String(me.date || "").slice(0, 7);
+        var loads = assignMonthCount(roster, evById, month, rosterCfg.assign_name);
+        var clashes = assignClashes(roster, me, evById, rosterCfg.assign_name);
+        render(loads, clashes);
+      });
+    }).catch(function () { say("Could not open the roster."); });
+
+    function onRoster(key) {
+      for (var i = 0; i < mine.length; i++) {
+        if (assignPersonKey((mine[i].data || {})[rosterCfg.assign_name]) === key) return mine[i];
+      }
+      return null;
+    }
+    function render(loads, clashes) {
+      var host = document.getElementById("as-list");
+      if (!host) return;
+      if (!cands.length) {
+        host.innerHTML = '<div class="m-empty">Nobody has voted for this event yet. ' +
+          "Make a voting link that includes it, and send it to the baristas.</div>";
+        paintCount();
+        return;
+      }
+      host.innerHTML = cands.map(function (c) {
+        var on = onRoster(c.key);
+        var slot = on ? String(on.slot || "confirmed") : "confirmed";
+        var load = loads[c.key] || 0;
+        var cl = clashes[c.key] || [];
+        return '<label class="ed-chk" style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;">' +
+          '<input type="checkbox" class="as-tick" data-key="' + esc(c.key) + '"' + (on ? " checked" : "") + ">" +
+          '<span style="flex:1;">' +
+            "<b>" + esc(c.name) + "</b>" +
+            (c.phone ? ' <span class="lbl">' + esc(c.phone) + "</span>" : ' <span class="lbl">no number</span>') +
+            '<br><span class="lbl">' + load + (load === 1 ? " event" : " events") + " this month</span>" +
+            (cl.length ? '<br><span class="lbl" style="color:var(--gold);">clashes with ' +
+                         esc(cl.join(", ")) + "</span>" : "") +
+          "</span>" +
+          '<select class="as-slot" data-key="' + esc(c.key) + '">' +
+            '<option value="confirmed"' + (slot === "confirmed" ? " selected" : "") + ">confirmed</option>" +
+            '<option value="backup"' + (slot === "backup" ? " selected" : "") + ">backup</option>" +
+          "</select></label>";
+      }).join("");
+      [].slice.call(host.querySelectorAll(".as-tick, .as-slot")).forEach(function (el) {
+        el.addEventListener("change", paintCount);
+      });
+      paintCount();
+    }
+    function ticked() {
+      var host = document.getElementById("as-list");
+      if (!host) return [];
+      return [].slice.call(host.querySelectorAll(".as-tick")).filter(function (i) { return i.checked; })
+        .map(function (i) {
+          var key = i.getAttribute("data-key");
+          var sel = host.querySelector('.as-slot[data-key="' + key + '"]');
+          var c = cands.filter(function (x) { return x.key === key; })[0] || {};
+          return { key: key, name: c.name, phone: c.phone, slot: (sel && sel.value) || "confirmed" };
+        });
+    }
+    function paintCount() {
+      var el = document.getElementById("as-count");
+      var go = document.getElementById("as-go");
+      if (go) go.disabled = false;
+      if (!el) return;
+      var picked = ticked();
+      var conf = picked.filter(function (p) { return p.slot === "confirmed"; }).length;
+      var back = picked.length - conf;
+      // Over capacity WARNS and never blocks. Zamel is the manager and the number is
+      // advisory in this flow — a hard stop here would be the app overruling him.
+      var over = places != null && conf > places;
+      el.textContent = conf + (places != null ? " of " + places + " places" : " confirmed") +
+        " · " + back + " backup" + (over ? "  — over capacity" : "");
+      el.style.color = over ? "var(--gold)" : "";
+    }
+
+    document.getElementById("as-go").addEventListener("click", function () {
+      var btn = this;
+      btn.disabled = true; say("Saving…");
+      submitAssignments({
+        db: db, rosterTableId: rosterId, eventId: evRec.id,
+        rosterCfg: rosterCfg, existing: mine, ticked: ticked()
+      }).then(function (d) {
+        // Said in the terms that matter: how many people will actually be told.
+        say(d.insert.length + " added · " + d.remove.length + " removed · " +
+            d.update.length + " moved · " + d.keep.length + " unchanged", true);
+        openAssign(t, evRec);
+      }).catch(function (e) {
+        btn.disabled = false;
+        say("Could not save the roster. " + ((e && e.message) || ""));
+      });
+    });
+  }
   function pollConfig(t) {
     var p = t && t.config && t.config.polls;
     return (p && p.store && p.form && p.name && p.events) ? p : null;
@@ -8222,7 +8548,13 @@
     // link block, which is the permission record_share_token enforces anyway.
     var kidT = (currentCustom && currentCustom.table) ? childTableOf(currentCustom.table) : null;
     var childT = (kidT && canManage(currentCustom.table.id)) ? kidT : null;
+    // Assigning is offered on the record because a roster belongs to one event. Same
+    // gate as Payroll rather than can_edit: this is what creates the rows payroll pays.
+    var assignT = (currentCustom && currentCustom.table) ? currentCustom.table : null;
+    var mayAssign = !!(assignT && assignConfig(assignT) && canManage(assignT.id));
     body.innerHTML = scoreHead + alertBannerHtml(currentCustom && currentCustom.table, s) +
+      (mayAssign ? '<div class="link-bar" style="margin-top:12px;"><span class="lbl">Staffing</span>' +
+        '<button type="button" class="linkbtn" id="cd-assign">Assign baristas</button></div>' : "") +
       recordLinkBlockHtml(childT) + '<div id="cd-kids"></div>' +
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
@@ -8237,6 +8569,10 @@
       '<div id="cd-notify"></div>';
     wireMoreLine(s, fields); wireLinkChips(); wireAlertBanner(s, fields); renderRecordNotify(s, fields);
     fillRecordLink(s, childT);
+    if (mayAssign) {
+      var ab = document.getElementById("cd-assign");
+      if (ab) ab.addEventListener("click", function () { openAssign(assignT, s); });
+    }
     loadChildRows(s, kidT);
     fields.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
     // show/hide the "other" free-text box as the choice changes
