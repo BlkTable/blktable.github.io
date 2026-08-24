@@ -3706,6 +3706,82 @@
     return [].slice.call(el.querySelectorAll("input:checked"))
       .map(function (i) { return i.value; }).join(", ");
   }
+  // ---- record_multi: another table's records as tick boxes -------------------
+  // Loaded per source table and cached for the session. What LABELS a record is the
+  // source table's own `card_fields` — whose first entry is already that record's
+  // title everywhere else in the app — so nothing here looks a question up by its
+  // label, and adding a question to the source table cannot change what this shows.
+  var RECORD_OPTS = {};
+  function recordOptsLabel(rec, cardFields) {
+    var parts = (cardFields || []).map(function (fid) {
+      var v = (rec.data || {})[fid];
+      return v == null ? "" : String(v).trim();
+    }).filter(Boolean);
+    return parts.length ? parts.join(" — ") : "(untitled)";
+  }
+  function recordOptsFor(f) {
+    var src = f && f.options && f.options.source;
+    return (src && RECORD_OPTS[src] && RECORD_OPTS[src].list) || [];
+  }
+  // Fetches a source table's records once per session. Never rejects: a source table
+  // that has gone missing leaves an empty picker, which is a question with no choices
+  // rather than a record panel that will not open.
+  function loadRecordOpts(slug) {
+    if (!slug) return Promise.resolve(null);
+    if (RECORD_OPTS[slug]) return Promise.resolve(RECORD_OPTS[slug]);
+    return db.from("app_tables").select("id,config").eq("slug", slug).single().then(function (tr) {
+      if (tr.error || !tr.data) { RECORD_OPTS[slug] = { list: [], byId: {} }; return RECORD_OPTS[slug]; }
+      var cf = (tr.data.config || {}).card_fields || [];
+      return db.from("app_submissions").select("id,data").eq("table_id", tr.data.id).then(function (sr) {
+        var list = [], byId = {};
+        ((sr && sr.data) || []).forEach(function (s) {
+          var label = recordOptsLabel(s, cf);
+          list.push({ value: s.id, label: label });
+          byId[s.id] = { id: s.id, name: label };
+        });
+        list.sort(function (a, b) { return a.label < b.label ? -1 : (a.label > b.label ? 1 : 0); });
+        RECORD_OPTS[slug] = { list: list, byId: byId };
+        return RECORD_OPTS[slug];
+      });
+    }).catch(function () { RECORD_OPTS[slug] = { list: [], byId: {} }; return RECORD_OPTS[slug]; });
+  }
+  // Every source table named by a record_multi question on this table. Called when a
+  // table is opened, so the picker is populated before any editor is drawn.
+  function loadRecordOptsFor(fields) {
+    var slugs = {};
+    (fields || []).forEach(function (f) {
+      if (f.type === "record_multi" && f.options && f.options.source) slugs[f.options.source] = true;
+    });
+    var keys = Object.keys(slugs);
+    if (!keys.length) return Promise.resolve([]);
+    return Promise.all(keys.map(loadRecordOpts));
+  }
+  function recordOptsById(f) {
+    var src = f && f.options && f.options.source;
+    return (src && RECORD_OPTS[src] && RECORD_OPTS[src].byId) || {};
+  }
+  // Like edChecks, but the checkbox VALUE is a record id and the text is its label.
+  // A ticked id whose record is gone is still rendered, still ticked and marked — the
+  // same rule edChecks follows for a retired choice, and for the same reason: dropping
+  // it means saving the record quietly deletes an answer nobody chose to remove.
+  function edChecksKeyed(id, value, options) {
+    // Trimmed, unlike edChecks: splitMulti only eats whitespace next to a comma, so a
+    // stored " e-1, e-2" keeps its leading space. That is harmless when the values are
+    // labels being compared to labels, but these are record ids — a space means the box
+    // does not tick and saving then drops the id.
+    var picked = splitMulti(value).map(function (s) { return String(s).trim(); }).filter(Boolean);
+    var known = {};
+    (options || []).forEach(function (o) { known[o.value] = true; });
+    var all = (options || []).slice();
+    picked.forEach(function (p) { if (!known[p]) all.push({ value: p, label: "(deleted)" }); });
+    return '<div class="ed-checks" id="' + id + '">' + all.map(function (o) {
+      var on = picked.indexOf(o.value) !== -1;
+      var gone = !known[o.value];
+      return '<label class="ed-chk' + (gone ? " retired" : "") + '">' +
+        '<input type="checkbox" value="' + esc(o.value) + '"' + (on ? " checked" : "") + '> ' +
+        esc(o.label) + (gone ? " (as recorded)" : "") + "</label>";
+    }).join("") + "</div>";
+  }
   // A stored answer that is not one of today's choices must still be offered, or the
   // browser silently selects the first option and saving rewrites the answer. Older
   // records legitimately hold retired choices, and a multi-select holds several joined
@@ -3730,7 +3806,7 @@
       if (isFileField(f)) return;
       if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
       var el = document.getElementById("ed-" + f.id); if (!el) return;
-      out[f.id] = f.type === "multi_select" ? edChecksValue(el) : (el.value || "").trim();
+      out[f.id] = (f.type === "multi_select" || f.type === "record_multi") ? edChecksValue(el) : (el.value || "").trim();
     });
     return out;
   }
@@ -3760,6 +3836,9 @@
     else if (f.type === "long_text") inner = edText(id, v, true);
     else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
     else if (f.type === "multi_select") inner = edChecks(id, v, choiceList(f));
+    // The picker: tick which records of another table this one is about. Used by the
+    // poll question "Events in this poll".
+    else if (f.type === "record_multi") inner = edChecksKeyed(id, v, recordOptsFor(f));
     else if (f.type === "dropdown") {
       inner = edSelect(id, v, [""].concat(choiceList(f)));
       if (fieldHasOther(f)) {
@@ -5396,6 +5475,13 @@
       currentCustom.fields = (out[0] && out[0].data) || [];
       // the Form tab was drawn before the questions arrived, so redraw it now that they have
       if (formPaneScope === "custom" && basePaneShowing("custom") === "form") mountFormPane("custom");
+      // A record_multi question offers another table's records as tick boxes, so those
+      // records have to be in hand before any editor is drawn — otherwise the picker
+      // comes up empty and saving writes an answer of nothing. Redraws when it lands,
+      // because the grid shows the same ids as names.
+      loadRecordOptsFor(currentCustom.fields).then(function (loaded) {
+        if (loaded && loaded.length && currentCustom && currentCustom.table.id === t.id) renderCustom();
+      });
       return loadCustomSubs(subsP);
     }).then(function () { loadKidCounts(t); });
   }
@@ -8263,8 +8349,12 @@
     });
   }
 
+  // A child whose own form is not live has no public link to offer. Without this gate
+  // the block keys on childTableOf alone, so an app-written child — a roster nobody
+  // fills in over the web — puts a link and a QR code on every parent record, pointing
+  // at a form that is switched off. is_active is the publish gate; linkLive reads it.
   function recordLinkBlockHtml(child) {
-    if (!child) return "";
+    if (!child || !linkLive(child)) return "";
     return '<div class="m-sub" style="margin-top:14px;">' + esc(child.name) + " link</div>" +
       '<div class="link-bar" id="rl-bar"><span class="lbl">Loading…</span></div>' +
       '<div id="rl-qrwrap" style="display:none;margin-top:10px;">' +
@@ -8275,7 +8365,7 @@
         "</div></div>";
   }
   function fillRecordLink(rec, child) {
-    if (!child) return;
+    if (!child || !linkLive(child)) return;
     var bar = document.getElementById("rl-bar"); if (!bar) return;
     function paint(token) {
       var url = recordFormLink(child.slug, token);
@@ -8440,7 +8530,10 @@
     function offerNewRecordLink(t, recId) {
       if (!t || !recId) return;
       var child = childTableOf(t);
-      if (!child || !canManage(t.id)) return;
+      // Same gate as the record panel: no live form, no link to offer. Without it every
+      // event Zamel created popped "here is its shareable link" for the roster form —
+      // a form that is switched off and that nobody fills in over the web.
+      if (!child || !linkLive(child) || !canManage(t.id)) return;
       db.rpc("record_share_token", { p_record: recId, p_rotate: false }).then(function (r) {
         if (r.error || !r.data) { if (window.console && r.error) console.warn("record link not available yet:", r.error.message); return; }
         window.prompt("Record created. Its shareable link (one per record):", recordFormLink(child.slug, r.data));

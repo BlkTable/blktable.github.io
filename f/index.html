@@ -1054,7 +1054,14 @@
         // trip — and like them it NEVER blocks the form: a database that does not have
         // ballot_options yet must still render every other question, so the page and
         // the migration can land in either order. Same rule as p_token and p_device.
-        var ballotReady = db.rpc("ballot_options", { p_slug: slug })
+        // p_token names the POLL this link is for, and it decides which events the
+        // ballot offers. Sent only when there is one — the same rule the submit uses:
+        // PostgREST resolves a function by the keys in the body, so a page that always
+        // sent two keys would break against a database that still had the one-argument
+        // version. The argument is defaulted server-side, so both shapes resolve.
+        var ballotPayload = { p_slug: slug };
+        if (parentToken) ballotPayload.p_token = parentToken;
+        var ballotReady = db.rpc("ballot_options", ballotPayload)
           .then(function (r) { BALLOT = (r && !r.error && Array.isArray(r.data)) ? r.data : []; })
           .catch(function () { BALLOT = []; });
         Promise.all([fieldsReady, branchesReady, countriesReady, ballotReady]).then(function (results) {
