@@ -73,16 +73,21 @@ t('null inputs are an empty diff rather than a throw', () => {
 
 // ---- The caller. A helper tested alone says nothing about who calls it. ----
 // payroll.test.js passing 16/16 while the export was broken is why this exists.
+// Inserts go through the create_record RPC, never a direct insert: there is no insert
+// policy on app_submissions, so a direct insert is refused by RLS. That is not a detail
+// the stub may paper over — it is the bug this stub exists to catch.
 function stubDb(fail){
   const calls = [];
-  const res = (kind) => Promise.resolve({error: (fail === kind) ? {message:'nope'} : null});
-  return { calls, from(){ return {
-    insert(rows){ calls.push({kind:'insert', rows}); return res('insert'); },
-    update(patch){ return {
-      eq(col, id){ calls.push({kind:'update', patch, id}); return res('update'); } }; },
-    delete(){ return {
-      in(col, ids){ calls.push({kind:'delete', ids}); return res('delete'); } }; }
-  }; } };
+  const res = (kind) => Promise.resolve({error: (fail === kind) ? {message:'nope'} : null, data: 'new-id'});
+  return { calls,
+    rpc(name, args){ calls.push({kind:name, args}); return res(name); },
+    from(){ return {
+      insert(rows){ calls.push({kind:'insert', rows}); return res('insert'); },
+      update(patch){ return {
+        eq(col, id){ calls.push({kind:'update', patch, id}); return res('update'); } }; },
+      delete(){ return {
+        in(col, ids){ calls.push({kind:'delete', ids}); return res('delete'); } }; }
+    }; } };
 }
 const RCFG = {assign_name:'R_NM', assign_phone:'R_PH'};
 const ctx = (existing, ticked, db) => ({db, rosterTableId:'T_ROSTER', eventId:'e-1',
@@ -104,10 +109,11 @@ await T('adding one to seven inserts one row and leaves the seven alone', async 
   const have = ['A','B','C','D','E','F','G'].map((x,i)=>RAW('r'+i,x,'confirmed'));
   const want = ['A','B','C','D','E','F','G','H'].map(x=>P(x,'+1','confirmed'));
   await API.submitAssignments(ctx(have, want, db));
-  const ins = db.calls.filter(c=>c.kind==='insert');
-  assert.strictEqual(ins.length, 1);
-  assert.strictEqual(ins[0].rows.length, 1, 'exactly one row inserted');
-  assert.strictEqual(ins[0].rows[0].data.R_NM, 'H');
+  const ins = db.calls.filter(c=>c.kind==='create_record');
+  assert.strictEqual(ins.length, 1, 'exactly one person created, not eight');
+  assert.strictEqual(ins[0].args.p_data.R_NM, 'H');
+  assert.strictEqual(db.calls.filter(c=>c.kind==='insert').length, 0,
+    'a direct insert is refused by RLS — there is no insert policy on app_submissions');
   assert.strictEqual(db.calls.filter(c=>c.kind==='delete').length, 0);
   assert.strictEqual(db.calls.filter(c=>c.kind==='update').length, 0);
 });
@@ -115,20 +121,20 @@ await T('adding one to seven inserts one row and leaves the seven alone', async 
 await T('an inserted row carries the event as parent, the phone, and slot as a COLUMN', async () => {
   const db = stubDb();
   await API.submitAssignments(ctx([], [P('Ahmad','+962791','backup')], db));
-  const row = db.calls.filter(c=>c.kind==='insert')[0].rows[0];
-  assert.strictEqual(row.table_id, 'T_ROSTER');
-  assert.strictEqual(row.parent_id, 'e-1', 'without parent_id the row is invisible and earns nothing');
-  assert.strictEqual(row.slot, 'backup',
+  const a = db.calls.filter(c=>c.kind==='create_record')[0].args;
+  assert.strictEqual(a.p_table, 'T_ROSTER');
+  assert.strictEqual(a.p_parent, 'e-1', 'without a parent the row is invisible and earns nothing');
+  assert.strictEqual(a.p_slot, 'backup',
     'payrollRows filters s.slot, the native column — a slot inside data is never paid');
-  assert.ok(!row.data.slot, 'and it must not also be written into data, or the two can disagree');
-  assert.strictEqual(row.data.R_NM, 'Ahmad');
-  assert.strictEqual(row.data.R_PH, '+962791', 'the number is copied onto the row, not looked up later');
+  assert.ok(!a.p_data.slot, 'and it must not also be written into data, or the two can disagree');
+  assert.strictEqual(a.p_data.R_NM, 'Ahmad');
+  assert.strictEqual(a.p_data.R_PH, '+962791', 'the number is copied onto the row, not looked up later');
 });
 
 await T('a slot change issues a column update and no insert or delete', async () => {
   const db = stubDb();
   await API.submitAssignments(ctx([RAW('r1','Ahmad','confirmed')], [P('Ahmad','+1','backup')], db));
-  assert.strictEqual(db.calls.filter(c=>c.kind==='insert').length, 0, 'no insert: it would message again');
+  assert.strictEqual(db.calls.filter(c=>c.kind==='create_record').length, 0, 'no insert: it would message again');
   assert.strictEqual(db.calls.filter(c=>c.kind==='delete').length, 0);
   const up = db.calls.filter(c=>c.kind==='update');
   assert.strictEqual(up.length, 1);
@@ -149,7 +155,7 @@ await T('inserts go LAST, so nothing is messaged before the removals have landed
   const db = stubDb();
   await API.submitAssignments(ctx([RAW('r1','Ahmad','confirmed')], [P('Sara','+1','confirmed')], db));
   const kinds = db.calls.map(c=>c.kind);
-  assert.deepStrictEqual(asW(kinds), ['delete','insert']);
+  assert.deepStrictEqual(asW(kinds), ['delete','create_record']);
 });
 
 await T('a failed delete stops before anything is inserted', async () => {
@@ -158,11 +164,11 @@ await T('a failed delete stops before anything is inserted', async () => {
   try { await API.submitAssignments(ctx([RAW('r1','Ahmad','confirmed')], [P('Sara','+1','confirmed')], db)); }
   catch (e) { threw = true; }
   assert.ok(threw, 'a failed write must surface, not be swallowed');
-  assert.strictEqual(db.calls.filter(c=>c.kind==='insert').length, 0, 'nothing inserted after a failed delete');
+  assert.strictEqual(db.calls.filter(c=>c.kind==='create_record').length, 0, 'nothing inserted after a failed delete');
 });
 
 await T('a failed insert surfaces too', async () => {
-  const db = stubDb('insert');
+  const db = stubDb('create_record');
   let threw = false;
   try { await API.submitAssignments(ctx([], [P('Sara','+1','confirmed')], db)); }
   catch (e) { threw = true; }

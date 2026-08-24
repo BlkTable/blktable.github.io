@@ -6760,19 +6760,24 @@
           .then(function (res) { if (res && res.error) throw res.error; });
       });
     });
-    if (d.insert.length) {
+    // One create_record per newly-added person, and not a direct insert: there is no
+    // insert policy on app_submissions, so a direct insert is refused by RLS. The RPC
+    // carries the parent and the native slot column, and checks both — a slot that is
+    // not confirmed/backup is a person payroll silently never pays, and a parent from
+    // another table would stamp a roster row onto an unrelated record.
+    d.insert.forEach(function (p) {
       step = step.then(function () {
-        var rows = d.insert.map(function (p) {
-          var data = {};
-          data[rcfg.assign_name] = p.name;
-          if (p.phone) data[rcfg.assign_phone] = p.phone;
-          return { table_id: ctx.rosterTableId, parent_id: ctx.eventId,
-                   slot: String(p.slot || "confirmed"), data: data };
-        });
-        return db.from("app_submissions").insert(rows)
-          .then(function (res) { if (res && res.error) throw res.error; });
+        var data = {};
+        data[rcfg.assign_name] = p.name;
+        if (p.phone) data[rcfg.assign_phone] = p.phone;
+        return db.rpc("create_record", {
+          p_table: ctx.rosterTableId,
+          p_data: data,
+          p_parent: ctx.eventId,
+          p_slot: String(p.slot || "confirmed")
+        }).then(function (res) { if (res && res.error) throw res.error; });
       });
-    }
+    });
     return step.then(function () { return d; });
   }
   // The roster panel for one event: everybody who voted for it, how loaded they already
@@ -7035,12 +7040,16 @@
       var data = {};
       data[cfg.name] = nm;
       data[cfg.events] = ids;
-      db.from("app_submissions").insert({ table_id: storeId, data: data }).select("id").single()
+      // create_record, not a direct insert: there is NO insert policy on app_submissions,
+      // so a direct insert is refused by RLS. Rows arrive either through
+      // submit_public_form (the public) or create_record (the dashboard), both of which
+      // are SECURITY DEFINER and check permission themselves.
+      db.rpc("create_record", { p_table: storeId, p_data: data })
         .then(function (r) {
-          if (r.error || !r.data) throw r.error || new Error("insert failed");
+          if (r.error || !r.data) throw r.error || new Error("could not create the link");
           // Mint the token now rather than lazily: the whole reason for this dialog is
           // to hand over a link, and a row with no token has nothing to hand over.
-          return db.rpc("record_share_token", { p_record: r.data.id, p_rotate: false });
+          return db.rpc("record_share_token", { p_record: r.data, p_rotate: false });
         })
         .then(function (r) {
           if (r.error || !r.data) throw r.error || new Error("no token");
