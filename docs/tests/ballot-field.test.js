@@ -81,9 +81,11 @@ t('ballotOptions never mutates the array it was handed', () => {
 // cannot be deployed before the migration.
 const SRC = fs.readFileSync('f/index.html','utf8');
 t('the ballot fetch tolerates a missing function instead of killing the page', () => {
-  const m = /ballotReady\s*=[\s\S]{0,500}?;\n/.exec(SRC);
-  assert.ok(m, 'no ballotReady in the boot sequence');
-  assert.ok(/\.catch\(/.test(m[0]), 'ballotReady must catch — a database without ballot_options must still render the form');
+  // Anchored on the call and its .catch rather than on the end of the line: this repo's
+  // checkouts are CRLF, and a regex needing ";\n" passes on one machine and fails on
+  // another after nothing more than a rebase.
+  const m = /var ballotReady = db\.rpc\([\s\S]{0,400}?\.catch\(/.exec(SRC);
+  assert.ok(m, 'ballotReady must catch — a database without ballot_options must still render the form');
 });
 t('the ballot is fetched alongside the branches, not in a second round trip', () => {
   assert.ok(/Promise\.all\(\[fieldsReady, branchesReady, countriesReady, ballotReady\]\)/.test(SRC),

@@ -120,8 +120,8 @@ t('the poll token is sent to ballot_options only when there is one', () => {
     'PostgREST resolves a function by the keys in the body — an always-sent key breaks against the one-argument version');
 });
 t('the ballot fetch still cannot break the page', () => {
-  const m = /var ballotReady[\s\S]{0,300}?;\n/.exec(FSRC);
-  assert.ok(m && /\.catch\(/.test(m[0]));
+  // Line-ending agnostic: see the note on the same assertion in ballot-field.test.js.
+  assert.ok(/var ballotReady = db\.rpc\([\s\S]{0,400}?\.catch\(/.test(FSRC));
 });
 
 // ---- The button lives on the events table, and the store table is invisible ----
