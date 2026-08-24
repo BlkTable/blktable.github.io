@@ -320,6 +320,9 @@
   var controls = []; // {f, wrap, validate(), value(), isPhoto, file()}
   var currentTable = null;
   var BRANCHES = [];
+  // The choices for a `record_multi` question, fetched at boot. Empty is a normal
+  // state: no events open, or a database that does not have ballot_options yet.
+  var BALLOT = [];
   // Only used to name a branch's country when a question offers more than one list.
   // Empty is fine: the label falls back to the list key, which is still readable.
   var COUNTRY_ROWS = [];
@@ -408,6 +411,37 @@
       }
     }
     return v;
+  }
+  // ---- The ballot: another table's live rows as tick boxes -----------------
+  // What a barista reads. Enough to tell two shifts apart — which is the whole job of
+  // this string, since the thing actually stored is the id underneath it.
+  //
+  // The rate is carried by ballot_options but deliberately not printed here. The built
+  // flow decided the event link says what the shift pays (workspaces/30); whether the
+  // ballot should is Zamel's call, and turning it on is one line.
+  function ballotLabel(r) {
+    var name = String((r && r.name) || "").trim() || "(untitled)";
+    var d = String((r && r.date) || "").slice(0, 10);
+    var tm = String((r && r.start) || "").slice(0, 5);
+    var loc = String((r && r.location) || "").trim();
+    return name + (d ? " — " + d : "") + (d && tm ? " " + tm : "") + (loc ? " · " + loc : "");
+  }
+  // The VALUE is the record id, never the label. A vote has to survive an event being
+  // renamed, and matching people to events by their printed name is the one thing this
+  // app refuses to do anywhere else.
+  //
+  // Sorted here as well as in SQL, and the same way — by date with the dateless last —
+  // because the page must not reorder the ballot if the RPC's ordering ever changes.
+  function ballotOptions(rows) {
+    return (rows || []).slice().sort(function (a, b) {
+      var ad = String((a && a.date) || "9999-12-31").slice(0, 10);
+      var bd = String((b && b.date) || "9999-12-31").slice(0, 10);
+      if (ad !== bd) return ad < bd ? -1 : 1;
+      var an = String((a && a.name) || ""), bn = String((b && b.name) || "");
+      return an < bn ? -1 : (an > bn ? 1 : 0);
+    }).map(function (r) {
+      return { value: String((r && r.id) || ""), label: ballotLabel(r) };
+    });
   }
   // How many places are left, in words. The server hands over counts only — never who
   // signed up — so this is all the page knows and all it needs to know.
@@ -585,6 +619,41 @@
         f: f, el: box,
         validate: function () { return !f.required || picked().length > 0; },
         value: function () { return picked().join(", ") || null; }
+      });
+    } else if (f.type === "record_multi") {
+      // Tick as many as apply, where the choices are another table's live rows. The
+      // answer is stored comma-joined exactly like a multi_select, so the grid, the
+      // filter and the CSV export all read it with no special case — but the values
+      // are record IDS, so nothing downstream depends on what an event is called.
+      var rbox = document.createElement("div");
+      rbox.className = "checks"; rbox.id = id;
+      var ropts = ballotOptions(BALLOT);
+      if (!ropts.length) {
+        // Not an error: there is simply nothing open to vote on yet. Saying so is far
+        // better than an empty box, which reads as a page that failed to load.
+        var rnone = document.createElement("div");
+        rnone.className = "combo-empty";
+        rnone.textContent = "Nothing is open for signup at the moment. Please check back later.";
+        rbox.appendChild(rnone);
+      }
+      ropts.forEach(function (o) {
+        var rl = document.createElement("label");
+        rl.className = "chk";
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.value = o.value;
+        rl.appendChild(cb);
+        rl.appendChild(document.createTextNode(" " + o.label));
+        rbox.appendChild(rl);
+      });
+      wrap.appendChild(rbox);
+      var rpicked = function () {
+        return [].slice.call(rbox.querySelectorAll("input:checked"))
+          .map(function (i) { return i.value; });
+      };
+      controls.push({
+        f: f, el: rbox,
+        validate: function () { return !f.required || rpicked().length > 0; },
+        value: function () { return rpicked().join(", ") || null; }
       });
     } else if (f.type === "dropdown" || f.type === "country") {
       var otherVals = {};
@@ -980,7 +1049,15 @@
         // Names the country a branch list belongs to, for a question offering several of
         // them. Never blocks the form: a failure leaves the list keys as their own labels.
         var countriesReady = db.from("countries").select("code,name_en,name_ar").then(function (r) { COUNTRY_ROWS = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
-        Promise.all([fieldsReady, branchesReady, countriesReady]).then(function (results) {
+        // The choices for a `record_multi` question. Fetched with the branches and the
+        // countries rather than after the field list, because it rides the same round
+        // trip — and like them it NEVER blocks the form: a database that does not have
+        // ballot_options yet must still render every other question, so the page and
+        // the migration can land in either order. Same rule as p_token and p_device.
+        var ballotReady = db.rpc("ballot_options", { p_slug: slug })
+          .then(function (r) { BALLOT = (r && !r.error && Array.isArray(r.data)) ? r.data : []; })
+          .catch(function () { BALLOT = []; });
+        Promise.all([fieldsReady, branchesReady, countriesReady, ballotReady]).then(function (results) {
           var fRes = results[0];
           if (fRes.error) { notFound(); return; }
           var st = slotsText(slots);

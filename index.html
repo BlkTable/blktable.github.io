@@ -6445,6 +6445,20 @@
   function payrollParentTable(t) { return t.config.parent.table; }
   // The button belongs where Faisal is — on Events — while the config that describes the
   // export stays on the table whose rows it reads.
+  // A `record_multi` answer is stored as record ids, so it is exact — and unreadable.
+  // This is the display half: the ids are resolved to names wherever the answer shows.
+  // An id with no row left is NAMED as deleted rather than dropped, because a vote for
+  // a deleted event must not look like a vote nobody ever cast.
+  function ballotNames(value, byId) {
+    return String(value == null ? "" : value).split(",")
+      .map(function (s) { return s.trim(); })
+      .filter(Boolean)
+      .map(function (id) {
+        var r = byId && byId[id];
+        return (r && String(r.name || "").trim()) || "(deleted event)";
+      })
+      .join(", ");
+  }
   function payrollHost(t) {
     if (payrollConfig(t)) return t;
     var k = childTableOf(t);
