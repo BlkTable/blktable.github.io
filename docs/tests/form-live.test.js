@@ -113,9 +113,17 @@ t('switching a form off is confirmed, switching it on is not', () => {
 });
 t('the flag is read through linkLive, not by hand', () => {
   // two hand-written copies of `t.is_active !== false` is how the sidebar ends up disagreeing
-  // with the Form tab about whether a link works
-  const hits = SRC.match(/\bis_active\b/g) || [];
-  assert.ok(hits.length <= 6, 'is_active is touched ' + hits.length + ' times — more copies than the helper, the write and the write-back');
+  // with the Form tab about whether a link works.
+  //
+  // The `branches` table carries a column of the same name — a shop that has closed — so a
+  // count of the WORD stopped meaning anything once the Countries manager could edit those
+  // rows. What is counted instead is the COMPARISON, and the two allowed to make it are
+  // named: linkLive for a form's public link, branchOpen for a shop on a branch list. A
+  // third is a hand-written copy of one of them, which is what this test exists to catch.
+  const cmps = SRC.match(/[A-Za-z_$][\w$]*\.is_active\s*!==\s*false/g) || [];
+  assert.equal(cmps.length, 2, 'is_active is compared ' + cmps.length + ' times — linkLive (a form) and branchOpen (a shop) are the whole list');
+  assert.ok(/function linkLive\(t\)[\s\S]{0,80}?t\.is_active !== false/.test(SRC), 'linkLive no longer makes the comparison itself');
+  assert.ok(/function branchOpen\(b\)[\s\S]{0,80}?b\.is_active !== false/.test(SRC), 'branchOpen no longer makes the comparison itself');
   assert.ok(/function linkLive\(t\) \{ return !t \|\| t\.is_active !== false; \}/.test(SRC),
     'linkLive is not the one place the flag is read');
 });
