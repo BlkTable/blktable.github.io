@@ -3456,11 +3456,22 @@
 
   function filterApps() {
     var q = (document.getElementById("ja-search").value || "").toLowerCase().trim();
+    // "#1945" and "1945" both find applicant 1945 by its record number, which is the same
+    // rule the custom tables already use. This local pass runs on every render, including
+    // straight after searchApps() has found the row in the database by seq, so without the
+    // number here that row was thrown away again: the number it was found by is not in the
+    // name, phone or area. Matched exactly rather than as a substring, because searching
+    // 45 should not return every applicant whose number happens to contain 45.
+    var qNum = q.replace(/^#/, "");
     return allApps.filter(function (a) {
       if ((a.status || "new") !== section) return false;
       if (q) {
-        var hay = ((a.full_name || "") + " " + (a.phone || "") + " " + (a.living_area || "")).toLowerCase();
-        if (hay.indexOf(q) === -1) return false;
+        var hit = !!qNum && String(a.seq) === qNum;
+        if (!hit) {
+          var hay = ((a.full_name || "") + " " + (a.phone || "") + " " + (a.living_area || "")).toLowerCase();
+          hit = hay.indexOf(q) !== -1;
+        }
+        if (!hit) return false;
       }
       return passesFilters(jobFV, a);
     });
