@@ -1582,7 +1582,6 @@
           <div class="base-bar">
             <span class="tmark lg" data-tmark="job_applications"></span>
             <button class="base-name" data-basemenu="job_applications"><span class="bn-txt" id="ja-basename">Job Applications</span><span class="bn-caret">▾</span></button>
-            <span class="ws-tag" id="ja-wstag" style="display:none;">OLD (Airtable)</span>
             <nav class="base-tabs" data-tabs="job_applications">
               <button type="button" data-t="data" class="active">Data</button>
               <button type="button" data-t="form">Form</button>
@@ -2874,14 +2873,19 @@
   // a trigger, so the grouping maintains itself.
   var JA_PAGE = 500;        // rows fetched per scope (API caps a response at 1000)
   var JA_RENDER_STEP = 300; // cards drawn before "Show more"
-  // Default to the current year: the board is for live hiring, and older years are
-  // history you switch to. Everything is still one table and one search away.
-  // origin splits the one table into the two workspaces without moving a row:
-  // 'blktable' = applications submitted through our own form (New), 'airtable' = the
-  // 33,943 imported ones (OLD). Both are the same table, so search, scoping and the
-  // hiring actions behave identically in each.
-  var JA_LIVE = "blktable", JA_HISTORY = "airtable";
-  var jaScope = { year: new Date().getFullYear(), country: null, origin: JA_LIVE }; // null = all
+  // Default to the current year: the board is for live hiring, and older years are one
+  // click away on the year picker. Everything is one table and one search away.
+  //
+  // THERE IS NO HISTORY SCOPE ANY MORE. `origin` used to split this one table into two
+  // sidebar entries — 'blktable' for applications through our own form, 'airtable' for the
+  // imported ones — and the imported side was where 33,789 real applicants sat unread.
+  // `workspaces/31` moved every one of them onto the board, so the second entry listed
+  // nothing and is gone. **Nothing filters on `origin` now**, deliberately: a scope that
+  // matches every row is a scope that can only ever hide one by accident, and a future
+  // import landing under the old value would have been invisible with no entry left to
+  // find it in. The column stays in the database as provenance (`extra._import` marks the
+  // same rows) — it is simply not something the board knows about.
+  var jaScope = { year: new Date().getFullYear(), country: null }; // null = all
   var jaFacets = { years: {}, countries: {}, statuses: {}, total: 0, unsent: 0 };
   var jaRenderCap = JA_RENDER_STEP;
   var jaServerSearch = false; // true when the list came from a database search
@@ -3321,7 +3325,6 @@
 
   // Apply the current scope (year + country) to a job_applications query.
   function jaScoped(q) {
-    if (jaScope.origin) q = q.eq("origin", jaScope.origin);
     if (jaScope.year) {
       q = q.gte("created_at", jaScope.year + "-01-01T00:00:00Z")
            .lt("created_at", (jaScope.year + 1) + "-01-01T00:00:00Z");
@@ -3331,7 +3334,11 @@
     return q;
   }
   function loadFacets() {
-    return db.rpc("ja_facets_scoped", { p_year: jaScope.year, p_country: jaScope.country, p_origin: jaScope.origin })
+    // p_origin is still sent, as null, and that is not tidiness left behind: PostgREST
+    // resolves an RPC by the keys in the body, so dropping one turns a three-argument call
+    // into a two-argument one that may resolve to nothing. Null means "every origin",
+    // which is the whole table.
+    return db.rpc("ja_facets_scoped", { p_year: jaScope.year, p_country: jaScope.country, p_origin: null })
       .then(function (r) {
         if (!r.error && r.data) jaFacets = r.data;
         return jaFacets;
@@ -3499,33 +3506,8 @@
   // appear underneath to choose from. The choice is remembered.
   var jaKidsOpen = false;
   try { jaKidsOpen = localStorage.getItem("blk_ja_kids") === "1"; } catch (e) {}
-  // Switch Job Applications between the live applications and the imported history.
-  // Same table, same board, same actions — only the scope changes, so nothing about the
-  // hiring workflow has to know this split exists.
-  function setJaOrigin(o) {
-    if (jaScope.origin === o) return openJa();
-    jaScope.origin = o;
-    // History spans 2021-2026 and the live set only exists this year, so a year filter
-    // carried across from the other side would show an empty board and look broken.
-    jaScope.year = (o === JA_HISTORY) ? null : new Date().getFullYear();
-    jaScope.country = null;
-    paintJaOrigin();
-    openJa();
-  }
-  function paintJaOrigin() {
-    var hist = jaScope.origin === JA_HISTORY;
-    var nm = document.getElementById("ja-basename");
-    if (nm) nm.textContent = builtinName("job_applications") + (hist ? " — Airtable history" : "");
-    var tag = document.getElementById("ja-wstag");
-    if (tag) tag.style.display = hist ? "" : "none";
-    var live = document.querySelector('.side-item[data-view="job_applications"]');
-    if (live) live.classList.toggle("active", !hist);
-    var histBtn = document.getElementById("side-ja-history");
-    if (histBtn) histBtn.classList.toggle("active", hist);
-  }
   function openJa() {
     showView("job_applications");
-    paintJaOrigin();
     loadApps();
   }
   function applyJaKids() {
@@ -4105,8 +4087,6 @@
   // pressing the Job Applications line reveals the countries to choose from
   document.querySelector('.side-item[data-view="job_applications"]').addEventListener("click", function (e) {
     if (e.target && e.target.closest && e.target.closest(".side-gear")) return; // gear = settings
-    // this line is the LIVE applications; the history sits in the OLD workspace group
-    if (jaScope.origin !== JA_LIVE) setJaOrigin(JA_LIVE); else paintJaOrigin();
     toggleJaKids();
   });
   applyJaKids();
@@ -5127,8 +5107,7 @@
   // One place that prints the two built-in names, so a rename lands everywhere at once.
   function paintBuiltinNames() {
     var ja = document.getElementById("ja-basename");
-    // Same wording as paintJaOrigin, without its side effect of marking a sidebar line active.
-    if (ja) ja.textContent = builtinName("job_applications") + (jaScope.origin === JA_HISTORY ? " — Airtable history" : "");
+    if (ja) ja.textContent = builtinName("job_applications");
     var cn = document.querySelector('[data-basemenu="casting"] .bn-txt');
     if (cn) cn.textContent = builtinName("casting");
     ["job_applications", "casting"].forEach(function (k) {
@@ -5270,19 +5249,10 @@
             wrap.style.display = collapsed ? "none" : "block"; paintWs();
           });
           renderCategories(wrap, ws.items);
-          // Job Applications is one table holding both the imported history and the live
-          // applications, so it cannot sit in one workspace the way a custom table can.
-          // Its history is listed here, in OLD, and opens the same board scoped to the
-          // imported rows. Admin-only, matching who can see the live entry.
-          if (ws.name === WS_OLD && accessKeys["job_applications"]) {
-            var jh = document.createElement("button");
-            jh.className = "side-item"; jh.id = "side-ja-history";
-            jh.title = "Applications imported from Airtable — history, not the live board";
-            jh.innerHTML = '<span class="tmark" data-tmark="job_applications"></span>' +
-              '<span class="side-label">Job Applications · history</span>';
-            jh.addEventListener("click", function () { setJaOrigin(JA_HISTORY); });
-            wrap.insertBefore(jh, wrap.firstChild);
-          }
+          // A second entry for the imported applications used to be inserted here, at the
+          // top of OLD, opening the same board scoped to those rows. It is gone: every one
+          // of those 33,789 applications is on the live board now (`workspaces/31`), so it
+          // listed nothing. Job Applications is one table and has one sidebar line.
           slot.appendChild(head); slot.appendChild(wrap);
         });
       }
