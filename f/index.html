@@ -643,7 +643,10 @@
         // Lebanon's shops. A heading would be invisible the moment anyone typed. A form
         // offering one list is untouched, so all 226 existing forms render as they did.
         var cn = multi ? countryNameFor(lk) : "";
-        BRANCHES.filter(function (b) { return (b.list_key || "jo") === lk; })
+        // A shop that has closed is switched off in the branches table, not deleted — so
+        // the answers naming it still read correctly and nobody is offered it again.
+        // Missing counts as open, which is what every row written before this said.
+        BRANCHES.filter(function (b) { return (b.list_key || "jo") === lk && b.is_active !== false; })
           .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
           .forEach(function (b) {
             dopts.push({ value: b.name,
@@ -973,7 +976,7 @@
           return;
         }
         var fieldsReady = db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true });
-        var branchesReady = db.from("branches").select("name,name_ar,position,list_key").order("position", { ascending: true }).then(function (r) { BRANCHES = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
+        var branchesReady = db.from("branches").select("name,name_ar,position,list_key,is_active").order("position", { ascending: true }).then(function (r) { BRANCHES = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
         // Names the country a branch list belongs to, for a question offering several of
         // them. Never blocks the form: a failure leaves the list keys as their own labels.
         var countriesReady = db.from("countries").select("code,name_en,name_ar").then(function (r) { COUNTRY_ROWS = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
