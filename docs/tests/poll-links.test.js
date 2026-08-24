@@ -3,7 +3,14 @@ function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matc
 function grab(js,name,file){const re=new RegExp('\\n  function '+name+'\\s*\\([\\s\\S]*?\\n  \\}','');const m=js.match(re);if(!m)throw new Error('no fn '+name+' in '+file);return m[0];}
 function load(file,names,extra){const js=scripts(file);const ctx=Object.assign({console},extra||{});vm.createContext(ctx);new vm.Script('(function(){'+names.map(n=>grab(js,n,file)).join('\n')+'\n this.API={'+names.join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
 
-const API = load('index.html', ['esc','splitMulti','linkLive','recordOptsLabel','edChecksKeyed']);
+// RECORD_OPTS is a page-level `var`, not a function, so `grab` cannot lift it — it is
+// injected as a context global instead and mutated from here. Same trick branch-field
+// uses to hand the page its rows.
+const CACHE = {};
+const API = load('index.html', ['esc','splitMulti','linkLive','recordOptsLabel','edChecksKeyed',
+                                'pollConfig','pollSummary','recordOptsStatus','recordOptsFor'],
+                 {RECORD_OPTS: CACHE});
+const asW = o => JSON.parse(JSON.stringify(o));
 let n=0; const t=(name,fn)=>{try{fn();n++;}catch(e){console.log('FAIL: '+name+' -> '+e.message);process.exitCode=1;}};
 
 // ---- What labels a record: the source table's own card_fields --------------
@@ -117,4 +124,106 @@ t('the ballot fetch still cannot break the page', () => {
   assert.ok(m && /\.catch\(/.test(m[0]));
 });
 
+// ---- The button lives on the events table, and the store table is invisible ----
+const PCFG = {store:'polls-zamel', form:'barista-availability-zamel', name:'F_NM', events:'F_EV'};
+t('a complete polls config is returned', () => {
+  assert.deepStrictEqual(API.pollConfig({config:{polls:PCFG}}), PCFG);
+});
+t('a half-written polls config is null, not half-usable', () => {
+  assert.strictEqual(API.pollConfig({config:{polls:{store:'x', form:'y'}}}), null);
+  assert.strictEqual(API.pollConfig({config:{polls:{name:'n', events:'e'}}}), null);
+  assert.strictEqual(API.pollConfig({config:{}}), null);
+  assert.strictEqual(API.pollConfig(null), null);
+});
+t('the Voting links button is gated on canManage, like Payroll', () => {
+  const m = /custom-polls"\)\.style\.display =\s*\n?\s*\(([^;]*)\)/.exec(SRC);
+  assert.ok(m, 'no visibility rule for the Voting links button');
+  assert.ok(/pollConfig\(t\)/.test(m[1]) && /canManage\(t\.id\)/.test(m[1]),
+    'a voting link asks staff to commit time and the roster it builds is what payroll pays');
+});
+
+// ---- What a link says about itself, so two links are tellable apart ---------
+t('a link reports how many events it asks about and how many have answered', () => {
+  const row = {id:'p1', data:{F_EV:'e-1, e-2, e-3'}};
+  assert.strictEqual(API.pollSummary(row, PCFG, {p1: 4}), '3 events · 4 votes');
+});
+t('one event and one vote read as singular', () => {
+  assert.strictEqual(API.pollSummary({id:'p1', data:{F_EV:'e-1'}}, PCFG, {p1: 1}), '1 event · 1 vote');
+});
+t('a link nobody has answered says 0 votes rather than nothing', () => {
+  assert.strictEqual(API.pollSummary({id:'p1', data:{F_EV:'e-1'}}, PCFG, {}), '1 event · 0 votes');
+  assert.strictEqual(API.pollSummary({id:'p1', data:{F_EV:'e-1'}}, PCFG, null), '1 event · 0 votes');
+});
+t('an empty event list counts 0, not 1 — a split of "" must not become one id', () => {
+  assert.strictEqual(API.pollSummary({id:'p1', data:{F_EV:''}}, PCFG, {}), '0 events · 0 votes');
+  assert.strictEqual(API.pollSummary({id:'p1', data:{}}, PCFG, {}), '0 events · 0 votes');
+});
+
+// ---- Which events Zamel may put on a link: draft and open only -------------
+const PICK = {source:'events-zamel', when_status:['draft','open'], null_status_is:'draft'};
+t('a null status reads as draft — what a dashboard-created record already displays as', () => {
+  assert.strictEqual(API.recordOptsStatus({status:null}, PICK), 'draft');
+  assert.strictEqual(API.recordOptsStatus({status:''}, PICK), 'draft');
+  assert.strictEqual(API.recordOptsStatus({}, PICK), 'draft');
+});
+t('a real status is itself', () => {
+  assert.strictEqual(API.recordOptsStatus({status:'open'}, PICK), 'open');
+  assert.strictEqual(API.recordOptsStatus({status:'done'}, PICK), 'done');
+});
+t('null reads as draft even with no null_status_is configured', () => {
+  assert.strictEqual(API.recordOptsStatus({status:null}, {}), 'draft');
+  assert.strictEqual(API.recordOptsStatus({status:null}, null), 'draft');
+});
+// The gate is on the PICKER. It used to be on the ballot, which was wrong: the link
+// decides what a barista sees, and this decides what Zamel may put on a link.
+t('only draft and open events are offered — a finished event is not asked about', () => {
+  RECORD_STUB();
+  const got = API.recordOptsFor({options: PICK}).map(o => o.value);
+  // Filtering preserves the cache's order; the sort happens once, where it is loaded.
+  assert.deepStrictEqual(asW(got), ['e-open','e-null','e-draft']);
+});
+t('no when_status means no gate, which is what every question before this said', () => {
+  RECORD_STUB();
+  const got = API.recordOptsFor({options: {source:'events-zamel'}}).map(o => o.value);
+  assert.strictEqual(got.length, 5);
+});
+t('an unknown source table is an empty picker rather than a throw', () => {
+  assert.deepStrictEqual(asW(API.recordOptsFor({options:{source:'nope'}})), []);
+  assert.deepStrictEqual(asW(API.recordOptsFor({})), []);
+  assert.deepStrictEqual(asW(API.recordOptsFor(null)), []);
+});
+
+// ---- Completeness: a picker missing rows makes links missing events --------
+t('the dialog pages the whole table instead of reading the screen', () => {
+  assert.ok(/fetchAllRows\(storeId, "id,data,share_token"\)/.test(SRC),
+    'the links list must be read from the database, not from currentCustom.subs');
+  assert.ok(/^  function fetchAllRows/m.test(SRC),
+    'fetchAllRows must be top level so the payroll export and this dialog share one reader');
+});
+t('a link row with no minted token shows no URL rather than one ending in undefined', () => {
+  assert.ok(/p\.share_token \? recordFormLink/.test(SRC),
+    'a URL built from a null token reads as a link and 404s');
+});
+t('creating a link refuses an empty tick list and an unnamed link', () => {
+  const m = /pl-go"\)\.addEventListener([\s\S]{0,900}?)insert\(/.exec(SRC);
+  assert.ok(m, 'could not find the create handler');
+  assert.ok(/if \(!ids\)/.test(m[1]), 'a link asking about nothing has nothing to answer');
+  assert.ok(/if \(!nm\)/.test(m[1]), 'an unnamed link cannot be told from the others later');
+});
+t('the token is minted when the link is created, not lazily', () => {
+  assert.ok(/record_share_token[\s\S]{0,200}?p_rotate: false/.test(SRC),
+    'the point of the dialog is to hand over a link; a row with no token has none');
+});
+
 console.log(n + ' passed');
+
+// Fills the cache the picker reads. Hoisted, so the tests above can call it.
+function RECORD_STUB() {
+  CACHE['events-zamel'] = { byId: {}, list: [
+    {value:'e-open',  label:'Open one',   status:'open'},
+    {value:'e-null',  label:'Fresh one',  status:null},
+    {value:'e-draft', label:'Draft one',  status:'draft'},
+    {value:'e-asgn',  label:'Staffed',    status:'assigned'},
+    {value:'e-done',  label:'Finished',   status:'done'}
+  ]};
+}

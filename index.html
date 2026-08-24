@@ -1794,6 +1794,9 @@
             <button class="tb-btn" id="custom-payroll" type="button" style="display:none;" title="Export names and money for a date range">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path><path d="M8 14h8"></path></svg>Payroll
             </button>
+            <button class="tb-btn" id="custom-polls" type="button" style="display:none;" title="Make a link that asks people which of these they can do">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path></svg>Voting links
+            </button>
             <div class="tb-right">
               <button class="tb-btn" id="custom-edit" style="display:none;" title="Edit this table and its questions">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"></path></svg>Edit table
@@ -3719,9 +3722,23 @@
     }).filter(Boolean);
     return parts.length ? parts.join(" — ") : "(untitled)";
   }
+  // A record created from the dashboard has status NULL and merely DISPLAYS as the
+  // first stage, so null reads as whatever the question says it reads as.
+  function recordOptsStatus(rec, opts) {
+    var s = rec && rec.status;
+    if (s == null || String(s) === "") return String((opts && opts.null_status_is) || "draft");
+    return String(s);
+  }
+  // Which of the source table's records this question may offer. `when_status` gates the
+  // PICKER, not the ballot: there is no sense asking who can work an event that is
+  // already staffed or finished. No list means no gate, which is what every question
+  // written before this said.
   function recordOptsFor(f) {
-    var src = f && f.options && f.options.source;
-    return (src && RECORD_OPTS[src] && RECORD_OPTS[src].list) || [];
+    var o = (f && f.options) || {};
+    var all = (o.source && RECORD_OPTS[o.source] && RECORD_OPTS[o.source].list) || [];
+    var want = o.when_status;
+    if (!want || !want.length) return all;
+    return all.filter(function (r) { return want.indexOf(recordOptsStatus(r, o)) !== -1; });
   }
   // Fetches a source table's records once per session. Never rejects: a source table
   // that has gone missing leaves an empty picker, which is a question with no choices
@@ -3732,11 +3749,13 @@
     return db.from("app_tables").select("id,config").eq("slug", slug).single().then(function (tr) {
       if (tr.error || !tr.data) { RECORD_OPTS[slug] = { list: [], byId: {} }; return RECORD_OPTS[slug]; }
       var cf = (tr.data.config || {}).card_fields || [];
-      return db.from("app_submissions").select("id,data").eq("table_id", tr.data.id).then(function (sr) {
+      // status comes along so a question can gate on it; the cache stays unfiltered so
+      // two questions naming the same source table can want different statuses.
+      return db.from("app_submissions").select("id,data,status").eq("table_id", tr.data.id).then(function (sr) {
         var list = [], byId = {};
         ((sr && sr.data) || []).forEach(function (s) {
           var label = recordOptsLabel(s, cf);
-          list.push({ value: s.id, label: label });
+          list.push({ value: s.id, label: label, status: s.status });
           byId[s.id] = { id: s.id, name: label };
         });
         list.sort(function (a, b) { return a.label < b.label ? -1 : (a.label > b.label ? 1 : 0); });
@@ -5440,6 +5459,10 @@
     // Payroll is money leaving the business, so it follows can_manage rather than can_edit.
     document.getElementById("custom-payroll").style.display =
       (payrollHost(t) && canManage(t.id)) ? "inline-flex" : "none";
+    // A voting link asks staff to commit their time, and the roster built from it is
+    // what payroll pays. Same gate as Payroll rather than can_edit.
+    document.getElementById("custom-polls").style.display =
+      (pollConfig(t) && canManage(t.id)) ? "inline-flex" : "none";
     customSel = {}; paintSelBar();
     document.getElementById("custom-count").textContent = "—";
     document.getElementById("custom-list").innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
@@ -6545,6 +6568,167 @@
       })
       .join(", ");
   }
+  // ---- Voting links ---------------------------------------------------------
+  // `config.polls` on a table means "make a shareable link asking people which of MY
+  // records they can do". Table-agnostic: `store` is where a link's row lives, `form`
+  // is the public form the link opens, and the two field ids are what this dialog
+  // writes into that row.
+  //
+  // A link needs a row to hang its token on — that is how every share link in this app
+  // works — but the store table is child_only, so it never appears in the sidebar.
+  // Links are made and found from this table and nowhere else, which is the whole point.
+  // PostgREST answers with at most one page, so anything that must be complete has to ask
+  // for the next one until a short page comes back. Stopping at the first page is the same
+  // silent-shortfall bug as reading the screen's array.
+  //
+  // Top-level rather than nested inside the payroll panel, because the links dialog needs
+  // exactly this and a second copy is how two readers come to disagree about how much of
+  // a table they can see.
+  function fetchAllRows(tableId, cols) {
+    var PAGE = 1000, all = [];
+    function next(from) {
+      return db.from("app_submissions").select(cols).eq("table_id", tableId)
+        .order("created_at", { ascending: true }).range(from, from + PAGE - 1)
+        .then(function (r) {
+          var rows = (r.data || []);
+          all = all.concat(rows);
+          return rows.length < PAGE ? all : next(from + PAGE);
+        });
+    }
+    return next(0);
+  }
+  function pollConfig(t) {
+    var p = t && t.config && t.config.polls;
+    return (p && p.store && p.form && p.name && p.events) ? p : null;
+  }
+  // How many records a link asks about, and how many people have answered it.
+  function pollSummary(row, cfg, votesByPoll) {
+    var ids = splitMulti((row.data || {})[cfg.events]).map(function (s) { return String(s).trim(); }).filter(Boolean);
+    var votes = (votesByPoll && votesByPoll[row.id]) || 0;
+    return ids.length + (ids.length === 1 ? " event" : " events") + " · " +
+           votes + (votes === 1 ? " vote" : " votes");
+  }
+  function openPolls(t) {
+    var cfg = pollConfig(t);
+    if (!cfg || !canManage(t.id)) return;
+    clearAutosave();
+    var body = document.getElementById("modal-body");
+    body.innerHTML =
+      '<div class="rec-head"><div class="rh-main"><div class="rh-title">Voting links</div>' +
+      '<div class="rh-meta">' + esc(t.name) + " · each link asks only about the events you tick</div></div></div>" +
+      '<div class="m-sub" style="margin-top:14px;">Links you have made</div>' +
+      '<div id="pl-list">Loading…</div>' +
+      '<div class="m-sub" style="margin-top:20px;">New link</div>' +
+      '<div class="m-grid">' + edRow("Name it, so you can tell them apart", edText("pl-name", ""), true) + "</div>" +
+      '<div class="m-field full"><div class="k">Which events go on this link</div><div id="pl-picker">Loading…</div></div>' +
+      '<div class="nr-foot"><button type="button" class="btn-new" id="pl-go">Create the link</button>' +
+      '<span class="nr-msg" id="pl-msg"></span></div>';
+    document.getElementById("modal").classList.add("open");
+
+    var storeId = null, formSlug = null, pickerOpts = null;
+    function say(text, ok) {
+      var m = document.getElementById("pl-msg");
+      if (m) { m.textContent = text || ""; m.className = "nr-msg" + (ok ? " ok" : ""); }
+    }
+    // The picker's own question carries the source table and which statuses may be
+    // offered, so the dialog never has to know that events exist.
+    var fieldP = db.from("app_fields").select("id,options").eq("id", cfg.events).single();
+    var storeP = db.from("app_tables").select("id").eq("slug", cfg.store).single();
+    var formP  = db.from("app_tables").select("id,slug").eq("slug", cfg.form).single();
+
+    Promise.all([fieldP, storeP, formP]).then(function (out) {
+      if (out[0].error || out[1].error || out[2].error) { say("Could not open the links panel."); return; }
+      pickerOpts = out[0].data.options || {};
+      storeId = out[1].data.id;
+      formSlug = out[2].data.slug;
+      var formId = out[2].data.id;
+      // fetchAllRows and not currentCustom.subs: that array is capped, and a picker
+      // missing the events that had not loaded yet looks complete while quietly
+      // leaving them off every link made from it.
+      return Promise.all([
+        loadRecordOpts(pickerOpts.source),
+        fetchAllRows(storeId, "id,data,share_token"),
+        fetchAllRows(formId, "id,parent_id")
+      ]).then(function (res) {
+        var polls = res[1] || [], votes = res[2] || [];
+        var byPoll = {};
+        votes.forEach(function (v) { if (v.parent_id) byPoll[v.parent_id] = (byPoll[v.parent_id] || 0) + 1; });
+        renderList(polls, byPoll);
+        renderPicker();
+      });
+    }).catch(function () { say("Could not open the links panel."); });
+
+    function renderPicker() {
+      var host = document.getElementById("pl-picker");
+      if (!host) return;
+      var opts = recordOptsFor({ options: pickerOpts });
+      if (!opts.length) {
+        host.innerHTML = '<div class="m-empty">There are no draft or open events to ask about yet. ' +
+          "Create an event first, then come back.</div>";
+        return;
+      }
+      host.innerHTML = edChecksKeyed("pl-events", "", opts);
+    }
+    function renderList(polls, byPoll) {
+      var host = document.getElementById("pl-list");
+      if (!host) return;
+      if (!polls.length) {
+        host.innerHTML = '<div class="m-empty">None yet. Make one below.</div>';
+        return;
+      }
+      host.innerHTML = polls.map(function (p) {
+        var nm = String(((p.data || {})[cfg.name]) || "").trim() || "(unnamed)";
+        // A row whose token was never minted has no link to show. Say so rather than
+        // printing a URL ending in "undefined", which reads as a link and 404s.
+        var url = p.share_token ? recordFormLink(formSlug, p.share_token) : "";
+        return '<div class="link-bar" style="margin-top:8px;"><span class="lbl">' + esc(nm) + "</span>" +
+          (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + "</a>" +
+                 '<button type="button" class="linkbtn pl-copy" data-url="' + esc(url) + '">Copy</button>'
+               : '<span class="lbl">no link yet</span>') +
+          '<span class="lbl">' + esc(pollSummary(p, cfg, byPoll)) + "</span></div>";
+      }).join("");
+      [].slice.call(host.querySelectorAll(".pl-copy")).forEach(function (b) {
+        b.addEventListener("click", function () {
+          var self = this;
+          navigator.clipboard.writeText(self.getAttribute("data-url")).then(function () {
+            self.textContent = "Copied ✓";
+            setTimeout(function () { self.textContent = "Copy"; }, 1600);
+          });
+        });
+      });
+    }
+
+    document.getElementById("pl-go").addEventListener("click", function () {
+      var btn = this;
+      var picker = document.getElementById("pl-events");
+      var ids = picker ? edChecksValue(picker) : "";
+      if (!ids) { say("Tick at least one event — a link that asks about nothing has nothing to answer."); return; }
+      var nm = (document.getElementById("pl-name").value || "").trim();
+      if (!nm) { say("Give the link a name, so you can tell it from the others later."); return; }
+      btn.disabled = true; say("Creating…");
+      var data = {};
+      data[cfg.name] = nm;
+      data[cfg.events] = ids;
+      db.from("app_submissions").insert({ table_id: storeId, data: data }).select("id").single()
+        .then(function (r) {
+          if (r.error || !r.data) throw r.error || new Error("insert failed");
+          // Mint the token now rather than lazily: the whole reason for this dialog is
+          // to hand over a link, and a row with no token has nothing to hand over.
+          return db.rpc("record_share_token", { p_record: r.data.id, p_rotate: false });
+        })
+        .then(function (r) {
+          if (r.error || !r.data) throw r.error || new Error("no token");
+          var url = recordFormLink(formSlug, r.data);
+          say("");
+          window.prompt("Voting link created. Send this to the baristas:", url);
+          openPolls(t);                       // redraw so the new link is in the list
+        })
+        .catch(function (e) {
+          btn.disabled = false;
+          say("Could not create the link. " + ((e && e.message) || ""));
+        });
+    });
+  }
   function payrollHost(t) {
     if (payrollConfig(t)) return t;
     var k = childTableOf(t);
@@ -6638,23 +6822,6 @@
     Promise.all([fetchAllRows(payrollParentTable(t), "id,data"),
                  fetchAllRows(t.id, "id,data,parent_id,slot")])
       .then(function (out) { parents = out[0]; subs = out[1]; loaded = true; preview(); });
-
-    // PostgREST answers with at most one page, so anything that must be complete has to ask
-    // for the next one until a short page comes back. Stopping at the first page is the same
-    // silent-shortfall bug as reading the screen's array.
-    function fetchAllRows(tableId, cols) {
-      var PAGE = 1000, all = [];
-      function next(from) {
-        return db.from("app_submissions").select(cols).eq("table_id", tableId)
-          .order("created_at", { ascending: true }).range(from, from + PAGE - 1)
-          .then(function (r) {
-            var rows = (r.data || []);
-            all = all.concat(rows);
-            return rows.length < PAGE ? all : next(from + PAGE);
-          });
-      }
-      return next(0);
-    }
 
     function range() {
       return { from: (document.getElementById("pay-from") || {}).value || "",
@@ -8737,6 +8904,10 @@
     if (!currentCustom) return;
     var host = payrollHost(currentCustom.table);
     if (host) openPayroll(host, currentCustom.fields || []);
+  });
+  document.getElementById("custom-polls").addEventListener("click", function () {
+    if (!currentCustom) return;
+    openPolls(currentCustom.table);
   });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openFormEditor(currentCustom.table); });
   // branch scope: chips on the page and the children in the sidebar do the same thing
