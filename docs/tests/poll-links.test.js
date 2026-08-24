@@ -194,6 +194,12 @@ t('an unknown source table is an empty picker rather than a throw', () => {
 });
 
 // ---- Completeness: a picker missing rows makes links missing events --------
+// There is no insert policy on app_submissions, so a direct insert is refused by RLS.
+// This is the assertion that would have caught it before it reached the screen.
+t('the link row is created through create_record, never a direct insert', () => {
+  assert.ok(!/from\("app_submissions"\)\.insert/.test(SRC),
+    'a direct insert into app_submissions is denied — rows arrive via submit_public_form or create_record');
+});
 t('the dialog pages the whole table instead of reading the screen', () => {
   assert.ok(/fetchAllRows\(storeId, "id,data,share_token"\)/.test(SRC),
     'the links list must be read from the database, not from currentCustom.subs');
@@ -205,7 +211,7 @@ t('a link row with no minted token shows no URL rather than one ending in undefi
     'a URL built from a null token reads as a link and 404s');
 });
 t('creating a link refuses an empty tick list and an unnamed link', () => {
-  const m = /pl-go"\)\.addEventListener([\s\S]{0,900}?)insert\(/.exec(SRC);
+  const m = /pl-go"\)\.addEventListener([\s\S]{0,900}?)create_record/.exec(SRC);
   assert.ok(m, 'could not find the create handler');
   assert.ok(/if \(!ids\)/.test(m[1]), 'a link asking about nothing has nothing to answer');
   assert.ok(/if \(!nm\)/.test(m[1]), 'an unnamed link cannot be told from the others later');
