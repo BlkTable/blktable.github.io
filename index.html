@@ -9040,7 +9040,7 @@
     // themselves, so the breakdown is worked out here instead of read out of a column. The
     // shape returned is identical, which is why the header and the section totals below
     // need to know nothing about which kind of scorecard they are showing.
-    if (cfg.scored) return scoredDetailFromRules(fields, d);
+    if (cfg.scorecard) return scoredDetailFromRules(fields, d);
     var qIds = Object.keys(map);
     if (!qIds.length) return null;
     var bySection = {}; var order = [];

@@ -6,7 +6,7 @@
 // it was hidden by "ask only if" or answered N/A. A question that was asked and missed
 // stays in the total and earns nothing.
 //
-// These rules are mirrored in SQL by score_submission() in docs/sql/scoring.sql, because
+// These rules are mirrored in SQL by score_submission() in the private workspaces/40-scorecard-rules.sql, because
 // the browser needs them for the live breakdown and the database needs them so that a
 // public submit, a staff edit, an added record and an import all agree. If the two ever
 // disagree, both have to be fixed: the SQL is what is stored, the JS is what people see.
@@ -215,20 +215,20 @@ t('a table that is not scored at all returns nothing', () => {
   assert.strictEqual(SD.scoredDetail({ config: {} }, [Q_CLEAN], { q1: 'Yes' }), null);
 });
 t('a builder-made scorecard totals from its rules', () => {
-  const table = { config: { scored: true, score_field: 'pct' } };
+  const table = { config: { scorecard: true, score_field: 'pct' } };
   const sd = SD.scoredDetail(table, [Q_CLEAN, Q_RATE], { q1: 'Yes', q2: 'Acceptable' });
   assert.ok(sd, 'expected a breakdown');
   assert.strictEqual(sd.possible, 7);
   assert.strictEqual(sd.earned, 5);
 });
 t('the breakdown names every scored question', () => {
-  const table = { config: { scored: true, score_field: 'pct' } };
+  const table = { config: { scorecard: true, score_field: 'pct' } };
   const labelled = [Object.assign({ label: 'Floors clean' }, Q_CLEAN)];
   const sd = SD.scoredDetail(table, labelled, { q1: 'Yes' });
   assert.ok(sd.html.includes('Floors clean'), 'expected the question in the breakdown');
 });
 t('an N/A question is shown as n/a rather than as a zero', () => {
-  const table = { config: { scored: true, score_field: 'pct' } };
+  const table = { config: { scorecard: true, score_field: 'pct' } };
   const q = { id: 'k', label: 'Kitchen', type: 'dropdown', scoring: { rule: 'choices' },
               options: [{ en: 'Clean', points: 3 }, { en: 'Not applicable', na: true }] };
   const sd = SD.scoredDetail(table, [q], { k: 'Not applicable' });
@@ -236,7 +236,7 @@ t('an N/A question is shown as n/a rather than as a zero', () => {
   assert.ok(sd.html.includes('n/a'), 'expected the row to read n/a, got: ' + sd.html);
 });
 t('sections group and each carries its own total', () => {
-  const table = { config: { scored: true, score_field: 'pct' } };
+  const table = { config: { scorecard: true, score_field: 'pct' } };
   const a = { id: 'a', label: 'A', type: 'yesno', scoring: { rule: 'equals', earn: ['Yes'], points: 2, section: 'Cleanliness' } };
   const b = { id: 'b', label: 'B', type: 'yesno', scoring: { rule: 'equals', earn: ['Yes'], points: 3, section: 'Service' } };
   const sd = SD.scoredDetail(table, [a, b], { a: 'Yes', b: 'No' });
@@ -245,7 +245,7 @@ t('sections group and each carries its own total', () => {
   same([clean.earned, clean.possible], [2, 2]);
 });
 t('a scorecard with no priced questions yet returns nothing rather than an empty box', () => {
-  assert.strictEqual(SD.scoredDetail({ config: { scored: true, score_field: 'pct' } }, [Q_PLAIN], {}), null);
+  assert.strictEqual(SD.scoredDetail({ config: { scorecard: true, score_field: 'pct' } }, [Q_PLAIN], {}), null);
 });
 
 if (!process.exitCode) console.log(n + ' passed');
