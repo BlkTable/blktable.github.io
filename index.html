@@ -680,6 +680,16 @@
   .m-sub { color: var(--muted); font-size: var(--fs-3); margin: 2px 0 16px; }
   .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin-bottom: 4px; }
   .m-field .k { color: var(--muted); font-size: var(--fs-2); letter-spacing: 0; }
+  /* "required", not a dim asterisk. Zamel fills these in and has to know at a glance
+     which ones the save will refuse — a grey * beside a grey label is neither. The word
+     also survives being read aloud or translated, which a symbol does not. */
+  .m-field .k .k-req { margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+    background: rgba(248,43,96,0.15); border: 1px solid rgba(248,43,96,0.4);
+    color: #ff9db4; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em;
+    text-transform: uppercase; vertical-align: 1px; }
+  /* A required question's label reads at full strength, so the eye finds the row before
+     it finds the tag. */
+  .m-field .k:has(.k-req) { color: var(--text); font-weight: 600; }
   .m-field .v { font-size: var(--fs-4); margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
   /* ---- record panel: label above, value below, choices as pills ---- */
@@ -3849,9 +3859,14 @@
   }
   // rowId + hidden are for conditional questions: the row is always built so that flipping
   // the answer it depends on can reveal it without reopening the record
-  function edRow(label, inner, full, rowId, hidden) {
+  // `required` is a FLAG and not markup appended to the label, because the label is
+  // escaped here — a question's name is typed by a person, so it has to be. Building the
+  // marker into the label string got it escaped too, and printed
+  // `Event name <span style="color:var(--silver);">*</span>` on screen as words.
+  function edRow(label, inner, full, rowId, hidden, required) {
     return '<div class="m-field' + (full ? " full" : "") + '"' + (rowId ? ' id="' + rowId + '"' : "") +
-      (hidden ? ' style="display:none;"' : "") + '><div class="k">' + esc(label) + "</div>" + inner + "</div>";
+      (hidden ? ' style="display:none;"' : "") + '><div class="k">' + esc(label) +
+      (required ? '<span class="k-req">required</span>' : "") + "</div>" + inner + "</div>";
   }
   // One editor row for one question. Both places a record is edited — the record panel and
   // the New record panel — build their rows here, so the two cannot drift apart the way a
@@ -3898,11 +3913,12 @@
     else if (f.type === "link") { var lo = f.options || {}; inner = lo.url ? '<a href="' + esc(lo.url) + '" target="_blank" rel="noopener">' + esc(lo.text || lo.url) + "</a>" : '<span style="color:var(--silver);">No link set</span>'; }
     else inner = edText(id, v, false);
     // Only the create panel marks what must be answered; the record panel is autosave and
-    // never refuses a save, so a star there would promise a validation that does not happen.
-    if (opts.stars && f.required) label += ' <span style="color:var(--silver);">*</span>';
+    // never refuses a save, so a marker there would promise a validation that does not
+    // happen. Passed as a flag, never appended to the label — see edRow.
+    var mustAnswer = !!(opts.stars && f.required);
     var gated = !!(f.show_if && f.show_if.field);
     var hide = gated && !condMet(f, d) && (v == null || v === "");
-    return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide);
+    return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide, mustAnswer);
   }
 
   // Phone editor with the full country/flag picker
