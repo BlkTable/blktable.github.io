@@ -7102,7 +7102,9 @@
     return ids.length + (ids.length === 1 ? " event" : " events") + " · " +
            votes + (votes === 1 ? " vote" : " votes");
   }
-  function openPolls(t) {
+  // `note` is what to say once the panel has been redrawn — a create or delete result,
+  // carried through the reopen so it survives it. Same reason openAssign takes one.
+  function openPolls(t, note) {
     var cfg = pollConfig(t);
     if (!cfg || !canManage(t.id)) return;
     clearAutosave();
@@ -7168,6 +7170,7 @@
       if (!host) return;
       if (!polls.length) {
         host.innerHTML = '<div class="m-empty">None yet. Make one below.</div>';
+        if (note) say(note, true);   // deleting the last link still reports back
         return;
       }
       host.innerHTML = polls.map(function (p) {
@@ -7175,18 +7178,60 @@
         // A row whose token was never minted has no link to show. Say so rather than
         // printing a URL ending in "undefined", which reads as a link and 404s.
         var url = p.share_token ? recordFormLink(formSlug, p.share_token) : "";
+        var votes = (byPoll && byPoll[p.id]) || 0;
         return '<div class="link-bar" style="margin-top:8px;"><span class="lbl">' + esc(nm) + "</span>" +
           (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + "</a>" +
                  '<button type="button" class="linkbtn pl-copy" data-url="' + esc(url) + '">Copy</button>'
                : '<span class="lbl">no link yet</span>') +
-          '<span class="lbl">' + esc(pollSummary(p, cfg, byPoll)) + "</span></div>";
+          '<span class="lbl">' + esc(pollSummary(p, cfg, byPoll)) + "</span>" +
+          '<button type="button" class="linkbtn pl-del" data-id="' + esc(p.id) +
+            '" data-name="' + esc(nm) + '" data-votes="' + votes + '">Delete</button>' +
+          "</div>";
       }).join("");
+      // After the redraw, so a create or delete result is still on screen.
+      if (note) say(note, true);
       [].slice.call(host.querySelectorAll(".pl-copy")).forEach(function (b) {
         b.addEventListener("click", function () {
           var self = this;
           navigator.clipboard.writeText(self.getAttribute("data-url")).then(function () {
             self.textContent = "Copied ✓";
             setTimeout(function () { self.textContent = "Copy"; }, 1600);
+          });
+        });
+      });
+      [].slice.call(host.querySelectorAll(".pl-del")).forEach(function (b) {
+        b.addEventListener("click", function () {
+          var id = this.getAttribute("data-id");
+          var dnm = this.getAttribute("data-name");
+          var dvotes = Number(this.getAttribute("data-votes")) || 0;
+          // The vote count is IN the question, because it is the thing being destroyed:
+          // a link with votes on it *is* the voting record, and deleting it empties the
+          // candidate list on every event it asked about. Rosters already assigned live
+          // in their own table and are untouched — worth saying, or this reads as if it
+          // might unpay somebody.
+          if (!window.confirm(
+                'Delete the voting link "' + dnm + '"?\n\n' +
+                (dvotes
+                  ? dvotes + (dvotes === 1 ? " vote" : " votes") + " cast on it will be deleted too, " +
+                    "so those people stop appearing when you assign.\n\n" +
+                    "Baristas already assigned to an event are NOT affected."
+                  : "Nobody has voted on it, so nothing else is lost.") +
+                "\n\nThe link stops working. This cannot be undone."
+              )) return;
+          this.disabled = true;
+          say("Deleting…");
+          // The votes BEFORE the link. parent_id is ON DELETE SET NULL, so the other
+          // order does not delete them — it orphans them: parent_id null, invisible in
+          // every view, and impossible to find and tidy afterwards.
+          db.from("app_submissions").delete().eq("parent_id", id).then(function (r1) {
+            if (r1 && r1.error) throw r1.error;
+            return db.from("app_submissions").delete().eq("id", id);
+          }).then(function (r2) {
+            if (r2 && r2.error) throw r2.error;
+            openPolls(t, "Link deleted" + (dvotes ? " with its " + dvotes +
+              (dvotes === 1 ? " vote" : " votes") : "") + ".");
+          }).catch(function (e) {
+            say("Could not delete the link. " + ((e && e.message) || ""));
           });
         });
       });
@@ -7219,7 +7264,9 @@
           var url = recordFormLink(formSlug, r.data);
           say("");
           window.prompt("Voting link created. Send this to the baristas:", url);
-          openPolls(t);                       // redraw so the new link is in the list
+          // Redraw so the new link is in the list, and say so — the prompt is gone by
+          // then and a blank panel reads as if nothing was created.
+          openPolls(t, 'Link created. It is in the list above, with a Copy button.');
         })
         .catch(function (e) {
           btn.disabled = false;
