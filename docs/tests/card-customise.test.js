@@ -276,7 +276,9 @@ t('the panel and its button exist in the toolbar', () => {
 });
 t('the cards read the chosen cover and shape rather than the first file question', () => {
   assert.ok(/var photoField = cardCfg\.cover \?/.test(page), 'cover is still hard-coded');
-  assert.ok(/coverHtml\(d\[photoField\.id\], cardCfg\.fit\)/.test(page), 'the shape never reaches the cover');
+  // coverPath() rather than the raw answer: a question holds several files now, and the cover
+  // is the first IMAGE among them rather than whichever one happens to be first.
+  assert.ok(/coverHtml\(coverPath\(d\[photoField\.id\]\), cardCfg\.fit\)/.test(page), 'the shape never reaches the cover');
   assert.ok(/cardCfg\.labels \? '<div class="k">/.test(page), 'field names are not switchable');
 });
 // Writing the default for everybody is a table-wide act, and the column picker beside it is

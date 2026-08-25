@@ -51,7 +51,7 @@ function load(js, vars, fns) {
 
 const A = load(APP,
   ['VIDEO_EXT', 'VIDEO_PLAYABLE', 'PLAY_SVG', 'IMAGE_EXT', 'PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES'],
-  ['esc', 'isFileField', 'isFileType', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel',
+  ['esc', 'isFileField', 'isFileType', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel', 'filePaths',
    'coverHtml', 'uploadCap', 'mbText', 'photoSectionHtml', 'ageText', 'otherKeyFor',
    'isChoiceField', 'isOtherChoice', 'customCellText']);
 
@@ -199,7 +199,9 @@ t('a video is never skipped, whatever id is passed', () => {
   assert.ok(/pc-video/.test(h), 'a video must survive even if named as the header');
 });
 t('the editable record panel renders the gallery', () => {
-  assert.ok(/scoredBlock \+ photoSectionHtml\(fields, d, photoPath \? photoFieldId : null\)/.test(APP_SRC),
+  // The fourth argument turns on the gallery's own add/remove for somebody who can edit the
+  // table — the gallery is now where uploads are managed, not only read.
+  assert.ok(/photoSectionHtml\(fields, d, photoPath \? photoFieldId : null, \{ edit: canEdit\(currentCustom\.table\.id\) \}\)/.test(APP_SRC),
     'without this an editor cannot see an upload at all — the header only shows an image');
 });
 // The label is typed by an admin and goes into markup.

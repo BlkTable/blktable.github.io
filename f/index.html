@@ -270,6 +270,42 @@
   // BEFORE a person waits through an upload that was never going to be accepted.
   var MAX_BYTES = 10 * 1024 * 1024;
   var MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+  // How many files one question takes. The per-file ceiling above was never a limit on the
+  // COUNT, and the r2 function is rate limited per IP — a whole shop is one IP — so forty
+  // photos off one form is how that limit gets reached by accident. The review app carries
+  // the same number: the two must refuse at the same count or one of them is lying.
+  var MAX_FILES = 10;
+  // ---- One question, more than one file ------------------------------------
+  // The same two rules the review app carries, and here for the same reason condMet is
+  // duplicated: this page and index.html each read and write upload answers, and a shape
+  // only one of them understood would be a form that submits something review cannot show.
+  //   filePaths()  reads either shape and always hands back an array
+  //   fileValue()  writes one key as a plain string and only several as an array
+  // One file stored as a plain string is what keeps every answer written before today —
+  // 158,207 records of them — meaning exactly what it meant.
+  function filePaths(v) {
+    if (v == null || v === "") return [];
+    if (Array.isArray(v)) {
+      return v.filter(function (p) { return p != null && p !== ""; }).map(String);
+    }
+    return [String(v)];
+  }
+  function fileValue(paths) {
+    var a = filePaths(paths);
+    return !a.length ? null : (a.length === 1 ? a[0] : a);
+  }
+  // uploadAll returns one {id, path} per FILE, in the order it was given. This puts them back
+  // on the questions they answer. Assigning each path straight onto data[id] — which is what
+  // the single-file version did — keeps only whichever file landed last, so nine of ten
+  // photos would upload successfully and then be thrown away on the way into the row.
+  function groupUploads(results) {
+    var by = {}, out = {};
+    (results || []).forEach(function (r) {
+      if (r && r.id) (by[r.id] = by[r.id] || []).push(r.path);
+    });
+    Object.keys(by).forEach(function (fid) { out[fid] = fileValue(by[fid]); });
+    return out;
+  }
   function isVideoFile(f) { return !!(f && /^video\//.test(f.type || "")); }
   function mbText(b) { return Math.round(b / 1048576) + " MB"; }
   function sizeText(b) {
@@ -317,7 +353,7 @@
       return k;
     } catch (e) { return null; }
   }
-  var controls = []; // {f, wrap, validate(), value(), isPhoto, file()}
+  var controls = []; // {f, wrap, validate(), value(), isPhoto, files()}
   var currentTable = null;
   var BRANCHES = [];
   // The choices for a `record_multi` question, fetched at boot. Empty is a normal
@@ -794,45 +830,67 @@
       var isMedia = f.type === "media";
       var isFile = f.type === "file";
       var cap = (isMedia || isFile) ? MEDIA_MAX_BYTES : MAX_BYTES;
-      var pickTxt = isFile ? "Choose file" : (isMedia ? "Choose photo or video" : "Choose photo");
-      var noneTxt = (isMedia || isFile) ? "No file chosen" : "No photo chosen";
+      // Plural, because a question takes up to MAX_FILES of them. "Choose photos" is also the
+      // only thing on the page that tells somebody they MAY attach more than one — a person
+      // who reads "Choose photo" picks one and never finds out.
+      var pickTxt = isFile ? "Choose files" : (isMedia ? "Choose photos or videos" : "Choose photos");
+      var noneTxt = (isMedia || isFile) ? "No files chosen" : "No photos chosen";
+      // What to call one of them in a count: "3 photos", but "3 files" once a video or any
+      // file type is allowed, because "3 photos" over two videos is simply wrong.
+      var oneWord = (isFile || isMedia) ? "file" : "photo";
+      var baseHint = isMedia ? "Photos or videos, up to " + mbText(cap) + " each — you can choose several."
+        : isFile ? "Files, up to " + mbText(cap) + " each — you can choose several."
+        : "You can choose several photos, up to " + mbText(cap) + " each.";
       var frow = document.createElement("div"); frow.className = "file-row"; frow.id = "row-" + f.id;
       frow.innerHTML = '<button type="button" class="file-btn">' + esc(pickTxt) + '</button><span class="file-check">✓</span><span class="file-name">' + esc(noneTxt) + '</span>';
       var fin = document.createElement("input"); fin.type = "file";
       fin.accept = isMedia ? "image/*,video/*" : "image/*";
       if (isFile) fin.accept = "";
+      fin.multiple = true;
       fin.style.display = "none"; fin.id = id;
       var fhint = document.createElement("div"); fhint.className = "hint";
-      if (isMedia) fhint.textContent = "A photo or a video, up to " + mbText(cap) + ".";
-      else if (isFile) fhint.textContent = "A file, up to " + mbText(cap) + ".";
+      fhint.textContent = baseHint;
       wrap.appendChild(frow); wrap.appendChild(fin); wrap.appendChild(fhint);
       var fbtn = frow.querySelector(".file-btn"), fchk = frow.querySelector(".file-check"), fnm = frow.querySelector(".file-name");
-      var overCap = false;
+      // Two separate refusals, because they need different wording: one file over the ceiling
+      // names that file, too many files names the count.
+      var overCap = false, tooMany = false;
+      function chosenFiles() { return fin.files ? [].slice.call(fin.files) : []; }
       fbtn.addEventListener("click", function () { fin.click(); });
       fin.addEventListener("change", function () {
-        var file = fin.files[0] || null;
-        overCap = !!(file && file.size > cap);
-        // The size is shown next to the name because on a video it is the number that decides
-        // whether this works, and a person cannot see it any other way on a phone.
-        fnm.textContent = file ? file.name + " · " + sizeText(file.size) : noneTxt;
-        fchk.style.display = (file && !overCap) ? "flex" : "none";
-        fbtn.textContent = file ? ((isMedia || isFile) ? "Change file" : "Change photo") : pickTxt;
+        var files = chosenFiles();
+        var big = files.filter(function (x) { return x.size > cap; })[0] || null;
+        overCap = !!big;
+        tooMany = files.length > MAX_FILES;
+        var total = files.reduce(function (n, x) { return n + x.size; }, 0);
+        // One file still reads exactly as it did — its name and its size. Several read as a
+        // count and the total, because on a phone the total is the number that decides whether
+        // this upload finishes at all, and eight filenames do not fit anyway.
+        fnm.textContent = !files.length ? noneTxt
+          : files.length === 1 ? files[0].name + " · " + sizeText(files[0].size)
+          : files.length + " " + oneWord + "s · " + sizeText(total);
+        fchk.style.display = (files.length && !overCap && !tooMany) ? "flex" : "none";
+        fbtn.textContent = files.length ? ((isMedia || isFile) ? "Change files" : "Change photos") : pickTxt;
         // Said now rather than after Submit: uploading 80 MB on shop wifi and being refused at
         // the end is the failure worth designing out.
-        fhint.textContent = overCap
-          ? (isFile
-              ? "That file is " + sizeText(file.size) + ". The limit is " + mbText(cap) + ". Please choose a smaller one."
-              : "That " + (isVideoFile(file) ? "video" : "photo") + " is " + sizeText(file.size) + ". The limit is " + mbText(cap) + "." +
-                (isVideoFile(file) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please choose a smaller one."))
-          : (isMedia ? "A photo or a video, up to " + mbText(cap) + "." : (isFile ? "A file, up to " + mbText(cap) + "." : ""));
-        fhint.style.color = overCap ? "var(--danger)" : "";
-        if (overCap) frow.classList.add("invalid"); else frow.classList.remove("invalid");
+        fhint.textContent = tooMany
+          ? MAX_FILES + " " + oneWord + "s at most, and " + files.length + " were chosen. Please choose fewer."
+          : !big ? baseHint
+          : (isFile
+              ? '"' + big.name + '" is ' + sizeText(big.size) + ". The limit is " + mbText(cap) + " each. Please choose a smaller one."
+              : '"' + big.name + '" is ' + sizeText(big.size) + ". The limit is " + mbText(cap) + " each." +
+                (isVideoFile(big) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please choose a smaller one."));
+        fhint.style.color = (overCap || tooMany) ? "var(--danger)" : "";
+        if (overCap || tooMany) frow.classList.add("invalid"); else frow.classList.remove("invalid");
       });
       controls.push({
         f: f, el: frow, isPhoto: true, cap: cap,
-        file: function () { return fin.files[0] || null; },
-        validate: function () { return !overCap && (!f.required || fin.files.length > 0); },
-        badMsg: function () { return overCap ? "That file is larger than " + mbText(cap) + ". Please choose a smaller one." : ""; }
+        files: chosenFiles,
+        validate: function () { return !overCap && !tooMany && (!f.required || chosenFiles().length > 0); },
+        badMsg: function () {
+          return tooMany ? f.label + ": " + MAX_FILES + " " + oneWord + "s at most. Please choose fewer."
+            : overCap ? "A " + oneWord + " is larger than " + mbText(cap) + ". Please choose a smaller one." : "";
+        }
       });
     } else if (f.type === "link") {
       // A read-only button that opens a URL. No answer is collected. Pair with show_if to
@@ -900,16 +958,21 @@
     if (firstBad) { msg.textContent = (firstBad.badMsg && firstBad.badMsg()) || "Please fill in the highlighted fields."; if (firstBad.el.scrollIntoView) firstBad.el.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
 
     btn.disabled = true; btn.textContent = "Submitting…";
-    var photoCtls = controls.filter(function (c) { return c.isPhoto && ctlVisible(c) && c.file(); });
+    var photoCtls = controls.filter(function (c) { return c.isPhoto && ctlVisible(c) && c.files().length; });
     // Checked before anything is uploaded, not per lane: a file over the ceiling is refused at
     // the end whatever we do, so there is no reason to spend the other uploads first.
     var tooBig = null;
     photoCtls.forEach(function (c) {
       var cap = c.cap || MAX_BYTES;   // a media question allows more than a photo question
-      if (!tooBig && c.file().size > cap) tooBig = { tooBig: true, cap: cap };
+      c.files().forEach(function (fl) { if (!tooBig && fl.size > cap) tooBig = { tooBig: true, cap: cap }; });
     });
 
-    var toUpload = photoCtls.map(function (c) { return { id: c.f.id, file: c.file() }; });
+    // One entry per FILE. uploadAll takes them up three lanes and hands back the paths in the
+    // order given, so a question's files come back in the order the person chose them.
+    var toUpload = [];
+    photoCtls.forEach(function (c) {
+      c.files().forEach(function (fl) { toUpload.push({ id: c.f.id, file: fl }); });
+    });
 
     (tooBig ? Promise.reject(tooBig) : uploadAll(toUpload, function (upDone, upTotal) {
       // A phone sending forty photos over shop wifi sits on "Submitting…" for minutes and
@@ -927,7 +990,8 @@
         data[c.f.id] = ctlVisible(c) ? c.value() : null;
         if (c.otherKey && ctlVisible(c)) { var ov = c.otherValue(); if (ov) data[c.otherKey] = ov; }   // free text behind an "other" choice
       });
-      results.forEach(function (r) { data[r.id] = r.path; });
+      var ups = groupUploads(results);
+      Object.keys(ups).forEach(function (fid) { data[fid] = ups[fid]; });
       // Submit via SECURITY DEFINER RPC: anon holds no direct table write grant (see 2026-08-09 lockdown). Server resolves the table from the slug and confirms it is a live form.
       // p_token names which parent record this belongs to; the server checks it belongs to
       // this form's parent table, and a parent-scoped form refuses a submission without one.

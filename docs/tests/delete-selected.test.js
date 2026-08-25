@@ -88,7 +88,13 @@ function rig(opts) {
     }
   };
   vm.createContext(ctx);
-  new vm.Script('(function(){' + grab(SRC, 'deleteSelectedRecords', 'index.html') +
+  // filePaths/recordFilePaths are loaded for real rather than stubbed: an upload question
+  // holds several files now, and "which paths does the delete sweep?" is exactly the question
+  // this rig exists to answer. A stub here would let the collector break silently.
+  new vm.Script('(function(){' +
+    grab(SRC, 'filePaths', 'index.html') + '\n' +
+    grab(SRC, 'recordFilePaths', 'index.html') + '\n' +
+    grab(SRC, 'deleteSelectedRecords', 'index.html') +
     '\n this.RUN = deleteSelectedRecords;}).call(this)').runInContext(ctx);
   return { ctx, log, run: () => { ctx.RUN(); return new Promise(r => setTimeout(r, 30)); } };
 }
@@ -149,6 +155,19 @@ t('every file field is deleted from storage, not just the first', async () => {
   await r.run();
   const paths = r.log.filter(x => x.op === 'storage').map(x => x.path).sort();
   assert.deepStrictEqual(paths, ['p/a1.jpg', 'p/a2.mp4', 'p/b1.jpg']);
+});
+// One question holding several files is the same class of bug one step down: sweeping the
+// answer instead of the answer's files strands nine photos out of ten in the bucket, where
+// nothing can ever find them again because the row that named them is gone.
+t('every file of a question holding several is deleted, not just the first', async () => {
+  const r = rig({
+    fields: [{ id: 'f1', type: 'photo' }, { id: 'f2', type: 'media' }],
+    rows: [{ id: 'a', data: { f1: ['p/a1.jpg', 'p/a2.jpg', 'p/a3.jpg'], f2: 'p/a4.mp4' } },
+           { id: 'b', data: { f1: 'p/b1.jpg' } }]
+  });
+  await r.run();
+  const paths = r.log.filter(x => x.op === 'storage').map(x => x.path).sort();
+  assert.deepStrictEqual(paths, ['p/a1.jpg', 'p/a2.jpg', 'p/a3.jpg', 'p/a4.mp4', 'p/b1.jpg']);
 });
 t('a record with no uploads deletes no files and still deletes the row', async () => {
   const r = rig({ fields: [{ id: 'f1', type: 'photo' }], rows: [{ id: 'a', data: {} }] });

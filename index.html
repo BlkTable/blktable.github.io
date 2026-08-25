@@ -896,7 +896,9 @@
   .photo-sec .ps-head { color: var(--muted); font-size: var(--fs-2); text-transform: uppercase;
     letter-spacing: 0.05em; margin-bottom: 8px; }
   .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
-  .photo-cell { display: flex; flex-direction: column; gap: 4px; }
+  /* position: relative so the remove button can sit on the corner of the tile rather than
+     stacking underneath it — the cell is a column, and a ✕ on its own row reads as a caption. */
+  .photo-cell { display: flex; flex-direction: column; gap: 4px; position: relative; }
   .photo-cell img { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 10px;
     background: var(--bg-3); border: 1px solid var(--field-border); cursor: zoom-in; }
   .photo-cell img:hover { border-color: var(--silver); }
@@ -915,6 +917,23 @@
   .photo-cell .pc-file span { font-size: var(--fs-1); text-align: center; word-break: break-all;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .photo-cell .pc-file:hover { border-color: var(--silver); color: var(--silver-hi); }
+  /* Remove one file. Only drawn for somebody who can edit the table, and deliberately small
+     and cornered: it deletes the file itself, so it must not be the easiest thing to press. */
+  .photo-cell .pc-del { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px;
+    border-radius: 50%; border: none; cursor: pointer; padding: 0; font-size: 0.72rem; line-height: 1;
+    background: rgba(0,0,0,0.66); color: #fff; opacity: 0; transition: opacity 0.12s ease; }
+  .photo-cell:hover .pc-del, .photo-cell .pc-del:focus-visible { opacity: 1; }
+  .photo-cell .pc-del:hover { background: var(--danger); }
+  .photo-cell .pc-del:disabled { cursor: progress; opacity: 1; }
+  /* Coarse pointers have no hover, so on a phone or tablet the remove is always visible. */
+  @media (hover: none) { .photo-cell .pc-del { opacity: 1; } }
+  /* Add more files to this question — a dashed tile the same size as a photo, so the gallery
+     reads as "these, and room for more" rather than needing a button somewhere else. */
+  .photo-cell .pc-add { width: 100%; aspect-ratio: 1/1; border-radius: 10px; cursor: pointer;
+    background: transparent; border: 1px dashed var(--field-border); color: var(--silver-lo);
+    display: flex; align-items: center; justify-content: center; padding: 0; }
+  .photo-cell .pc-add:hover { border-color: var(--silver); color: var(--silver-hi); }
+  .photo-cell .pc-add:disabled { cursor: not-allowed; opacity: 0.4; }
   /* ================================================================
      Airtable shell: global header, sidebar, base bar, grid toolbar.
      Everything here is flat — borders and low-contrast lines separate
@@ -1192,6 +1211,11 @@
   table.grid span.cellfile { width: 34px; height: 34px; border-radius: 6px; background: var(--bg-3);
     border: 1px solid var(--field-border); color: var(--silver-lo); display: flex; align-items: center; justify-content: center; }
   table.grid span.cellfile svg { width: 16px; height: 16px; }
+  /* More than one file on one question. The tile spans are display:flex, so they need a row
+     to sit in or the badge wraps under them; a single file is drawn without this wrapper. */
+  table.grid span.cellfiles { display: inline-flex; align-items: center; gap: 5px; }
+  table.grid span.cellmore { color: var(--muted); font-size: var(--fs-1); font-variant-numeric: tabular-nums;
+    background: var(--bg-3); border: 1px solid var(--field-border); border-radius: 5px; padding: 1px 5px; }
   /* The row-number column is now the leftmost thing, so it takes the sticky edge and
      the first data column moves over by its width — otherwise they overlap on scroll. */
   table.grid th.rowno, table.grid td.rowno { position: sticky; left: 0; z-index: 1;
@@ -4107,7 +4131,7 @@
       if (opts.photo !== "input") return "";
       // The accept list is the only difference between the two here — what is uploaded, and
       // where it is stored, is one path for both.
-      inner = '<input type="file" accept="' + (f.type === "file" ? "" : f.type === "media" ? "image/*,video/*" : "image/*") + '" class="ed-in" id="' + id + '">';
+      inner = '<input type="file" multiple accept="' + (f.type === "file" ? "" : f.type === "media" ? "image/*,video/*" : "image/*") + '" class="ed-in" id="' + id + '">';
     }
     else if (f.type === "long_text") inner = edText(id, v, true);
     else if (f.type === "yesno") inner = edSelect(id, v, ["", "Yes", "No"]);
@@ -4832,9 +4856,7 @@
     // while a table had exactly one, and a media question is the reason a table now has two
     // (a photo of the shelf and a video of the machine). storageDelete always resolves, so
     // one failure cannot strand the row itself.
-    var paths = (fields || []).filter(isFileField)
-      .map(function (f) { return s.data ? s.data[f.id] : null; })
-      .filter(function (p) { return !!p; });
+    var paths = recordFilePaths(fields, s.data);
     var done = function () { if (currentCustom) currentCustom.subs = currentCustom.subs.filter(function (x) { return x.id !== s.id; }); renderCustom(); };
     var del = function () { db.from("app_submissions").delete().eq("id", s.id).then(function (res) { if (res.error) { window.alert("Could not delete. " + (res.error.message || "")); return; } done(); }); };
     if (paths.length) Promise.all(paths.map(storageDelete)).then(del, del); else del();
@@ -5029,6 +5051,64 @@
   // uses it. `isFileField` is the honest name for what those checks were always for.
   function isFileField(f) { return !!f && (f.type === "photo" || f.type === "media" || f.type === "file"); }
   function isFileType(t) { return t === "photo" || t === "media" || t === "file"; }
+  // ---- One question, more than one file ------------------------------------
+  // An upload answer used to be exactly one bare R2 object key. It is now EITHER that same
+  // key or an array of them, and these two functions are the only places that know it:
+  //   filePaths()  reads either shape and always hands back an array
+  //   fileValue()  writes one key as a plain string and only several as an array
+  // Storing a single file as a string rather than an array of one is the whole
+  // backwards-compatibility story. 158,207 records already hold a plain string; a shape
+  // that made those mean something else would be a migration of every table at once, and
+  // a round trip through both functions has to leave such a row exactly as it was.
+  function filePaths(v) {
+    if (v == null || v === "") return [];
+    if (Array.isArray(v)) {
+      return v.filter(function (p) { return p != null && p !== ""; }).map(String);
+    }
+    return [String(v)];
+  }
+  function fileValue(paths) {
+    var a = filePaths(paths);
+    return !a.length ? null : (a.length === 1 ? a[0] : a);
+  }
+  // uploadAll returns one {id, path} per FILE, in the order it was given. This puts them back
+  // on the questions they answer. Assigning each path straight onto data[id] — which is what
+  // the single-file version did — keeps only whichever file landed last, so nine of ten photos
+  // would upload successfully and then be thrown away on the way into the row. The public form
+  // carries the same function for the same reason condMet is duplicated.
+  function groupUploads(results) {
+    var by = {}, out = {};
+    (results || []).forEach(function (r) {
+      if (r && r.id) (by[r.id] = by[r.id] || []).push(r.path);
+    });
+    Object.keys(by).forEach(function (fid) { out[fid] = fileValue(by[fid]); });
+    return out;
+  }
+  function firstPath(v) { var a = filePaths(v); return a.length ? a[0] : null; }
+  // A card cover has to be something a browser can actually paint. With one answer there was
+  // no choice to make; with several there is, and a play glyph over a record that DOES hold a
+  // photo reads as "no picture here" when there is one. Falls back to the first file so a
+  // question holding only videos still marks the card rather than leaving it blank.
+  function coverPath(v) {
+    var a = filePaths(v);
+    for (var i = 0; i < a.length; i++) { if (isImagePath(a[i])) return a[i]; }
+    return a.length ? a[0] : null;
+  }
+  // Every file on a record, for deleting them from the bucket when the row goes. A row that
+  // is gone cannot tell you what it pointed at, so a path missed here is orphaned in R2 for
+  // good — which is why both delete paths read it from this one function.
+  function recordFilePaths(fields, data) {
+    var out = [];
+    (fields || []).forEach(function (f) {
+      if (!isFileField(f)) return;
+      filePaths(data ? data[f.id] : null).forEach(function (p) { out.push(p); });
+    });
+    return out;
+  }
+  // How many files one question takes. The per-file size ceiling was never the binding
+  // limit on a count: the r2 function is rate limited per IP, and a whole shop is one IP,
+  // so forty photos off one form is how that limit gets reached by accident.
+  var MAX_FILES = 10;
   // What is stored is a bare R2 object key — `<uuid>_<original filename>` — with no MIME
   // type beside it and nowhere to put one without changing the shape of every answer.
   // The extension survives sanitizing, so it is what decides how the file is shown. A key
@@ -5066,6 +5146,10 @@
   // grid cell or card cover reads as "there is a file here" rather than a failed image.
   var FILE_SVG = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">' +
     '<path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6zm7 1.5L18.5 9H13V3.5z"/></svg>';
+  // The "add more files to this question" tile, which sits in the gallery beside the files
+  // already on the record — the only place a photo can be added to a record after the fact.
+  var ADD_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">' +
+    '<path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5z"/></svg>';
   // A card cover for one uploaded answer. An image gets the usual lazily-painted thumbnail;
   // a video gets a play mark, because it has no thumbnail to paint and an empty grey box
   // reads as a card that failed to load rather than a card holding a video.
@@ -5133,7 +5217,12 @@
     if (isOtherChoice(f, v) && d[otherKeyFor(f)]) return v + " — " + d[otherKeyFor(f)];
     // An upload reads as its own filename, not as the object key. A CSV column of
     // "a3f1c2de-…-9b_IMG_4021.mp4" tells a reader nothing, and the uuid is ours, not theirs.
-    if (isFileField(f) && v) return fileLabel(v);
+    // Every filename, not the first: an export that names one of five photos is wrong, and a
+    // reader has no way to tell it is short.
+    if (isFileField(f)) {
+      var names = filePaths(v).map(fileLabel);
+      return names.length ? names.join("; ") : "—";
+    }
     return (v == null || v === "") ? "—" : String(v);
   }
   // ---- Builder: workflow stages editor ----
@@ -6178,7 +6267,7 @@
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
         if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
         el.innerHTML =
-          (photoField && d[photoField.id] ? coverHtml(d[photoField.id], cardCfg.fit) : '') +
+          (photoField && coverPath(d[photoField.id]) ? coverHtml(coverPath(d[photoField.id]), cardCfg.fit) : '') +
           '<div class="body" style="text-align:left">' +
             threadHtml + headHtml + fldsHtml +
             '<div class="card-foot">' + (scoreStat || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
@@ -6216,8 +6305,9 @@
       // A video has no thumbnail — the hourly sweeper builds them from images. Asking for one
       // 404s and falls back to the full file, which as a CSS background paints nothing at all,
       // so a video cover would read as a broken card. It gets a play mark instead.
-      if (photoField && d[photoField.id] && isImagePath(d[photoField.id])) {
-        setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: d[photoField.id] });
+      var coverP = photoField ? coverPath(d[photoField.id]) : null;
+      if (coverP && isImagePath(coverP)) {
+        setThumb(el.querySelector(".photo, .ja-thumb"), { photo_path: coverP });
       }
     });
   }
@@ -6573,41 +6663,82 @@
   // carries the first image as a header with its own Change button, and showing it again
   // here would be the same photo twice. A video is never that header, so a video is never
   // skipped: this gallery is the only place it can be played.
-  function photoSectionHtml(fields, d, skipId) {
-    var shots = fields.filter(function (f) {
-      if (!isFileField(f) || !d[f.id]) return false;
-      // Skip only a still image. The caller only ever names an image today, but that depends
-      // on how the header is chosen a few hundred lines away — and if that ever changes, the
-      // failure is a video nobody can play, which is the bug this whole section exists to fix.
-      return !(f.id === skipId && isImagePath(d[f.id]));
+  //
+  // opts.edit turns the gallery into the place uploads are MANAGED as well as read: a remove
+  // button on every file and an "add" tile per question. It is off by default, so the
+  // read-only branch and every caller that does not ask for it are unchanged.
+  function photoSectionHtml(fields, d, skipId, opts) {
+    opts = opts || {};
+    d = d || {};
+    // One entry per FILE now, not per question — a question can hold ten of them. The pair
+    // (question, path) is what every tile, remove button and heading count works from.
+    var shots = [], skipped = false;
+    (fields || []).forEach(function (f) {
+      if (!isFileField(f)) return;
+      var paths = filePaths(d[f.id]);
+      paths.forEach(function (p, idx) {
+        // Skip exactly the ONE file the header already carries: the first image of the named
+        // question, which is what openCustomDetail picks. Skipping the whole question would
+        // hide the other nine photos from the only people who can review them, and skipping
+        // by position would swallow a video that is not the header at all.
+        if (!skipped && f.id === skipId && isImagePath(p)) { skipped = true; return; }
+        // The position comes from the loop, not indexOf: two identical keys on one question
+        // would both number themselves as the first.
+        shots.push({ f: f, p: p, n: paths.length, i: idx + 1 });
+      });
     });
-    if (!shots.length) return "";
-    var vids = shots.filter(function (f) { return isVideoPath(d[f.id]); }).length;
-    var docs = shots.filter(function (f) { return !isImagePath(d[f.id]) && !isVideoPath(d[f.id]); }).length;
+    // With editing on there is always something to show: a question with no answer yet needs
+    // its add tile, or a record whose photo was never filled in can never be filled in.
+    var addable = opts.edit ? (fields || []).filter(isFileField) : [];
+    if (!shots.length && !addable.length) return "";
+    var vids = shots.filter(function (x) { return isVideoPath(x.p); }).length;
+    var docs = shots.filter(function (x) { return !isImagePath(x.p) && !isVideoPath(x.p); }).length;
     // The heading counts what is actually there. "Photos (3)" over two videos and a photo is
     // a small lie that makes a reviewer think a video is missing. A pile of PDFs is "Files";
     // a mix of files with photos or videos is honestly just "Attachments".
+    // Nothing uploaded yet and only an add tile to show: a count of (0) would be noise, and
+    // "Files (0)" — which is what the rule below reaches for when nothing is a document — is
+    // wrong as well as noisy.
     var head =
-        docs === shots.length ? (docs === 1 ? "File (1)" : "Files (" + docs + ")")
+        !shots.length ? ((fields || []).filter(isFileField).every(function (f) { return f.type === "photo"; }) ? "Photos" : "Attachments")
+      : docs === shots.length ? (docs === 1 ? "File (1)" : "Files (" + docs + ")")
       : docs ? "Attachments (" + shots.length + ")"
       : !vids ? "Photos (" + shots.length + ")"
       : vids === shots.length ? (vids === 1 ? "Video (1)" : "Videos (" + shots.length + ")")
       : "Photos and videos (" + shots.length + ")";
     return '<div class="photo-sec"><div class="ps-head">' + esc(head) + '</div><div class="photo-grid">' +
-      shots.map(function (f) {
-        var p = d[f.id], lab = '<span class="pc-lab">' + esc(f.label) + "</span>";
+      shots.map(function (x) {
+        var f = x.f, p = x.p;
+        // Five tiles all captioned "Shelf photo" say nothing about which is which, so a
+        // question holding more than one numbers them. A question holding exactly one keeps
+        // the bare label it has always had.
+        var lab = '<span class="pc-lab">' + esc(f.label) + (x.n > 1 ? " (" + x.i + "/" + x.n + ")" : "") + "</span>";
+        // Remove names the question AND the exact key: with ten files on one question, an id
+        // alone would delete whichever one the handler happened to read first.
+        var del = opts.edit
+          ? '<button type="button" class="pc-del" data-del-field="' + esc(f.id) + '" data-del-path="' + esc(p) +
+            '" title="Remove this file" aria-label="Remove this file">✕</button>'
+          : "";
         if (isImagePath(p)) {
-          return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(p) + '" alt="">' + lab + "</div>";
+          return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(p) + '" alt="">' + del + lab + "</div>";
         }
         // A document, or a video format a browser will not play, is still the person's answer:
         // it is offered as a download rather than a player that would show a black rectangle. A
         // document gets the page glyph; an unplayable video keeps the play glyph.
         if (!isPlayableVideo(p)) {
           return '<div class="photo-cell"><a class="imp-file pc-file" data-path="' + esc(p) + '" href="#" target="_blank" rel="noopener">' +
-            (isVideoPath(p) ? PLAY_SVG : FILE_SVG) + "<span>" + esc(fileLabel(p)) + "</span></a>" + lab + "</div>";
+            (isVideoPath(p) ? PLAY_SVG : FILE_SVG) + "<span>" + esc(fileLabel(p)) + "</span></a>" + del + lab + "</div>";
         }
         return '<div class="photo-cell"><button type="button" class="pc-video" data-vpath="' + esc(p) + '" title="Play">' +
-          PLAY_SVG + "</button>" + lab + "</div>";
+          PLAY_SVG + "</button>" + del + lab + "</div>";
+      }).join("") +
+      addable.map(function (f) {
+        var have = filePaths(d[f.id]).length;
+        var full = have >= MAX_FILES;
+        return '<div class="photo-cell"><button type="button" class="pc-add" data-add-field="' + esc(f.id) + '"' +
+          (full ? " disabled" : "") + ' title="' + esc(full ? f.label + " already holds " + MAX_FILES + " files" : "Add to " + f.label) + '">' +
+          ADD_SVG + "</button>" +
+          '<span class="pc-lab">' + esc(f.label) + (have ? " · add" : "") + "</span></div>";
       }).join("") + "</div></div>";
   }
 
@@ -6705,13 +6836,22 @@
     if (f.id === "__branch") return branchPillHtml(s.branch);
     if (f.id === "__country") return esc(recordCountryText(s, currentCustom && currentCustom.fields));
     if (isFileField(f)) {
-      var p = d[f.id];
-      if (!p) return "";
+      var ps = filePaths(d[f.id]);
+      if (!ps.length) return "";
+      // A 34px cell cannot show ten photos, so it shows the first and says how many more.
+      // Without the badge a cell holding five files is indistinguishable from one holding
+      // one, and the record panel is the only place the difference would ever surface.
+      var p = coverPath(ps);
       // 34px of video is not worth fetching or watching. The cell says there is one and the
       // record panel plays it, which is where a reviewer is actually looking at the answer.
-      if (isVideoPath(p)) return '<span class="cellvid" title="' + esc(fileLabel(p)) + '">' + PLAY_SVG + "</span>";
-      if (!isImagePath(p)) return '<span class="cellfile" title="' + esc(fileLabel(p)) + '">' + FILE_SVG + "</span>";
-      return '<img class="cellimg" data-path="' + esc(p) + '" alt="">';
+      var tile = isVideoPath(p) ? '<span class="cellvid" title="' + esc(fileLabel(p)) + '">' + PLAY_SVG + "</span>"
+        : !isImagePath(p) ? '<span class="cellfile" title="' + esc(fileLabel(p)) + '">' + FILE_SVG + "</span>"
+        : '<img class="cellimg" data-path="' + esc(p) + '" alt="">';
+      // One file renders exactly the markup it always did — no wrapper, nothing to lay out
+      // differently — because that is what every record written before today holds.
+      if (ps.length === 1) return tile;
+      return '<span class="cellfiles">' + tile +
+        '<span class="cellmore" title="' + ps.length + ' files on this question">+' + (ps.length - 1) + "</span></span>";
     }
     var txt = customCellText(f, d);
     var pc = scoreFraction(f, txt);
@@ -8254,8 +8394,8 @@
       if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
       var picked = (currentCustom.subs || []).filter(function (s) { return customSel[s.id]; });
       var paths = [];
-      (currentCustom.fields || []).filter(isFileField).forEach(function (f) {
-        picked.forEach(function (s) { var p = s.data ? s.data[f.id] : null; if (p) paths.push(p); });
+      picked.forEach(function (s) {
+        recordFilePaths(currentCustom.fields, s.data).forEach(function (p) { paths.push(p); });
       });
 
       // storageDelete always resolves, so one bucket failure cannot strand the rows.
@@ -8893,7 +9033,13 @@
     fields.forEach(function (f) {
       if (!isFileField(f)) return;
       if (photoFieldId == null) photoFieldId = f.id;
-      if (photoPath == null && d[f.id] && isImagePath(d[f.id])) { photoPath = d[f.id]; photoFieldId = f.id; }
+      // The FIRST image among that question's files, because a question now holds several.
+      // photoSectionHtml skips exactly this one file, so the two have to agree on which.
+      if (photoPath == null) {
+        filePaths(d[f.id]).forEach(function (p) {
+          if (photoPath == null && isImagePath(p)) { photoPath = p; photoFieldId = f.id; }
+        });
+      }
     });
     // The score lives in the record's header, on the right of the record's own identity.
     var scoreSlot = "";
@@ -9069,7 +9215,8 @@
       // could not see its uploads: the header only ever shows the first image, and a video is
       // never the header. A video answer was therefore invisible to exactly the people who
       // review them. The header's own photo is skipped so it is not shown twice.
-      '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d, photoPath ? photoFieldId : null) +
+      '<div class="m-grid">' + grid + "</div>" + scoredBlock +
+      photoSectionHtml(fields, d, photoPath ? photoFieldId : null, { edit: canEdit(currentCustom.table.id) }) +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>' +
       '<div id="cd-notify"></div>';
@@ -9113,9 +9260,91 @@
     document.getElementById("modal").classList.add("open"); wireImportedFiles();
     if (photoPath) getPhotoUrl(photoPath).then(function (url) { var im = document.getElementById("cd-photo"); if (url && im) { im.src = url; im.style.display = "block"; } });
     wireChangePhoto("cd-photo", function (np) {
-      var nd = {}; Object.keys(s.data || {}).forEach(function (k) { nd[k] = s.data[k]; });
-      nd[photoFieldId] = np;
-      return db.from("app_submissions").update({ data: nd }).eq("id", s.id).then(function (r) { if (r.error) throw r.error; s.data = nd; });
+      // The header shows ONE file of a question that may now hold several. Replacing it swaps
+      // that key in place; writing `np` over the whole answer would throw the other nine away.
+      var list = filePaths(s.data ? s.data[photoFieldId] : null);
+      var at = list.indexOf(photoPath);
+      if (at === -1) list.push(np); else list[at] = np;
+      return saveRecordFiles(s, photoFieldId, list);
+    });
+    wireGalleryEdit(s, fields);
+  }
+  // Add, remove or replace the files on ONE upload question of ONE record. The answer is
+  // rewritten from a list, so the shape rule lives in one place — and a remove that empties a
+  // question deletes the key rather than leaving `[]` behind, because "did they answer this?"
+  // is measured everywhere by whether the key is there.
+  function saveRecordFiles(s, fieldId, paths) {
+    var nd = {}; Object.keys(s.data || {}).forEach(function (k) { nd[k] = s.data[k]; });
+    var v = fileValue(paths);
+    if (v == null) delete nd[fieldId]; else nd[fieldId] = v;
+    return db.from("app_submissions").update({ data: nd }).eq("id", s.id)
+      .then(function (r) { if (r.error) throw r.error; s.data = nd; });
+  }
+  // The gallery's own editing. Before this the only upload a reviewer could change was the
+  // header photo, so a question holding five photos was four-fifths read-only.
+  function wireGalleryEdit(s, fields) {
+    [].slice.call(document.querySelectorAll(".pc-del[data-del-field]")).forEach(function (b) {
+      var fid = b.getAttribute("data-del-field"), p = b.getAttribute("data-del-path");
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (!window.confirm("Remove this file from the record? The file itself is deleted too, and this can't be undone.")) return;
+        b.disabled = true;
+        var list = filePaths(s.data ? s.data[fid] : null).filter(function (x) { return x !== p; });
+        // The row first, the bucket second. The other order can leave an answer pointing at a
+        // file that is already gone, which shows a reviewer a broken tile and no way to fix it.
+        saveRecordFiles(s, fid, list)
+          .then(function () {
+            // uploadAll remembers the upload per File object, so one photo attached to two
+            // questions is uploaded once and BOTH answers hold the same key. Deleting the
+            // object because one question let go of it would break the other one's tile.
+            var stillUsed = recordFilePaths(fields, s.data).indexOf(p) !== -1;
+            return stillUsed ? null : storageDelete(p);
+          })
+          .then(function () { renderCustom(); openCustomDetail(s, fields); })
+          .catch(function (err) {
+            b.disabled = false;
+            if (window.console) console.error(err);
+            window.alert("Couldn't remove that file: " + ((err && err.message) || "unknown error"));
+          });
+      });
+    });
+    [].slice.call(document.querySelectorAll(".pc-add[data-add-field]")).forEach(function (b) {
+      var fid = b.getAttribute("data-add-field");
+      var f = (fields || []).filter(function (x) { return x.id === fid; })[0];
+      if (!f) return;
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var inp = document.createElement("input");
+        inp.type = "file"; inp.multiple = true;
+        inp.accept = f.type === "file" ? "" : (f.type === "media" ? "image/*,video/*" : "image/*");
+        inp.addEventListener("change", function () {
+          var chosen = [].slice.call(inp.files || []);
+          if (!chosen.length) return;
+          var have = filePaths(s.data ? s.data[fid] : null);
+          var room = MAX_FILES - have.length;
+          // Refused before anything is uploaded: the alternative is sending eight files and
+          // being told after the wait that only three of them were ever going to be kept.
+          if (chosen.length > room) {
+            window.alert(f.label + " holds " + MAX_FILES + " files at most. " +
+              (room > 0 ? "There is room for " + room + " more." : "It is already full."));
+            return;
+          }
+          var over = chosen.filter(function (fl) { return fl.size > uploadCap(f); })[0];
+          if (over) { window.alert('"' + over.name + '" is larger than ' + mbText(uploadCap(f)) + "."); return; }
+          b.disabled = true;
+          uploadAll(chosen.map(function (fl) { return { id: fid, file: fl }; }))
+            .then(function (ups) {
+              return saveRecordFiles(s, fid, have.concat(ups.map(function (u) { return u.path; })));
+            })
+            .then(function () { renderCustom(); openCustomDetail(s, fields); })
+            .catch(function (err) {
+              b.disabled = false;
+              if (window.console) console.error(err);
+              window.alert("Couldn't add to " + f.label + ": " + ((err && err.message) || "unknown error"));
+            });
+        });
+        inp.click();
+      });
     });
   }
   function saveCustom(s, fields) {
@@ -9508,7 +9737,12 @@
         if (!on) oth.value = "";
       });
     });
-    function fileFor(f) { var el = document.getElementById("ed-" + f.id); return (el && el.files && el.files[0]) || null; }
+    // Every chosen file, not the first: the picker is `multiple` now, and reading files[0]
+    // would silently keep one of the five somebody attached.
+    function filesFor(f) {
+      var el = document.getElementById("ed-" + f.id);
+      return (el && el.files) ? [].slice.call(el.files) : [];
+    }
     function othersNow() {
       var o = {};
       asked.forEach(function (f) {
@@ -9553,7 +9787,7 @@
     function say(text, ok) { msg.textContent = text; msg.className = "nr-msg" + (ok ? " ok" : ""); }
     btn.addEventListener("click", function () {
       var cur = edValues(asked);
-      var missing = newRecordMissing(asked, cur, fileFor);
+      var missing = newRecordMissing(asked, cur, function (f) { return filesFor(f).length > 0; });
       [].slice.call(body.querySelectorAll(".invalid")).forEach(function (e) { e.classList.remove("invalid"); });
       if (missing.length) {
         missing.forEach(function (f) { var el = document.getElementById("ed-" + f.id); if (el) el.classList.add("invalid"); });
@@ -9564,22 +9798,39 @@
       }
       // Too big is caught here rather than by the upload, so the person is told which question
       // and which limit instead of watching a 90 MB video crawl up to a 413.
-      var over = asked.filter(function (f) { var fl = isFileField(f) && fileFor(f); return fl && fl.size > uploadCap(f); })[0];
+      var over = null, overF = null;
+      asked.forEach(function (f) {
+        if (over || !isFileField(f)) return;
+        filesFor(f).forEach(function (fl) { if (!over && fl.size > uploadCap(f)) { over = fl; overF = f; } });
+      });
       if (over) {
-        var el = document.getElementById("ed-" + over.id); if (el) el.classList.add("invalid");
-        say(over.label + ": that file is larger than " + mbText(uploadCap(over)) + ".");
+        var el = document.getElementById("ed-" + overF.id); if (el) el.classList.add("invalid");
+        say(overF.label + ': "' + over.name + '" is larger than ' + mbText(uploadCap(overF)) + ".");
+        return;
+      }
+      // Refused up front for the same reason as the ceiling: attaching twelve photos and
+      // being told after the upload that two were dropped is worse than being told now.
+      var tooMany = asked.filter(function (f) { return isFileField(f) && filesFor(f).length > MAX_FILES; })[0];
+      if (tooMany) {
+        var el2 = document.getElementById("ed-" + tooMany.id); if (el2) el2.classList.add("invalid");
+        say(tooMany.label + ": " + MAX_FILES + " files at most, and " + filesFor(tooMany).length + " were chosen.");
         return;
       }
       btn.disabled = true; say("Saving…", true);
-      var shots = asked.filter(function (f) { return isFileField(f) && fileFor(f); });
-      uploadAll(shots.map(function (f) { return { id: f.id, file: fileFor(f) }; }), function (upDone, upTotal) {
+      // One entry per FILE, so a question holding five of them is five uploads down the same
+      // lanes rather than one. The question id rides along so the answers can be regrouped.
+      var shots = [];
+      asked.forEach(function (f) {
+        if (!isFileField(f)) return;
+        filesFor(f).forEach(function (fl) { shots.push({ id: f.id, file: fl }); });
+      });
+      uploadAll(shots, function (upDone, upTotal) {
         // A record with forty photos sits on "Saving…" for minutes and looks stuck, and
         // pressing Save again is what turns a slow save into one that never lands.
         if (upTotal > 1 && upDone < upTotal) say("Uploading photo " + (upDone + 1) + " of " + upTotal + "…", true);
         else say("Saving…", true);
       }).then(function (ups) {
-        var photos = {};
-        ups.forEach(function (u) { photos[u.id] = u.path; });
+        var photos = groupUploads(ups);
         return db.rpc("create_record", { p_table: t.id, p_data: newRecordData(asked, cur, photos, othersNow()) });
       }).then(function (res) {
         if (res && res.error) throw res.error;
