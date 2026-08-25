@@ -117,6 +117,12 @@
     transition: background 0.15s ease, transform 0.05s ease; }
   .submit:hover { background: var(--accent-hi); } .submit:active { transform: translateY(1px); } .submit:disabled { opacity: 0.5; cursor: default; background: var(--accent); }
   .form-msg { text-align: center; min-height: 1.2em; margin-top: 12px; font-size: 0.88rem; color: var(--danger); }
+  /* "we kept your answers" — shown only when there were answers to keep */
+  .draft-note { display: none; border: 1px solid rgba(126,208,138,0.3); background: rgba(126,208,138,0.07);
+    border-radius: 10px; padding: 13px 15px; margin-bottom: 20px; font-size: 0.85rem; line-height: 1.6; color: var(--silver-lo); }
+  .draft-note .ar { display: block; direction: rtl; text-align: right; color: var(--muted); }
+  .draft-note button { margin-top: 9px; padding: 0; border: none; background: none; font: inherit; font-weight: 600;
+    color: var(--accent-hi); cursor: pointer; text-decoration: underline; }
   .success, .notfound { display: none; text-align: center; padding: 20px 10px; }
   .success .check { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 18px; border: 2px solid var(--silver);
     display: flex; align-items: center; justify-content: center; font-size: 30px; color: var(--silver); }
@@ -134,6 +140,11 @@
       <div class="loading" id="loading">Loading…</div>
       <div class="card" id="card" style="display:none;">
         <form id="form" novalidate>
+          <div class="draft-note" id="draft-note">
+            <span id="draft-note-en"></span>
+            <span class="ar" id="draft-note-ar" dir="rtl"></span>
+            <button type="button" id="draft-clear">Start over · ابدأ من جديد</button>
+          </div>
           <div id="fields"></div>
           <button type="button" class="submit" id="submit-btn">Submit</button>
           <div class="form-msg" id="form-msg"></div>
@@ -353,7 +364,148 @@
       return k;
     } catch (e) { return null; }
   }
-  var controls = []; // {f, wrap, validate(), value(), isPhoto, files()}
+  // ---- A half-filled form survives a refresh (every table, current and future) ----
+  // Every answer used to live only in the DOM, so anything that reloaded the page emptied
+  // the form and the person started again: pull-to-refresh, a dropped connection, the back
+  // button — and the one nobody chooses, a phone discarding this tab while the camera app
+  // is open, which is exactly what a photo question asks people to do. Answers are written
+  // to this browser as they are typed and read back on load, so a reload costs nothing.
+  //
+  // Only this browser ever sees them: nothing is sent anywhere, and a submitted form clears
+  // its draft, because a shop tablet is one browser used by everybody and the next person
+  // must start on an empty form.
+  var DRAFT_PREFIX = "blk_draft_";
+  var DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;   // a week; a form left longer than that is a new visit
+  var draftK = "";        // set once the form is known; "" means nothing is being kept
+  var draftTimer = null;
+
+  // One draft per form, and per parent record where the link names one: two events sharing
+  // a signup form are two different forms to the person filling them in.
+  function draftKey(s, token) {
+    if (!s) return "";
+    return DRAFT_PREFIX + s + (token ? "__" + token : "");
+  }
+  // What came out of storage is usable only if it is this shape and recent. Anything else —
+  // an older format, a half-written record, a draft from last month, a clock that was wrong
+  // when it was written — reads as no draft at all.
+  function draftFresh(rec, now) {
+    if (!rec || rec.v !== 1 || !rec.a || typeof rec.a !== "object") return false;
+    var at = Number(rec.at);
+    if (!(at > 0) || at > now + 60000) return false;
+    return (now - at) <= DRAFT_MAX_AGE_MS;
+  }
+  function readDraft(key, now) {
+    if (!key) return null;
+    try {
+      var raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      var rec = JSON.parse(raw);
+      if (!draftFresh(rec, now)) { window.localStorage.removeItem(key); return null; }
+      return rec.a;
+    } catch (e) { return null; }
+  }
+  // Nothing typed yet is not a draft. Writing one anyway would leave a row in this browser
+  // for every link ever opened, and put "we kept your answers" above an empty form.
+  function writeDraft(key, answers, now) {
+    if (!key) return false;
+    var keys = answers ? Object.keys(answers) : [];
+    if (!keys.length) { clearDraft(key); return false; }
+    try {
+      window.localStorage.setItem(key, JSON.stringify({ v: 1, at: now, a: answers }));
+      return true;
+    } catch (e) { return false; }   // private mode, or storage full: the form still works
+  }
+  function clearDraft(key) {
+    if (!key) return;
+    try { window.localStorage.removeItem(key); } catch (e) {}
+  }
+  // An answer worth keeping is a non-empty one. Whether the question is being asked right
+  // now is deliberately NOT consulted: the answer stays on screen when a person changes
+  // their mind back, so it stays here too. What travels with the submission is decided
+  // separately, in submitForm, and that rule is not this one's business.
+  function draftAnswers(ctls) {
+    var out = {};
+    (ctls || []).forEach(function (c) {
+      if (c.isPhoto || !c.value) return;   // a chosen file cannot be written to storage
+      var v = c.value();
+      if (v != null && v !== "") out[c.f.id] = String(v);
+      if (c.otherKey && c.otherValue) { var ov = c.otherValue(); if (ov) out[c.otherKey] = String(ov); }
+    });
+    return out;
+  }
+  // Puts them back. A question that cannot take an answer back (a file, a link button) is
+  // skipped rather than guessed at, and an answer whose question is gone from the form —
+  // renamed, removed, or hidden since — is dropped.
+  function restoreAnswers(ctls, answers) {
+    var n = 0;
+    if (!answers) return 0;
+    (ctls || []).forEach(function (c) {
+      if (!c.setDraft) return;
+      var v = answers[c.f.id];
+      var ov = c.otherKey ? answers[c.otherKey] : null;
+      if (v == null && ov == null) return;
+      // One question refusing its own answer must not cost the rest of the form theirs.
+      try { c.setDraft(v == null ? "" : v, ov == null ? "" : ov); n++; } catch (e) {}
+    });
+    return n;
+  }
+  // A phone answer is one string on the way out ("+962791234567") and two controls on the
+  // way in. Longest dial code first, so a country whose code begins with another's cannot
+  // be read as the wrong one; a number this form cannot offer is refused rather than
+  // mangled into a Jordanian one.
+  function splitPhone(v) {
+    var s = String(v == null ? "" : v).replace(/[^\d+]/g, "");
+    if (s.charAt(0) !== "+") return null;
+    var d = s.slice(1), best = -1;
+    for (var i = 0; i < COUNTRIES.length; i++) {
+      if (d.indexOf(COUNTRIES[i].cc) === 0 && (best < 0 || COUNTRIES[i].cc.length > COUNTRIES[best].cc.length)) best = i;
+    }
+    if (best < 0) return null;
+    return { i: best, local: d.slice(COUNTRIES[best].cc.length) };
+  }
+  // A draft is only ever read when its own form is opened again, so one belonging to a form
+  // nobody goes back to would sit in this browser for good. Every load sweeps out the
+  // expired ones, whichever form they belong to — which is also the only thing that keeps
+  // somebody's half-typed answers from outliving the week they were promised.
+  function sweepDrafts(now) {
+    var dead = [];
+    try {
+      var ls = window.localStorage;
+      for (var i = 0; i < ls.length; i++) {
+        var k = ls.key(i);
+        if (!k || k.indexOf(DRAFT_PREFIX) !== 0) continue;
+        var rec = null;
+        try { rec = JSON.parse(ls.getItem(k)); } catch (e) {}
+        if (!draftFresh(rec, now)) dead.push(k);
+      }
+      dead.forEach(function (k) { ls.removeItem(k); });
+    } catch (e) { return 0; }   // a browser with no storage has nothing to sweep
+    return dead.length;
+  }
+  function saveDraftNow() {
+    if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
+    if (!draftK || !currentTable) return;
+    writeDraft(draftK, draftAnswers(controls), Date.now());
+  }
+  function queueDraftSave() {
+    if (!draftK) return;
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraftNow, 400);
+  }
+  // Said only when there was something to restore, and it says the one thing the person
+  // needs to check for themselves: a photo cannot be kept, so a form that asks for one is
+  // still missing it.
+  function showDraftNote(hadFile) {
+    var box = document.getElementById("draft-note");
+    if (!box) return;
+    document.getElementById("draft-note-en").textContent =
+      "We kept the answers you had already filled in." + (hadFile ? " Photos and files need choosing again." : "");
+    document.getElementById("draft-note-ar").textContent =
+      "احتفظنا بالإجابات التي كتبتها." + (hadFile ? " الصور والملفات تحتاج اختيارها من جديد." : "");
+    box.style.display = "block";
+  }
+
+  var controls = []; // {f, wrap, validate(), value(), setDraft(), isPhoto, files()}
   var currentTable = null;
   var BRANCHES = [];
   // The choices for a `record_multi` question, fetched at boot. Empty is a normal
@@ -654,7 +806,8 @@
 
     if (f.type === "long_text" || f.type === "short_text") {
       var ta = document.createElement("textarea"); ta.id = id; ta.rows = 1; growTextarea(ta, f.type === "short_text"); wrap.appendChild(ta);
-      controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; } });
+      controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; },
+                      setDraft: function (v) { ta.value = v; autoGrow(ta); } });
     } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "time") {
       var isDate = f.type === "date" || f.type === "dob";
       var isPicked = isDate || f.type === "time";
@@ -663,7 +816,8 @@
       inp.id = id; wrap.appendChild(inp);
       if (isPicked) inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
       if (f.type === "dob") inp.max = new Date().toISOString().slice(0, 10);   // a birth date can't be in the future
-      controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; } });
+      controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; },
+                      setDraft: function (v) { inp.value = v; } });
     } else if (f.type === "multi_select") {
       // Airtable's multi-select: tick as many as apply. The answer is stored comma-
       // joined, exactly the way Airtable stores it, so old and new records read alike.
@@ -688,7 +842,12 @@
       controls.push({
         f: f, el: box,
         validate: function () { return !f.required || picked().length > 0; },
-        value: function () { return picked().join(", ") || null; }
+        value: function () { return picked().join(", ") || null; },
+        // the answer is one comma-joined string, so it is split back into the ticks it came from
+        setDraft: function (v) {
+          var want = String(v).split(",").map(function (s) { return s.trim(); });
+          [].slice.call(box.querySelectorAll("input")).forEach(function (i) { i.checked = want.indexOf(i.value) !== -1; });
+        }
       });
     } else if (f.type === "record_multi") {
       // Tick as many as apply, where the choices are another table's live rows. The
@@ -723,7 +882,13 @@
       controls.push({
         f: f, el: rbox,
         validate: function () { return !f.required || rpicked().length > 0; },
-        value: function () { return rpicked().join(", ") || null; }
+        value: function () { return rpicked().join(", ") || null; },
+        // a day that has since closed is simply not there to tick again, which is right:
+        // a draft cannot hold a place open
+        setDraft: function (v) {
+          var want = String(v).split(",").map(function (s) { return s.trim(); });
+          [].slice.call(rbox.querySelectorAll("input")).forEach(function (i) { i.checked = want.indexOf(i.value) !== -1; });
+        }
       });
     } else if (f.type === "dropdown" || f.type === "country") {
       var otherVals = {};
@@ -765,7 +930,13 @@
         badEl: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v] && otherInp.value.trim() === "") ? otherInp : combo.input; },
         value: function () { return combo.getValue(); },
         otherKey: hasOther ? f.id + "__other" : null,
-        otherValue: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v]) ? (otherInp.value.trim() || null) : null; }
+        otherValue: function () { var v = combo.getValue(); return (hasOther && v && otherVals[v]) ? (otherInp.value.trim() || null) : null; },
+        // the box behind an "other" choice is opened first and filled second: toggleOther
+        // empties it on the way through, so filling it first would lose the words
+        setDraft: function (v, ov) {
+          combo.setValue(v); toggleOther(v);
+          if (ov && otherInp) { otherInp.value = ov; autoGrow(otherInp); }
+        }
       });
     } else if (f.type === "branch") {
       // A branch question may name more than one list — "jo, lebanon" — so one form can
@@ -797,7 +968,10 @@
       controls.push({
         f: f, el: combo.input,
         validate: function () { return !f.required || !!combo.getValue(); },
-        value: function () { return combo.getValue(); }
+        value: function () { return combo.getValue(); },
+        // a shop switched off since the draft was written is no longer an option, and
+        // setValue on a name the list does not hold leaves the box empty rather than wrong
+        setDraft: function (v) { combo.setValue(v); }
       });
     } else if (f.type === "yesno") {
       var sel = document.createElement("select"); sel.id = id;
@@ -806,7 +980,8 @@
         var op = document.createElement("option"); op.value = o.en; op.textContent = o.en + " / " + o.ar; sel.appendChild(op);
       });
       wrap.appendChild(sel);
-      controls.push({ f: f, el: sel, validate: function () { return !f.required || sel.value !== ""; }, value: function () { return sel.value || null; } });
+      controls.push({ f: f, el: sel, validate: function () { return !f.required || sel.value !== ""; }, value: function () { return sel.value || null; },
+                      setDraft: function (v) { sel.value = v; } });
     } else if (f.type === "phone") {
       var row = document.createElement("div"); row.className = "phone-row";
       row.innerHTML = '<div class="cc-picker"><button type="button" class="cc-btn"><img class="cc-flag" alt=""><span class="cc-dial">+962</span><span class="cc-caret">▾</span></button><ul class="cc-menu" role="listbox"></ul></div><input type="tel" inputmode="numeric" id="' + id + '">';
@@ -821,7 +996,8 @@
       document.addEventListener("click", function (e) { if (!picker.contains(e.target)) menu.classList.remove("open"); });
       local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
       apply(0);
-      controls.push({ f: f, el: local, validate: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return (!f.required && d === "") || sc.len.indexOf(d.length) !== -1; }, value: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + sc.cc + d : null; } });
+      controls.push({ f: f, el: local, validate: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return (!f.required && d === "") || sc.len.indexOf(d.length) !== -1; }, value: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + sc.cc + d : null; },
+                      setDraft: function (v) { var p = splitPhone(v); if (!p) return; apply(p.i); local.value = p.local; } });
     } else if (f.type === "photo" || f.type === "media" || f.type === "file") {
       // One branch, not three. A media question is a photo question with a wider accept and a
       // bigger ceiling; a file question is a media question with any accept at all. Splitting
@@ -906,7 +1082,8 @@
       controls.push({ f: f, el: a, validate: function () { return true; }, value: function () { return null; } });
     } else {
       var inp2 = document.createElement("textarea"); inp2.id = id; inp2.rows = 1; growTextarea(inp2, true); wrap.appendChild(inp2);
-      controls.push({ f: f, el: inp2, validate: function () { return !f.required || inp2.value.trim() !== ""; }, value: function () { return inp2.value.trim() || null; } });
+      controls.push({ f: f, el: inp2, validate: function () { return !f.required || inp2.value.trim() !== ""; }, value: function () { return inp2.value.trim() || null; },
+                      setDraft: function (v) { inp2.value = v; autoGrow(inp2); } });
     }
     // every branch above pushes exactly one control; it owns this wrapper, which is what
     // gets hidden when the question does not apply
@@ -929,6 +1106,15 @@
     document.getElementById("card").style.display = "block";
     var host = document.getElementById("fields");
     fields.filter(function (f) { return !f.internal; }).forEach(function (f) { host.appendChild(buildField(f)); }); // staff-only fields never render publicly
+
+    // Read back before anything is typed, so the page somebody comes back to is the page
+    // they left. A file question is named in the note because it is the one answer that
+    // cannot be kept, and a person who is not told will press Submit and be sent back.
+    draftK = draftKey(slug, parentToken);
+    sweepDrafts(Date.now());
+    if (restoreAnswers(controls, readDraft(draftK, Date.now()))) {
+      showDraftNote(controls.some(function (c) { return c.isPhoto; }));
+    }
     [].slice.call(host.querySelectorAll("textarea.autogrow")).forEach(autoGrow);
 
     var formEl = document.getElementById("form");
@@ -938,7 +1124,17 @@
     // A dropdown settles on blur (the combobox resolves typed text there), which "change"
     // does not cover — hence both, plus focusout.
     ["input", "change", "focusout"].forEach(function (ev) {
-      formEl.addEventListener(ev, function () { setTimeout(applyConditions, 0); }, true);
+      formEl.addEventListener(ev, function () { setTimeout(applyConditions, 0); queueDraftSave(); }, true);
+    });
+    // The debounce alone would lose the last few keystrokes, and they are the ones that
+    // matter: the camera app opening is a phone's cue to discard this tab, and "hidden" is
+    // the last event it will deliver before it does. pagehide covers the browsers that skip
+    // visibilitychange on the way out.
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") saveDraftNow(); });
+    window.addEventListener("pagehide", saveDraftNow);
+    var wipe = document.getElementById("draft-clear");
+    if (wipe) wipe.addEventListener("click", function (e) {
+      e.preventDefault(); clearDraft(draftK); draftK = ""; location.reload();
     });
     applyConditions();
   }
@@ -1008,6 +1204,10 @@
       return db.rpc("submit_public_form", payload);
     }).then(function (res) {
       if (res && res.error) throw res.error;
+      // The answers are in the database now. Clearing the key as well as the draft stops the
+      // page-hide save writing them back on the way out: a shop tablet is one browser used
+      // by everybody, and the next person must find an empty form.
+      clearDraft(draftK); draftK = "";
       // Which place they took, when the form has capacity. A backup who is told only "thank
       // you" turns up believing they are working.
       var slot = res && res.data && res.data.slot;

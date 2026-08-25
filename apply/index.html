@@ -115,6 +115,12 @@
   .submit:hover { background: var(--accent-hi); }
   .submit:active { transform: translateY(1px); }
   .submit:disabled { opacity: 0.5; cursor: default; background: var(--accent); }
+  /* "we kept your answers" — shown only when there were answers to keep */
+  .draft-note { display: none; border: 1px solid rgba(126,208,138,0.3); background: rgba(126,208,138,0.07);
+    border-radius: 10px; padding: 13px 15px; margin-bottom: 20px; font-size: 0.85rem; line-height: 1.6; color: var(--silver-lo); }
+  .draft-note .ar { display: block; direction: rtl; text-align: right; color: var(--muted); }
+  .draft-note button { margin-top: 9px; padding: 0; border: none; background: none; font: inherit; font-weight: 600;
+    color: var(--accent-hi); cursor: pointer; text-decoration: underline; }
   .form-msg { text-align: center; min-height: 1.2em; margin-top: 12px; font-size: 0.88rem; color: var(--danger); }
   .success { display: none; text-align: center; padding: 20px 10px; }
   .success .check {
@@ -138,6 +144,11 @@
 
       <div class="card" id="card">
         <form id="form" novalidate>
+          <div class="draft-note" id="draft-note">
+            <span id="draft-note-en"></span>
+            <span class="ar" id="draft-note-ar" dir="rtl"></span>
+            <button type="button" id="draft-clear">Start over · ابدأ من جديد</button>
+          </div>
           <div class="field">
             <label for="full_name">Full name <span class="ar">/ الاسم الكامل</span> <span class="req">*</span></label>
             <input type="text" id="full_name" autocomplete="name" required>
@@ -447,10 +458,126 @@
   function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80); }
   function markInvalid(id, bad) { var el = document.getElementById(id); if (el) el.classList.toggle("invalid", !!bad); }
 
+  // ---- A half-filled form survives a refresh -------------------------------
+  // The same rule, storage shape and week-long life as the custom forms in /f/ (the long
+  // note is there). Answers used to live only in the DOM, so anything that reloaded the
+  // page emptied a form somebody had spent ten minutes on: pull-to-refresh, a dropped
+  // connection, the back button — and the one nobody chooses, a phone discarding this tab
+  // while the camera app is open, which is exactly what the photo question asks for.
+  //
+  // Nothing leaves the browser, and a sent application clears its draft: one phone at the
+  // front of a queue fills in more than one of these, and the next person must find an
+  // empty form.
+  var DRAFT_PREFIX = "blk_draft_";
+  var DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;   // a week; a form left longer is a new visit
+  var draftK = DRAFT_PREFIX + "job_applications";
+  var draftTimer = null;
+  function draftFresh(rec, now) {
+    if (!rec || rec.v !== 1 || !rec.a || typeof rec.a !== "object") return false;
+    var at = Number(rec.at);
+    if (!(at > 0) || at > now + 60000) return false;   // a clock that was wrong when it was written
+    return (now - at) <= DRAFT_MAX_AGE_MS;
+  }
+  function readDraft(key, now) {
+    if (!key) return null;
+    try {
+      var raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      var rec = JSON.parse(raw);
+      if (!draftFresh(rec, now)) { window.localStorage.removeItem(key); return null; }
+      return rec.a;
+    } catch (e) { return null; }
+  }
+  function writeDraft(key, answers, now) {
+    if (!key) return false;
+    var keys = answers ? Object.keys(answers) : [];
+    if (!keys.length) { clearDraft(key); return false; }   // nothing typed yet is not a draft
+    try {
+      window.localStorage.setItem(key, JSON.stringify({ v: 1, at: now, a: answers }));
+      return true;
+    } catch (e) { return false; }   // private mode, or storage full: the form still works
+  }
+  function clearDraft(key) {
+    if (!key) return;
+    try { window.localStorage.removeItem(key); } catch (e) {}
+  }
+  // Every box on the form that holds an answer, by its own id — which covers the questions
+  // an admin adds from the dashboard ("extra-<id>") without this needing to know anything
+  // about them. A file input is skipped: a chosen file cannot be written to storage, and a
+  // path that looked like an answer would promise a photo nobody picked.
+  function draftFormAnswers(root) {
+    var out = {};
+    if (!root) return out;
+    [].slice.call(root.querySelectorAll("input, select, textarea")).forEach(function (el) {
+      if (!el.id || el.type === "file" || el.type === "button" || el.type === "submit") return;
+      var v = (el.value == null ? "" : String(el.value)).trim();
+      if (v !== "") out[el.id] = v;
+    });
+    return out;
+  }
+  function restoreFormAnswers(root, answers) {
+    var n = 0;
+    if (!root || !answers) return 0;
+    [].slice.call(root.querySelectorAll("input, select, textarea")).forEach(function (el) {
+      if (!el.id || el.type === "file") return;
+      var v = answers[el.id];
+      if (v == null) return;   // a question the draft says nothing about keeps what is in it
+      el.value = v; n++;
+    });
+    return n;
+  }
+  function queueDraftSave() {
+    if (draftTimer) clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraftNow, 400);
+  }
+  // Said only when there was something to restore, and it names the one answer that cannot
+  // be kept, because a person who is not told will press Submit and be sent back.
+  function showDraftNote() {
+    var box = document.getElementById("draft-note");
+    if (!box) return;
+    document.getElementById("draft-note-en").textContent =
+      "We kept the answers you had already filled in. The photo needs choosing again.";
+    document.getElementById("draft-note-ar").textContent =
+      "احتفظنا بالإجابات التي كتبتها. الصورة تحتاج اختيارها من جديد.";
+    box.style.display = "block";
+  }
+
+
   // Clear the red outline as soon as the user edits a field
   var formEl = document.getElementById("form");
   formEl.addEventListener("input", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
   formEl.addEventListener("change", function (e) { if (e.target && e.target.classList) e.target.classList.remove("invalid"); }, true);
+
+  function saveDraftNow() {
+    if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; }
+    writeDraft(draftK, draftFormAnswers(formEl), Date.now());
+  }
+  formEl.addEventListener("input", queueDraftSave, true);
+  formEl.addEventListener("change", queueDraftSave, true);
+  // The debounce alone would lose the last few keystrokes, and they are the ones that
+  // matter: the camera app opening is a phone's cue to discard this tab, and "hidden" is
+  // the last event it will deliver before it does. pagehide covers the browsers that skip
+  // visibilitychange on the way out.
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") saveDraftNow(); });
+  window.addEventListener("pagehide", saveDraftNow);
+  // Read back before anything is typed, so the page somebody comes back to is the page they
+  // left. Called again once the admin-defined questions arrive, because they are not on the
+  // page yet the first time round.
+  function loadDraft() {
+    var answers = readDraft(draftK, Date.now());
+    if (!answers) return;
+    restoreFormAnswers(formEl, answers);
+    // The Country question drives the dial code, the Jordan-only City list and "Are you
+    // Lebanese?", and it blanks those two for a country they do not apply to — so it is run
+    // first and their answers are put back after it.
+    syncCountry();
+    restoreFormAnswers(formEl, answers);
+    [].slice.call(formEl.querySelectorAll("textarea")).forEach(function (t) { t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; });
+    showDraftNote();
+  }
+  loadDraft();
+  var wipe = document.getElementById("draft-clear");
+  if (wipe) wipe.addEventListener("click", function (e) { e.preventDefault(); clearDraft(draftK); draftK = ""; location.reload(); });
 
   document.getElementById("form").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -556,6 +683,10 @@
       })
       .then(function (res) {
         if (res && res.error) throw res.error;
+        // It is in the database now. Clearing the key as well as the draft stops the
+        // page-hide save writing the answers back on the way out — one phone at the front of
+        // a queue fills in more than one of these.
+        clearDraft(draftK); draftK = "";
         document.getElementById("card").style.display = "none";
         document.getElementById("form-intro").style.display = "none";
         document.getElementById("success").style.display = "block";
@@ -616,6 +747,8 @@
       c.anchor.parentNode.insertBefore(wrap, c.last.nextSibling);
       c.last = wrap;
     });
+    // These questions did not exist on the page when the draft was first read back.
+    loadDraft();
   }).catch(function () {});
 
   // Auto-grow: single-line text fields expand with their content instead of hiding it
