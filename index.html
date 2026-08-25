@@ -1344,6 +1344,21 @@
   .bld-field .opts { flex: 1; min-width: 120px; min-height: 40px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-3); outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
   .bld-field .req-lbl { margin-top: 8px; }
   .bld-field .rm { margin-left: auto; background: none; border: none; color: var(--danger); cursor: pointer; font-size: var(--fs-3); }
+  /* The first screen of creation: three types, each saying what it is. */
+  .bp-list { display: grid; gap: 10px; margin: 16px 0 4px; }
+  .bp-card { display: block; width: 100%; text-align: left; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--text);
+    cursor: pointer; font: inherit; }
+  .bp-card:hover { border-color: var(--silver); background: rgba(255,255,255,0.05); }
+  .bp-card .bp-name { font-size: var(--fs-4); margin-bottom: 3px; }
+  .bp-card .bp-blurb { color: var(--muted); font-size: var(--fs-3); }
+  #bld-purpose { display: none; }
+  .picking #bld-purpose { display: block; }
+  /* Hide everything the builder normally shows, by exclusion rather than by listing it:
+     the modal carries a name row, an intro, a country picker and more, and a list of
+     things to hide is a list that goes stale the next time a row is added. */
+  .picking .modal > *:not(#bld-purpose):not(.modal-close) { display: none; }
+
   /* Scorecard only: the price of a question, and the running total under the list. */
   .bld-field .r3 { display: none; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px;
                    padding-top: 8px; border-top: 1px dashed var(--line); }
@@ -2156,6 +2171,11 @@
     <div class="modal-overlay" id="builder-modal">
       <div class="modal" style="max-width: 660px;">
         <button class="modal-close" id="builder-close" aria-label="Close">✕</button>
+        <div id="bld-purpose">
+          <div class="m-name">What are you making?</div>
+          <div class="m-sub">This sets up the next screen. You can change the questions later, but not the type.</div>
+          <div class="bp-list" id="bld-purpose-list"></div>
+        </div>
         <div class="m-name" id="bld-title">New table</div>
         <div class="m-sub" id="bld-sub">Create a form — it gets its own public link.</div>
         <!-- Everything you can change about a table. Moved between this modal (creating one)
@@ -10590,6 +10610,7 @@
       nameAr: document.getElementById("bld-name-ar").value,
       intro: document.getElementById("bld-intro").value,
       introAr: document.getElementById("bld-intro-ar").value,
+      purpose: builderPurpose,
       country: (document.getElementById("bld-country") || {}).value || "",
       franchise: !!(document.getElementById("bld-franchise") || {}).checked,
       fields: rows.map(function (r) {
@@ -10636,7 +10657,7 @@
     builderMode = mode;
     var isCreate = mode === "create", isBuiltin = mode === "builtin";
     document.getElementById("bld-title").textContent = isCreate ? "New table" : (isBuiltin ? "Edit: " + name : "Edit table");
-    document.getElementById("bld-sub").textContent = isCreate ? "Create a form — it gets its own public link."
+    document.getElementById("bld-sub").textContent = isCreate ? purposeOf(builderPurpose).blurb
       : (isBuiltin ? "The built-in questions are fixed. Add your own extra questions below — they appear on the form and in each entry."
       : "Add, edit, or remove questions. Changes apply to new submissions.");
     document.getElementById("bld-save").textContent = isCreate ? "Create table" : "Save changes";
@@ -10882,15 +10903,59 @@
       "A country added later needs its own form; the ones made now are not touched.";
     note.style.display = "block";
   }
+  // ---- What are you making? ------------------------------------------------------
+  // Creation used to hand everybody the same blank form and the same six sections, most
+  // of which did not apply to what they were doing. The pick is made once, at creation,
+  // and its job is to take things away: a checklist stops showing a public link, a
+  // scorecard starts showing points. Editing an existing table never asks again, because
+  // changing a live table's type is a different question with records already in it.
+  //
+  // The marker is config.scorecard and not config.scored, because the imported engine
+  // reads app_tables.config ? 'scoring' and two keys one letter apart is a trap.
+  var TABLE_PURPOSES = [
+    { v: "form", label: "Form", kind: "form", scorecard: false,
+      blurb: "Collects answers from people through a public link." },
+    { v: "scorecard", label: "Scorecard", kind: "form", scorecard: true,
+      blurb: "A form whose answers earn points and produce a percentage." },
+    { v: "checklist", label: "Checklist", kind: "task", scorecard: false,
+      blurb: "Work your team completes. No public link." }
+  ];
+  function purposeOf(v) {
+    return TABLE_PURPOSES.filter(function (p) { return p.v === v; })[0] || TABLE_PURPOSES[0];
+  }
+  function purposeConfig(v) {
+    var p = purposeOf(v);
+    return { kind: p.kind, scorecard: p.scorecard };
+  }
+  var builderPurpose = "form";
   function openBuilder() {
     useBuilderHost();               // claim the editor back from any Form tab it is sitting in
     formEditFor = null;             // and make that tab reload it rather than show an empty box
     builtinEditKey = null;
     editingTableId = null; editingFieldIds = []; editingTableConfig = null;
+    builder.classList.add("picking");
+    var host = document.getElementById("bld-purpose-list");
+    host.innerHTML = TABLE_PURPOSES.map(function (p) {
+      return '<button type="button" class="bp-card" data-v="' + p.v + '">' +
+        '<div class="bp-name">' + esc(p.label) + '</div>' +
+        '<div class="bp-blurb">' + esc(p.blurb) + '</div></button>';
+    }).join("");
+    [].slice.call(host.querySelectorAll(".bp-card")).forEach(function (b) {
+      b.addEventListener("click", function () { startBuilderFor(b.getAttribute("data-v")); });
+    });
+    builder.classList.add("open");
+  }
+  // Step two, now that we know what it is for.
+  function startBuilderFor(v) {
+    builderPurpose = v;
+    builder.classList.remove("picking");
+    builder.classList.toggle("scored-build", purposeOf(v).scorecard);
     setBuilderChrome("create");
     document.getElementById("bld-msg").textContent = "";
     var d = loadDraft();
-    if (draftHasContent(d)) {
+    // a draft belongs to the type it was started in: restoring a scorecard's prices into
+    // a checklist would put points on a form that has nowhere to show them
+    if (draftHasContent(d) && (d.purpose || "form") === v) {
       document.getElementById("bld-name").value = d.name || "";
       document.getElementById("bld-name-ar").value = d.nameAr || "";
       setIntroInputs({ en: d.intro, ar: d.introAr });
@@ -10903,7 +10968,7 @@
     } else {
       resetBuilder();
     }
-    builder.classList.add("open");
+    refreshBuilderTotal();
     requestAnimationFrame(growAllBld);
   }
   // Two different questions share the type `link`, which is the trap this exists to close:
@@ -10973,6 +11038,8 @@
     editingTableId = table.id; editingFieldIds = [];
     editingTableConfig = table.config || {};
     setBuilderChrome("edit");
+    builder.classList.remove("picking");
+    builder.classList.toggle("scored-build", !!(table.config && table.config.scorecard));
     msg.textContent = "Loading…";
     document.getElementById("bld-name").value = table.name || "";
     document.getElementById("bld-name-ar").value = table.name_ar || "";
@@ -11233,15 +11300,42 @@
     // form. The country is recorded on the table (config.country) and stamped on each
     // submission by the country trigger, because 260 forms asked the public which country
     // they were in and 4 records ever answered.
-    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: builderConfig({ country: scope.country }) }).select().single().then(function (tRes) {
+    var pc = purposeConfig(builderPurpose);
+    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, kind: pc.kind,
+      config: builderConfig({ country: scope.country, scorecard: pc.scorecard || null }) }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       return db.from("app_fields").insert(fieldRowsFor(tid, fields, 0)).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields, 0); })
+        .then(function () { return pc.scorecard ? addScoreField(tid) : null; })
         .then(function () { return tRes.data; });
     }).then(function (t) {
       clearDraft(); closeBuilder(); loadCustomTables();
-      setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
+      setTimeout(function () {
+        openCustomTable(t);
+        // a checklist has no public link, so it is not offered one
+        if (purposeOf(builderPurpose).kind !== "task") {
+          window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug));
+        }
+      }, 400);
     }).catch(function (err) { msg.set("Could not create the table. Please try again.", "err"); if (window.console) console.error(err); });
+  }
+  // A scorecard needs somewhere to keep its percentage, because the grid, the filters, the
+  // sort and the CSV export all read a field rather than recompute the rules. It is marked
+  // as a percentage so it prints as 94% rather than 0.9444, and staff-only because it is
+  // worked out rather than answered.
+  function addScoreField(tid) {
+    return db.from("app_fields").insert({
+      table_id: tid, position: 9000, label: "Score", label_ar: "النتيجة", type: "number",
+      required: false, internal: true, options: { score_fmt: "percent" }
+    }).select().single().then(function (r) {
+      if (r.error) throw r.error;
+      return db.from("app_tables").select("config").eq("id", tid).single().then(function (c) {
+        if (c.error) throw c.error;
+        // merged, never replaced: writing a fresh object here wiped sixteen keys once
+        var cfg = Object.assign({}, c.data.config || {}, { score_field: r.data.id });
+        return db.from("app_tables").update({ config: cfg }).eq("id", tid);
+      });
+    });
   }
   // The config every created table carries, plus whatever this save adds — so the parent
   // form and its country sub-forms cannot end up with different stages or a different
