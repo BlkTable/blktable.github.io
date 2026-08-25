@@ -5199,6 +5199,95 @@
     }
     return false;
   }
+  // ---- Scorecard rules -----------------------------------------------------------
+  // A scorecard prices its own questions. `app_fields.scoring` holds the question-level
+  // rule and the choice objects hold their own prices, so renaming a choice keeps what it
+  // is worth. Everything here is arithmetic over one record: nothing renders, nothing is
+  // stored, and the same rules are mirrored in SQL by score_submission() so that a public
+  // submit, a staff edit, an added record and an import all agree.
+  //
+  // The rule that matters most: a question that was never asked leaves the total. Hidden
+  // by "ask only if", or answered with a choice marked N/A. A branch with no kitchen must
+  // not score worse than a branch with a spotless one for the same work. A question that
+  // was asked and missed is a different thing and stays in the total, earning nothing.
+  function choicePoints(o) {
+    if (!o || typeof o !== "object") return 0;
+    var n = parseFloat(o.points);
+    return isNaN(n) ? 0 : n;
+  }
+  // The most a question can give. A priced choice list works it out from the choices and
+  // never stores it, because a maximum stored beside the choices is a maximum that
+  // disagrees with them the first time one is repriced.
+  function questionMaxPoints(f) {
+    var sc = f && f.scoring;
+    if (!sc) return 0;
+    if (sc.rule === "choices") {
+      var list = Array.isArray(f.options) ? f.options : [];
+      if (f.type === "multi_select") {
+        return list.reduce(function (a, o) { var p = choicePoints(o); return a + (p > 0 ? p : 0); }, 0);
+      }
+      return list.reduce(function (a, o) { return Math.max(a, choicePoints(o)); }, 0);
+    }
+    var n = parseFloat(sc.points);
+    return isNaN(n) ? 0 : n;
+  }
+  // The choices this question treats as "does not apply here".
+  function naChoices(f) {
+    return (Array.isArray(f && f.options) ? f.options : [])
+      .filter(function (o) { return o && typeof o === "object" && o.na; })
+      .map(function (o) { return o.en; });
+  }
+  function questionApplies(f, data) {
+    if (!f || !f.scoring) return false;
+    if (!condMet(f, data)) return false;              // never asked on this record
+    var v = (data || {})[f.id];
+    var txt = v == null ? "" : String(v);
+    if (!txt) return true;                            // asked and missed still counts
+    var na = naChoices(f);
+    if (!na.length) return true;
+    // Stored comma-joined for a multi-select. Only a wholly N/A answer takes the question
+    // out: ticking N/A alongside a real answer is still an answer.
+    return !txt.split(/\s*,\s*/).every(function (p) { return na.indexOf(p) !== -1; });
+  }
+  function questionEarned(f, data) {
+    var sc = f && f.scoring;
+    if (!sc) return 0;
+    var v = (data || {})[f.id];
+    var txt = v == null ? "" : String(v);
+    if (sc.rule === "choices") {
+      if (!txt) return 0;
+      var by = {};
+      (Array.isArray(f.options) ? f.options : []).forEach(function (o) { if (o && o.en) by[o.en] = o; });
+      var parts = txt.split(/\s*,\s*/);
+      if (f.type === "multi_select") {
+        return parts.reduce(function (a, p) { return a + choicePoints(by[p]); }, 0);
+      }
+      return choicePoints(by[parts[0]]);
+    }
+    var max = questionMaxPoints(f);
+    if (sc.rule === "equals") {
+      return (sc.earn || []).some(function (w) {
+        return String(w).toLowerCase() === txt.toLowerCase();
+      }) ? max : 0;
+    }
+    if (sc.rule === "threshold") {
+      var n = parseFloat(txt), tv = parseFloat(sc.value);
+      if (isNaN(n) || isNaN(tv)) return 0;   // a blank number is a non-answer, not a pass
+      if (sc.op === "<") return n < tv ? max : 0;
+      if (sc.op === ">") return n > tv ? max : 0;
+      return n === tv ? max : 0;
+    }
+    return txt ? max : 0;                    // rule "answered": the points are for answering
+  }
+  function scorecardTotals(fields, data) {
+    var earned = 0, possible = 0;
+    (fields || []).forEach(function (f) {
+      if (!questionApplies(f, data)) return;
+      possible += questionMaxPoints(f);
+      earned += questionEarned(f, data);
+    });
+    return { earned: earned, possible: possible };
+  }
   function condLabel(f, fields) {
     var c = f && f.show_if; if (!c || !c.field) return "";
     var on = (fields || []).filter(function (g) { return g.id === c.field; })[0];
