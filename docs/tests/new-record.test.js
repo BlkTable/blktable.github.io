@@ -157,4 +157,53 @@ t('a condition pointing at a deleted field hides the question, as on the public 
   assert.strictEqual(A.newRecordVisible([orphan], { 'f-gone': 'Yes' })['f-x'], false);
 });
 
+// ---- What the label says, and that it is not printed as markup ------------
+// Reported from the screen: the create panel showed
+//   Event name <span style="color:var(--silver);">*</span>
+// as words. The marker was being appended to the label STRING, and edRow escapes the
+// label — as it must, since a question's name is typed by a person. Passed as a flag
+// instead, so the marker is markup and the name is still escaped.
+const SRC = fs.readFileSync('index.html', 'utf8');
+const ER = (function () {
+  const js = scripts('index.html');
+  const ctx = { console, esc: s => String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])) };
+  vm.createContext(ctx);
+  new vm.Script('(function(){' + grab(js, 'edRow', 'index.html') + '\n this.edRow = edRow;}).call(this)')
+    .runInContext(ctx);
+  return ctx.edRow;
+})();
+
+t('a required question is marked, and the marker is markup rather than words', () => {
+  const h = ER('Event name', '<input>', false, null, false, true);
+  assert.ok(/<span class="k-req">required<\/span>/.test(h), h);
+  assert.ok(!/&lt;span/.test(h), 'the marker must not come out escaped');
+});
+t('an optional question carries no marker at all', () => {
+  const h = ER('Description', '<input>', false, null, false, false);
+  assert.ok(!/k-req/.test(h), h);
+  assert.ok(!/required/.test(h), h);
+});
+t('the label itself is STILL escaped — a question name is typed by a person', () => {
+  const h = ER('<img src=x onerror=1>', '<input>', false, null, false, true);
+  assert.ok(!/<img/.test(h), 'the fix must not have turned the label into raw markup');
+  assert.ok(/&lt;img/.test(h));
+});
+t('no marker text is ever appended to the label string', () => {
+  // The shape of the original bug: `label += '<span ...>'`.
+  assert.ok(!/label \+= ['"] ?<span/.test(SRC),
+    'appending markup to an escaped label is what printed it as words');
+});
+t('the marker is passed as a flag from edFieldRowHtml', () => {
+  assert.ok(/return edRow\(label, inner,[\s\S]{0,120}?mustAnswer\)/.test(SRC),
+    'edRow must receive the required flag, not a pre-marked label');
+});
+t('only the create panel marks required, because only it refuses a save', () => {
+  assert.ok(/opts\.stars && f\.required/.test(SRC),
+    'the record panel autosaves and never refuses, so a marker there would be a lie');
+});
+t('the marker has a style rule, or it renders as unstyled text', () => {
+  assert.ok(/\.m-field \.k \.k-req \{/.test(SRC), 'no CSS for .k-req');
+});
+
 console.log(n + ' new-record tests passed');
