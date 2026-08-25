@@ -828,6 +828,24 @@
   .tb-btn { border: 1px solid transparent; background: none; color: var(--muted); font-size: var(--fs-3); font-weight: 600; padding: 6px 10px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
   .tb-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
   .tb-btn.active { color: #ffe9a6; background: rgba(234,179,8,0.12); }
+  /* The two buttons that drive the events flow. Everything else in this bar is a view
+     control; these two act — one hands out a voting link, the other builds a roster
+     people get paid from — so they read as buttons rather than as toolbar text. The
+     glow is a slow pulse, not a flash: it should be findable, not distracting. */
+  .tb-btn.tb-glow { color: #cfe4ff; border-color: rgba(45,127,249,0.55); background: rgba(45,127,249,0.12);
+    animation: tbGlow 2.8s ease-in-out infinite; }
+  .tb-btn.tb-glow:hover { color: #fff; background: rgba(45,127,249,0.22); border-color: var(--accent-hi); animation: none; }
+  @keyframes tbGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(45,127,249,0.00); }
+    50%      { box-shadow: 0 0 10px 1px rgba(45,127,249,0.45); }
+  }
+  /* Somebody who has asked not to see motion gets the colour and the border, no pulse. */
+  @media (prefers-reduced-motion: reduce) { .tb-btn.tb-glow { animation: none; } }
+  /* The Assign button on a record panel, same reasoning. */
+  .linkbtn.lb-glow { color: #cfe4ff; border-color: rgba(45,127,249,0.55); background: rgba(45,127,249,0.12);
+    animation: tbGlow 2.8s ease-in-out infinite; }
+  .linkbtn.lb-glow:hover { color: #fff; background: rgba(45,127,249,0.22); animation: none; }
+  @media (prefers-reduced-motion: reduce) { .linkbtn.lb-glow { animation: none; } }
   /* multi-select editor in the record panel */
   .ed-checks { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line);
     border-radius: 8px; padding: 5px; background: rgba(255,255,255,0.03); max-height: 230px; overflow-y: auto; }
@@ -1794,7 +1812,7 @@
             <button class="tb-btn" id="custom-payroll" type="button" style="display:none;" title="Export names and money for a date range">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4"></path><path d="M8 14h8"></path></svg>Payroll
             </button>
-            <button class="tb-btn" id="custom-polls" type="button" style="display:none;" title="Make a link that asks people which of these they can do">
+            <button class="tb-btn tb-glow" id="custom-polls" type="button" style="display:none;" title="Make a link that asks people which of these they can do">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"></path></svg>Voting links
             </button>
             <div class="tb-right">
@@ -6562,9 +6580,16 @@
     return String(value == null ? "" : value).split(",")
       .map(function (s) { return s.trim(); })
       .filter(Boolean)
-      .map(function (id) {
+      .map(function (key) {
+        // A vote names one DAY of an event, stored as "<id>#<date>". Splitting the day
+        // off is what keeps this readable: looking the whole key up as an id would miss
+        // every row and print "(deleted event)" against perfectly good votes.
+        var hash = key.indexOf("#");
+        var id = hash === -1 ? key : key.slice(0, hash);
+        var day = hash === -1 ? "" : key.slice(hash + 1);
         var r = byId && byId[id];
-        return (r && String(r.name || "").trim()) || "(deleted event)";
+        var nm = (r && String(r.name || "").trim()) || "(deleted event)";
+        return day ? nm + " (" + day + ")" : nm;
       })
       .join(", ");
   }
@@ -6609,6 +6634,33 @@
   // One person, spelled once. The SAME rule payrollRows uses — if these two ever
   // disagree, the roster and the money disagree about who somebody is.
   function assignPersonKey(name) { return String(name == null ? "" : name).trim().toLowerCase(); }
+  // The days an event covers — the same rule as the public form's copy, which is why
+  // both carry the same comment: an empty end date means a single day, and no date at
+  // all means one unnamed day rather than none. Capped at 60, so a year typed wrong
+  // draws an obviously wrong 60 rather than hundreds.
+  function eventDays(start, end) {
+    var d0 = String(start || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d0)) return [null];
+    var d1 = String(end || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d1) || d1 <= d0) return [d0];
+    var out = [], cur = d0;
+    while (cur <= d1 && out.length < 60) {
+      out.push(cur);
+      var t = new Date(cur + "T00:00:00Z");
+      t.setUTCDate(t.getUTCDate() + 1);
+      cur = t.toISOString().slice(0, 10);
+    }
+    return out;
+  }
+  // What a vote names: one DAY of one event. The public form builds the identical
+  // string, and a roster row is matched back by it, so the two must never drift.
+  function ballotKey(id, day) { return String(id == null ? "" : id) + "#" + String(day || ""); }
+  // A roster row belongs to one person on one day. This is the identity the diff keys
+  // on — NOT the person alone, or Day 2's roster would read as a duplicate of Day 1's
+  // and be deleted the moment Day 1 was saved.
+  function assignRowKey(name, day) {
+    return assignPersonKey(name) + "#" + String(day || "").slice(0, 10);
+  }
 
   // Everyone whose LATEST vote ticks this event. Latest and not all, because a barista
   // fills a ballot in again whenever a new link arrives: counting every submission would
@@ -6616,8 +6668,9 @@
   //
   // Matched on the EVENT id, so it does not matter which poll the vote was cast in — an
   // event can sit on more than one link and every vote for it counts.
-  function assignCandidates(availRows, eventId, cfg) {
+  function assignCandidates(availRows, eventId, cfg, day) {
     if (!cfg || !eventId) return [];
+    var want = ballotKey(eventId, day);
     var latest = {};
     (availRows || []).forEach(function (r) {
       var k = assignPersonKey((r.data || {})[cfg.name]);
@@ -6630,7 +6683,9 @@
       var r = latest[k];
       var ticked = String(((r.data || {})[cfg.match]) || "").split(",")
         .map(function (s) { return s.trim(); }).filter(Boolean);
-      if (ticked.indexOf(String(eventId)) === -1) return;   // exact: e-1 never matches e-12
+      // Exact, and per DAY: "e-1#2026-09-10" never matches e-12, and never matches the
+      // Saturday of the same event either.
+      if (ticked.indexOf(want) === -1) return;
       out.push({
         key: k,
         name: String(((r.data || {})[cfg.name]) || "").trim() || "(no name)",
@@ -6644,12 +6699,16 @@
   // How many events each person already has in one month, so the work can be spread
   // instead of the same four people getting everything. By month because that is the
   // period Zamel thinks in and the one payroll is run over.
-  function assignMonthCount(rosterRows, eventsById, monthKey, nameField) {
+  function assignMonthCount(rosterRows, eventsById, monthKey, nameField, dayField) {
     var out = {};
     (rosterRows || []).forEach(function (r) {
       var ev = eventsById && eventsById[r.parent_id];
       if (!ev) return;                                     // an event since deleted counts nowhere
-      if (String(ev.date || "").slice(0, 7) !== String(monthKey || "")) return;
+      // A multi-day event's rows each name their own day, so the count is of DAYS
+      // worked rather than events — which is also what the person is paid for.
+      var own = dayField ? String((r.data || {})[dayField] || "").slice(0, 10) : "";
+      var when = own || String(ev.date || "");
+      if (String(when).slice(0, 7) !== String(monthKey || "")) return;
       var k = assignPersonKey((r.data || {})[nameField]);
       if (!k) return;
       out[k] = (out[k] || 0) + 1;
@@ -6679,12 +6738,18 @@
   // Who on this event's candidate list is already booked somewhere overlapping, and
   // where. Named rather than counted: "clashes with Brunch" is actionable, "1 clash"
   // sends Zamel hunting.
-  function assignClashes(rosterRows, event, eventsById, nameField) {
+  function assignClashes(rosterRows, event, eventsById, nameField, dayField) {
     var out = {};
     (rosterRows || []).forEach(function (r) {
       if (!event || r.parent_id === event.id) return;       // its own roster is not a clash
       var other = eventsById && eventsById[r.parent_id];
-      if (!other || !eventsOverlap(event, other)) return;
+      if (!other) return;
+      // A multi-day event's roster rows each name their own day, so compare against
+      // THAT day. Using the event's first day instead would report somebody booked on
+      // the Saturday as booked on the Friday, and miss the real clash.
+      var own = dayField ? String((r.data || {})[dayField] || "").slice(0, 10) : "";
+      var probe = own ? { date: own, start: other.start, end: other.end, name: other.name } : other;
+      if (!eventsOverlap(event, probe)) return;
       var k = assignPersonKey((r.data || {})[nameField]);
       if (!k) return;
       out[k] = out[k] || [];
@@ -6709,17 +6774,17 @@
   function assignDiff(existing, ticked) {
     var first = {}, dupes = [];
     (existing || []).forEach(function (r) {
-      var k = assignPersonKey(r.name);
+      var k = assignRowKey(r.name, r.day);
       if (!first[k]) first[k] = r; else dupes.push(r);
     });
     var want = {};
-    (ticked || []).forEach(function (p) { want[assignPersonKey(p.name)] = p; });
+    (ticked || []).forEach(function (p) { want[assignRowKey(p.name, p.day)] = p; });
     var slotOf = function (s) { return String(s || "confirmed"); };
     var insert = [], remove = dupes.slice(), update = [], keep = [];
     Object.keys(want).forEach(function (k) {
       var row = first[k], p = want[k];
       if (!row) { insert.push(p); return; }
-      if (slotOf(p.slot) !== slotOf(row.slot)) update.push({ id: row.id, slot: slotOf(p.slot), name: p.name });
+      if (slotOf(p.slot) !== slotOf(row.slot)) update.push({ id: row.id, slot: slotOf(p.slot), name: p.name, day: p.day });
       else keep.push(row);
     });
     Object.keys(first).forEach(function (k) { if (!want[k]) remove.push(first[k]); });
@@ -6743,7 +6808,9 @@
     // Normalised to {id, name, slot} so the diff stays pure and the real field ids live
     // in exactly one place.
     var norm = (ctx.existing || []).map(function (r) {
-      return { id: r.id, slot: r.slot, name: (r.data || {})[rcfg.assign_name] };
+      return { id: r.id, slot: r.slot,
+               name: (r.data || {})[rcfg.assign_name],
+               day: rcfg.assign_day ? (r.data || {})[rcfg.assign_day] : null };
     });
     var d = assignDiff(norm, ctx.ticked || []);
     var step = Promise.resolve();
@@ -6770,6 +6837,10 @@
         var data = {};
         data[rcfg.assign_name] = p.name;
         if (p.phone) data[rcfg.assign_phone] = p.phone;
+        // Which day of the event this row is for. One row per person per day is what
+        // makes the money right: payrollRows adds the event's rate once per row, so
+        // two days of a 15 JD event pays 30 with no payroll change at all.
+        if (rcfg.assign_day && p.day) data[rcfg.assign_day] = p.day;
         return db.rpc("create_record", {
           p_table: ctx.rosterTableId,
           p_data: data,
@@ -6782,7 +6853,9 @@
   }
   // The roster panel for one event: everybody who voted for it, how loaded they already
   // are that month, whether they are double-booked, and one Submit.
-  function openAssign(t, evRec) {
+  // `note` is what to say once the panel has been redrawn — a save's result, carried
+  // through the reopen so it survives it.
+  function openAssign(t, evRec, note) {
     var cfg = assignConfig(t);
     if (!cfg || !canManage(t.id) || !evRec) return;
     clearAutosave();
@@ -6799,7 +6872,7 @@
       '<span class="nr-msg" id="as-msg"></span></div>';
     document.getElementById("modal").classList.add("open");
 
-    var cands = [], mine = [], rosterId = null, rosterCfg = {}, places = null;
+    var byDay = [], days = [], mine = [], rosterId = null, rosterCfg = {}, places = null;
     function say(text, ok) {
       var m = document.getElementById("as-msg");
       if (m) { m.textContent = text || ""; m.className = "nr-msg" + (ok ? " ok" : ""); }
@@ -6834,81 +6907,167 @@
           };
         });
         var me = evById[evRec.id] || { id: evRec.id };
-        cands = assignCandidates(avail, evRec.id, cfg);
         mine = roster.filter(function (r) { return r.parent_id === evRec.id; });
         places = Number((evRec.data || {})[cfg.capacity]);
         if (!isFinite(places)) places = null;
-        var month = String(me.date || "").slice(0, 7);
-        var loads = assignMonthCount(roster, evById, month, rosterCfg.assign_name);
-        var clashes = assignClashes(roster, me, evById, rosterCfg.assign_name);
+        // One block per day of the event, and the candidates for each day are only the
+        // people who ticked THAT day. A single-day event is one block, as before.
+        days = eventDays(me.date, (evRec.data || {})[cfg.end_date]);
+        byDay = days.map(function (day) {
+          return { day: day, cands: assignCandidates(avail, evRec.id, cfg, day) };
+        });
+        // Somebody already rostered on a day the event NO LONGER covers — because its
+        // dates were shortened after the roster was built. Without a block of their own
+        // they render nowhere, so the next Submit reads them as un-ticked and deletes
+        // them: a roster quietly lost by editing a date. Shown instead, ticked, so
+        // dropping them is a decision rather than a side effect.
+        var known = {};
+        days.forEach(function (d) { known[String(d || "")] = true; });
+        var strays = {};
+        mine.forEach(function (r) {
+          var d = rosterCfg.assign_day
+            ? String((r.data || {})[rosterCfg.assign_day] || "").slice(0, 10) : "";
+          if (known[d]) return;
+          strays[d] = strays[d] || [];
+          strays[d].push({
+            key: assignPersonKey((r.data || {})[rosterCfg.assign_name]),
+            name: String((r.data || {})[rosterCfg.assign_name] || "").trim() || "(no name)",
+            phone: String((r.data || {})[rosterCfg.assign_phone] || "").trim()
+          });
+        });
+        Object.keys(strays).forEach(function (d) {
+          byDay.push({ day: d || null, stray: true, cands: strays[d] });
+        });
+        var loads = {}, clashes = {};
+        days.forEach(function (day) {
+          var probe = { id: evRec.id, name: me.name, date: day || me.date, start: me.start, end: me.end };
+          var month = String(day || me.date || "").slice(0, 7);
+          var l = assignMonthCount(roster, evById, month, rosterCfg.assign_name, rosterCfg.assign_day);
+          var c = assignClashes(roster, probe, evById, rosterCfg.assign_name, rosterCfg.assign_day);
+          loads[String(day || "")] = l;
+          clashes[String(day || "")] = c;
+        });
         render(loads, clashes);
       });
     }).catch(function () { say("Could not open the roster."); });
 
-    function onRoster(key) {
+    // A roster row is found by person AND day, never person alone — otherwise Day 1's
+    // row answers for Day 2 and the panel opens with the wrong boxes already ticked.
+    function onRoster(key, day) {
+      var want = assignRowKey(key, day);
       for (var i = 0; i < mine.length; i++) {
-        if (assignPersonKey((mine[i].data || {})[rosterCfg.assign_name]) === key) return mine[i];
+        var d = rosterCfg.assign_day ? (mine[i].data || {})[rosterCfg.assign_day] : null;
+        if (assignRowKey((mine[i].data || {})[rosterCfg.assign_name], d) === want) return mine[i];
       }
       return null;
     }
     function render(loads, clashes) {
       var host = document.getElementById("as-list");
       if (!host) return;
-      if (!cands.length) {
+      var total = byDay.reduce(function (a, b) { return a + b.cands.length; }, 0);
+      if (!total) {
         host.innerHTML = '<div class="m-empty">Nobody has voted for this event yet. ' +
           "Make a voting link that includes it, and send it to the baristas.</div>";
         paintCount();
+        if (note) say(note, true);      // a save that emptied the roster still reports back
         return;
       }
-      host.innerHTML = cands.map(function (c) {
-        var on = onRoster(c.key);
-        var slot = on ? String(on.slot || "confirmed") : "confirmed";
-        var load = loads[c.key] || 0;
-        var cl = clashes[c.key] || [];
-        return '<label class="ed-chk" style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;">' +
-          '<input type="checkbox" class="as-tick" data-key="' + esc(c.key) + '"' + (on ? " checked" : "") + ">" +
-          '<span style="flex:1;">' +
-            "<b>" + esc(c.name) + "</b>" +
-            (c.phone ? ' <span class="lbl">' + esc(c.phone) + "</span>" : ' <span class="lbl">no number</span>') +
-            '<br><span class="lbl">' + load + (load === 1 ? " event" : " events") + " this month</span>" +
-            (cl.length ? '<br><span class="lbl" style="color:var(--gold);">clashes with ' +
-                         esc(cl.join(", ")) + "</span>" : "") +
-          "</span>" +
-          '<select class="as-slot" data-key="' + esc(c.key) + '">' +
-            '<option value="confirmed"' + (slot === "confirmed" ? " selected" : "") + ">confirmed</option>" +
-            '<option value="backup"' + (slot === "backup" ? " selected" : "") + ">backup</option>" +
-          "</select></label>";
+      var multi = days.length > 1 || byDay.length > days.length;
+      host.innerHTML = byDay.map(function (blk, di) {
+        var dk = String(blk.day || "");
+        var head = blk.stray
+          ? '<div class="m-sub" style="margin-top:16px;color:var(--gold);">' +
+            "No longer a day of this event" + (blk.day ? " · " + esc(blk.day) : "") +
+            " — untick to drop them" +
+            ' <span class="as-daycount" data-day="' + esc(dk) + '"></span></div>'
+          : multi
+          ? '<div class="m-sub" style="margin-top:16px;">Day ' + (di + 1) + " of " + days.length +
+            (blk.day ? " · " + esc(blk.day) : "") +
+            ' <span class="as-daycount" data-day="' + esc(dk) + '"></span></div>'
+          : "";
+        if (!blk.cands.length) {
+          return head + '<div class="m-empty">Nobody ticked this day.</div>';
+        }
+        return head + blk.cands.map(function (c) {
+          var on = onRoster(c.key, blk.day);
+          var slot = on ? String(on.slot || "confirmed") : "confirmed";
+          var load = ((loads[dk] || {})[c.key]) || 0;
+          var cl = ((clashes[dk] || {})[c.key]) || [];
+          var rk = esc(c.key + "#" + dk);
+          return '<label class="ed-chk" style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;">' +
+            '<input type="checkbox" class="as-tick" data-rk="' + rk + '" data-key="' + esc(c.key) +
+              '" data-day="' + esc(dk) + '"' + (on ? " checked" : "") + ">" +
+            '<span style="flex:1;">' +
+              "<b>" + esc(c.name) + "</b>" +
+              (c.phone ? ' <span class="lbl">' + esc(c.phone) + "</span>" : ' <span class="lbl">no number</span>') +
+              '<br><span class="lbl">' + load + (load === 1 ? " day" : " days") + " this month</span>" +
+              (cl.length ? '<br><span class="lbl" style="color:var(--gold);">clashes with ' +
+                           esc(cl.join(", ")) + "</span>" : "") +
+            "</span>" +
+            '<select class="as-slot" data-rk="' + rk + '">' +
+              '<option value="confirmed"' + (slot === "confirmed" ? " selected" : "") + ">confirmed</option>" +
+              '<option value="backup"' + (slot === "backup" ? " selected" : "") + ">backup</option>" +
+            "</select></label>";
+        }).join("");
       }).join("");
       [].slice.call(host.querySelectorAll(".as-tick, .as-slot")).forEach(function (el) {
         el.addEventListener("change", paintCount);
       });
       paintCount();
+      // Said AFTER the redraw, so a save's result is still on screen when the panel
+      // comes back. paintCount() does not touch this line, so it stays put.
+      if (note) say(note, true);
     }
     function ticked() {
       var host = document.getElementById("as-list");
       if (!host) return [];
+      var all = [];
+      byDay.forEach(function (blk) {
+        blk.cands.forEach(function (c) { all.push({ c: c, day: blk.day }); });
+      });
       return [].slice.call(host.querySelectorAll(".as-tick")).filter(function (i) { return i.checked; })
         .map(function (i) {
+          var rk = i.getAttribute("data-rk");
           var key = i.getAttribute("data-key");
-          var sel = host.querySelector('.as-slot[data-key="' + key + '"]');
-          var c = cands.filter(function (x) { return x.key === key; })[0] || {};
-          return { key: key, name: c.name, phone: c.phone, slot: (sel && sel.value) || "confirmed" };
+          var dk = i.getAttribute("data-day");
+          var sel = host.querySelector('.as-slot[data-rk="' + rk + '"]');
+          var hit = all.filter(function (x) {
+            return x.c.key === key && String(x.day || "") === String(dk || "");
+          })[0];
+          var c = (hit && hit.c) || {};
+          return { key: key, name: c.name, phone: c.phone, day: dk || null,
+                   slot: (sel && sel.value) || "confirmed" };
         });
     }
     function paintCount() {
       var el = document.getElementById("as-count");
       var go = document.getElementById("as-go");
       if (go) go.disabled = false;
-      if (!el) return;
       var picked = ticked();
+      // Capacity is per DAY: six places on a three-day fair is six people each day.
+      var anyOver = false;
+      byDay.forEach(function (blk) {
+        var dk = String(blk.day || "");
+        var mineDay = picked.filter(function (p) { return String(p.day || "") === dk; });
+        var conf = mineDay.filter(function (p) { return p.slot === "confirmed"; }).length;
+        var over = places != null && conf > places;
+        if (over) anyOver = true;
+        var tag = document.querySelector('.as-daycount[data-day="' + dk + '"]');
+        if (tag) {
+          tag.textContent = " — " + conf + (places != null ? "/" + places : "") +
+            " confirmed, " + (mineDay.length - conf) + " backup" + (over ? " (over)" : "");
+          tag.style.color = over ? "var(--gold)" : "";
+        }
+      });
+      if (!el) return;
       var conf = picked.filter(function (p) { return p.slot === "confirmed"; }).length;
       var back = picked.length - conf;
+      var unit = byDay.length > 1 ? " place-days" : " places";
       // Over capacity WARNS and never blocks. Zamel is the manager and the number is
       // advisory in this flow — a hard stop here would be the app overruling him.
-      var over = places != null && conf > places;
-      el.textContent = conf + (places != null ? " of " + places + " places" : " confirmed") +
-        " · " + back + " backup" + (over ? "  — over capacity" : "");
-      el.style.color = over ? "var(--gold)" : "";
+      el.textContent = conf + (places != null ? " of " + (places * byDay.length) + unit : " confirmed") +
+        " · " + back + " backup" + (anyOver ? "  — over capacity on a day" : "");
+      el.style.color = anyOver ? "var(--gold)" : "";
     }
 
     document.getElementById("as-go").addEventListener("click", function () {
@@ -6919,9 +7078,13 @@
         rosterCfg: rosterCfg, existing: mine, ticked: ticked()
       }).then(function (d) {
         // Said in the terms that matter: how many people will actually be told.
-        say(d.insert.length + " added · " + d.remove.length + " removed · " +
-            d.update.length + " moved · " + d.keep.length + " unchanged", true);
-        openAssign(t, evRec);
+        //
+        // Passed INTO the reopen rather than said before it. Saying it first and then
+        // redrawing wiped it in the same tick, which is why saving looked like it did
+        // nothing until you closed the panel and came back.
+        openAssign(t, evRec,
+          d.insert.length + " added · " + d.remove.length + " removed · " +
+          d.update.length + " moved · " + d.keep.length + " unchanged");
       }).catch(function (e) {
         btn.disabled = false;
         say("Could not save the roster. " + ((e && e.message) || ""));
@@ -8563,7 +8726,7 @@
     var mayAssign = !!(assignT && assignConfig(assignT) && canManage(assignT.id));
     body.innerHTML = scoreHead + alertBannerHtml(currentCustom && currentCustom.table, s) +
       (mayAssign ? '<div class="link-bar" style="margin-top:12px;"><span class="lbl">Staffing</span>' +
-        '<button type="button" class="linkbtn" id="cd-assign">Assign baristas</button></div>' : "") +
+        '<button type="button" class="linkbtn lb-glow" id="cd-assign">Assign baristas</button></div>' : "") +
       recordLinkBlockHtml(childT) + '<div id="cd-kids"></div>' +
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +

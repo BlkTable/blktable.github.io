@@ -3,7 +3,7 @@ function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matc
 function grab(js,name,file){const re=new RegExp('\\n  function '+name+'\\s*\\([\\s\\S]*?\\n  \\}','');const m=js.match(re);if(!m)throw new Error('no fn '+name+' in '+file);return m[0];}
 function load(file,names,extra){const js=scripts(file);const ctx=Object.assign({console},extra||{});vm.createContext(ctx);new vm.Script('(function(){'+names.map(n=>grab(js,n,file)).join('\n')+'\n this.API={'+names.join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
 
-const API = load('index.html', ['assignPersonKey','assignDiff','submitAssignments']);
+const API = load('index.html', ['assignPersonKey','assignRowKey','assignDiff','submitAssignments']);
 const asW = o => JSON.parse(JSON.stringify(o));
 let n=0, failed=0;
 const t=(name,fn)=>{try{fn();n++;}catch(e){console.log('FAIL: '+name+' -> '+e.message);failed++;process.exitCode=1;}};
@@ -95,6 +95,14 @@ const ctx = (existing, ticked, db) => ({db, rosterTableId:'T_ROSTER', eventId:'e
 // what submitAssignments receives from the panel: raw roster rows
 const RAW = (id, name, slot) => ({id, slot, data:{R_NM:name, R_PH:'+1'}});
 
+// Multi-day fixtures, declared up here rather than beside their tests: the async block
+// below awaits before reaching that point, and a `const` referenced across an await
+// boundary from earlier in the block is still in its temporal dead zone.
+const PD = (name, phone, slot, day) => ({key:name.trim().toLowerCase(), name, phone, slot, day});
+const RCFGD = {assign_name:'R_NM', assign_phone:'R_PH', assign_day:'R_DAY'};
+const ctxd = (existing, ticked, db) => ({db, rosterTableId:'T_ROSTER', eventId:'e-9',
+  rosterCfg:RCFGD, existing, ticked});
+
 (async () => {
 
 await T('an unchanged roster writes NOTHING — the rule the feature lives on', async () => {
@@ -175,12 +183,64 @@ await T('a failed insert surfaces too', async () => {
   assert.ok(threw);
 });
 
+await T('a multi-day insert writes the day onto the row, which is what pays it twice', async () => {
+  const db = stubDb();
+  await API.submitAssignments(ctxd([], [PD('Ali','+1','confirmed','2026-09-10'),
+                                       PD('Ali','+1','confirmed','2026-09-11')], db));
+  const made = db.calls.filter(c=>c.kind==='create_record');
+  assert.strictEqual(made.length, 2, 'two days is two rows');
+  assert.deepStrictEqual(asW(made.map(c=>c.args.p_data.R_DAY)), ['2026-09-10','2026-09-11']);
+  assert.ok(made.every(c => c.args.p_parent === 'e-9'), 'both hang off the same event');
+});
+
+await T('the day is left off when the roster has no day question, rather than written as null', async () => {
+  const db = stubDb();
+  await API.submitAssignments(ctx([], [P('Ahmad','+1','confirmed')], db));
+  const a = db.calls.filter(c=>c.kind==='create_record')[0].args;
+  assert.ok(!('R_DAY' in a.p_data), 'a table without days must not gain an empty day answer');
+});
+
 await T('the diff is handed back, so the panel can say what actually happened', async () => {
   const db = stubDb();
   const d = await API.submitAssignments(ctx([RAW('r1','Ahmad','confirmed')],
     [P('Ahmad','+1','confirmed'), P('Sara','+2','confirmed')], db));
   assert.strictEqual(d.insert.length, 1);
   assert.strictEqual(d.keep.length, 1);
+});
+
+// ---- Multi-day: one row per person per day ------------------------------
+t('the same person on two days is two rows, not a duplicate', () => {
+  const d = API.assignDiff([], [PD('Ali','+1','confirmed','2026-09-10'),
+                                PD('Ali','+1','confirmed','2026-09-11')]);
+  assert.strictEqual(d.insert.length, 2, 'two days worked is two rows, and two days paid');
+  assert.deepStrictEqual(asW(d.remove), []);
+});
+t('saving Day 2 does not delete Day 1', () => {
+  // Keyed on the person alone this was a duplicate, and Day 1 was removed.
+  const have = [{id:'r1', name:'Ali', slot:'confirmed', day:'2026-09-10'}];
+  const d = API.assignDiff(have, [PD('Ali','+1','confirmed','2026-09-10'),
+                                  PD('Ali','+1','confirmed','2026-09-11')]);
+  assert.deepStrictEqual(asW(d.remove), [], 'Day 1 must survive');
+  assert.strictEqual(d.keep.length, 1);
+  assert.strictEqual(d.insert.length, 1);
+  assert.strictEqual(d.insert[0].day, '2026-09-11');
+});
+t('un-ticking one day removes only that day', () => {
+  const have = [{id:'r1', name:'Ali', slot:'confirmed', day:'2026-09-10'},
+                {id:'r2', name:'Ali', slot:'confirmed', day:'2026-09-11'}];
+  const d = API.assignDiff(have, [PD('Ali','+1','confirmed','2026-09-10')]);
+  assert.deepStrictEqual(asW(d.remove.map(x=>x.id)), ['r2']);
+  assert.strictEqual(d.keep.length, 1);
+});
+t('a slot change on one day leaves the other day alone', () => {
+  const have = [{id:'r1', name:'Ali', slot:'confirmed', day:'2026-09-10'},
+                {id:'r2', name:'Ali', slot:'confirmed', day:'2026-09-11'}];
+  const d = API.assignDiff(have, [PD('Ali','+1','backup','2026-09-10'),
+                                  PD('Ali','+1','confirmed','2026-09-11')]);
+  assert.deepStrictEqual(asW(d.update.map(x=>x.id)), ['r1']);
+  assert.strictEqual(d.keep.length, 1);
+  assert.deepStrictEqual(asW(d.insert), []);
+  assert.deepStrictEqual(asW(d.remove), []);
 });
 
 // ---- Gating and restraint, read out of the page as source ----------------

@@ -419,12 +419,38 @@
   // The rate is carried by ballot_options but deliberately not printed here. The built
   // flow decided the event link says what the shift pays (workspaces/30); whether the
   // ballot should is Zamel's call, and turning it on is one line.
-  function ballotLabel(r) {
+  // The days an event covers: the inclusive range from its date to its end date. An
+  // empty end date, or one before the start, means a single day — which is every event
+  // written before End date existed, so nothing changes for them. No date at all gives
+  // one unnamed day rather than none, so a dateless event is still tickable.
+  //
+  // Capped at 60. A year typed wrong in the end date would otherwise draw hundreds of
+  // tick boxes; 60 is far past any real event and still obviously wrong on sight.
+  function eventDays(start, end) {
+    var d0 = String(start || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d0)) return [null];
+    var d1 = String(end || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d1) || d1 <= d0) return [d0];
+    var out = [], cur = d0;
+    while (cur <= d1 && out.length < 60) {
+      out.push(cur);
+      var t = new Date(cur + "T00:00:00Z");
+      t.setUTCDate(t.getUTCDate() + 1);
+      cur = t.toISOString().slice(0, 10);
+    }
+    return out;
+  }
+  // What a vote names: one DAY of one event. Both pages build this the same way, and a
+  // roster row is matched back by it, so the two must never drift.
+  function ballotKey(id, day) { return String(id == null ? "" : id) + "#" + String(day || ""); }
+  function ballotLabel(r, day, i, n) {
     var name = String((r && r.name) || "").trim() || "(untitled)";
-    var d = String((r && r.date) || "").slice(0, 10);
+    var d = String(day || (r && r.date) || "").slice(0, 10);
     var tm = String((r && r.start) || "").slice(0, 5);
     var loc = String((r && r.location) || "").trim();
-    return name + (d ? " — " + d : "") + (d && tm ? " " + tm : "") + (loc ? " · " + loc : "");
+    // Only said when there is more than one, so a single-day event reads as it always did.
+    var dayTag = (n && n > 1) ? " · day " + (i + 1) + " of " + n : "";
+    return name + dayTag + (d ? " — " + d : "") + (d && tm ? " " + tm : "") + (loc ? " · " + loc : "");
   }
   // The VALUE is the record id, never the label. A vote has to survive an event being
   // renamed, and matching people to events by their printed name is the one thing this
@@ -432,16 +458,24 @@
   //
   // Sorted here as well as in SQL, and the same way — by date with the dateless last —
   // because the page must not reorder the ballot if the RPC's ordering ever changes.
+  // One entry per DAY of each event, because a barista can work the Friday of a
+  // three-day fair and not the Saturday. A single-day event is one entry, exactly as
+  // before.
   function ballotOptions(rows) {
-    return (rows || []).slice().sort(function (a, b) {
+    var out = [];
+    (rows || []).slice().sort(function (a, b) {
       var ad = String((a && a.date) || "9999-12-31").slice(0, 10);
       var bd = String((b && b.date) || "9999-12-31").slice(0, 10);
       if (ad !== bd) return ad < bd ? -1 : 1;
       var an = String((a && a.name) || ""), bn = String((b && b.name) || "");
       return an < bn ? -1 : (an > bn ? 1 : 0);
-    }).map(function (r) {
-      return { value: String((r && r.id) || ""), label: ballotLabel(r) };
+    }).forEach(function (r) {
+      var days = eventDays(r && r.date, r && r.end_date);
+      days.forEach(function (day, i) {
+        out.push({ value: ballotKey(r && r.id, day), label: ballotLabel(r, day, i, days.length) });
+      });
     });
+    return out;
   }
   // How many places are left, in words. The server hands over counts only — never who
   // signed up — so this is all the page knows and all it needs to know.
