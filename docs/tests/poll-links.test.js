@@ -216,6 +216,44 @@ t('creating a link refuses an empty tick list and an unnamed link', () => {
   assert.ok(/if \(!ids\)/.test(m[1]), 'a link asking about nothing has nothing to answer');
   assert.ok(/if \(!nm\)/.test(m[1]), 'an unnamed link cannot be told from the others later');
 });
+// ---- Deleting a link: the order is the whole correctness of it -------------
+t('a link can be deleted, and the button carries what the confirm needs to say', () => {
+  assert.ok(/class="linkbtn pl-del"/.test(SRC), 'no delete button on a link');
+  const m = /pl-del"\)\)\.forEach([\s\S]{0,2600}?)\.catch\(function \(e\) \{/.exec(SRC);
+  assert.ok(m, 'could not find the delete handler');
+  assert.ok(/window\.confirm\(/.test(m[1]), 'deleting a link is irreversible; it must be confirmed');
+  assert.ok(/dvotes/.test(m[1]),
+    'the confirm must name how many votes go with it — that is the thing being destroyed');
+});
+t('the VOTES are deleted before the link, never after', () => {
+  // parent_id is ON DELETE SET NULL. The other order does not delete the votes, it
+  // orphans them: parent_id null, invisible in every view, impossible to tidy later.
+  // This is the same trap delete-selected.test.js pins for records and their children.
+  const m = /pl-del"\)\)\.forEach([\s\S]{0,2600}?)\.catch\(function \(e\) \{/.exec(SRC);
+  const kids = m[1].indexOf('eq("parent_id"');
+  const parent = m[1].indexOf('eq("id", id)');
+  assert.ok(kids !== -1, 'the votes are never deleted');
+  assert.ok(parent !== -1, 'the link itself is never deleted');
+  assert.ok(kids < parent, 'the votes must be deleted FIRST, or they are orphaned');
+});
+t('a failed vote delete stops before the link is deleted', () => {
+  const m = /pl-del"\)\)\.forEach([\s\S]{0,2600}?)\.catch\(function \(e\) \{/.exec(SRC);
+  assert.ok(/if \(r1 && r1\.error\) throw r1\.error;/.test(m[1]),
+    'otherwise the link goes and its votes are left orphaned');
+});
+t('the confirm says rosters already assigned are safe', () => {
+  const m = /pl-del"\)\)\.forEach([\s\S]{0,2600}?)\.catch\(function \(e\) \{/.exec(SRC);
+  assert.ok(/NOT affected/.test(m[1]),
+    'without this it reads as though deleting a link might unpay somebody');
+});
+t('creating and deleting both report back through the redraw', () => {
+  assert.ok(/function openPolls\(t, note\)/.test(SRC), 'openPolls must accept a note');
+  assert.ok(/openPolls\(t, "Link deleted/.test(SRC), 'a delete must say so');
+  assert.ok(/openPolls\(t, 'Link created/.test(SRC), 'a create must say so');
+  assert.ok(/if \(note\) say\(note, true\);/.test(SRC),
+    'and it must be said AFTER the redraw, or the redraw wipes it');
+});
+
 t('the token is minted when the link is created, not lazily', () => {
   assert.ok(/record_share_token[\s\S]{0,200}?p_rotate: false/.test(SRC),
     'the point of the dialog is to hand over a link; a row with no token has none');
