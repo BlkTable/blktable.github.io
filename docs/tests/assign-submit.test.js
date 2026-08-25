@@ -3,7 +3,7 @@ function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matc
 function grab(js,name,file){const re=new RegExp('\\n  function '+name+'\\s*\\([\\s\\S]*?\\n  \\}','');const m=js.match(re);if(!m)throw new Error('no fn '+name+' in '+file);return m[0];}
 function load(file,names,extra){const js=scripts(file);const ctx=Object.assign({console},extra||{});vm.createContext(ctx);new vm.Script('(function(){'+names.map(n=>grab(js,n,file)).join('\n')+'\n this.API={'+names.join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
 
-const API = load('index.html', ['assignPersonKey','assignRowKey','assignDiff','submitAssignments']);
+const API = load('index.html', ['assignPersonKey','assignRowKey','assignDiff','assignReport','submitAssignments']);
 const asW = o => JSON.parse(JSON.stringify(o));
 let n=0, failed=0;
 const t=(name,fn)=>{try{fn();n++;}catch(e){console.log('FAIL: '+name+' -> '+e.message);failed++;process.exitCode=1;}};
@@ -241,6 +241,51 @@ t('a slot change on one day leaves the other day alone', () => {
   assert.strictEqual(d.keep.length, 1);
   assert.deepStrictEqual(asW(d.insert), []);
   assert.deepStrictEqual(asW(d.remove), []);
+});
+
+// ---- What the save says it did. On a removal there is nothing left on screen
+// ---- to check against, so the line has to name the person.
+t('a removal NAMES who was removed, not just how many', () => {
+  const r = API.assignReport({insert:[], remove:[{name:'Sara'}], update:[], keep:[{}, {}]});
+  assert.ok(/Removed Sara/.test(r), r);
+  assert.ok(/2 unchanged/.test(r), r);
+});
+t('an addition names who was added', () => {
+  assert.ok(/Added Ahmad/.test(API.assignReport({insert:[{name:'Ahmad'}], remove:[], update:[], keep:[]})));
+});
+t('a slot move names who moved', () => {
+  assert.ok(/Moved Omar/.test(API.assignReport({insert:[], remove:[], update:[{name:'Omar'}], keep:[]})));
+});
+t('all three at once read in one line, in that order', () => {
+  const r = API.assignReport({insert:[{name:'A'}], remove:[{name:'B'}], update:[{name:'C'}], keep:[]});
+  assert.ok(r.indexOf('Added A') < r.indexOf('Removed B'), r);
+  assert.ok(r.indexOf('Removed B') < r.indexOf('Moved C'), r);
+});
+t('the day is named too, because on a three-day event the name is half the fact', () => {
+  const r = API.assignReport({insert:[], remove:[{name:'Sara', day:'2026-09-11'}], update:[], keep:[]});
+  assert.ok(/Sara \(09-11\)/.test(r), r);
+});
+t('a long list is trimmed to three and a count, not a paragraph', () => {
+  const many = ['A','B','C','D','E'].map(n => ({name:n}));
+  const r = API.assignReport({insert:many, remove:[], update:[], keep:[]});
+  assert.ok(/Added A, B, C and 2 more/.test(r), r);
+});
+t('a nameless person still reads as something', () => {
+  assert.ok(/\(no name\)/.test(API.assignReport({insert:[{name:''}], remove:[], update:[], keep:[]})));
+});
+t('saving with nothing changed says so plainly rather than printing four zeros', () => {
+  const r = API.assignReport({insert:[], remove:[], update:[], keep:[{}, {}]});
+  assert.ok(/Nothing changed/.test(r), r);
+});
+t('a null diff does not throw', () => {
+  assert.ok(API.assignReport(null).length > 0);
+  assert.ok(API.assignReport({}).length > 0);
+});
+t('the panel reports through assignReport, not a hand-built count', () => {
+  // Read inline rather than via SRC: that const is declared further down the file and
+  // is still in its temporal dead zone here.
+  assert.ok(/openAssign\(t, evRec, assignReport\(d\)\)/.test(fs.readFileSync('index.html','utf8')),
+    'the save must report in names, which is the whole point of the helper');
 });
 
 // ---- Gating and restraint, read out of the page as source ----------------
