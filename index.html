@@ -9036,6 +9036,11 @@
     var cfg = table.config || {};
     if (!cfg.score_field) return null;
     var map = questionScorerMap(table, fields);      // questionFieldId -> scorerField
+    // A builder-made scorecard has no scorer fields. Its points are rules on the questions
+    // themselves, so the breakdown is worked out here instead of read out of a column. The
+    // shape returned is identical, which is why the header and the section totals below
+    // need to know nothing about which kind of scorecard they are showing.
+    if (cfg.scored) return scoredDetailFromRules(fields, d);
     var qIds = Object.keys(map);
     if (!qIds.length) return null;
     var bySection = {}; var order = [];
@@ -9067,6 +9072,39 @@
       });
       sections.push({ name: sec, earned: se, possible: sp });
       // a lone default section needs no heading — "Scored answers" already said it
+      var showHead = !(order.length === 1 && sec === "Score");
+      html += (showHead ? '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' : "") + rows;
+    });
+    return { html: html, earned: earned, possible: possible, sections: sections };
+  }
+  // The same breakdown as the imported path, computed from app_fields.scoring. Grouped by
+  // scoring.section, and a question that does not apply on this record reads "n/a" and is
+  // in neither total, exactly as an imported scorer holding null does.
+  function scoredDetailFromRules(fields, d) {
+    var scored = (fields || []).filter(function (f) { return f && f.scoring; });
+    if (!scored.length) return null;
+    var bySection = {}, order = [];
+    scored.forEach(function (f) {
+      var sec = (f.scoring && f.scoring.section) || "Score";
+      if (!bySection[sec]) { bySection[sec] = []; order.push(sec); }
+      bySection[sec].push(f);
+    });
+    var earned = 0, possible = 0, sections = [], html = "";
+    order.forEach(function (sec) {
+      var se = 0, sp = 0, rows = "";
+      bySection[sec].forEach(function (f) {
+        var applies = questionApplies(f, d);
+        var maxP = questionMaxPoints(f);
+        var pts = applies ? questionEarned(f, d) : 0;
+        if (applies) { se += pts; sp += maxP; earned += pts; possible += maxP; }
+        var answered = d && d[f.id] != null && d[f.id] !== "";
+        var cls = !applies ? "na" : (pts >= maxP ? "plus" : (pts > 0 ? "na" : "zero"));
+        var lbl = !applies ? "n/a" : (pts > 0 ? "+" + pts : "0");
+        rows += '<div class="q-scored"><div class="ql"><div class="qq">' + esc(f.label) + '</div>' +
+          '<div class="qa">' + (answered ? cellValueHtml(f, d, null) : '<span class="empty-box"></span>') + '</div></div>' +
+          '<div class="qp ' + cls + '">' + lbl + '</div></div>';
+      });
+      sections.push({ name: sec, earned: se, possible: sp });
       var showHead = !(order.length === 1 && sec === "Score");
       html += (showHead ? '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' : "") + rows;
     });

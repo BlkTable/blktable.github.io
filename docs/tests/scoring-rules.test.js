@@ -189,4 +189,63 @@ t('no fields and no data is a total of nothing, not a crash', () => {
   same(scorecardTotals(null, null), { earned: 0, possible: 0 });
 });
 
+// ---- the record view's own totals ----
+// scoredDetail is what the record header reads. It has two paths now: the imported
+// scorer-field path that QC and Mystery Shopper use, and the rules path a builder-made
+// scorecard uses. They must not interfere with each other.
+//
+// cellValueHtml is stubbed rather than loaded. It reaches customCellText, pillClass,
+// fmtFieldDate and half a dozen more, and dragging that chain in would make this file
+// fail for reasons that have nothing to do with scoring. What is under test here is which
+// questions count and what they are worth, not how one answer is painted.
+function loadWith(file, names, stubs) {
+  const js = scripts(file);
+  const ctx = { console };
+  vm.createContext(ctx);
+  new vm.Script('(function(){' + (stubs || '') + '\n' + names.map(x => grab(js, x, file)).join('\n') +
+    '\n this.API={' + names.join(',') + '};}).call(this)').runInContext(ctx);
+  return ctx.API;
+}
+const SD = loadWith('index.html',
+  ['scoredDetail', 'scoredDetailFromRules', 'questionScorerMap', 'questionApplies', 'questionEarned',
+   'questionMaxPoints', 'choicePoints', 'naChoices', 'condMet', 'esc'],
+  'function cellValueHtml(f, d, s) { return "<i>" + ((d && d[f.id]) || "") + "</i>"; }');
+
+t('a table that is not scored at all returns nothing', () => {
+  assert.strictEqual(SD.scoredDetail({ config: {} }, [Q_CLEAN], { q1: 'Yes' }), null);
+});
+t('a builder-made scorecard totals from its rules', () => {
+  const table = { config: { scored: true, score_field: 'pct' } };
+  const sd = SD.scoredDetail(table, [Q_CLEAN, Q_RATE], { q1: 'Yes', q2: 'Acceptable' });
+  assert.ok(sd, 'expected a breakdown');
+  assert.strictEqual(sd.possible, 7);
+  assert.strictEqual(sd.earned, 5);
+});
+t('the breakdown names every scored question', () => {
+  const table = { config: { scored: true, score_field: 'pct' } };
+  const labelled = [Object.assign({ label: 'Floors clean' }, Q_CLEAN)];
+  const sd = SD.scoredDetail(table, labelled, { q1: 'Yes' });
+  assert.ok(sd.html.includes('Floors clean'), 'expected the question in the breakdown');
+});
+t('an N/A question is shown as n/a rather than as a zero', () => {
+  const table = { config: { scored: true, score_field: 'pct' } };
+  const q = { id: 'k', label: 'Kitchen', type: 'dropdown', scoring: { rule: 'choices' },
+              options: [{ en: 'Clean', points: 3 }, { en: 'Not applicable', na: true }] };
+  const sd = SD.scoredDetail(table, [q], { k: 'Not applicable' });
+  assert.strictEqual(sd.possible, 0, 'an N/A question must not be in the total');
+  assert.ok(sd.html.includes('n/a'), 'expected the row to read n/a, got: ' + sd.html);
+});
+t('sections group and each carries its own total', () => {
+  const table = { config: { scored: true, score_field: 'pct' } };
+  const a = { id: 'a', label: 'A', type: 'yesno', scoring: { rule: 'equals', earn: ['Yes'], points: 2, section: 'Cleanliness' } };
+  const b = { id: 'b', label: 'B', type: 'yesno', scoring: { rule: 'equals', earn: ['Yes'], points: 3, section: 'Service' } };
+  const sd = SD.scoredDetail(table, [a, b], { a: 'Yes', b: 'No' });
+  assert.strictEqual(sd.sections.length, 2);
+  const clean = sd.sections.filter(s => s.name === 'Cleanliness')[0];
+  same([clean.earned, clean.possible], [2, 2]);
+});
+t('a scorecard with no priced questions yet returns nothing rather than an empty box', () => {
+  assert.strictEqual(SD.scoredDetail({ config: { scored: true, score_field: 'pct' } }, [Q_PLAIN], {}), null);
+});
+
 if (!process.exitCode) console.log(n + ' passed');
