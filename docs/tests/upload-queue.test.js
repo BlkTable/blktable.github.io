@@ -267,7 +267,9 @@ t('neither page fires its uploads all at once any more', () => {
 });
 t('both pages send their photos through the queue', () => {
   assert.ok(/uploadAll\(toUpload,/.test(PUB_SRC), 'f/index.html submit');
-  assert.ok(/uploadAll\(shots\.map/.test(APP_SRC), 'index.html new record');
+  // `shots` is now built as one entry per FILE before the call, because a question can hold
+  // ten of them — so the queue is handed the list rather than a map over the questions.
+  assert.ok(/uploadAll\(shots,/.test(APP_SRC), 'index.html new record');
 });
 t('both pages carry the status through from the file server', () => {
   // without this the queue cannot tell "wait, we are throttled" from "this file is too big",
