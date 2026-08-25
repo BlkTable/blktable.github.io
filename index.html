@@ -1344,6 +1344,41 @@
   .bld-field .opts { flex: 1; min-width: 120px; min-height: 40px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-3); outline: none; font-family: inherit; resize: none; overflow: hidden; line-height: 1.35; box-sizing: border-box; }
   .bld-field .req-lbl { margin-top: 8px; }
   .bld-field .rm { margin-left: auto; background: none; border: none; color: var(--danger); cursor: pointer; font-size: var(--fs-3); }
+  /* The first screen of creation: three types, each saying what it is. */
+  .bp-list { display: grid; gap: 10px; margin: 16px 0 4px; }
+  .bp-card { display: block; width: 100%; text-align: left; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.02); color: var(--text);
+    cursor: pointer; font: inherit; }
+  .bp-card:hover { border-color: var(--silver); background: rgba(255,255,255,0.05); }
+  .bp-card .bp-name { font-size: var(--fs-4); margin-bottom: 3px; }
+  .bp-card .bp-blurb { color: var(--muted); font-size: var(--fs-3); }
+  #bld-purpose { display: none; }
+  .picking #bld-purpose { display: block; }
+  /* Hide everything the builder normally shows, by exclusion rather than by listing it:
+     the modal carries a name row, an intro, a country picker and more, and a list of
+     things to hide is a list that goes stale the next time a row is added. */
+  .picking .modal > *:not(#bld-purpose):not(.modal-close) { display: none; }
+
+  /* Scorecard only: the price of a question, and the running total under the list. */
+  .bld-field .r3 { display: none; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px;
+                   padding-top: 8px; border-top: 1px dashed var(--line); }
+  .scored-build .bld-field .r3 { display: flex; }
+  .bld-field .r3 .pl { color: var(--muted); font-size: var(--fs-3); }
+  .bld-field input.fpts, .bld-field input.fscval { width: 74px; min-height: 34px; padding: 6px 8px;
+    border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg);
+    color: var(--text); font-size: var(--fs-3); box-sizing: border-box; }
+  .bld-field input.fsec { flex: 1; min-width: 110px; min-height: 34px; padding: 6px 8px;
+    border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg);
+    color: var(--text); font-size: var(--fs-3); box-sizing: border-box; }
+  .bld-field select.fscop, .bld-field select.fscearn { height: 34px; padding: 0 24px 0 8px;
+    border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg);
+    color: var(--text); font-size: var(--fs-3); appearance: none; -webkit-appearance: none; }
+  .bld-field .qmax { color: var(--silver); font-size: var(--fs-3); font-family: var(--font-mono, monospace); }
+  #bld-total { display: none; margin: 10px 0 2px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: rgba(255,255,255,0.03);
+    color: var(--silver); font-size: var(--fs-3); }
+  .scored-build #bld-total { display: block; }
+  #bld-total b { font-family: var(--font-mono, monospace); font-size: var(--fs-4); color: var(--text); }
   .bld-fixed { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
   .bld-fixed-h { color: var(--muted); font-size: var(--fs-3); margin-bottom: 8px; }
   .bld-chip { display: inline-block; margin: 0 6px 6px 0; padding: 4px 10px; border-radius: 999px; background: rgba(214,218,222,0.1); color: var(--silver); font-size: var(--fs-3); }
@@ -2136,6 +2171,11 @@
     <div class="modal-overlay" id="builder-modal">
       <div class="modal" style="max-width: 660px;">
         <button class="modal-close" id="builder-close" aria-label="Close">✕</button>
+        <div id="bld-purpose">
+          <div class="m-name">What are you making?</div>
+          <div class="m-sub">This sets up the next screen. You can change the questions later, but not the type.</div>
+          <div class="bp-list" id="bld-purpose-list"></div>
+        </div>
         <div class="m-name" id="bld-title">New table</div>
         <div class="m-sub" id="bld-sub">Create a form — it gets its own public link.</div>
         <!-- Everything you can change about a table. Moved between this modal (creating one)
@@ -2174,6 +2214,7 @@
           </div>
           <div class="fp-label" id="bld-q-lab" style="margin: 16px 0 6px;">Questions</div>
           <div class="bld-fields" id="bld-fields"></div>
+          <div id="bld-total"></div>
           <button type="button" class="btn-save" id="bld-add-field" style="margin-top: 4px;">＋ Add question</button>
           <div class="bld-stages-wrap" id="bld-stages-wrap">
             <div class="fp-label" style="margin: 16px 0 6px;">Workflow stages <span style="color:var(--muted);font-weight:400;">— optional. Add stages (e.g. New / Approved / Rejected) to get tabs + move buttons.</span></div>
@@ -5198,6 +5239,117 @@
       if (w === v || parts.indexOf(w) !== -1) return true;
     }
     return false;
+  }
+  // ---- Scorecard rules -----------------------------------------------------------
+  // A scorecard prices its own questions. `app_fields.scoring` holds the question-level
+  // rule and the choice objects hold their own prices, so renaming a choice keeps what it
+  // is worth. Everything here is arithmetic over one record: nothing renders, nothing is
+  // stored, and the same rules are mirrored in SQL by score_submission() so that a public
+  // submit, a staff edit, an added record and an import all agree.
+  //
+  // The rule that matters most: a question that was never asked leaves the total. Hidden
+  // by "ask only if", or answered with a choice marked N/A. A branch with no kitchen must
+  // not score worse than a branch with a spotless one for the same work. A question that
+  // was asked and missed is a different thing and stays in the total, earning nothing.
+  function choicePoints(o) {
+    if (!o || typeof o !== "object") return 0;
+    var n = parseFloat(o.points);
+    return isNaN(n) ? 0 : n;
+  }
+  // The most a question can give. A priced choice list works it out from the choices and
+  // never stores it, because a maximum stored beside the choices is a maximum that
+  // disagrees with them the first time one is repriced.
+  function questionMaxPoints(f) {
+    var sc = f && f.scoring;
+    if (!sc) return 0;
+    if (sc.rule === "choices") {
+      var list = Array.isArray(f.options) ? f.options : [];
+      if (f.type === "multi_select") {
+        return list.reduce(function (a, o) { var p = choicePoints(o); return a + (p > 0 ? p : 0); }, 0);
+      }
+      return list.reduce(function (a, o) { return Math.max(a, choicePoints(o)); }, 0);
+    }
+    var n = parseFloat(sc.points);
+    return isNaN(n) ? 0 : n;
+  }
+  // The choices this question treats as "does not apply here".
+  function naChoices(f) {
+    return (Array.isArray(f && f.options) ? f.options : [])
+      .filter(function (o) { return o && typeof o === "object" && o.na; })
+      .map(function (o) { return o.en; });
+  }
+  function questionApplies(f, data) {
+    if (!f || !f.scoring) return false;
+    if (!condMet(f, data)) return false;              // never asked on this record
+    var v = (data || {})[f.id];
+    var txt = v == null ? "" : String(v);
+    if (!txt) return true;                            // asked and missed still counts
+    var na = naChoices(f);
+    if (!na.length) return true;
+    // Stored comma-joined for a multi-select. Only a wholly N/A answer takes the question
+    // out: ticking N/A alongside a real answer is still an answer.
+    return !txt.split(/\s*,\s*/).every(function (p) { return na.indexOf(p) !== -1; });
+  }
+  function questionEarned(f, data) {
+    var sc = f && f.scoring;
+    if (!sc) return 0;
+    var v = (data || {})[f.id];
+    var txt = v == null ? "" : String(v);
+    if (sc.rule === "choices") {
+      if (!txt) return 0;
+      var by = {};
+      (Array.isArray(f.options) ? f.options : []).forEach(function (o) { if (o && o.en) by[o.en] = o; });
+      var parts = txt.split(/\s*,\s*/);
+      if (f.type === "multi_select") {
+        return parts.reduce(function (a, p) { return a + choicePoints(by[p]); }, 0);
+      }
+      return choicePoints(by[parts[0]]);
+    }
+    var max = questionMaxPoints(f);
+    if (sc.rule === "equals") {
+      return (sc.earn || []).some(function (w) {
+        return String(w).toLowerCase() === txt.toLowerCase();
+      }) ? max : 0;
+    }
+    if (sc.rule === "threshold") {
+      var n = parseFloat(txt), tv = parseFloat(sc.value);
+      if (isNaN(n) || isNaN(tv)) return 0;   // a blank number is a non-answer, not a pass
+      if (sc.op === "<") return n < tv ? max : 0;
+      if (sc.op === ">") return n > tv ? max : 0;
+      return n === tv ? max : 0;
+    }
+    return txt ? max : 0;                    // rule "answered": the points are for answering
+  }
+  function scorecardTotals(fields, data) {
+    var earned = 0, possible = 0;
+    (fields || []).forEach(function (f) {
+      if (!questionApplies(f, data)) return;
+      possible += questionMaxPoints(f);
+      earned += questionEarned(f, data);
+    });
+    return { earned: earned, possible: possible };
+  }
+  // The total under the builder's question list. Takes the same {type, options, scoring}
+  // shape the save writes, so the number somebody watches while building and the number
+  // the database stores are produced by one function rather than two that agree by luck.
+  function builderTotalPoints(rows) {
+    return (rows || []).reduce(function (a, r) { return a + questionMaxPoints(r); }, 0);
+  }
+  // A saved rule, back into the row's boxes. A priced choice list shows no points box of
+  // its own: its maximum is the choices, and a second place to type it is a second answer.
+  // No rule at all must come back blank rather than as a 0, because a 0 in the box reads
+  // as "worth nothing", which is itself a rule and would score every ordinary question.
+  function scoringToInputs(sc) {
+    sc = sc || {};
+    var flat = sc.rule && sc.rule !== "choices";
+    return {
+      points: flat && sc.points != null ? sc.points : "",
+      rule: sc.rule || "",
+      earn: (sc.earn || []).join(", "),
+      op: sc.op || "<",
+      value: sc.value == null ? "" : sc.value,
+      section: sc.section || ""
+    };
   }
   function condLabel(f, fields) {
     var c = f && f.show_if; if (!c || !c.field) return "";
@@ -8947,6 +9099,11 @@
     var cfg = table.config || {};
     if (!cfg.score_field) return null;
     var map = questionScorerMap(table, fields);      // questionFieldId -> scorerField
+    // A builder-made scorecard has no scorer fields. Its points are rules on the questions
+    // themselves, so the breakdown is worked out here instead of read out of a column. The
+    // shape returned is identical, which is why the header and the section totals below
+    // need to know nothing about which kind of scorecard they are showing.
+    if (cfg.scorecard) return scoredDetailFromRules(fields, d);
     var qIds = Object.keys(map);
     if (!qIds.length) return null;
     var bySection = {}; var order = [];
@@ -8978,6 +9135,39 @@
       });
       sections.push({ name: sec, earned: se, possible: sp });
       // a lone default section needs no heading — "Scored answers" already said it
+      var showHead = !(order.length === 1 && sec === "Score");
+      html += (showHead ? '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' : "") + rows;
+    });
+    return { html: html, earned: earned, possible: possible, sections: sections };
+  }
+  // The same breakdown as the imported path, computed from app_fields.scoring. Grouped by
+  // scoring.section, and a question that does not apply on this record reads "n/a" and is
+  // in neither total, exactly as an imported scorer holding null does.
+  function scoredDetailFromRules(fields, d) {
+    var scored = (fields || []).filter(function (f) { return f && f.scoring; });
+    if (!scored.length) return null;
+    var bySection = {}, order = [];
+    scored.forEach(function (f) {
+      var sec = (f.scoring && f.scoring.section) || "Score";
+      if (!bySection[sec]) { bySection[sec] = []; order.push(sec); }
+      bySection[sec].push(f);
+    });
+    var earned = 0, possible = 0, sections = [], html = "";
+    order.forEach(function (sec) {
+      var se = 0, sp = 0, rows = "";
+      bySection[sec].forEach(function (f) {
+        var applies = questionApplies(f, d);
+        var maxP = questionMaxPoints(f);
+        var pts = applies ? questionEarned(f, d) : 0;
+        if (applies) { se += pts; sp += maxP; earned += pts; possible += maxP; }
+        var answered = d && d[f.id] != null && d[f.id] !== "";
+        var cls = !applies ? "na" : (pts >= maxP ? "plus" : (pts > 0 ? "na" : "zero"));
+        var lbl = !applies ? "n/a" : (pts > 0 ? "+" + pts : "0");
+        rows += '<div class="q-scored"><div class="ql"><div class="qq">' + esc(f.label) + '</div>' +
+          '<div class="qa">' + (answered ? cellValueHtml(f, d, null) : '<span class="empty-box"></span>') + '</div></div>' +
+          '<div class="qp ' + cls + '">' + lbl + '</div></div>';
+      });
+      sections.push({ name: sec, earned: se, possible: sp });
       var showHead = !(order.length === 1 && sec === "Score");
       html += (showHead ? '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' : "") + rows;
     });
@@ -10251,6 +10441,70 @@
     document.getElementById("bld-intro").value = (intro && intro.en) || "";
     document.getElementById("bld-intro-ar").value = (intro && intro.ar) || "";
   }
+  // Which of the points boxes make sense for this question's type. A priced choice list
+  // prices its choices in the Options box, so it shows its worked-out maximum instead of
+  // a points box; everything else needs a number typed.
+  function bldScoreVisibility(row) {
+    var type = row.querySelector(".ftype").value;
+    var choices = type === "dropdown" || type === "multi_select";
+    row.querySelector(".fpts").style.display = choices ? "none" : "";
+    row.querySelector(".fscearn").style.display = type === "yesno" ? "" : "none";
+    var num = type === "number";
+    row.querySelector(".fscop").style.display = num ? "" : "none";
+    row.querySelector(".fscval").style.display = num && row.querySelector(".fscop").value ? "" : "none";
+    row.querySelector(".r3 .pl").textContent = choices ? "Priced per choice in Options" : "Points";
+    var max = questionMaxPoints(rowFieldShape(row));
+    row.querySelector(".qmax").textContent = max ? "max " + max : "";
+  }
+  // One builder row, in the same {type, options, scoring} shape the save and the database
+  // use, so the total on screen is computed from exactly what will be stored.
+  function rowFieldShape(row) {
+    var type = row.querySelector(".ftype").value;
+    var options = (type === "dropdown" || type === "multi_select")
+      ? parseChoiceList(row.querySelector(".opts").value) : null;
+    return { type: type, options: options, scoring: rowScoring(row) };
+  }
+  // The scoring rule for one row, or null when this question is not priced. Reading it
+  // from the boxes rather than from a flag means a question stops being scored the moment
+  // its points are cleared, with nothing left behind to disagree with the total.
+  function rowScoring(row) {
+    var type = row.querySelector(".ftype").value;
+    var section = row.querySelector(".fsec").value.trim();
+    if (type === "dropdown" || type === "multi_select") {
+      var list = parseChoiceList(row.querySelector(".opts").value);
+      var priced = list.some(function (o) { return typeof o.points === "number"; });
+      if (!priced) return null;
+      var sc = { rule: "choices" };
+      if (section) sc.section = section;
+      return sc;
+    }
+    var pts = parseFloat(row.querySelector(".fpts").value);
+    if (isNaN(pts)) return null;
+    var out = { points: pts };
+    if (section) out.section = section;
+    if (type === "yesno" && row.querySelector(".fscearn").value) {
+      out.rule = "equals"; out.earn = [row.querySelector(".fscearn").value];
+    } else if (type === "number" && row.querySelector(".fscop").value) {
+      out.rule = "threshold"; out.op = row.querySelector(".fscop").value;
+      out.value = parseFloat(row.querySelector(".fscval").value);
+      if (isNaN(out.value)) return null;    // a threshold with no number is not a rule
+    } else {
+      out.rule = "answered";
+    }
+    return out;
+  }
+  function refreshBuilderTotal() {
+    var el = document.getElementById("bld-total");
+    if (!el) return;
+    var rows = [].slice.call(bldHost().querySelectorAll(".bld-field"));
+    var shapes = rows.map(rowFieldShape);
+    var scored = shapes.filter(function (s) { return s.scoring; }).length;
+    var total = builderTotalPoints(shapes);
+    el.innerHTML = scored
+      ? "Total: <b>" + total + "</b> points across " + scored + " scored question" + (scored === 1 ? "" : "s") +
+        ". Every record is scored out of the questions that applied to it."
+      : "No points set yet. Give a question points and it starts counting towards the total.";
+  }
   function addBuilderField(data) {
     var row = document.createElement("div"); row.className = "bld-field";
     var typeOpts = FIELD_TYPES.map(function (t) { return '<option value="' + t.v + '">' + t.label + "</option>"; }).join("");
@@ -10261,7 +10515,15 @@
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
       afterFieldSelectHtml() + condSelectHtml() +
-      '<button type="button" class="rm">Remove</button></div>';
+      '<button type="button" class="rm">Remove</button></div>' +
+      '<div class="r3">' +
+        '<span class="pl">Points</span><input class="fpts" type="number" min="0" step="0.5" placeholder="0">' +
+        '<select class="fscearn"><option value="">for answering</option><option value="Yes">for Yes</option><option value="No">for No</option></select>' +
+        '<select class="fscop"><option value="">no number rule</option><option value="&lt;">when under</option><option value="&gt;">when over</option><option value="=">when exactly</option></select>' +
+        '<input class="fscval" type="number" step="any" placeholder="value">' +
+        '<span class="qmax"></span>' +
+        '<input class="fsec" placeholder="Section (optional), e.g. Cleanliness">' +
+      '</div>';
     row.setAttribute("data-row-key", "r" + (++bldRowSeq));
     bldHost().appendChild(row);
     if (data) {
@@ -10287,18 +10549,43 @@
       // resolved once every row exists — the question this one depends on may be below it
       if (data.showIf || data.condIdx != null) row.setAttribute("data-cond-pending", JSON.stringify(data.showIf || { idx: data.condIdx, equals: data.condVal }));
     }
-    row.querySelector(".ftype").addEventListener("change", function () { var o = row.querySelector(".opts"); o.style.display = typeUsesOpts(this.value) ? "" : "none"; o.placeholder = optsPlaceholder(this.value); bldGrow(o); });
+    if (data && data.scoring) {
+      var si = scoringToInputs(data.scoring);
+      row.querySelector(".fpts").value = si.points;
+      row.querySelector(".fscearn").value = si.earn.split(",")[0].trim();
+      row.querySelector(".fscop").value = si.rule === "threshold" ? si.op : "";
+      row.querySelector(".fscval").value = si.value;
+      row.querySelector(".fsec").value = si.section;
+    }
+    // a draft remembers the boxes rather than the rule, because a half-typed rule is not
+    // yet a rule and must still come back exactly as it was left
+    if (data) {
+      if (data.pts != null && data.pts !== "") row.querySelector(".fpts").value = data.pts;
+      if (data.scEarn) row.querySelector(".fscearn").value = data.scEarn;
+      if (data.scOp) row.querySelector(".fscop").value = data.scOp;
+      if (data.scVal != null && data.scVal !== "") row.querySelector(".fscval").value = data.scVal;
+      if (data.scSec) row.querySelector(".fsec").value = data.scSec;
+    }
+    bldScoreVisibility(row);
+    [".fpts", ".fscearn", ".fscop", ".fscval", ".fsec"].forEach(function (s) {
+      var el = row.querySelector(s);
+      el.addEventListener("input", function () { bldScoreVisibility(row); refreshBuilderTotal(); saveDraft(); });
+      el.addEventListener("change", function () { bldScoreVisibility(row); refreshBuilderTotal(); saveDraft(); });
+    });
+    row.querySelector(".opts").addEventListener("input", function () { bldScoreVisibility(row); refreshBuilderTotal(); });
+    row.querySelector(".ftype").addEventListener("change", function () { var o = row.querySelector(".opts"); o.style.display = typeUsesOpts(this.value) ? "" : "none"; o.placeholder = optsPlaceholder(this.value); bldGrow(o); bldScoreVisibility(row); refreshBuilderTotal(); });
     var condSel = row.querySelector(".fcond");
     condSel.addEventListener("mousedown", function () { refreshCondSelect(row); });
     condSel.addEventListener("change", function () { syncCondRow(row); saveDraft(); });
     row.querySelector(".fcondv").addEventListener("input", saveDraft);
     [].slice.call(row.querySelectorAll("textarea")).forEach(wireBldGrow);
-    row.querySelector(".rm").addEventListener("click", function () { row.remove(); saveDraft(); });
+    row.querySelector(".rm").addEventListener("click", function () { row.remove(); refreshBuilderTotal(); saveDraft(); });
     var handle = row.querySelector(".bld-drag");
     handle.addEventListener("mousedown", function () { row.draggable = true; });
     handle.addEventListener("mouseup", function () { row.draggable = false; });
     row.addEventListener("dragstart", function (e) { bldDragEl = row; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", ""); } catch (_) {} });
     row.addEventListener("dragend", function () { row.classList.remove("dragging"); row.draggable = false; bldDragEl = null; saveDraft(); });
+    refreshBuilderTotal();   // adding a question can change the total, restored draft included
     return row;
   }
   var bldDragEl = null;
@@ -10323,6 +10610,7 @@
       nameAr: document.getElementById("bld-name-ar").value,
       intro: document.getElementById("bld-intro").value,
       introAr: document.getElementById("bld-intro-ar").value,
+      purpose: builderPurpose,
       country: (document.getElementById("bld-country") || {}).value || "",
       franchise: !!(document.getElementById("bld-franchise") || {}).checked,
       fields: rows.map(function (r) {
@@ -10333,7 +10621,10 @@
           label: r.querySelector(".lab").value, labelAr: r.querySelector(".lab-ar").value,
           type: r.querySelector(".ftype").value, opts: r.querySelector(".opts").value,
           required: r.querySelector(".freq").checked, internal: r.querySelector(".fint").checked,
-          condIdx: ci, condVal: ci == null ? "" : r.querySelector(".fcondv").value
+          condIdx: ci, condVal: ci == null ? "" : r.querySelector(".fcondv").value,
+          pts: r.querySelector(".fpts").value, scEarn: r.querySelector(".fscearn").value,
+          scOp: r.querySelector(".fscop").value, scVal: r.querySelector(".fscval").value,
+          scSec: r.querySelector(".fsec").value
         };
       })
     };
@@ -10366,7 +10657,7 @@
     builderMode = mode;
     var isCreate = mode === "create", isBuiltin = mode === "builtin";
     document.getElementById("bld-title").textContent = isCreate ? "New table" : (isBuiltin ? "Edit: " + name : "Edit table");
-    document.getElementById("bld-sub").textContent = isCreate ? "Create a form — it gets its own public link."
+    document.getElementById("bld-sub").textContent = isCreate ? purposeOf(builderPurpose).blurb
       : (isBuiltin ? "The built-in questions are fixed. Add your own extra questions below — they appear on the form and in each entry."
       : "Add, edit, or remove questions. Changes apply to new submissions.");
     document.getElementById("bld-save").textContent = isCreate ? "Create table" : "Save changes";
@@ -10568,7 +10859,7 @@
     }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
-      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if }); });
+      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
       resolveCondPending();
       requestAnimationFrame(growAllBld);
     }).catch(function () { msg.textContent = ""; });
@@ -10612,15 +10903,59 @@
       "A country added later needs its own form; the ones made now are not touched.";
     note.style.display = "block";
   }
+  // ---- What are you making? ------------------------------------------------------
+  // Creation used to hand everybody the same blank form and the same six sections, most
+  // of which did not apply to what they were doing. The pick is made once, at creation,
+  // and its job is to take things away: a checklist stops showing a public link, a
+  // scorecard starts showing points. Editing an existing table never asks again, because
+  // changing a live table's type is a different question with records already in it.
+  //
+  // The marker is config.scorecard and not config.scored, because the imported engine
+  // reads app_tables.config ? 'scoring' and two keys one letter apart is a trap.
+  var TABLE_PURPOSES = [
+    { v: "form", label: "Form", kind: "form", scorecard: false,
+      blurb: "Collects answers from people through a public link." },
+    { v: "scorecard", label: "Scorecard", kind: "form", scorecard: true,
+      blurb: "A form whose answers earn points and produce a percentage." },
+    { v: "checklist", label: "Checklist", kind: "task", scorecard: false,
+      blurb: "Work your team completes. No public link." }
+  ];
+  function purposeOf(v) {
+    return TABLE_PURPOSES.filter(function (p) { return p.v === v; })[0] || TABLE_PURPOSES[0];
+  }
+  function purposeConfig(v) {
+    var p = purposeOf(v);
+    return { kind: p.kind, scorecard: p.scorecard };
+  }
+  var builderPurpose = "form";
   function openBuilder() {
     useBuilderHost();               // claim the editor back from any Form tab it is sitting in
     formEditFor = null;             // and make that tab reload it rather than show an empty box
     builtinEditKey = null;
     editingTableId = null; editingFieldIds = []; editingTableConfig = null;
+    builder.classList.add("picking");
+    var host = document.getElementById("bld-purpose-list");
+    host.innerHTML = TABLE_PURPOSES.map(function (p) {
+      return '<button type="button" class="bp-card" data-v="' + p.v + '">' +
+        '<div class="bp-name">' + esc(p.label) + '</div>' +
+        '<div class="bp-blurb">' + esc(p.blurb) + '</div></button>';
+    }).join("");
+    [].slice.call(host.querySelectorAll(".bp-card")).forEach(function (b) {
+      b.addEventListener("click", function () { startBuilderFor(b.getAttribute("data-v")); });
+    });
+    builder.classList.add("open");
+  }
+  // Step two, now that we know what it is for.
+  function startBuilderFor(v) {
+    builderPurpose = v;
+    builder.classList.remove("picking");
+    builder.classList.toggle("scored-build", purposeOf(v).scorecard);
     setBuilderChrome("create");
     document.getElementById("bld-msg").textContent = "";
     var d = loadDraft();
-    if (draftHasContent(d)) {
+    // a draft belongs to the type it was started in: restoring a scorecard's prices into
+    // a checklist would put points on a form that has nowhere to show them
+    if (draftHasContent(d) && (d.purpose || "form") === v) {
       document.getElementById("bld-name").value = d.name || "";
       document.getElementById("bld-name-ar").value = d.nameAr || "";
       setIntroInputs({ en: d.intro, ar: d.introAr });
@@ -10633,7 +10968,7 @@
     } else {
       resetBuilder();
     }
-    builder.classList.add("open");
+    refreshBuilderTotal();
     requestAnimationFrame(growAllBld);
   }
   // Two different questions share the type `link`, which is the trap this exists to close:
@@ -10648,6 +10983,27 @@
   function linkRecordOptions(options) {
     if (!options || typeof options !== "object" || Array.isArray(options)) return null;
     return options.links_to_table ? options : null;
+  }
+  // The Options box, read back into choices. The first two slots are English and Arabic;
+  // everything after them is a token rather than a position, because three flags in fixed
+  // slots is how "other" ends up meaning "priced at 3" the day somebody adds a price.
+  // Tokens: "other" opens a free-text box, "na" takes the question out of the score total,
+  // "pts:3" prices the choice.
+  function parseChoiceList(raw) {
+    return String(raw || "").split(/[\r\n,]+/).map(function (p) {
+      var kv = p.split("|");
+      var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
+      for (var i = 2; i < kv.length; i++) {
+        var tok = (kv[i] || "").trim().toLowerCase();
+        if (tok === "other") o.other = true;
+        else if (tok === "na") o.na = true;
+        else if (tok.indexOf("pts:") === 0) {
+          var n = parseFloat(tok.slice(4));
+          if (!isNaN(n)) o.points = n;      // a price that is not a number is no price at all
+        }
+      }
+      return o;
+    }).filter(function (o) { return o.en; });
   }
   function optsToString(options) {
     if (!options) return "";
@@ -10664,8 +11020,13 @@
     if (!options.length) return "";
     return options.map(function (o) {
       var en = (typeof o === "string" ? o : o.en) || "", ar = (typeof o === "string" ? "" : o.ar) || "";
-      var other = (typeof o === "object" && o.other) ? (ar ? "|other" : "||other") : "";
-      return en + (ar ? "|" + ar : "") + other;
+      var toks = [];
+      if (typeof o === "object" && o) {
+        if (o.other) toks.push("other");
+        if (o.na) toks.push("na");
+        if (typeof o.points === "number" && !isNaN(o.points)) toks.push("pts:" + o.points);
+      }
+      return en + (ar || toks.length ? "|" + ar : "") + (toks.length ? "|" + toks.join("|") : "");
     }).join(", ");
   }
   // presetType comes from the grid's "+" field-type picker: the editor opens with a
@@ -10677,6 +11038,8 @@
     editingTableId = table.id; editingFieldIds = [];
     editingTableConfig = table.config || {};
     setBuilderChrome("edit");
+    builder.classList.remove("picking");
+    builder.classList.toggle("scored-build", !!(table.config && table.config.scorecard));
     msg.textContent = "Loading…";
     document.getElementById("bld-name").value = table.name || "";
     document.getElementById("bld-name-ar").value = table.name_ar || "";
@@ -10701,7 +11064,7 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), showIf: f.show_if });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), showIf: f.show_if, scoring: f.scoring });
       });
       resolveCondPending();
       if (presetType) {
@@ -10863,12 +11226,7 @@
       if (type === "dropdown" || type === "multi_select") {
         var raw = rows[i].querySelector(".opts").value.trim();
         if (!raw) { msg.set("Choice questions need options.", "err"); return; }
-        options = raw.split(/[\r\n,]+/).map(function (p) {
-          var kv = p.split("|");
-          var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
-          if ((kv[2] || "").trim().toLowerCase() === "other") o.other = true;   // this choice opens a free-text box
-          return o;
-        }).filter(function (o) { return o.en; });
+        options = parseChoiceList(raw);
       } else if (type === "link") {
         // A LINKED RECORD comes first, and the ordering is the fix. This branch used to
         // demand a URL out of a box that was empty for all 200 of them, fail the check and
@@ -10924,7 +11282,7 @@
           if (ctrlId) { showIf = { field: ctrlId, equals: equals }; condOnIdx = null; }
         }
       }
-      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: type === "link" ? false : rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, condOnIdx: condOnIdx, condEquals: equals });
+      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: type === "link" ? false : rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, scoring: rowScoring(rows[i]), condOnIdx: condOnIdx, condEquals: equals });
     }
     // A built-in form's rows are EXTRA questions on top of hand-coded ones, so having none
     // is normal — BLK Casting has none today. Only a table needs at least one question.
@@ -10942,15 +11300,42 @@
     // form. The country is recorded on the table (config.country) and stamped on each
     // submission by the country trigger, because 260 forms asked the public which country
     // they were in and 4 records ever answered.
-    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, config: builderConfig({ country: scope.country }) }).select().single().then(function (tRes) {
+    var pc = purposeConfig(builderPurpose);
+    db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, kind: pc.kind,
+      config: builderConfig({ country: scope.country, scorecard: pc.scorecard || null }) }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
       return db.from("app_fields").insert(fieldRowsFor(tid, fields, 0)).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields, 0); })
+        .then(function () { return pc.scorecard ? addScoreField(tid) : null; })
         .then(function () { return tRes.data; });
     }).then(function (t) {
       clearDraft(); closeBuilder(); loadCustomTables();
-      setTimeout(function () { openCustomTable(t); window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug)); }, 400);
+      setTimeout(function () {
+        openCustomTable(t);
+        // a checklist has no public link, so it is not offered one
+        if (purposeOf(builderPurpose).kind !== "task") {
+          window.prompt("Table created! Public form link (share this):", publicFormLink(t.slug));
+        }
+      }, 400);
     }).catch(function (err) { msg.set("Could not create the table. Please try again.", "err"); if (window.console) console.error(err); });
+  }
+  // A scorecard needs somewhere to keep its percentage, because the grid, the filters, the
+  // sort and the CSV export all read a field rather than recompute the rules. It is marked
+  // as a percentage so it prints as 94% rather than 0.9444, and staff-only because it is
+  // worked out rather than answered.
+  function addScoreField(tid) {
+    return db.from("app_fields").insert({
+      table_id: tid, position: 9000, label: "Score", label_ar: "النتيجة", type: "number",
+      required: false, internal: true, options: { score_fmt: "percent" }
+    }).select().single().then(function (r) {
+      if (r.error) throw r.error;
+      return db.from("app_tables").select("config").eq("id", tid).single().then(function (c) {
+        if (c.error) throw c.error;
+        // merged, never replaced: writing a fresh object here wiped sixteen keys once
+        var cfg = Object.assign({}, c.data.config || {}, { score_field: r.data.id });
+        return db.from("app_tables").update({ config: cfg }).eq("id", tid);
+      });
+    });
   }
   // The config every created table carries, plus whatever this save adds — so the parent
   // form and its country sub-forms cannot end up with different stages or a different
@@ -10965,7 +11350,7 @@
   function fieldRowsFor(tid, fields, offset) {
     return (fields || []).map(function (f) {
       return { table_id: tid, position: f.position + (offset || 0), label: f.label, label_ar: f.label_ar,
-               type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if };
+               type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if, scoring: f.scoring || null };
     });
   }
   // ---- Shared with franchisees: a family of forms -----------------------------------
@@ -11094,8 +11479,8 @@
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
     fields.forEach(function (f) {
-      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if }).eq("id", f.id));
-      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if });
+      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null });
     });
     if (toInsert.length) ops.push(db.from("app_fields").insert(toInsert));
     if (toDelete.length) ops.push(db.from("app_fields").delete().in("id", toDelete));
