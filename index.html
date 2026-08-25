@@ -6791,6 +6791,34 @@
     return { insert: insert, remove: remove, update: update, keep: keep };
   }
 
+  // What a save actually did, in names rather than counts. "1 removed" leaves you
+  // scanning the list to work out who, which is the one thing this line exists to save
+  // you from — and on a removal there is nothing left on screen to check against.
+  //
+  // The day is included when there is one, because on a three-day event "Sara removed"
+  // is only half the fact.
+  function assignReport(d) {
+    var tag = function (name, day) {
+      var n = String(name || "").trim() || "(no name)";
+      var dd = String(day || "").slice(5, 10);      // 09-11: enough to tell days apart
+      return dd ? n + " (" + dd + ")" : n;
+    };
+    var parts = [];
+    var add = function (label, list) {
+      if (!list || !list.length) return;
+      var names = list.map(function (x) { return tag(x.name, x.day); });
+      // Three, then a count. A roster of twenty would otherwise print a paragraph.
+      parts.push(label + " " + names.slice(0, 3).join(", ") +
+        (names.length > 3 ? " and " + (names.length - 3) + " more" : ""));
+    };
+    add("Added", (d && d.insert) || []);
+    add("Removed", (d && d.remove) || []);
+    add("Moved", (d && d.update) || []);
+    if (!parts.length) return "Nothing changed — everybody was already as you left them.";
+    var kept = (d && d.keep && d.keep.length) || 0;
+    return parts.join(" · ") + (kept ? " · " + kept + " unchanged" : "");
+  }
+
   // Writes one event's roster. Deletes, then slot moves, then inserts — and a failure at
   // any stage stops the rest rather than leaving half a roster behind.
   //
@@ -7082,9 +7110,7 @@
         // Passed INTO the reopen rather than said before it. Saying it first and then
         // redrawing wiped it in the same tick, which is why saving looked like it did
         // nothing until you closed the panel and came back.
-        openAssign(t, evRec,
-          d.insert.length + " added · " + d.remove.length + " removed · " +
-          d.update.length + " moved · " + d.keep.length + " unchanged");
+        openAssign(t, evRec, assignReport(d));
       }).catch(function (e) {
         btn.disabled = false;
         say("Could not save the roster. " + ((e && e.message) || ""));
