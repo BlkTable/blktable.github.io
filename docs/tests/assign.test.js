@@ -4,7 +4,8 @@ function grab(js,name,file){const re=new RegExp('\\n  function '+name+'\\s*\\([\
 function load(file,names,extra){const js=scripts(file);const ctx=Object.assign({console},extra||{});vm.createContext(ctx);new vm.Script('(function(){'+names.map(n=>grab(js,n,file)).join('\n')+'\n this.API={'+names.join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
 
 const API = load('index.html', ['assignConfig','assignPersonKey','assignCandidates',
-                                'assignMonthCount','eventsOverlap','assignClashes']);
+                                'assignMonthCount','eventsOverlap','assignClashes',
+                                'eventDays','ballotKey','assignRowKey']);
 const asW = o => JSON.parse(JSON.stringify(o));
 let n=0; const t=(name,fn)=>{try{fn();n++;}catch(e){console.log('FAIL: '+name+' -> '+e.message);process.exitCode=1;}};
 
@@ -36,45 +37,45 @@ t('a name is identified trimmed and lowercased, the same rule payroll uses', () 
 
 // ---- The rule Zamel described: only people who voted for THIS event ------
 t('only people who ticked this event are candidates', () => {
-  const rows = [row('s1','Ahmad','+962791','e-1, e-2','2026-08-01T10:00:00Z'),
-                row('s2','Sara','+962792','e-2','2026-08-01T11:00:00Z')];
+  const rows = [row('s1','Ahmad','+962791','e-1#, e-2#','2026-08-01T10:00:00Z'),
+                row('s2','Sara','+962792','e-2#','2026-08-01T11:00:00Z')];
   assert.deepStrictEqual(asW(API.assignCandidates(rows,'e-1',CFG).map(c=>c.name)), ['Ahmad']);
   assert.deepStrictEqual(asW(API.assignCandidates(rows,'e-2',CFG).map(c=>c.name)), ['Ahmad','Sara']);
 });
 t('somebody who voted for A and B is NOT offered for C', () => {
-  const rows = [row('s1','Ali','+962791','e-A, e-B','2026-08-01T10:00:00Z')];
+  const rows = [row('s1','Ali','+962791','e-A#, e-B#','2026-08-01T10:00:00Z')];
   assert.deepStrictEqual(asW(API.assignCandidates(rows,'e-C',CFG)), []);
 });
 t('a substring is not a tick — e-1 must never match e-12', () => {
-  const rows = [row('s1','Ahmad','+962791','e-12','2026-08-01T10:00:00Z')];
+  const rows = [row('s1','Ahmad','+962791','e-12#','2026-08-01T10:00:00Z')];
   assert.deepStrictEqual(asW(API.assignCandidates(rows,'e-1',CFG)), []);
 });
 t('spacing in the stored tick list does not matter', () => {
-  const rows = [row('s1','Ahmad','+962791','  e-1 ,e-2 ','2026-08-01T10:00:00Z')];
+  const rows = [row('s1','Ahmad','+962791','  e-1# ,e-2# ','2026-08-01T10:00:00Z')];
   assert.strictEqual(API.assignCandidates(rows,'e-1',CFG).length, 1);
 });
 t('the phone comes across, because it is what the message is sent to', () => {
-  const rows = [row('s1','Ahmad','+962791','e-1','2026-08-01T10:00:00Z')];
+  const rows = [row('s1','Ahmad','+962791','e-1#','2026-08-01T10:00:00Z')];
   assert.strictEqual(API.assignCandidates(rows,'e-1',CFG)[0].phone, '+962791');
 });
 
 // ---- Voting again replaces, never duplicates ----------------------------
 t('three submissions from one person are one candidate, and the latest wins', () => {
-  const rows = [row('s1','Ahmad','+962791','e-1','2026-08-01T10:00:00Z'),
-                row('s2','Ahmad','+962791','e-1','2026-08-05T10:00:00Z'),
-                row('s3','Ahmad','+962799','e-1','2026-08-09T10:00:00Z')];
+  const rows = [row('s1','Ahmad','+962791','e-1#','2026-08-01T10:00:00Z'),
+                row('s2','Ahmad','+962791','e-1#','2026-08-05T10:00:00Z'),
+                row('s3','Ahmad','+962799','e-1#','2026-08-09T10:00:00Z')];
   const got = API.assignCandidates(rows,'e-1',CFG);
   assert.strictEqual(got.length, 1);
   assert.strictEqual(got[0].phone, '+962799', 'a new number on the latest vote is the one used');
 });
 t('the LATEST vote decides, so withdrawing a tick actually withdraws it', () => {
-  const rows = [row('s1','Ahmad','+962791','e-1, e-2','2026-08-01T10:00:00Z'),
-                row('s2','Ahmad','+962791','e-2','2026-08-09T10:00:00Z')];
+  const rows = [row('s1','Ahmad','+962791','e-1#, e-2#','2026-08-01T10:00:00Z'),
+                row('s2','Ahmad','+962791','e-2#','2026-08-09T10:00:00Z')];
   assert.deepStrictEqual(asW(API.assignCandidates(rows,'e-1',CFG)), []);
   assert.strictEqual(API.assignCandidates(rows,'e-2',CFG).length, 1);
 });
 t('array order never decides — only created_at does', () => {
-  const a = [row('s1','Ahmad','+962791','e-1','2026-08-09T10:00:00Z'),
+  const a = [row('s1','Ahmad','+962791','e-1#','2026-08-09T10:00:00Z'),
              row('s2','Ahmad','+962791','','2026-08-01T10:00:00Z')];
   assert.strictEqual(API.assignCandidates(a,'e-1',CFG).length, 1);
   assert.strictEqual(API.assignCandidates(a.slice().reverse(),'e-1',CFG).length, 1);
@@ -82,37 +83,74 @@ t('array order never decides — only created_at does', () => {
 // Votes now arrive under different polls. An event can sit on more than one link, and
 // a person's vote counts wherever it was cast — the tick names the event, not the poll.
 t('votes from two different polls both count for the same event', () => {
-  const rows = [Object.assign(row('s1','Ahmad','+1','e-1','2026-08-01T10:00:00Z'), {parent_id:'poll-A'}),
-                Object.assign(row('s2','Sara','+2','e-1','2026-08-02T10:00:00Z'), {parent_id:'poll-B'})];
+  const rows = [Object.assign(row('s1','Ahmad','+1','e-1#','2026-08-01T10:00:00Z'), {parent_id:'poll-A'}),
+                Object.assign(row('s2','Sara','+2','e-1#','2026-08-02T10:00:00Z'), {parent_id:'poll-B'})];
   assert.deepStrictEqual(asW(API.assignCandidates(rows,'e-1',CFG).map(c=>c.name)), ['Ahmad','Sara']);
 });
 
 // ---- One person, spelled two ways --------------------------------------
 t('Ahmad and "  ahmad  " are one person, and the display keeps the typed spelling', () => {
-  const rows = [row('s1','Ahmad','+962791','e-1','2026-08-01T10:00:00Z'),
-                row('s2','  ahmad  ','+962792','e-1','2026-08-09T10:00:00Z')];
+  const rows = [row('s1','Ahmad','+962791','e-1#','2026-08-01T10:00:00Z'),
+                row('s2','  ahmad  ','+962792','e-1#','2026-08-09T10:00:00Z')];
   const got = API.assignCandidates(rows,'e-1',CFG);
   assert.strictEqual(got.length, 1);
   assert.strictEqual(got[0].name, 'ahmad', 'the latest spelling, trimmed — not the lowercase key');
   assert.strictEqual(got[0].key, 'ahmad');
 });
 t('a nameless vote is kept as (no name) rather than silently dropped', () => {
-  const rows = [row('s1','','+962791','e-1','2026-08-01T10:00:00Z')];
+  const rows = [row('s1','','+962791','e-1#','2026-08-01T10:00:00Z')];
   const got = API.assignCandidates(rows,'e-1',CFG);
   assert.strictEqual(got.length, 1);
   assert.strictEqual(got[0].name, '(no name)');
 });
 t('candidates come back sorted by name, so the list does not reshuffle on reload', () => {
-  const rows = [row('s1','Sara','+1','e-1','2026-08-01T10:00:00Z'),
-                row('s2','Ahmad','+2','e-1','2026-08-02T10:00:00Z'),
-                row('s3','Mego','+3','e-1','2026-08-03T10:00:00Z')];
+  const rows = [row('s1','Sara','+1','e-1#','2026-08-01T10:00:00Z'),
+                row('s2','Ahmad','+2','e-1#','2026-08-02T10:00:00Z'),
+                row('s3','Mego','+3','e-1#','2026-08-03T10:00:00Z')];
   assert.deepStrictEqual(asW(API.assignCandidates(rows,'e-1',CFG).map(c=>c.name)), ['Ahmad','Mego','Sara']);
 });
 t('no rows, no event, or a null config is an empty list rather than a throw', () => {
   assert.deepStrictEqual(asW(API.assignCandidates([], 'e-1', CFG)), []);
   assert.deepStrictEqual(asW(API.assignCandidates(null, 'e-1', CFG)), []);
-  assert.deepStrictEqual(asW(API.assignCandidates([row('s1','A','+1','e-1','2026-08-01T10:00:00Z')], 'e-1', null)), []);
-  assert.deepStrictEqual(asW(API.assignCandidates([row('s1','A','+1','e-1','2026-08-01T10:00:00Z')], null, CFG)), []);
+  assert.deepStrictEqual(asW(API.assignCandidates([row('s1','A','+1','e-1#','2026-08-01T10:00:00Z')], 'e-1', null)), []);
+  assert.deepStrictEqual(asW(API.assignCandidates([row('s1','A','+1','e-1#','2026-08-01T10:00:00Z')], null, CFG)), []);
+});
+
+// ---- Multi-day: a vote names one DAY, and days do not bleed --------------
+const D1 = '2026-09-10', D2 = '2026-09-11', D3 = '2026-09-12';
+const dayRows = [
+  row('s1','Ali', '+1', 'e-9#'+D1+', e-9#'+D3, '2026-08-20T10:00:00Z'),
+  row('s2','Sara','+2', 'e-9#'+D2,             '2026-08-20T11:00:00Z')
+];
+t('somebody who ticked Friday and Sunday is offered for those days only', () => {
+  assert.deepStrictEqual(asW(API.assignCandidates(dayRows,'e-9',CFG,D1).map(c=>c.name)), ['Ali']);
+  assert.deepStrictEqual(asW(API.assignCandidates(dayRows,'e-9',CFG,D2).map(c=>c.name)), ['Sara']);
+  assert.deepStrictEqual(asW(API.assignCandidates(dayRows,'e-9',CFG,D3).map(c=>c.name)), ['Ali']);
+});
+t('a day nobody ticked has no candidates rather than everybody', () => {
+  assert.deepStrictEqual(asW(API.assignCandidates(dayRows,'e-9',CFG,'2026-09-13')), []);
+});
+t('the same event on a different day is a different vote', () => {
+  // The bug this guards: matching on the event alone would put Ali on the Saturday he
+  // deliberately did not tick.
+  assert.strictEqual(API.assignCandidates(dayRows,'e-9',CFG,D2).length, 1);
+  assert.ok(!API.assignCandidates(dayRows,'e-9',CFG,D2).some(c => c.name === 'Ali'));
+});
+t('a day-bearing vote is not matched by a dayless query, and vice versa', () => {
+  assert.deepStrictEqual(asW(API.assignCandidates(dayRows,'e-9',CFG)), []);
+  const dayless = [row('s1','Ali','+1','e-9#','2026-08-20T10:00:00Z')];
+  assert.deepStrictEqual(asW(API.assignCandidates(dayless,'e-9',CFG,D1)), []);
+  assert.strictEqual(API.assignCandidates(dayless,'e-9',CFG).length, 1);
+});
+t('a roster row is identified by person AND day', () => {
+  // Keyed on the person alone, Day 2's row would read as a duplicate of Day 1's and be
+  // deleted the moment Day 1 was saved.
+  assert.notStrictEqual(API.assignRowKey('Ali', D1), API.assignRowKey('Ali', D2));
+  assert.strictEqual(API.assignRowKey('Ali', D1), API.assignRowKey('  ali  ', D1));
+  assert.strictEqual(API.assignRowKey('Ali', null), API.assignRowKey('ali', ''));
+});
+t('a day with a timestamp on it still keys as its date', () => {
+  assert.strictEqual(API.assignRowKey('Ali', '2026-09-10T00:00:00Z'), API.assignRowKey('Ali', D1));
 });
 
 // ---- Spreading the work -------------------------------------------------
