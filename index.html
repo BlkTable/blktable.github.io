@@ -1292,6 +1292,11 @@
   .m-section { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
   .m-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .m-row label { font-size: var(--fs-3); color: var(--muted); width: 62px; flex: 0 0 auto; }
+  /* A tick box beside the row's own label is the control, not a second 62px label —
+     without this its words wrap one per line down a narrow column. */
+  .m-row label.m-opt { display: flex; align-items: center; gap: 8px; width: auto; flex: 1 1 auto;
+    color: var(--text); font-size: var(--fs-4); cursor: pointer; }
+  .m-row label.m-opt input { width: auto; height: auto; flex: 0 0 auto; }
   .m-row select, .m-row textarea { flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--field-border);
     background: var(--field-bg); color: var(--text); font-size: var(--fs-4); outline: none; font-family: inherit; color-scheme: dark; }
   .m-row select:focus, .m-row textarea:focus { border-color: var(--silver); }
@@ -1326,15 +1331,56 @@
   .bl-toggle input { width: auto; height: auto; }
   .u-inp { width: 100%; height: 44px; padding: 0 12px; margin-bottom: 10px; border-radius: 10px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); outline: none; }
   .u-inp:focus { border-color: var(--silver); }
-  .u-tables { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
   .u-chk { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: var(--fs-4); cursor: pointer; flex: 1; min-width: 0; }
   .u-chk input { width: auto; height: auto; }
   .u-trow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 6px; }
-  .u-editopt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: var(--fs-2); cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
-  .u-editopt input { width: auto; height: auto; }
-  .u-trow .u-scope { display: inline-flex; flex-wrap: wrap; align-items: center; }
   .u-co { display: inline-flex; align-items: center; gap: 4px; margin: 2px 8px 2px 0; font-size: 13px; color: var(--muted); }
   .u-co input { width: auto; height: auto; }
+  /* ---- The access picker: a searchable list of things to grant --------------------
+     Same shell whichever way round it is used — tables for a person, people for a
+     table — so the two lists cannot drift apart visually either. */
+  .u-tables { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .ap-head { padding: 10px 10px 8px; border-bottom: 1px solid var(--line); background: var(--bg-3); }
+  .ap-search { width: 100%; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: var(--fs-3); font-family: inherit; outline: none; }
+  .ap-search:focus { border-color: var(--silver); }
+  .ap-meta { display: flex; align-items: center; gap: 10px; margin-top: 7px; min-height: 20px; }
+  .ap-count { color: var(--muted); font-size: var(--fs-2); flex: 1 1 auto; min-width: 0; }
+  .ap-acts { display: flex; gap: 10px; flex: 0 0 auto; }
+  .ap-acts .linkbtn { padding: 0; font-size: var(--fs-2); }
+  .ap-list { display: flex; flex-direction: column; max-height: 240px; overflow-y: auto; padding: 6px; }
+  .ap-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 4px; padding: 6px 6px; border-radius: 8px; }
+  .ap-row + .ap-row { border-top: 1px solid rgba(255,255,255,0.05); }
+  .ap-row.on { background: rgba(214,218,222,0.06); }
+  .ap-pick { display: flex; align-items: center; gap: 9px; flex: 1 1 180px; min-width: 0; cursor: pointer; }
+  .ap-pick input { width: auto; height: auto; flex: 0 0 auto; }
+  .ap-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+  .ap-name { color: var(--text); font-size: var(--fs-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ap-sub { color: var(--muted); font-size: var(--fs-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ap-level { flex: 0 0 auto; height: 30px; border-radius: 7px; border: 1px solid var(--field-border); background: var(--field-bg);
+    color: var(--text); font-size: var(--fs-2); padding: 0 6px; color-scheme: dark; font-family: inherit; }
+  .ap-level:disabled { opacity: 0.45; }
+  /* The country limit is a detail of a row that is already granted, so it appears with
+     the grant rather than sitting there greyed out on all 118 rows. */
+  .ap-scope { display: none; flex-basis: 100%; padding: 2px 0 2px 27px; }
+  .ap-row.on .ap-scope { display: block; }
+  .ap-scope-lbl { color: var(--muted); font-size: var(--fs-1); margin-right: 6px; }
+  .ap-empty { color: var(--muted); font-size: var(--fs-3); padding: 14px 8px; text-align: center; }
+  /* ---- The user modal ------------------------------------------------------------ */
+  .u-sect { color: var(--silver); font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .u-sect:first-of-type { margin-top: 6px; }
+  .u-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .u-passrow { display: flex; align-items: center; gap: 10px; }
+  .u-passrow .u-inp { flex: 1 1 auto; }
+  .u-passrow .linkbtn { flex: 0 0 auto; margin-bottom: 10px; }
+  .u-inp.bad { border-color: var(--danger); }
+  .u-done-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 6px 0 4px; background: var(--bg-3); }
+  .u-done-h { color: #4ad991; font-weight: 800; font-size: var(--fs-4); margin-bottom: 10px; }
+  .u-done-line { display: flex; gap: 12px; align-items: baseline; padding: 4px 0; }
+  .u-done-line span { color: var(--muted); font-size: var(--fs-2); flex: 0 0 150px; }
+  .u-done-line b { color: var(--text); font-size: var(--fs-4); overflow-wrap: anywhere; }
+  .u-done-note { color: var(--muted); font-size: var(--fs-2); margin-top: 10px; }
   /* top-right profile menu */
   .profile-menu { position: relative; }
   .profile-btn { display: flex; align-items: center; gap: 9px; background: var(--card); border: 1px solid var(--field-border); border-radius: 999px; padding: 5px 12px 5px 6px; color: var(--text); cursor: pointer; font-family: inherit; }
@@ -1456,8 +1502,11 @@
     .link-bar a, .qr-bar a { overflow-wrap: anywhere; word-break: break-word; }
     /* Country views: keep the users-panel scope checkboxes and the sidebar country
        group inside their containers, and make the country dropdown full width. */
-    .u-trow .u-scope { flex-wrap: wrap; }
     .u-co { flex-wrap: wrap; }
+    /* Name and email side by side needs a screen; on a phone they stack. */
+    .u-grid { grid-template-columns: 1fr; }
+    .ap-row { align-items: flex-start; }
+    .ap-scope { padding-left: 0; }
     .side-kid-countries { min-width: 0; }
     #fp-country, #fp-country button { width: 100%; }
   }
@@ -2135,30 +2184,55 @@
 
     <!-- Admin: create user -->
     <div class="modal-overlay" id="users-modal">
-      <div class="modal" style="max-width: 460px;">
+      <div class="modal" style="max-width: 620px;">
         <button class="modal-close" id="users-close" aria-label="Close">✕</button>
         <div class="m-name" id="u-title">New user</div>
-        <div class="m-sub">Create a login and choose which tables they can view.</div>
-        <div class="u-photo-row">
-          <div class="u-photo-preview" id="u-photo-preview" aria-hidden="true"></div>
-          <button type="button" class="linkbtn" id="u-photo-btn">Choose photo</button>
-          <input type="file" id="u-photo" accept="image/*" style="display:none;">
+        <div class="m-sub" id="u-sub">Create a login and choose what it opens.</div>
+        <div id="u-form">
+          <div class="u-sect">Person</div>
+          <div class="u-photo-row">
+            <div class="u-photo-preview" id="u-photo-preview" aria-hidden="true"></div>
+            <button type="button" class="linkbtn" id="u-photo-btn">Choose photo</button>
+            <input type="file" id="u-photo" accept="image/*" style="display:none;">
+          </div>
+          <div class="u-grid">
+            <input id="u-name" placeholder="Full name" autocomplete="off" class="u-inp">
+            <input id="u-email" placeholder="Email" autocomplete="off" class="u-inp">
+          </div>
+          <div class="u-passrow">
+            <input id="u-pass" type="text" placeholder="Temporary password (min 8 chars)" autocomplete="off" class="u-inp">
+            <button type="button" class="linkbtn" id="u-gen">Generate</button>
+          </div>
+          <div class="u-sect">Access</div>
+          <div class="m-row" style="margin-top:4px;"><label>Role</label>
+            <select id="u-role"><option value="reviewer">Reviewer (view only)</option><option value="admin">Admin (full access)</option></select>
+          </div>
+          <div class="m-row" id="u-create-tables-wrap" style="margin-top:4px;"><label>Tables</label>
+            <label class="m-opt"><input type="checkbox" id="u-create-tables"> Can create and own their own tables</label>
+          </div>
+          <div id="u-tables-wrap">
+            <div class="fp-label" style="margin: 8px 0 6px;">Tables this user can open</div>
+            <div id="u-tables" class="u-tables"></div>
+          </div>
+          <div class="m-actions" style="margin-top: 16px;"><button class="btn-wa" id="u-create">Create account</button></div>
+          <div class="m-msg" id="u-msg"></div>
         </div>
-        <input id="u-name" placeholder="Full name" autocomplete="off" class="u-inp">
-        <input id="u-email" placeholder="Email" autocomplete="off" class="u-inp">
-        <input id="u-pass" type="text" placeholder="Temporary password (min 8 chars)" autocomplete="off" class="u-inp">
-        <div class="m-row" style="margin-top:4px;"><label>Role</label>
-          <select id="u-role"><option value="reviewer">Reviewer (view only)</option><option value="admin">Admin (full access)</option></select>
+        <!-- What the admin actually needs the moment the account exists: the login, in one
+             place, copyable. The old alert told them to share a password it did not show. -->
+        <div id="u-done" style="display:none;">
+          <div class="u-done-card">
+            <div class="u-done-h">✓ Account created</div>
+            <div class="u-done-line"><span>Sign in at</span><b id="u-done-url"></b></div>
+            <div class="u-done-line"><span>Email</span><b id="u-done-email"></b></div>
+            <div class="u-done-line"><span>Temporary password</span><b id="u-done-pass"></b></div>
+            <div class="u-done-note">They can change the password from their account page after logging in.</div>
+          </div>
+          <div class="m-actions" style="margin-top:16px; gap:10px;">
+            <button class="btn-wa" id="u-copy" type="button">Copy invite</button>
+            <button class="linkbtn" id="u-done-close" type="button">Done</button>
+          </div>
+          <div class="m-msg" id="u-done-msg"></div>
         </div>
-        <div class="m-row" id="u-create-tables-wrap" style="margin-top:4px;"><label>Tables</label>
-          <label style="display:flex;align-items:center;gap:8px;font-weight:normal;"><input type="checkbox" id="u-create-tables"> Can create and own their own tables</label>
-        </div>
-        <div id="u-tables-wrap">
-          <div class="fp-label" style="margin: 8px 0 6px;">Tables this user can view</div>
-          <div id="u-tables" class="u-tables"></div>
-        </div>
-        <div class="m-actions" style="margin-top: 16px;"><button class="btn-wa" id="u-create">Create account</button></div>
-        <div class="m-msg" id="u-msg"></div>
       </div>
     </div>
   </div>
@@ -2335,6 +2409,7 @@
   var homeView = "cards";
   var shareKey = null;
   var shareAccess = {}; // user_id -> existing table_access row for shareKey (to preserve scope on save)
+  var sharePicker = null;
   var myName = "";
   var builderUsers = []; // [{id,name}] for review-chain assignee pickers (admin only)
   function loadBuilderUsers() {
@@ -2790,6 +2865,156 @@
     h.innerHTML = "<div>Name</div><div>Last opened</div><div>Workspace</div><div></div>";
     return h;
   }
+  // ---- The access picker ----------------------------------------------------------
+  // One searchable list, used both ways round: "which tables can this person open" in the
+  // user modal, and "who can open this table" in Share. They are the same list — a row per
+  // thing, one level per row — so they are one function rather than two that drift, and a
+  // table added to the workspace is searchable in both without anybody touching either.
+  //
+  // The level is one word instead of two dependent tickboxes. That makes "manager" imply
+  // "can edit", which is what the tooltip always said but not what the two boxes enforced,
+  // so a row the admin never touched is written back byte for byte as it was stored rather
+  // than re-derived — see accessGrantFor.
+  function accessLevelOf(a) {
+    if (!a) return "view";
+    // A boolean column read back as the text 't'/'f' is truthy either way in JS, and 'f'
+    // read as a grant would promote every viewer to a manager. Read the value, not its
+    // truthiness.
+    var yes = function (v) { return v === true || v === "t" || v === "true"; };
+    return yes(a.can_manage) ? "manage" : yes(a.can_edit) ? "edit" : "view";
+  }
+  function accessGrantFor(level, prev) {
+    var yes = function (v) { return v === true || v === "t" || v === "true"; };
+    if (prev && accessLevelOf(prev) === level) return { can_edit: yes(prev.can_edit), can_manage: yes(prev.can_manage) };
+    return { can_edit: level === "edit" || level === "manage", can_manage: level === "manage" };
+  }
+  function pickerMatch(item, q) {
+    var s = String(q == null ? "" : q).trim().toLowerCase();
+    if (!s) return true;
+    var hay = [item.name, item.alt, item.sub].map(function (x) { return String(x == null ? "" : x).toLowerCase(); }).join(" ");
+    return hay.indexOf(s) > -1;
+  }
+  function pickerRows(items, sel, q) {
+    var hits = (items || []).filter(function (i) { return pickerMatch(i, q); });
+    var on = hits.filter(function (i) { return !!(sel && sel[i.key]); });
+    var off = hits.filter(function (i) { return !(sel && sel[i.key]); });
+    // What is already granted sits at the top, so a list of 118 still shows the 3 that
+    // matter. Within each half the caller's order is kept — re-sorting by name would
+    // shuffle the sidebar's order out from under somebody who knows where theirs sits.
+    return on.concat(off);
+  }
+  function pickerCountText(n, total, noun) {
+    if (!n) return "No " + noun + " selected";
+    return n + " of " + total + " " + noun + " selected";
+  }
+  var AP_LEVELS = [
+    { v: "view", label: "Can view", hint: "Read the records." },
+    { v: "edit", label: "Can edit", hint: "Read and change records, and add new ones." },
+    { v: "manage", label: "Manager", hint: "Everything an editor can do, plus approve/reject, send WhatsApp, delete records, and drive the review chain." }
+  ];
+  // opts: items [{key,name,sub,alt}], initial [{key,can_edit,can_manage,countries}],
+  //       noun (plural, for the count line), placeholder, scope (offer a country limit),
+  //       empty (what to say when there is nothing to list), onChange.
+  function accessPicker(host, opts) {
+    opts = opts || {};
+    var items = opts.items || [], noun = opts.noun || "items", sel = {};
+    (opts.initial || []).forEach(function (a) {
+      sel[a.key] = { level: accessLevelOf(a), countries: (a.countries || []).slice(), prev: a };
+    });
+    var q = "";
+    host.className = "u-tables";
+    host.innerHTML =
+      '<div class="ap-head">' +
+        '<input class="ap-search" type="search" placeholder="' + esc(opts.placeholder || "Search…") + '" autocomplete="off">' +
+        '<div class="ap-meta"><span class="ap-count"></span><span class="ap-acts">' +
+          '<button type="button" class="linkbtn ap-all" style="display:none;"></button>' +
+          '<button type="button" class="linkbtn ap-clear" style="display:none;">Clear</button>' +
+        '</span></div>' +
+      '</div><div class="ap-list"></div>';
+    var search = host.querySelector(".ap-search"), list = host.querySelector(".ap-list");
+    var countEl = host.querySelector(".ap-count"), allBtn = host.querySelector(".ap-all"), clearBtn = host.querySelector(".ap-clear");
+    function selCount() { return Object.keys(sel).length; }
+    function scopeHtml(key) {
+      if (!opts.scope) return "";
+      return '<div class="ap-scope"><span class="ap-scope-lbl">Limit to:</span>' +
+        COUNTRY_LIST.map(function (c) {
+          var on = sel[key] && sel[key].countries.indexOf(c.code) > -1;
+          return '<label class="u-co"><input type="checkbox" class="ap-co" value="' + esc(c.code) + '"' + (on ? " checked" : "") + "> " + esc(c.name_en) + "</label>";
+        }).join("") + '<span class="ap-scope-lbl">none ticked = every country</span></div>';
+    }
+    function rowHtml(it) {
+      var s = sel[it.key];
+      return '<div class="ap-row' + (s ? " on" : "") + '" data-key="' + esc(it.key) + '">' +
+        '<label class="ap-pick"><input type="checkbox" class="ap-box"' + (s ? " checked" : "") + ">" +
+          '<span class="ap-txt"><span class="ap-name">' + esc(it.name || "") + "</span>" +
+          (it.sub ? '<span class="ap-sub">' + esc(it.sub) + "</span>" : "") + "</span></label>" +
+        '<select class="ap-level"' + (s ? "" : " disabled") + ">" +
+          AP_LEVELS.map(function (l) {
+            return '<option value="' + l.v + '" title="' + esc(l.hint) + '"' + (s && s.level === l.v ? " selected" : "") + ">" + esc(l.label) + "</option>";
+          }).join("") + "</select>" +
+        scopeHtml(it.key) + "</div>";
+    }
+    function paintMeta() {
+      var n = selCount();
+      countEl.textContent = pickerCountText(n, items.length, noun);
+      clearBtn.style.display = n ? "" : "none";
+      var unpicked = pickerRows(items, sel, q).filter(function (i) { return !sel[i.key]; }).length;
+      var filtering = !!String(q).trim();
+      allBtn.style.display = (filtering && unpicked) ? "" : "none";
+      allBtn.textContent = "Select all " + unpicked;
+    }
+    function render() {
+      var rows = pickerRows(items, sel, q);
+      if (!items.length) list.innerHTML = '<div class="ap-empty">' + esc(opts.empty || "Nothing to choose from yet.") + "</div>";
+      else if (!rows.length) list.innerHTML = '<div class="ap-empty">Nothing matches “' + esc(q) + "”.</div>";
+      else list.innerHTML = rows.map(rowHtml).join("");
+      paintMeta();
+    }
+    // Ticking a row must not move it, so the row is patched where it stands. Only a new
+    // search re-orders, which is the one moment nobody is mid-click.
+    list.addEventListener("change", function (e) {
+      var row = e.target.closest ? e.target.closest(".ap-row") : null;
+      if (!row) return;
+      var key = row.getAttribute("data-key"), lv = row.querySelector(".ap-level");
+      if (e.target.classList.contains("ap-box")) {
+        if (e.target.checked) sel[key] = { level: lv.value || "view", countries: [], prev: null };
+        else delete sel[key];
+        row.classList.toggle("on", !!sel[key]);
+        lv.disabled = !sel[key];
+        if (!sel[key]) {
+          lv.value = "view";
+          row.querySelectorAll(".ap-co").forEach(function (b) { b.checked = false; });
+        }
+        paintMeta();
+      } else if (e.target.classList.contains("ap-level")) {
+        if (sel[key]) sel[key].level = e.target.value;
+      } else if (e.target.classList.contains("ap-co")) {
+        if (sel[key]) sel[key].countries = [].slice.call(row.querySelectorAll(".ap-co:checked")).map(function (b) { return b.value; });
+      }
+      if (opts.onChange) opts.onChange(selCount());
+    });
+    search.addEventListener("input", function () { q = this.value; render(); });
+    allBtn.addEventListener("click", function () {
+      pickerRows(items, sel, q).forEach(function (i) { if (!sel[i.key]) sel[i.key] = { level: "view", countries: [], prev: null }; });
+      render();
+      if (opts.onChange) opts.onChange(selCount());
+    });
+    clearBtn.addEventListener("click", function () {
+      sel = {}; render();
+      if (opts.onChange) opts.onChange(0);
+    });
+    render();
+    return {
+      count: selCount,
+      focus: function () { search.focus(); },
+      value: function () {
+        return Object.keys(sel).map(function (k) {
+          var s = sel[k], g = accessGrantFor(s.level, s.prev);
+          return { key: k, can_edit: g.can_edit, can_manage: g.can_manage, countries: s.countries.slice() };
+        });
+      }
+    };
+  }
   function openShare(key, name) {
     shareKey = key;
     document.getElementById("share-title").textContent = "Share: " + name;
@@ -2803,28 +3028,27 @@
       var profs = ((r[0] && r[0].data) || []).filter(function (p) { return p.role !== "admin"; });
       var acc = {}; ((r[1] && r[1].data) || []).forEach(function (a) { acc[a.user_id] = a; });
       shareAccess = acc;
-      host.innerHTML = "";
-      if (!profs.length) { host.innerHTML = '<div style="color:var(--muted);padding:6px;">No reviewer accounts yet — create one from your profile menu → Users.</div>'; return; }
-      profs.forEach(function (p) {
-        var cur = acc[p.id], has = !!cur;
-        var row = document.createElement("div"); row.className = "u-trow";
-        row.innerHTML = '<label class="u-chk"><input type="checkbox" class="sh-acc" value="' + esc(p.id) + '"' + (has ? " checked" : "") + "> " + esc(p.full_name || p.email) + "</label>" +
-          '<label class="u-editopt"><input type="checkbox" class="sh-edit" data-uid="' + esc(p.id) + '"' + (cur && cur.can_edit ? " checked" : "") + (has ? "" : " disabled") + "> can edit</label>" +
-          '<label class="u-editopt" title="Everything an editor can do, plus approve/reject, send WhatsApp, delete records, and drive the review chain."><input type="checkbox" class="sh-manage" data-uid="' + esc(p.id) + '"' + (cur && cur.can_manage ? " checked" : "") + (has ? "" : " disabled") + "> manager (full control)</label>";
-        var a = row.querySelector(".sh-acc"), e = row.querySelector(".sh-edit"), m = row.querySelector(".sh-manage");
-        a.addEventListener("change", function () { e.disabled = !a.checked; m.disabled = !a.checked; if (!a.checked) { e.checked = false; m.checked = false; } });
-        host.appendChild(row);
+      sharePicker = accessPicker(host, {
+        items: profs.map(function (p) {
+          return { key: p.id, name: p.full_name || p.email, sub: p.full_name ? p.email : "" };
+        }),
+        initial: profs.filter(function (p) { return acc[p.id]; }).map(function (p) {
+          return { key: p.id, can_edit: acc[p.id].can_edit, can_manage: acc[p.id].can_manage };
+        }),
+        noun: "people",
+        placeholder: "Search people…",
+        empty: "No reviewer accounts yet — create one from your profile menu → Users."
       });
-    }).catch(function () { host.innerHTML = '<div style="color:#ff6b6b;padding:6px;">Could not load accounts.</div>'; });
+    }).catch(function () { sharePicker = null; host.className = ""; host.innerHTML = '<div style="color:#ff6b6b;padding:6px;">Could not load accounts.</div>'; });
   }
   document.getElementById("share-close").addEventListener("click", function () { document.getElementById("share-modal").classList.remove("open"); });
   document.getElementById("share-modal").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("open"); });
   document.getElementById("share-save").addEventListener("click", function () {
-    if (!shareKey) return;
-    var rows = [].slice.call(document.querySelectorAll("#share-users .sh-acc:checked")).map(function (c) {
-      var e = document.querySelector('#share-users .sh-edit[data-uid="' + c.value + '"]');
-      var m = document.querySelector('#share-users .sh-manage[data-uid="' + c.value + '"]');
-      return { user_id: c.value, table_key: shareKey, can_edit: !!(e && e.checked), can_manage: !!(m && m.checked), scope: (shareAccess[c.value] && shareAccess[c.value].scope) || null };
+    if (!shareKey || !sharePicker) return;
+    // The country limit is set per person in the Users panel, not here, so it is carried
+    // across from the row being replaced rather than dropped.
+    var rows = sharePicker.value().map(function (v) {
+      return { user_id: v.key, table_key: shareKey, can_edit: v.can_edit, can_manage: v.can_manage, scope: (shareAccess[v.key] && shareAccess[v.key].scope) || null };
     });
     var msg = document.getElementById("share-msg"); msg.textContent = "Saving…";
     db.from("table_access").delete().eq("table_key", shareKey).then(function (res) {
@@ -10655,15 +10879,10 @@
   // ---- Admin: users management (list, create, edit, delete, reassign) ----
   var usersModal = document.getElementById("users-modal");
   var editingUser = null;
+  var uPicker = null;
   // Per-reviewer country restriction. Enforced in the DB (RLS) via table_access.scope.
-  // Every table is scopable; the checkboxes only record the grant, the RLS is the real gate.
-  function scopeSelectHtml(key) {
-    return '<span class="u-scope" data-key="' + esc(key) + '">' +
-      COUNTRY_LIST.map(function (c) {
-        return '<label class="u-co"><input type="checkbox" class="u-co-box" value="' + esc(c.code) + '" disabled> ' +
-          esc(c.name_en) + '</label>';
-      }).join('') + '</span>';
-  }
+  // Every table is scopable; the tick boxes only record the grant, the RLS is the real gate.
+  // The boxes themselves are drawn by the access picker, under the row they belong to.
   function scopeFromCountries(arr) {
     var xs = (arr || []).map(canonicalCountry).filter(Boolean);
     return xs.length ? { country: xs } : null;
@@ -10685,26 +10904,18 @@
     var t = customTables.filter(function (x) { return x.id === k; })[0];
     return t ? t.name : k;
   }
-  function renderUserTables() {
-    var host = document.getElementById("u-tables"); host.innerHTML = "";
+  function renderUserTables(accessList) {
     var all = [{ key: "job_applications", name: builtinName("job_applications") }, { key: "casting", name: builtinName("casting") }]
-      .concat(customTables.map(function (t) { return { key: t.id, name: t.name }; }));
-    all.forEach(function (t) {
-      var row = document.createElement("div"); row.className = "u-trow";
-      row.innerHTML = '<label class="u-chk"><input type="checkbox" class="u-acc" value="' + esc(t.key) + '"> ' + esc(t.name) + "</label>" +
-        '<label class="u-editopt"><input type="checkbox" class="u-can-edit" data-key="' + esc(t.key) + '" disabled> can edit</label>' +
-        '<label class="u-editopt" title="Everything an editor can do, plus approve/reject, send WhatsApp, delete records, and drive the review chain."><input type="checkbox" class="u-can-manage" data-key="' + esc(t.key) + '" disabled> manager (full control)</label>' +
-        scopeSelectHtml(t.key);
-      var acc = row.querySelector(".u-acc"), ce = row.querySelector(".u-can-edit"), cm = row.querySelector(".u-can-manage"), sc = row.querySelector(".u-scope");
-      acc.addEventListener("change", function () {
-        ce.disabled = !acc.checked; cm.disabled = !acc.checked;
-        if (sc) sc.querySelectorAll('.u-co-box').forEach(function (b) { b.disabled = !acc.checked; });
-        if (!acc.checked) {
-          ce.checked = false; cm.checked = false;
-          if (sc) sc.querySelectorAll('.u-co-box').forEach(function (b) { b.checked = false; });
-        }
-      });
-      host.appendChild(row);
+      .concat(customTables.map(function (t) { return { key: t.id, name: t.name, alt: t.name_ar }; }));
+    uPicker = accessPicker(document.getElementById("u-tables"), {
+      items: all,
+      initial: (accessList || []).map(function (a) {
+        return { key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage, countries: countriesFromScope(a.scope) };
+      }),
+      noun: "tables",
+      placeholder: "Search tables…",
+      scope: true,
+      empty: "No tables yet."
     });
   }
   // ---- Countries and their branch lists --------------------------------------------
@@ -10925,30 +11136,24 @@
     document.getElementById("u-name").value = user ? (user.full_name || "") : "";
     if (user && user.avatar_path) getThumbUrl(user.avatar_path).then(function (url) { if (url) { pv.style.background = "url(" + url + ") center/cover"; pv.textContent = ""; } });
     document.getElementById("u-title").textContent = user ? "Edit user" : "New user";
+    document.getElementById("u-sub").textContent = user ? "Change the login, the role, or what it opens." : "Create a login and choose what it opens.";
     document.getElementById("u-email").value = user ? (user.email || "") : "";
     document.getElementById("u-pass").value = "";
     document.getElementById("u-pass").placeholder = user ? "New password (leave blank to keep)" : "Temporary password (min 8 chars)";
     document.getElementById("u-role").value = user ? user.role : "reviewer";
     document.getElementById("u-create").textContent = user ? "Save changes" : "Create account";
     document.getElementById("u-msg").textContent = "";
+    // Back to the form: the modal is reused, and the last account's password must not be
+    // sitting there when it opens for the next person.
+    document.getElementById("u-form").style.display = "";
+    document.getElementById("u-done").style.display = "none";
+    document.getElementById("u-done-msg").textContent = "";
+    uClearBad();
     document.getElementById("u-create-tables").checked = !!(user && user.can_create_tables);
     var uShow = document.getElementById("u-role").value === "admin" ? "none" : "block";
     document.getElementById("u-tables-wrap").style.display = uShow;
     document.getElementById("u-create-tables-wrap").style.display = uShow;
-    renderUserTables();
-    if (user && accessList) accessList.forEach(function (a) {
-      var acc = document.querySelector('#u-tables .u-acc[value="' + a.table_key + '"]');
-      if (acc) {
-        acc.checked = true;
-        var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + a.table_key + '"]'); if (ce) { ce.disabled = false; ce.checked = !!a.can_edit; }
-        var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + a.table_key + '"]'); if (cm) { cm.disabled = false; cm.checked = !!a.can_manage; }
-        var sc = document.querySelector('#u-tables .u-scope[data-key="' + a.table_key + '"]');
-        if (sc) {
-          var codes = countriesFromScope(a.scope);
-          sc.querySelectorAll('.u-co-box').forEach(function (b) { b.disabled = false; b.checked = codes.indexOf(b.value) > -1; });
-        }
-      }
-    });
+    renderUserTables(user ? accessList : null);
     usersModal.classList.add("open");
   }
   function deleteUser(p) {
@@ -10980,6 +11185,51 @@
       return db.from("profiles").update(patch).eq("id", id).then(function (r) { if (r.error) throw r.error; });
     });
   }
+  // ---- The login itself -------------------------------------------------------------
+  // The password is read off one screen and typed on another, so it is built out of
+  // characters that only read one way: no l/I/1/O/0, nothing that moves on an Arabic
+  // keyboard, and grouped in fours so it can be dictated over the phone.
+  function newTempPassword() {
+    var pool = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    var buf = new Uint32Array(12);
+    crypto.getRandomValues(buf);
+    var out = "";
+    for (var i = 0; i < 12; i++) out += pool.charAt(buf[i] % pool.length) + ((i === 3 || i === 7) ? "-" : "");
+    return out;
+  }
+  function inviteText(name, email, pass, url) {
+    return (name ? "Hi " + name + "," : "Hi,") +
+      "\nYour BLKTable account is ready.\n\n" +
+      url + "\nEmail: " + email + "\nTemporary password: " + pass +
+      "\n\nYou can change the password from your account page after you log in.";
+  }
+  function signInUrl() { return location.origin + location.pathname.replace(/\/[^\/]*$/, "/"); }
+  // A message under the button says which field is wrong; the field says so too, or the
+  // admin reads "Enter an email" while looking at the name box.
+  function uClearBad() { ["u-name", "u-email", "u-pass"].forEach(function (id) { document.getElementById(id).classList.remove("bad"); }); }
+  function uBad(id, text) {
+    uClearBad();
+    var el = document.getElementById(id);
+    el.classList.add("bad"); el.focus();
+    document.getElementById("u-msg").textContent = text;
+  }
+  document.getElementById("u-gen").addEventListener("click", function () {
+    var el = document.getElementById("u-pass");
+    el.value = newTempPassword(); el.classList.remove("bad");
+    el.focus(); el.select();
+  });
+  document.getElementById("u-done-close").addEventListener("click", function () { usersModal.classList.remove("open"); });
+  var uDoneName = "";
+  document.getElementById("u-copy").addEventListener("click", function () {
+    var b = this, txt = inviteText(uDoneName,
+      document.getElementById("u-done-email").textContent,
+      document.getElementById("u-done-pass").textContent, signInUrl());
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () {
+        b.textContent = "Copied ✓"; setTimeout(function () { b.textContent = "Copy invite"; }, 1600);
+      }).catch(function () { window.prompt("Copy this invite:", txt); });
+    } else { window.prompt("Copy this invite:", txt); }
+  });
   document.getElementById("users-new").addEventListener("click", function () { openUserModal(null); });
   document.getElementById("users-close").addEventListener("click", function () { usersModal.classList.remove("open"); });
   usersModal.addEventListener("click", function (e) { if (e.target === this) usersModal.classList.remove("open"); });
@@ -10991,22 +11241,23 @@
     var role = document.getElementById("u-role").value;
     var canCreate = role !== "admin" && document.getElementById("u-create-tables").checked;
     var name = document.getElementById("u-name").value.trim();
-    if (!name) { msg.textContent = "Enter a name."; return; }
-    if (!email) { msg.textContent = "Enter an email."; return; }
+    uClearBad();
+    if (!name) { uBad("u-name", "Enter a name."); return; }
+    if (!email) { uBad("u-email", "Enter an email."); return; }
     var access = [];
     if (role !== "admin") {
-      [].slice.call(document.querySelectorAll("#u-tables .u-acc:checked")).forEach(function (c) {
-        var ce = document.querySelector('#u-tables .u-can-edit[data-key="' + c.value + '"]');
-        var cm = document.querySelector('#u-tables .u-can-manage[data-key="' + c.value + '"]');
-        var sc = document.querySelector('#u-tables .u-scope[data-key="' + c.value + '"]');
-        var picked = sc ? Array.prototype.slice.call(sc.querySelectorAll('.u-co-box:checked')).map(function (b) { return b.value; }) : [];
-        access.push({ table_key: c.value, can_edit: !!(ce && ce.checked), can_manage: !!(cm && cm.checked), scope: scopeFromCountries(picked) });
+      (uPicker ? uPicker.value() : []).forEach(function (v) {
+        access.push({ table_key: v.key, can_edit: v.can_edit, can_manage: v.can_manage, scope: scopeFromCountries(v.countries) });
       });
-      if (!access.length) { msg.textContent = "Pick at least one table for this reviewer."; return; }
+      if (!access.length) {
+        msg.textContent = "Pick at least one table for this reviewer.";
+        if (uPicker) uPicker.focus();
+        return;
+      }
     }
 
     if (!editingUser) {
-      if (!pass || pass.length < 8) { msg.textContent = "Password must be at least 8 characters."; return; }
+      if (!pass || pass.length < 8) { uBad("u-pass", "Password must be at least 8 characters — or press Generate."); return; }
       msg.textContent = "Creating…";
       db.functions.invoke("admin-users", { body: { email: email, password: pass, role: role } }).then(function (res) {
         var e = invokeErr(res); if (e) throw new Error(e);
@@ -11017,11 +11268,19 @@
         });
       }).then(function (r) {
         if (r && r.error) throw r.error;
-        usersModal.classList.remove("open"); loadUsers();
-        window.alert("Account created for " + email + ".\nShare the temporary password — they can change it after logging in.");
+        loadUsers();
+        // The account exists; the modal now has one job — hand over the login.
+        uDoneName = name;
+        document.getElementById("u-done-url").textContent = signInUrl();
+        document.getElementById("u-done-email").textContent = email;
+        document.getElementById("u-done-pass").textContent = pass;
+        document.getElementById("u-form").style.display = "none";
+        document.getElementById("u-done").style.display = "";
+        document.getElementById("u-title").textContent = name;
+        document.getElementById("u-sub").textContent = "Send them these details.";
       }).catch(function (err) { msg.textContent = "Could not create. " + errText(err); if (window.console) console.error(err); });
     } else {
-      if (pass && pass.length < 8) { msg.textContent = "Password must be at least 8 characters."; return; }
+      if (pass && pass.length < 8) { uBad("u-pass", "Password must be at least 8 characters."); return; }
       if (editingUser.id === myUserId && role !== "admin") { msg.textContent = "You can't remove your own admin access."; return; }
       var id = editingUser.id;
       msg.textContent = "Saving…";
@@ -11034,7 +11293,14 @@
       chain = chain.then(function () { return saveProfileExtras(id, name, uPhotoFile, canCreate); });
       chain = chain.then(function () { return db.from("table_access").delete().eq("user_id", id).then(function (r) { if (r.error) throw r.error; }); });
       if (role !== "admin" && access.length) chain = chain.then(function () { return db.from("table_access").insert(access.map(function (a) { return { user_id: id, table_key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage, scope: a.scope }; })).then(function (r) { if (r.error) throw r.error; }); });
-      chain.then(function () { usersModal.classList.remove("open"); loadUsers(); window.alert("Saved."); }).catch(function (err) { msg.textContent = "Could not save. " + errText(err); if (window.console) console.error(err); });
+      chain.then(function () {
+        // Closing in silence reads as a dead button, so the button says it landed and the
+        // modal follows a moment later.
+        var btn = document.getElementById("u-create");
+        msg.textContent = ""; btn.textContent = "Saved ✓";
+        loadUsers();
+        setTimeout(function () { usersModal.classList.remove("open"); btn.textContent = "Save changes"; }, 700);
+      }).catch(function (err) { msg.textContent = "Could not save. " + errText(err); if (window.console) console.error(err); });
     }
   });
 
