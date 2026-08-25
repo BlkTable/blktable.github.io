@@ -55,7 +55,11 @@ const A = load(APP,
    'coverHtml', 'uploadCap', 'mbText', 'photoSectionHtml', 'ageText', 'otherKeyFor',
    'isChoiceField', 'isOtherChoice', 'customCellText']);
 
-const P = load(PUB, ['MAX_BYTES', 'MEDIA_MAX_BYTES'], ['isVideoFile', 'mbText', 'sizeText']);
+// isVideoFile now answers through fileKind, so that the size hint and the preview tile can
+// never disagree about the same file (see upload-tiles.test.js) — which is why its two
+// extension lists come along here.
+const P = load(PUB, ['MAX_BYTES', 'MEDIA_MAX_BYTES', 'IMAGE_EXT_RE', 'VIDEO_EXT_RE'],
+  ['fileKind', 'isVideoFile', 'mbText', 'sizeText']);
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; } catch (e) { console.log('FAIL: ' + name + ' -> ' + e.message); process.exitCode = 1; } };
@@ -239,6 +243,8 @@ t('an unanswered upload still exports as a dash', () => {
 });
 
 // ---- the public form's own copy ------------------------------------------
+// The MIME type first, and the filename when the browser gives no type at all — which
+// Android's picker regularly does. upload-tiles.test.js covers that fallback.
 t('a chosen file is judged by its MIME type, which is what the browser knows', () => {
   assert.ok(P.isVideoFile({ type: 'video/mp4' }));
   assert.ok(P.isVideoFile({ type: 'video/quicktime' }));
