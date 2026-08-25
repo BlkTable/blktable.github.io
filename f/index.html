@@ -107,6 +107,26 @@
   .file-name { color: var(--muted); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-check { display: none; width: 22px; height: 22px; border-radius: 50%; background: var(--wa); color: #0a2e17; font-weight: 800; font-size: 0.78rem; align-items: center; justify-content: center; flex: 0 0 auto; }
   .file-row.invalid .file-btn { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
+  /* One tile per chosen file, so a person can see WHICH photos they attached and take one
+     back off. auto-fill rather than a fixed column count: three across on a phone, more on
+     a laptop, without a media query. */
+  .file-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-top: 10px; }
+  .file-tiles:empty { display: none; }
+  .file-tile { position: relative; border: 1px solid var(--field-border); border-radius: 8px; background: var(--field-bg); overflow: hidden; }
+  .file-tile.invalid { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
+  .ft-shot { display: block; width: 100%; height: 92px; object-fit: cover; background: #000; }
+  .ft-glyph { display: flex; align-items: center; justify-content: center; height: 92px; color: var(--muted); font-weight: 800; font-size: 0.78rem; letter-spacing: 0.04em; }
+  .ft-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none;
+    width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; font-size: 0.7rem;
+    display: flex; align-items: center; justify-content: center; padding-left: 2px; }
+  .ft-cap { padding: 5px 6px; font-size: 0.7rem; color: var(--muted); border-top: 1px solid var(--line);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Big enough to hit with a thumb, and always on top of the picture rather than beside it,
+     because on a phone there is no room beside it. */
+  .ft-del { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+    background: rgba(0,0,0,0.6); color: #fff; font-size: 0.8rem; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; }
+  .ft-del:hover { background: var(--danger); }
   .form-link { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 8px;
     background: var(--accent); color: #fff; font-weight: 600; font-size: 0.95rem; text-decoration: none;
     transition: background 0.15s ease, transform 0.05s ease; }
@@ -317,7 +337,54 @@
     Object.keys(by).forEach(function (fid) { out[fid] = fileValue(by[fid]); });
     return out;
   }
-  function isVideoFile(f) { return !!(f && /^video\//.test(f.type || "")); }
+  // ---- The chosen files, as a list we own ----------------------------------
+  // A browser's FileList is read-only: nothing can be taken out of it, and a second pick
+  // REPLACES it rather than adding to it. Both of those were visible to the person filling
+  // the form as one thing — a photo attached by mistake could not be taken off, and trying
+  // to attach one more silently lost the rest. So the page keeps its own array and these
+  // are its rules. Nothing is uploaded until Submit, so removing one costs nothing and
+  // leaves no orphan object in the bucket.
+  //
+  // Identity is name + size + moment, because "Add photos" reopens a picker that on a phone
+  // usually comes back with the previous selection still ticked: appending blindly would
+  // attach everything a second time. The moment is in there so that two genuinely different
+  // photos that share a name and a size — IMG_0001.jpg off two phones, or a picker that
+  // calls everything image.jpg — are not mistaken for one.
+  function fileKey(f) { return !f ? "" : [f.name || "", f.size || 0, f.lastModified || 0].join("|"); }
+  // Refused at pick time rather than blocking the form: whatever the selection ends up
+  // being, it is a legal one, and the count that did not fit is what the message says.
+  function addFiles(cur, incoming, max) {
+    var out = (cur || []).slice(), have = {}, dupes = 0, over = 0;
+    out.forEach(function (f) { have[fileKey(f)] = true; });
+    (incoming || []).forEach(function (f) {
+      if (!f) return;
+      var k = fileKey(f);
+      if (have[k]) { dupes++; return; }
+      if (out.length >= max) { over++; return; }
+      have[k] = true; out.push(f);
+    });
+    return { files: out, dupes: dupes, over: over };
+  }
+  // Android's picker and several in-app browsers hand over a File with type === "". A photo
+  // with no preview is the exact failure the tiles exist to fix, so the extension is read
+  // whenever the MIME type is missing.
+  var IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|heic|heif|bmp|avif|tiff?)$/i;
+  var VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|avi|mkv|3gp|hevc)$/i;
+  function fileKind(f) {
+    if (!f) return "other";
+    var t = f.type || "", n = f.name || "";
+    if (/^image\//.test(t) || IMAGE_EXT_RE.test(n)) return "image";
+    if (/^video\//.test(t) || VIDEO_EXT_RE.test(n)) return "video";
+    return "other";
+  }
+  // What a tile with no picture to show says instead.
+  function extLabel(name) {
+    var m = /\.([a-z0-9]{1,6})$/i.exec(name || "");
+    return m ? m[1].toUpperCase() : "FILE";
+  }
+  // One rule, not two: the size hint offers "a shorter clip" and the tile draws a play
+  // badge, and those must never disagree about the same file.
+  function isVideoFile(f) { return fileKind(f) === "video"; }
   function mbText(b) { return Math.round(b / 1048576) + " MB"; }
   function sizeText(b) {
     if (!(b > 0)) return "0 KB";
@@ -1024,20 +1091,68 @@
       if (isFile) fin.accept = "";
       fin.multiple = true;
       fin.style.display = "none"; fin.id = id;
+      // Said once something is chosen, because a second pick now ADDS to the selection. The
+      // old label was "Change", which was honest about a picker that replaced everything and
+      // is what made a photo attached by mistake look permanent.
+      var addTxt = isFile ? "Add files" : (isMedia ? "Add photos or videos" : "Add photos");
+      var ftiles = document.createElement("div"); ftiles.className = "file-tiles";
       var fhint = document.createElement("div"); fhint.className = "hint";
       fhint.textContent = baseHint;
-      wrap.appendChild(frow); wrap.appendChild(fin); wrap.appendChild(fhint);
+      wrap.appendChild(frow); wrap.appendChild(fin); wrap.appendChild(ftiles); wrap.appendChild(fhint);
       var fbtn = frow.querySelector(".file-btn"), fchk = frow.querySelector(".file-check"), fnm = frow.querySelector(".file-name");
-      // Two separate refusals, because they need different wording: one file over the ceiling
-      // names that file, too many files names the count.
-      var overCap = false, tooMany = false;
-      function chosenFiles() { return fin.files ? [].slice.call(fin.files) : []; }
-      fbtn.addEventListener("click", function () { fin.click(); });
-      fin.addEventListener("change", function () {
-        var files = chosenFiles();
+      // The selection, as an array we own rather than the input's FileList — see addFiles.
+      // `note` is what the last pick has to say for itself: files that did not fit, or a
+      // photo already attached. It is cleared by the next pick, and never blocks Submit,
+      // because what is on screen after a refused pick is always a legal selection.
+      var picked = [], urls = [], note = "", noteBad = false, overCap = false;
+      function chosenFiles() { return picked.slice(); }
+      function releaseUrls() {
+        urls.forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) {} });
+        urls = [];
+      }
+      // Redrawn whole on every change. Ten tiles at most, so there is nothing to gain from
+      // patching them in place, and a full redraw cannot leave a tile pointing at a file
+      // that is no longer in the list.
+      function drawTiles() {
+        releaseUrls();
+        ftiles.innerHTML = "";
+        picked.forEach(function (fl) {
+          var kind = fileKind(fl);
+          var tile = document.createElement("div");
+          tile.className = "file-tile" + (fl.size > cap ? " invalid" : "");
+          if (kind === "image" || kind === "video") {
+            var u = URL.createObjectURL(fl); urls.push(u);
+            var shot = document.createElement(kind === "image" ? "img" : "video");
+            shot.className = "ft-shot"; shot.src = u;
+            if (kind === "image") shot.alt = "";
+            else { shot.preload = "metadata"; shot.muted = true; shot.playsInline = true; }
+            tile.appendChild(shot);
+            if (kind === "video") { var pl = document.createElement("span"); pl.className = "ft-play"; pl.textContent = "▶"; tile.appendChild(pl); }
+          } else {
+            var gl = document.createElement("div"); gl.className = "ft-glyph"; gl.textContent = extLabel(fl.name);
+            tile.appendChild(gl);
+          }
+          var capn = document.createElement("div"); capn.className = "ft-cap";
+          capn.textContent = fl.name; capn.title = fl.name + " · " + sizeText(fl.size);
+          tile.appendChild(capn);
+          var del = document.createElement("button");
+          del.type = "button"; del.className = "ft-del"; del.textContent = "✕";
+          del.title = "Remove"; del.setAttribute("aria-label", "Remove " + fl.name);
+          // By identity, not by position: a tile removed above this one would make a
+          // remembered index point at somebody else's photo.
+          del.addEventListener("click", function () {
+            var at = picked.indexOf(fl);
+            if (at !== -1) picked.splice(at, 1);
+            note = ""; noteBad = false; refreshFiles();
+          });
+          tile.appendChild(del);
+          ftiles.appendChild(tile);
+        });
+      }
+      function refreshFiles() {
+        var files = picked;
         var big = files.filter(function (x) { return x.size > cap; })[0] || null;
         overCap = !!big;
-        tooMany = files.length > MAX_FILES;
         var total = files.reduce(function (n, x) { return n + x.size; }, 0);
         // One file still reads exactly as it did — its name and its size. Several read as a
         // count and the total, because on a phone the total is the number that decides whether
@@ -1045,27 +1160,51 @@
         fnm.textContent = !files.length ? noneTxt
           : files.length === 1 ? files[0].name + " · " + sizeText(files[0].size)
           : files.length + " " + oneWord + "s · " + sizeText(total);
-        fchk.style.display = (files.length && !overCap && !tooMany) ? "flex" : "none";
-        fbtn.textContent = files.length ? ((isMedia || isFile) ? "Change files" : "Change photos") : pickTxt;
+        fchk.style.display = (files.length && !overCap) ? "flex" : "none";
+        fbtn.textContent = files.length ? addTxt : pickTxt;
         // Said now rather than after Submit: uploading 80 MB on shop wifi and being refused at
         // the end is the failure worth designing out.
-        fhint.textContent = tooMany
-          ? MAX_FILES + " " + oneWord + "s at most, and " + files.length + " were chosen. Please choose fewer."
-          : !big ? baseHint
-          : (isFile
-              ? '"' + big.name + '" is ' + sizeText(big.size) + ". The limit is " + mbText(cap) + " each. Please choose a smaller one."
+        fhint.textContent = big
+          ? (isFile
+              ? '"' + big.name + '" is ' + sizeText(big.size) + ". The limit is " + mbText(cap) + " each. Please remove it."
               : '"' + big.name + '" is ' + sizeText(big.size) + ". The limit is " + mbText(cap) + " each." +
-                (isVideoFile(big) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please choose a smaller one."));
-        fhint.style.color = (overCap || tooMany) ? "var(--danger)" : "";
-        if (overCap || tooMany) frow.classList.add("invalid"); else frow.classList.remove("invalid");
+                (isVideoFile(big) ? " A shorter clip, or your phone's lower video quality setting, will fit." : " Please remove it."))
+          : note || baseHint;
+        fhint.style.color = (overCap || noteBad) ? "var(--danger)" : "";
+        if (overCap) frow.classList.add("invalid"); else frow.classList.remove("invalid");
+        drawTiles();
+      }
+      fbtn.addEventListener("click", function () { fin.click(); });
+      fin.addEventListener("change", function () {
+        // The one place the input's own list is read, and only to learn what was just
+        // picked. Everything else reads `picked`.
+        var justPicked = [].slice.call(fin.files || []);
+        var res = addFiles(picked, justPicked, MAX_FILES);
+        picked = res.files;
+        // Emptied so the same photo can be chosen again after being removed: while the input
+        // still holds it, picking it fires no change event at all and nothing happens.
+        fin.value = "";
+        // Over the cap is a refusal and reads as one. A photo already attached is not a
+        // mistake worth colouring red — it is a phone picker handing back a selection that
+        // was already ticked — but saying nothing at all looks like the pick did nothing.
+        if (res.over) {
+          note = MAX_FILES + " " + oneWord + "s at most, so " + res.over + " of them " +
+                 (res.over === 1 ? "was" : "were") + " not added.";
+          noteBad = true;
+        } else if (res.dupes) {
+          note = res.dupes === 1 ? "That one is already attached." : "Those are already attached.";
+          noteBad = false;
+        } else {
+          note = ""; noteBad = false;
+        }
+        refreshFiles();
       });
       controls.push({
         f: f, el: frow, isPhoto: true, cap: cap,
         files: chosenFiles,
-        validate: function () { return !overCap && !tooMany && (!f.required || chosenFiles().length > 0); },
+        validate: function () { return !overCap && (!f.required || picked.length > 0); },
         badMsg: function () {
-          return tooMany ? f.label + ": " + MAX_FILES + " " + oneWord + "s at most. Please choose fewer."
-            : overCap ? "A " + oneWord + " is larger than " + mbText(cap) + ". Please choose a smaller one." : "";
+          return overCap ? "A " + oneWord + " is larger than " + mbText(cap) + ". Please remove it." : "";
         }
       });
     } else if (f.type === "link") {
