@@ -116,6 +116,43 @@ t('no rows, no event, or a null config is an empty list rather than a throw', ()
   assert.deepStrictEqual(asW(API.assignCandidates([row('s1','A','+1','e-1#','2026-08-01T10:00:00Z')], null, CFG)), []);
 });
 
+// ---- The number comes from the staff directory, not from the vote --------
+// A barista picks their name and nothing else. HR keeps 336 numbers correct in one
+// place instead of 300 people retyping their own.
+const DIRCFG = {from:'a', match:'F_EV', name:'F_NM', roster:'r'};   // note: no `phone`
+const PHONES = {'ahmad':'+962791111111', 'sara':'+962792222222'};
+t('the phone is looked up by name from the directory', () => {
+  const rows = [row('s1','Ahmad','','e-1#','2026-08-01T10:00:00Z')];
+  assert.strictEqual(API.assignCandidates(rows,'e-1',DIRCFG,undefined,PHONES)[0].phone, '+962791111111');
+});
+t('a name spelled with stray spaces still finds its number', () => {
+  const rows = [row('s1','  AHMAD  ','','e-1#','2026-08-01T10:00:00Z')];
+  assert.strictEqual(API.assignCandidates(rows,'e-1',DIRCFG,undefined,PHONES)[0].phone, '+962791111111');
+});
+t('somebody not in the directory has no number rather than a wrong one', () => {
+  // 56 of the 336 have no number in the sheet. They can be assigned; they cannot be
+  // messaged, and the panel says so.
+  const rows = [row('s1','Nobody','','e-1#','2026-08-01T10:00:00Z')];
+  assert.strictEqual(API.assignCandidates(rows,'e-1',DIRCFG,undefined,PHONES)[0].phone, '');
+});
+t('no directory at all is an empty number, not a throw', () => {
+  const rows = [row('s1','Ahmad','','e-1#','2026-08-01T10:00:00Z')];
+  assert.strictEqual(API.assignCandidates(rows,'e-1',DIRCFG,undefined,null)[0].phone, '');
+  assert.strictEqual(API.assignCandidates(rows,'e-1',DIRCFG)[0].phone, '');
+});
+t('a table still configured the old way keeps reading the phone off the vote', () => {
+  // The fallback exists so this change did not have to be flag-day for every table.
+  const rows = [row('s1','Ahmad','+962790000000','e-1#','2026-08-01T10:00:00Z')];
+  assert.strictEqual(API.assignCandidates(rows,'e-1',CFG)[0].phone, '+962790000000');
+});
+t('the directory WINS over a phone left on an old vote', () => {
+  // Existing votes still carry the answer to a question that no longer exists. HR's
+  // number is the current one.
+  const rows = [row('s1','Ahmad','+962790000000','e-1#','2026-08-01T10:00:00Z')];
+  const both = {from:'a', match:'F_EV', name:'F_NM', phone:'F_PH', roster:'r'};
+  assert.strictEqual(API.assignCandidates(rows,'e-1',both,undefined,PHONES)[0].phone, '+962791111111');
+});
+
 // ---- Multi-day: a vote names one DAY, and days do not bleed --------------
 const D1 = '2026-09-10', D2 = '2026-09-11', D3 = '2026-09-12';
 const dayRows = [

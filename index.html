@@ -6684,7 +6684,12 @@
   //
   // Matched on the EVENT id, so it does not matter which poll the vote was cast in — an
   // event can sit on more than one link and every vote for it counts.
-  function assignCandidates(availRows, eventId, cfg, day) {
+  // `phones` maps a person key to their number, from the staff directory. The vote no
+  // longer carries one: a barista picks their name and nothing else, and the number is
+  // HR's to keep correct in one place rather than 300 people's to retype. Falls back to
+  // a phone answer on the vote when no directory is supplied, so a table configured the
+  // old way still works.
+  function assignCandidates(availRows, eventId, cfg, day, phones) {
     if (!cfg || !eventId) return [];
     var want = ballotKey(eventId, day);
     var latest = {};
@@ -6705,7 +6710,7 @@
       out.push({
         key: k,
         name: String(((r.data || {})[cfg.name]) || "").trim() || "(no name)",
-        phone: String(((r.data || {})[cfg.phone]) || "").trim(),
+        phone: (phones && phones[k]) || String((cfg.phone ? (r.data || {})[cfg.phone] : "") || "").trim(),
         at: r.created_at || null
       });
     });
@@ -6923,20 +6928,36 @@
     }
     var availP  = db.from("app_tables").select("id").eq("slug", cfg.from).single();
     var rosterP = db.from("app_tables").select("id,config").eq("slug", cfg.roster).single();
+    // The staff directory, if this table has one. Absent is fine — the panel then shows
+    // "no number" against everybody, which is true rather than broken.
+    var dirCfg = cfg.directory || null;
+    var dirP = (dirCfg && dirCfg.table)
+      ? db.from("app_tables").select("id").eq("slug", dirCfg.table).single()
+      : Promise.resolve({ data: null });
 
-    Promise.all([availP, rosterP]).then(function (out) {
+    Promise.all([availP, rosterP, dirP]).then(function (out) {
       if (out[0].error || out[1].error) { say("Could not open the roster."); return; }
       rosterId = out[1].data.id;
       rosterCfg = out[1].data.config || {};
+      var dirTableId = (out[2] && out[2].data && out[2].data.id) || null;
       // The whole roster across every event, not just this one: the clash warning and the
       // month count are both about what a person is doing ELSEWHERE. Paged, because a
       // roster read one page deep hides exactly the bookings that would have warned.
       return Promise.all([
         fetchAllRows(out[0].data.id, "id,data,created_at,parent_id"),
         fetchAllRows(rosterId, "id,data,slot,parent_id"),
-        fetchAllRows(t.id, "id,data")
+        fetchAllRows(t.id, "id,data"),
+        dirTableId ? fetchAllRows(dirTableId, "id,data") : Promise.resolve([])
       ]).then(function (res) {
         var avail = res[0], roster = res[1], events = res[2];
+        // Keyed the same way a person is keyed everywhere else in this flow, so a name
+        // spelled with stray spaces still finds its number.
+        var phones = {};
+        (res[3] || []).forEach(function (r) {
+          var k = assignPersonKey((r.data || {})[dirCfg && dirCfg.name]);
+          var ph = String(((r.data || {})[dirCfg && dirCfg.phone]) || "").trim();
+          if (k && ph) phones[k] = ph;
+        });
         var evById = {};
         events.forEach(function (e) {
           // The three time questions are named in config.assign. Nothing here looks a
@@ -6958,7 +6979,7 @@
         // people who ticked THAT day. A single-day event is one block, as before.
         days = eventDays(me.date, (evRec.data || {})[cfg.end_date]);
         byDay = days.map(function (day) {
-          return { day: day, cands: assignCandidates(avail, evRec.id, cfg, day) };
+          return { day: day, cands: assignCandidates(avail, evRec.id, cfg, day, phones) };
         });
         // Somebody already rostered on a day the event NO LONGER covers — because its
         // dates were shortened after the roster was built. Without a block of their own
@@ -6976,7 +6997,7 @@
           strays[d].push({
             key: assignPersonKey((r.data || {})[rosterCfg.assign_name]),
             name: String((r.data || {})[rosterCfg.assign_name] || "").trim() || "(no name)",
-            phone: String((r.data || {})[rosterCfg.assign_phone] || "").trim()
+            phone: phones[assignPersonKey((r.data || {})[rosterCfg.assign_name])] || String((r.data || {})[rosterCfg.assign_phone] || "").trim()
           });
         });
         Object.keys(strays).forEach(function (d) {
