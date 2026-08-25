@@ -248,4 +248,40 @@ t('a scorecard with no priced questions yet returns nothing rather than an empty
   assert.strictEqual(SD.scoredDetail({ config: { scorecard: true, score_field: 'pct' } }, [Q_PLAIN], {}), null);
 });
 
+// ---- the same six cases the database was checked against ----
+// These are not extra coverage. They are the exact records run through score_submission()
+// on the live database on 2026-08-25, with the exact figures it returned, so the two
+// implementations of the rule are pinned to each other here rather than in a paragraph
+// somebody has to remember to re-run. If one of these changes, the SQL changed too.
+const MIRROR_FIELDS = [
+  { id: 'q1', type: 'yesno', scoring: { rule: 'equals', earn: ['Yes'], points: 4 } },
+  { id: 'q2', type: 'dropdown', scoring: { rule: 'choices' },
+    options: [{ en: 'Excellent', points: 3 }, { en: 'Acceptable', points: 1 }, { en: 'Poor', points: 0 }] },
+  { id: 'q3', type: 'dropdown', scoring: { rule: 'choices' },
+    options: [{ en: 'Clean', points: 3 }, { en: 'Not applicable', na: true }] },
+  { id: 'q4', type: 'yesno', show_if: { field: 'q1', equals: ['Yes'] },
+    scoring: { rule: 'equals', earn: ['Yes'], points: 5 } }
+];
+const pct = d => {
+  const r = scorecardTotals(MIRROR_FIELDS, d);
+  return r.possible ? Number((r.earned / r.possible).toFixed(4)) : null;
+};
+t('mirror 1: everything applies, 8 of 15', () => {
+  assert.strictEqual(pct({ q1: 'Yes', q2: 'Acceptable', q3: 'Clean', q4: 'No' }), 0.5333);
+});
+t('mirror 2: an N/A answer leaves the total, 12 of 12', () => {
+  assert.strictEqual(pct({ q1: 'Yes', q2: 'Excellent', q3: 'Not applicable', q4: 'Yes' }), 1);
+});
+t('mirror 3: a question never asked leaves the total, 6 of 10', () => {
+  assert.strictEqual(pct({ q1: 'No', q2: 'Excellent', q3: 'Clean' }), 0.6);
+});
+t('mirror 4: asked and missed stays in the total, 12 of 15', () => {
+  assert.strictEqual(pct({ q1: 'Yes', q3: 'Clean', q4: 'Yes' }), 0.8);
+});
+t('mirror 5: unanswered questions still count, so this is 0 of 7 and not a null', () => {
+  // Only q3 is N/A and only q4 was never asked. q1 and q2 were asked and missed, so the
+  // record scores zero out of seven rather than having no score at all.
+  assert.strictEqual(pct({ q3: 'Not applicable' }), 0);
+});
+
 if (!process.exitCode) console.log(n + ' passed');

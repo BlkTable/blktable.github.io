@@ -719,7 +719,7 @@ The stored percentage is what the grid, filters, sort, group-by and CSV export r
 This SQL is **not applied in this task**. It is written, reviewed and committed; applying it to the live database is a separate, deliberate step at the end.
 
 **Files:**
-- Create: `docs/sql/scoring.sql` (the repo is public, and this file names no hosts, credentials or people, so it belongs with the code it describes)
+- Create: `blktable-migration/workspaces/40-scorecard-rules.sql` in the PRIVATE folder. `*.sql` is gitignored in this repo because it is public and served at blktable.blk.jo, and 39 is the real highest number there
 - Modify: `docs/tests/README.md` — add the two new suites to the table
 
 - [ ] **Step 1: Check whether the database already has a conditional-question helper**
@@ -736,7 +736,7 @@ If a helper exists, use its name in Step 2 instead of defining `cond_met`. If no
 
 - [ ] **Step 2: Write the SQL**
 
-Create `docs/sql/scoring.sql`:
+Create `/c/Users/ASUS/blktable-migration/workspaces/40-scorecard-rules.sql`:
 
 ```sql
 -- Scorecards built in the app: points live on app_fields.scoring and on the choice
@@ -892,7 +892,7 @@ create trigger score_submission_trg
 Run it inside a transaction that is rolled back, so nothing is installed:
 ```sql
 begin;
-\i docs/sql/scoring.sql
+i /tmp/scoring.sql
 rollback;
 ```
 Expected: no errors, and `rollback` leaves the database exactly as it was. If `alter table ... add column if not exists` reports it already exists, that is fine and means a previous run reached that line.
@@ -903,13 +903,13 @@ Add two rows to the table in `docs/tests/README.md`:
 
 ```markdown
 | `scoring-options.test.js` | prices and the N/A marker surviving the Options box (`parseChoiceList`, `optsToString`) — that the tokens are order independent, that a price of zero is kept rather than dropped as falsy, that a price which is not a number becomes no price rather than NaN, and that a full list round-trips unchanged. The builder rebuilds every choice from this text on each save, so a token it cannot read is a price that quietly becomes zero |
-| `scoring-rules.test.js` | what a score means (`questionMaxPoints`, `questionApplies`, `questionEarned`, `scorecardTotals`, `scoredDetail`) — the worked example of 60 out of 64 reading 94%, per-choice prices, multi-select adding up, a blank number not passing as zero the way Airtable's did, and above all the denominator rule: a question hidden by "ask only if" or answered N/A leaves the total, while one that was asked and missed stays in it. The same rules are mirrored in `docs/sql/scoring.sql`, and the two must agree |
+| `scoring-rules.test.js` | what a score means (`questionMaxPoints`, `questionApplies`, `questionEarned`, `scorecardTotals`, `scoredDetail`) — the worked example of 60 out of 64 reading 94%, per-choice prices, multi-select adding up, a blank number not passing as zero the way Airtable's did, and above all the denominator rule: a question hidden by "ask only if" or answered N/A leaves the total, while one that was asked and missed stays in it. The same rules are mirrored in `blktable-migration/workspaces/40-scorecard-rules.sql`, and the two must agree |
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add docs/sql/scoring.sql docs/tests/README.md
+git add docs/tests/README.md   # the SQL itself is gitignored and lives in the private folder
 git commit -m "feat: app_fields.scoring and the trigger that writes a scorecard's percentage"
 ```
 
@@ -1585,7 +1585,7 @@ Everything so far is code that behaves whether or not the database has changed. 
 
 Number the file at this point, since other sessions claim numbers too (34 is the highest referenced today):
 ```bash
-git mv docs/sql/scoring.sql docs/sql/35-scorecard-rules.sql
+# already named 40-scorecard-rules.sql in the private folder
 ```
 Apply it against the live database using the three-call recipe in the private self-host runbook. Confirm afterwards:
 ```sql
@@ -1636,7 +1636,7 @@ Open QC and Mystery Shopper. Expected: their headline scores and per-question br
 Add to Current state, in the list of table-wide standards:
 
 ```markdown
-- **A table says what it is for when you make it (all future tables, 2026-08-25):** Create asks first, with three types. **Form** is what the app always made. **Checklist** is `kind='task'`, with no public link, the shape the 33 Operate imports already had but which no human could choose. **Scorecard** prices its own questions: points per question, or a price per choice so "Excellent" 3 and "Acceptable" 1, with the total worked out from the questions rather than typed, shown live under the list while you build. A record is scored out of what applied to it: a question hidden by "ask only if", or answered with a choice marked N/A, leaves the total, so a branch with no kitchen is not marked down for not having one. A question that was asked and missed stays in the total and earns nothing. Rules live on `app_fields.scoring` and on the choice objects, so renaming a choice keeps its price; the percentage is written by a trigger so the public form, a staff edit, an added record and an import all agree, and the grid, filters, sort and CSV export read it as an ordinary field. **QC and Mystery Shopper are untouched**: they carry no `config.scored` and no `scoring`, so the new trigger returns on its second line and their imported engine keeps running. Nothing is ever rescored. `docs/sql/35-scorecard-rules.sql`; tests across `scoring-rules`, `scoring-options`, `scoring-builder` and `table-purpose`.
+- **A table says what it is for when you make it (all future tables, 2026-08-25):** Create asks first, with three types. **Form** is what the app always made. **Checklist** is `kind='task'`, with no public link, the shape the 33 Operate imports already had but which no human could choose. **Scorecard** prices its own questions: points per question, or a price per choice so "Excellent" 3 and "Acceptable" 1, with the total worked out from the questions rather than typed, shown live under the list while you build. A record is scored out of what applied to it: a question hidden by "ask only if", or answered with a choice marked N/A, leaves the total, so a branch with no kitchen is not marked down for not having one. A question that was asked and missed stays in the total and earns nothing. Rules live on `app_fields.scoring` and on the choice objects, so renaming a choice keeps its price; the percentage is written by a trigger so the public form, a staff edit, an added record and an import all agree, and the grid, filters, sort and CSV export read it as an ordinary field. **QC and Mystery Shopper are untouched**: they carry no `config.scored` and no `scoring`, so the new trigger returns on its second line and their imported engine keeps running. Nothing is ever rescored. `blktable-migration/workspaces/40-scorecard-rules.sql`; tests across `scoring-rules`, `scoring-options`, `scoring-builder` and `table-purpose`.
 ```
 
 Add a dated line to the Log:
@@ -1648,7 +1648,7 @@ Add a dated line to the Log:
 - [ ] **Step 9: Commit and open the PR**
 
 ```bash
-git add STATUS.md docs/sql/35-scorecard-rules.sql
+git add STATUS.md
 git commit -m "docs: STATUS for table purpose and builder-made scorecards"
 git push -u origin feat/table-purpose-scoring
 gh pr create --title "A table says what it is for, and a scorecard you can build in the UI" --body "..."
