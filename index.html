@@ -10649,6 +10649,27 @@
     if (!options || typeof options !== "object" || Array.isArray(options)) return null;
     return options.links_to_table ? options : null;
   }
+  // The Options box, read back into choices. The first two slots are English and Arabic;
+  // everything after them is a token rather than a position, because three flags in fixed
+  // slots is how "other" ends up meaning "priced at 3" the day somebody adds a price.
+  // Tokens: "other" opens a free-text box, "na" takes the question out of the score total,
+  // "pts:3" prices the choice.
+  function parseChoiceList(raw) {
+    return String(raw || "").split(/[\r\n,]+/).map(function (p) {
+      var kv = p.split("|");
+      var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
+      for (var i = 2; i < kv.length; i++) {
+        var tok = (kv[i] || "").trim().toLowerCase();
+        if (tok === "other") o.other = true;
+        else if (tok === "na") o.na = true;
+        else if (tok.indexOf("pts:") === 0) {
+          var n = parseFloat(tok.slice(4));
+          if (!isNaN(n)) o.points = n;      // a price that is not a number is no price at all
+        }
+      }
+      return o;
+    }).filter(function (o) { return o.en; });
+  }
   function optsToString(options) {
     if (!options) return "";
     if (!Array.isArray(options) && options.list) return options.list;
@@ -10664,8 +10685,13 @@
     if (!options.length) return "";
     return options.map(function (o) {
       var en = (typeof o === "string" ? o : o.en) || "", ar = (typeof o === "string" ? "" : o.ar) || "";
-      var other = (typeof o === "object" && o.other) ? (ar ? "|other" : "||other") : "";
-      return en + (ar ? "|" + ar : "") + other;
+      var toks = [];
+      if (typeof o === "object" && o) {
+        if (o.other) toks.push("other");
+        if (o.na) toks.push("na");
+        if (typeof o.points === "number" && !isNaN(o.points)) toks.push("pts:" + o.points);
+      }
+      return en + (ar || toks.length ? "|" + ar : "") + (toks.length ? "|" + toks.join("|") : "");
     }).join(", ");
   }
   // presetType comes from the grid's "+" field-type picker: the editor opens with a
@@ -10863,12 +10889,7 @@
       if (type === "dropdown" || type === "multi_select") {
         var raw = rows[i].querySelector(".opts").value.trim();
         if (!raw) { msg.set("Choice questions need options.", "err"); return; }
-        options = raw.split(/[\r\n,]+/).map(function (p) {
-          var kv = p.split("|");
-          var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
-          if ((kv[2] || "").trim().toLowerCase() === "other") o.other = true;   // this choice opens a free-text box
-          return o;
-        }).filter(function (o) { return o.en; });
+        options = parseChoiceList(raw);
       } else if (type === "link") {
         // A LINKED RECORD comes first, and the ordering is the fix. This branch used to
         // demand a URL out of a box that was empty for all 200 of them, fail the check and
