@@ -323,14 +323,19 @@ t('a submitted form leaves no draft behind', () => {
 });
 t('every question type that can take an answer back says so', () => {
   // a new field type added without setDraft loses its answer on every refresh, silently.
-  // Two branches deliberately have none: a file (cannot be stored) and a link (collects
-  // nothing at all).
+  // One branch deliberately has none: a link, which collects nothing at all. A file question
+  // used to be the second — a chosen file could not be written to storage — and now takes its
+  // answer back through setDraftFiles instead, because the files live in IndexedDB rather
+  // than in the answers object (form-draft-files.test.js).
   const body = SRC.slice(SRC.indexOf('function buildField'), SRC.indexOf('function markCtl'));
   const pushes = body.split('controls.push({').slice(1).map(p => p.slice(0, p.indexOf('});') + 3));
   assert.ok(pushes.length >= 10, 'expected every field type to push a control, saw ' + pushes.length);
-  const without = pushes.filter(p => p.indexOf('setDraft') === -1);
-  assert.strictEqual(without.length, 2, 'controls with no setDraft: ' + without.length + ' (expected the file and link questions only)');
-  assert.ok(without.every(p => /isPhoto|el: a,/.test(p)), 'the two without setDraft are not the file and link questions');
+  const without = pushes.filter(p => !/setDraft\b/.test(p) && p.indexOf('setDraftFiles') === -1);
+  assert.strictEqual(without.length, 1, 'controls with no way back at all: ' + without.length + ' (expected the link question only)');
+  assert.ok(/el: a,/.test(without[0]), 'the one with no way back is not the link question');
+  const file = pushes.filter(p => /isPhoto: true/.test(p));
+  assert.strictEqual(file.length, 1, 'expected exactly one file control');
+  assert.ok(file[0].indexOf('setDraftFiles') !== -1, 'the file question cannot take its files back');
 });
 
 // ---- the same rules on the two hand-built forms ----

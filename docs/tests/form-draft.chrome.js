@@ -190,8 +190,15 @@ until(function () { return el('fld-name'); }, 5000).then(function (booted) {
   // Yes is hidden while the form is being rebuilt, and must not lose its answer to that.
   ok('a question asked only behind a Yes is asked again, with its answer',
      el('fld-detail') && el('fld-detail').value === 'it was the fastest', el('fld-detail') && el('fld-detail').value);
-  ok('the photo did not come back', el('fld-pic').files.length === 0, String(el('fld-pic').files.length));
-  ok('and the person is told so, in both languages',
+  // The input is empty whatever happens: no page may put a file into an <input type="file">,
+  // so a kept photo comes back into the control and its tiles, never into the element. And in
+  // this harness nothing comes back at all — the page is on file://, which has no origin, and
+  // Chrome refuses an origin-less page IndexedDB. That is the fallback the pages are written
+  // to survive, and here it is being survived: the answers come back, the photo does not, and
+  // the note says so rather than promising something that is not there. The photos actually
+  // coming back, on a served page and across a real reload, is form-draft-files.chrome.js.
+  ok('the file input is empty, as it is either way', el('fld-pic').files.length === 0, String(el('fld-pic').files.length));
+  ok('and with no storage to keep the photo, the person is told so in both languages',
      el('draft-note').style.display === 'block' &&
      /kept the answers/.test(el('draft-note-en').textContent) && /Photos and files/.test(el('draft-note-en').textContent) &&
      el('draft-note-ar').textContent.length > 10,

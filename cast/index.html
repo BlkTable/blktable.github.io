@@ -297,6 +297,7 @@
   var DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;   // a week; a form left longer is a new visit
   var draftK = DRAFT_PREFIX + "casting";
   var draftTimer = null;
+  var draftHadAnswers = false;
   function draftFresh(rec, now) {
     if (!rec || rec.v !== 1 || !rec.a || typeof rec.a !== "object") return false;
     var at = Number(rec.at);
@@ -326,10 +327,177 @@
     if (!key) return;
     try { window.localStorage.removeItem(key); } catch (e) {}
   }
+  // The identity of a chosen file: name, size, and the moment it was last changed. The same
+  // three parts f/index.html uses, and they have to stay the same three — a row written
+  // under one spelling is looked for under the other and never found again.
+  function fileKey(f) { return !f ? "" : [f.name || "", f.size || 0, f.lastModified || 0].join("|"); }
+  // ---- The files a draft is holding ----------------------------------------
+  // Answers are text and fit in localStorage. Files do not: one photo off a phone is 2-4 MB,
+  // the shop QC check asks for 52 of them, and localStorage holds strings inside about 5 MB
+  // per site. So the answers stay where they are and the files go to IndexedDB, which stores
+  // the file itself and is measured in hundreds of MB. Same draft key, same week, and the
+  // same submit clears both — from the person's side there is one draft, not two.
+  //
+  // A row per FILE rather than per draft, because the write happens while they are still
+  // filling the form in: a question holding forty photos would otherwise rewrite forty
+  // photos every time somebody adds a forty-first.
+  var FILE_DB = "blk_form_files";
+  var FILE_STORE = "files";
+  var fileDbP = null;
+  // Opened once. A browser that refuses — private mode, storage switched off, an engine with
+  // no IndexedDB at all — must not be asked again on every pick and must not take the form
+  // down with it, so the refusal is remembered as a rejected promise that every caller
+  // catches. A form that cannot keep files still submits them.
+  function fileDb() {
+    if (fileDbP) return fileDbP;
+    fileDbP = new Promise(function (ok, no) {
+      var idb = window.indexedDB;
+      if (!idb) { no(new Error("no_indexeddb")); return; }
+      var rq = idb.open(FILE_DB, 1);
+      rq.onupgradeneeded = function () {
+        var d = rq.result;
+        if (!d.objectStoreNames.contains(FILE_STORE)) {
+          d.createObjectStore(FILE_STORE, { keyPath: "id" }).createIndex("by_k", "k", { unique: false });
+        }
+      };
+      rq.onsuccess = function () { ok(rq.result); };
+      rq.onerror = function () { no(rq.error || new Error("open_failed")); };
+      rq.onblocked = function () { no(new Error("blocked")); };
+    });
+    fileDbP.catch(function () {});
+    return fileDbP;
+  }
+  // The same three parts the picker already de-duplicates on, so a file restored from here
+  // is recognised as the row it came from rather than written back a second time. NUL is the
+  // separator because it is the one character a slug, a question id and a filename cannot
+  // contain between them.
+  var FILE_ROW_SEP = String.fromCharCode(0);
+  function fileRowId(k, fid, fl) { return k + FILE_ROW_SEP + fid + FILE_ROW_SEP + fileKey(fl); }
+  // Files come back in the order they were chosen, so each row records when it arrived. The
+  // counter is the tiebreak for one multi-pick, where ten files are written inside the same
+  // millisecond; a file added after a reload lands later on the clock and sorts after the
+  // ones that were just restored.
+  var fileSeqN = 0;
+  function nextFileSeq() { return Date.now() * 1000 + (fileSeqN++ % 1000); }
+  // The same test the answers get, applied to a row: an unreadable date, a clock that was
+  // wrong when it was written, or a week gone by reads as no file at all.
+  function fileRowFresh(r, now) {
+    if (!r || !r.blob) return false;
+    var at = Number(r.at);
+    if (!(at > 0) || at > now + 60000) return false;
+    return (now - at) <= DRAFT_MAX_AGE_MS;
+  }
+  // Makes the rows for one question match what is on screen: a file just picked is written,
+  // a file just taken off is dropped, and everything already there is left alone — which is
+  // the whole point of a row per file. Another question's rows are not this one's business.
+  function syncDraftFiles(fid, files) {
+    if (!draftK) return;   // before the form is known, nothing is being kept
+    var k = draftK, want = {}, order = [];
+    (files || []).forEach(function (fl) {
+      var id = fileRowId(k, fid, fl);
+      if (!want[id]) { want[id] = fl; order.push(id); }
+    });
+    fileDb().then(function (d) {
+      var tx = d.transaction(FILE_STORE, "readwrite"), st = tx.objectStore(FILE_STORE);
+      // Out of room is the expected failure — forty photos is more than some phones will
+      // keep — and it is not one the person filling the form can do anything about, so it
+      // is swallowed here rather than shown. What they lose is the keeping, not the form.
+      tx.onerror = function (e) { if (e && e.preventDefault) e.preventDefault(); };
+      tx.onabort = function () {};
+      var rq = st.index("by_k").openCursor(IDBKeyRange.only(k));
+      rq.onsuccess = function () {
+        var cur = rq.result;
+        if (cur) {
+          var v = cur.value || {};
+          if (v.fid === fid) { if (want[v.id]) delete want[v.id]; else cur.delete(); }
+          cur.continue();
+          return;
+        }
+        order.forEach(function (id) {
+          var fl = want[id];
+          if (!fl) return;
+          st.put({ id: id, k: k, fid: fid, seq: nextFileSeq(), at: Date.now(),
+                   name: fl.name || "", type: fl.type || "", lastModified: fl.lastModified || 0, blob: fl });
+        });
+      };
+      rq.onerror = function () {};
+    }).catch(function () {});
+  }
+  // Rebuilt as a File rather than handed back as the stored blob: the tiles, the size check,
+  // the per-question cap and the upload all read .name, .size and .lastModified, and those
+  // are exactly what a bare Blob has lost.
+  function rowToFile(r) {
+    try {
+      if (!r || !r.blob || typeof File !== "function") return null;
+      return new File([r.blob], r.name || "file", { type: r.type || "", lastModified: r.lastModified || 0 });
+    } catch (e) { return null; }
+  }
+  // Everything this draft is holding, as {question id: [File]}, in the order chosen.
+  function readDraftFiles(k, now) {
+    if (!k) return Promise.resolve({});
+    return fileDb().then(function (d) {
+      return new Promise(function (ok) {
+        var rows = [];
+        var rq = d.transaction(FILE_STORE, "readonly").objectStore(FILE_STORE).index("by_k").openCursor(IDBKeyRange.only(k));
+        rq.onsuccess = function () {
+          var cur = rq.result;
+          if (cur) { if (fileRowFresh(cur.value, now)) rows.push(cur.value); cur.continue(); return; }
+          rows.sort(function (a, b) { return (a.seq || 0) - (b.seq || 0); });
+          var out = {};
+          rows.forEach(function (r) { var fl = rowToFile(r); if (fl) (out[r.fid] = out[r.fid] || []).push(fl); });
+          ok(out);
+        };
+        rq.onerror = function () { ok({}); };
+      });
+    }).catch(function () { return {}; });
+  }
+  // Cleared beside the answers, and for the same reason: a shop tablet is one browser used by
+  // everybody, and the next person must not open the form holding the last person's
+  // photographs. Resolves either way, so a caller that reloads afterwards is never stuck.
+  function clearDraftFiles(k) {
+    if (!k) return Promise.resolve(0);
+    return fileDb().then(function (d) {
+      return new Promise(function (ok) {
+        var n = 0, tx = d.transaction(FILE_STORE, "readwrite");
+        var rq = tx.objectStore(FILE_STORE).index("by_k").openCursor(IDBKeyRange.only(k));
+        rq.onsuccess = function () {
+          var cur = rq.result;
+          if (cur) { cur.delete(); n++; cur.continue(); }
+        };
+        rq.onerror = function () {};
+        tx.oncomplete = function () { ok(n); };
+        tx.onerror = function (e) { if (e && e.preventDefault) e.preventDefault(); ok(n); };
+        tx.onabort = function () { ok(n); };
+      });
+    }).catch(function () { return 0; });
+  }
+  // The answers are swept on every load; the files have to be swept for a harder reason. A
+  // form abandoned with forty photos in it is a couple of hundred megabytes of somebody's
+  // phone rather than a few kilobytes of text, and a form nobody goes back to is never read
+  // again — so this load sweeps every expired row, whichever form it belongs to.
+  function sweepDraftFiles(now) {
+    return fileDb().then(function (d) {
+      return new Promise(function (ok) {
+        var n = 0, tx = d.transaction(FILE_STORE, "readwrite");
+        var rq = tx.objectStore(FILE_STORE).openCursor();
+        rq.onsuccess = function () {
+          var cur = rq.result;
+          if (!cur) return;
+          if (!fileRowFresh(cur.value, now)) { cur.delete(); n++; }
+          cur.continue();
+        };
+        rq.onerror = function () {};
+        tx.oncomplete = function () { ok(n); };
+        tx.onerror = function (e) { if (e && e.preventDefault) e.preventDefault(); ok(n); };
+        tx.onabort = function () { ok(n); };
+      });
+    }).catch(function () { return 0; });
+  }
   // Every box on the form that holds an answer, by its own id — which covers the questions
   // an admin adds from the dashboard ("extra-<id>") without this needing to know anything
-  // about them. A file input is skipped: a chosen file cannot be written to storage, and a
-  // path that looked like an answer would promise a photo nobody picked.
+  // about them. A file input is skipped: a file is not a string, and a path that looked like
+  // an answer would promise a photo nobody picked. The photo itself is kept by
+  // syncDraftFiles, in IndexedDB, under the same key.
   function draftFormAnswers(root) {
     var out = {};
     if (!root) return out;
@@ -355,15 +523,22 @@
     if (draftTimer) clearTimeout(draftTimer);
     draftTimer = setTimeout(saveDraftNow, 400);
   }
-  // Said only when there was something to restore, and it names the one answer that cannot
-  // be kept, because a person who is not told will press Submit and be sent back.
-  function showDraftNote() {
+  // Said only when there was something to restore. The photo comes back too now, but only
+  // where this browser would keep it — a phone out of room, or private mode, still hands
+  // back the answers and nothing else — so the sentence follows what actually arrived
+  // rather than what the page can do. An applicant not told the photo is missing presses
+  // Submit and is sent back up the page.
+  function showDraftNote(keptPhoto) {
     var box = document.getElementById("draft-note");
     if (!box) return;
-    document.getElementById("draft-note-en").textContent =
-      "We kept the answers you had already filled in. The photo needs choosing again.";
-    document.getElementById("draft-note-ar").textContent =
-      "احتفظنا بالإجابات التي كتبتها. الصورة تحتاج اختيارها من جديد.";
+    document.getElementById("draft-note-en").textContent = keptPhoto
+      ? (draftHadAnswers ? "We kept the answers and the photo you had already added."
+                         : "We kept the photo you had already added.")
+      : "We kept the answers you had already filled in. The photo needs choosing again.";
+    document.getElementById("draft-note-ar").textContent = keptPhoto
+      ? (draftHadAnswers ? "احتفظنا بالإجابات والصورة التي أضفتها."
+                         : "احتفظنا بالصورة التي أضفتها.")
+      : "احتفظنا بالإجابات التي كتبتها. الصورة تحتاج اختيارها من جديد.";
     box.style.display = "block";
   }
 
@@ -430,28 +605,62 @@
   function loadDraft() {
     var answers = readDraft(draftK, Date.now());
     if (!answers) return;
+    draftHadAnswers = true;
     restoreFormAnswers(formEl, answers);
     if (answers._cc) {
       for (var i = 0; i < COUNTRIES.length; i++) if (COUNTRIES[i].cc === answers._cc) selectCountry(i);
     }
     [].slice.call(formEl.querySelectorAll("textarea")).forEach(function (t) { t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; });
-    showDraftNote();
+    showDraftNote(!!restoredPhoto);
   }
   loadDraft();
+  // The photo comes a moment behind the answers, because IndexedDB is asynchronous, so the
+  // note is written again when it lands. Somebody who attached a photo and typed nothing
+  // has no answers to restore and still gets told. Swept afterwards, so the sweep can never
+  // be the thing that empties this form.
+  readDraftFiles(draftK, Date.now()).then(function (byField) {
+    var fls = (byField && byField.photo) || [];
+    if (fls.length) { restoredPhoto = fls[0]; paintPhotoRow(); }
+    if (draftHadAnswers || fls.length) showDraftNote(fls.length > 0);
+    return sweepDraftFiles(Date.now());
+  }).catch(function () {});
   var wipe = document.getElementById("draft-clear");
-  if (wipe) wipe.addEventListener("click", function (e) { e.preventDefault(); clearDraft(draftK); draftK = ""; location.reload(); });
+  if (wipe) wipe.addEventListener("click", function (e) {
+    e.preventDefault();
+    var k = draftK;
+    clearDraft(k); draftK = "";
+    // Reloaded only once the photo is gone as well, or the page coming back up reads it
+    // straight in again and "Start over" looks like it did nothing.
+    clearDraftFiles(k).then(reload, reload);
+    function reload() { location.reload(); }
+  });
   selectCountry(0);
 
   // Photo
   var fileInput = document.getElementById("photo");
   var fileName = document.getElementById("file-name");
   document.getElementById("file-btn").addEventListener("click", function () { fileInput.click(); });
-  fileInput.addEventListener("change", function () {
-    var has = fileInput.files.length > 0;
-    fileName.textContent = has ? fileInput.files[0].name : "No photo chosen";
+  // The photo the form is holding. Usually the input's own — but one read back out of this
+  // browser after a refresh can never be in the input, because no page may put a file there,
+  // so it is held here and the two are asked in that order.
+  var restoredPhoto = null;
+  function chosenPhoto() { return (fileInput.files && fileInput.files[0]) || restoredPhoto || null; }
+  function paintPhotoRow() {
+    var fl = chosenPhoto(), has = !!fl;
+    fileName.textContent = has ? fl.name : "No photo chosen";
     document.getElementById("file-check").style.display = has ? "flex" : "none";
     document.getElementById("file-btn").textContent = has ? "Change photo" : "Choose photo";
     if (has) document.getElementById("file-row").classList.remove("invalid");
+  }
+  fileInput.addEventListener("change", function () {
+    // A pick replaces whatever was restored — including a pick that came back empty, where
+    // the picker was opened and closed again: the old photo must not reappear.
+    restoredPhoto = null;
+    paintPhotoRow();
+    // Kept as it is chosen rather than at Submit: the tab being discarded while the camera
+    // app is open is the exact thing this question asks somebody to risk, and by then there
+    // is no later moment to save in.
+    syncDraftFiles("photo", chosenPhoto() ? [chosenPhoto()] : []);
   });
 
   formEl.addEventListener("submit", function (e) {
@@ -472,7 +681,7 @@
     if (!phoneValid) { markInvalid("phone_local", true); missing.push("phone_local"); }
 
     var fileRow = document.getElementById("file-row");
-    var noPhoto = fileInput.files.length === 0;
+    var noPhoto = !chosenPhoto();
     fileRow.classList.toggle("invalid", noPhoto);
     if (noPhoto) missing.push("photo");
 
@@ -497,7 +706,7 @@
     if (extraMissing.length) { msg.textContent = "Please fill in the highlighted fields."; if (extraMissing[0].scrollIntoView) extraMissing[0].scrollIntoView({ behavior: "smooth", block: "center" }); return; }
 
     var phone = "+" + selCountry.cc + local;
-    var file = fileInput.files[0];
+    var file = chosenPhoto();
     if (file.size > MAX_BYTES) { msg.textContent = "That photo is larger than 10 MB. Please choose a smaller one."; return; }
 
     btn.disabled = true; btn.textContent = "Submitting…";
@@ -520,7 +729,7 @@
         // It is in the database now. Clearing the key as well as the draft stops the
         // page-hide save writing the answers back on the way out — one phone at the front of
         // a queue fills in more than one of these.
-        clearDraft(draftK); draftK = "";
+        clearDraft(draftK); clearDraftFiles(draftK); draftK = "";
         document.getElementById("card").style.display = "none";
         document.getElementById("form-intro").style.display = "none";
         document.getElementById("success").style.display = "block";
