@@ -10279,7 +10279,15 @@
     var body = document.getElementById("modal-body");
     // Staff-only questions are shown: the person filling this in IS staff, and a table whose
     // status or price is staff-only would otherwise be uncreatable.
-    var asked = (fields || []).filter(function (f) { return f.type !== "link"; });
+    // A computed score is not a question. The record panel already refuses to draw one as a
+    // box and edValues() refuses to read one back, but this panel filtered on type alone, so
+    // creating a QC inspection opened with seventy "<Question> Score" text boxes above the
+    // questions they are computed from — the very thing that was supposed to have stopped.
+    // Nothing was saved from them (edValues skips a scorer), which is exactly why it survived
+    // unnoticed: it was noise rather than corruption.
+    var asked = (fields || []).filter(function (f) {
+      return f.type !== "link" && !isScorerField(f);
+    });
     // A new inspection is the main place a QC form is actually filled in, so it scores as it
     // goes: the chip on a question turns green or red the moment the answer is chosen, and
     // the running total at the top is the figure the record will be saved with.
