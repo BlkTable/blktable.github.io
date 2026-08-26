@@ -52,7 +52,7 @@ function load(js, vars, fns) {
 const A = load(APP,
   ['VIDEO_EXT', 'VIDEO_PLAYABLE', 'PLAY_SVG', 'IMAGE_EXT', 'PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES'],
   ['esc', 'isFileField', 'isFileType', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel', 'filePaths',
-   'coverHtml', 'uploadCap', 'mbText', 'photoSectionHtml', 'ageText', 'otherKeyFor',
+   'coverHtml', 'uploadCap', 'mbText', 'photoSectionHtml', 'fileTileHtml', 'fileAddTileHtml', 'ageText', 'otherKeyFor',
    'isChoiceField', 'isOtherChoice', 'customCellText']);
 
 // isVideoFile now answers through fileKind, so that the size hint and the preview tile can
@@ -202,11 +202,38 @@ t('a video is never skipped, whatever id is passed', () => {
   const h = A.photoSectionHtml([F_VID], { f2: 'b.mp4' }, 'f2');
   assert.ok(/pc-video/.test(h), 'a video must survive even if named as the header');
 });
-t('the editable record panel renders the gallery', () => {
-  // The fourth argument turns on the gallery's own add/remove for somebody who can edit the
-  // table — the gallery is now where uploads are managed, not only read.
-  assert.ok(/photoSectionHtml\(fields, d, photoPath \? photoFieldId : null, \{ edit: canEdit\(currentCustom\.table\.id\) \}\)/.test(APP_SRC),
-    'without this an editor cannot see an upload at all — the header only shows an image');
+t('the editable record panel renders every upload question with its own files', () => {
+  // Was one stacked gallery at the foot of the record with { edit: … } on it. The files now
+  // sit under the question they answer — opts.only scopes them — and `edit` still has to
+  // ride along, or an editor is back to seeing no upload at all beyond the header image,
+  // which is the bug this assertion was written for in the first place.
+  assert.ok(/photoSectionHtml\(fields, d, null, \{ only: f\.id, edit: mayEditHere \}\)/.test(APP_SRC),
+    'the edit grid must render each upload question scoped and editable');
+  assert.ok(/var mayEditHere = canEdit\(currentCustom\.table\.id\)/.test(APP_SRC),
+    'and mayEditHere must be the table permission, not a constant');
+  // and the read-only panel does the same, minus the editing
+  assert.ok(/photoSectionHtml\(fields, d, null, \{ only: f\.id \}\)/.test(APP_SRC),
+    'the read-only panel must scope its tiles per question too');
+});
+t('opts.only really does restrict the tiles to one question', () => {
+  const fields = [{ id: 'a', label: 'First shot', type: 'photo' },
+                  { id: 'b', label: 'Second shot', type: 'photo' }];
+  const d = { a: 'one.jpg', b: 'two.jpg' };
+  const only = A.photoSectionHtml(fields, d, null, { only: 'b' });
+  assert.ok(/two\.jpg/.test(only), 'the named question renders');
+  assert.ok(!/one\.jpg/.test(only), 'the other one must not');
+  // scoped, the question label is already above the tiles, so it is not repeated on them
+  assert.ok(!/Second shot/.test(only), 'the caption is dropped when scoped');
+  assert.ok(!/ps-head/.test(only), 'and so is the gallery heading');
+  const all = A.photoSectionHtml(fields, d, null, {});
+  assert.ok(/one\.jpg/.test(all) && /two\.jpg/.test(all), 'unscoped still shows both');
+  assert.ok(/Second shot/.test(all), 'and still captions them');
+});
+t('a scoped question holding several files still numbers them', () => {
+  const fields = [{ id: 'a', label: 'Shelf', type: 'photo' }];
+  const h = A.photoSectionHtml(fields, { a: ['x.jpg', 'y.jpg', 'z.jpg'] }, null, { only: 'a' });
+  assert.ok(/1\/3/.test(h) && /3\/3/.test(h), 'two identical thumbnails need telling apart');
+  assert.ok(!/Shelf/.test(h), 'but not by repeating the label three times');
 });
 // The label is typed by an admin and goes into markup.
 t('the question label is escaped', () => {

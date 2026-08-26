@@ -813,6 +813,25 @@
   .q-scored.lost .qq { color: var(--silver); }
   /* in no total, so it must not read as though it were pulling the score down */
   .q-scored.outside { opacity: 0.62; }
+  /* ---- the colour on the answer itself, where the answer is ----
+     A scored question wears its result in place, in the grid and in the editor, rather than
+     being reprinted in a report underneath. The band is on the leading edge so it survives
+     RTL, and the tint is faint on purpose: 68 saturated rows would be unreadable, and the
+     chip beside the label is what carries the number. */
+  .m-field.sc-plus, .m-field.sc-part, .m-field.sc-zero, .m-field.sc-neg, .m-field.sc-na {
+    border-inline-start: 3px solid transparent; padding-inline-start: 9px; border-radius: 3px;
+  }
+  .m-field.sc-plus { border-inline-start-color: #2fbf6b; background: rgba(47, 191, 107, 0.055); }
+  .m-field.sc-part { border-inline-start-color: #eab308; background: rgba(234, 179, 8, 0.06); }
+  .m-field.sc-zero { border-inline-start-color: #ff6b6b; background: rgba(255, 107, 107, 0.06); }
+  .m-field.sc-neg  { border-inline-start-color: #8c2f2f; background: rgba(140, 47, 47, 0.13); }
+  .m-field.sc-na   { border-inline-start-color: var(--line); }
+  .m-field .k .qp { margin-inline-start: 7px; padding: 1px 7px; font-size: var(--fs-1);
+    font-weight: 800; border-radius: 6px; vertical-align: middle; }
+  /* The running total while somebody is still filling the form in. */
+  .sc-live { display: flex; align-items: baseline; gap: 8px; margin: 0 0 12px; font-size: var(--fs-2); }
+  .sc-live b { font-family: var(--font-mono); font-size: var(--fs-5); font-weight: 500; }
+  .sc-live .sc-of { color: var(--muted); }
   /* ---- the record's header: identity on the left, score on the right ---- */
   /* Sticky: a QC record is 171 questions long, and the score is the thing you keep
      wanting to see while you scroll through them. */
@@ -4182,10 +4201,14 @@
   // escaped here — a question's name is typed by a person, so it has to be. Building the
   // marker into the label string got it escaped too, and printed
   // `Event name <span style="color:var(--silver);">*</span>` on screen as words.
-  function edRow(label, inner, full, rowId, hidden, required) {
-    return '<div class="m-field' + (full ? " full" : "") + '"' + (rowId ? ' id="' + rowId + '"' : "") +
+  // `chip` is trusted markup and `cls` an extra class, both for the scoring colour. They are
+  // appended rather than folded into `label` for the same reason `required` is a flag: the
+  // label is a person's typed words and has to stay escaped.
+  function edRow(label, inner, full, rowId, hidden, required, chip, cls) {
+    return '<div class="m-field' + (full ? " full" : "") + (cls ? " " + cls : "") + '"' +
+      (rowId ? ' id="' + rowId + '"' : "") +
       (hidden ? ' style="display:none;"' : "") + '><div class="k">' + esc(label) +
-      (required ? '<span class="k-req">required</span>' : "") + "</div>" + inner + "</div>";
+      (required ? '<span class="k-req">required</span>' : "") + (chip || "") + "</div>" + inner + "</div>";
   }
   // One editor row for one question. Both places a record is edited — the record panel and
   // the New record panel — build their rows here, so the two cannot drift apart the way a
@@ -4237,7 +4260,12 @@
     var mustAnswer = !!(opts.stars && f.required);
     var gated = !!(f.show_if && f.show_if.field);
     var hide = gated && !condMet(f, d) && (v == null || v === "");
-    return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide, mustAnswer);
+    // The scoring colour rides along on the row it belongs to. opts.scored is the scorer
+    // field for this question when the table scores it, and it is passed in rather than
+    // looked up here so that one row can be repainted on its own as the answer changes.
+    var sm = opts.scored ? scoreRowMeta(opts.scored, opts.answers || d) : null;
+    return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide, mustAnswer,
+                 sm ? sm.chipEditor : "", sm ? "sc-" + sm.cls : "");
   }
 
   // Phone editor with the full country/flag picker
@@ -6857,6 +6885,10 @@
     var shots = [], skipped = false;
     (fields || []).forEach(function (f) {
       if (!isFileField(f)) return;
+      // opts.only scopes the whole thing to ONE question, which is how an upload question
+      // shows its own photos under itself in the record instead of every question's files
+      // being stacked in one pile at the foot of the page.
+      if (opts.only && f.id !== opts.only) return;
       var paths = filePaths(d[f.id]);
       paths.forEach(function (p, idx) {
         // Skip exactly the ONE file the header already carries: the first image of the named
@@ -6871,7 +6903,9 @@
     });
     // With editing on there is always something to show: a question with no answer yet needs
     // its add tile, or a record whose photo was never filled in can never be filled in.
-    var addable = opts.edit ? (fields || []).filter(isFileField) : [];
+    var addable = opts.edit ? (fields || []).filter(function (f) {
+      return isFileField(f) && (!opts.only || f.id === opts.only);
+    }) : [];
     if (!shots.length && !addable.length) return "";
     var vids = shots.filter(function (x) { return isVideoPath(x.p); }).length;
     var docs = shots.filter(function (x) { return !isImagePath(x.p) && !isVideoPath(x.p); }).length;
@@ -6888,40 +6922,55 @@
       : !vids ? "Photos (" + shots.length + ")"
       : vids === shots.length ? (vids === 1 ? "Video (1)" : "Videos (" + shots.length + ")")
       : "Photos and videos (" + shots.length + ")";
+    // Scoped to one question, the question's own label is already the heading, and the tiles
+    // do not need to repeat it either.
+    if (opts.only) {
+      return '<div class="photo-sec inline"><div class="photo-grid">' +
+        shots.map(function (x) { return fileTileHtml(x, opts, true); }).join("") +
+        addable.map(function (f) { return fileAddTileHtml(f, d, true); }).join("") + "</div></div>";
+    }
     return '<div class="photo-sec"><div class="ps-head">' + esc(head) + '</div><div class="photo-grid">' +
-      shots.map(function (x) {
-        var f = x.f, p = x.p;
-        // Five tiles all captioned "Shelf photo" say nothing about which is which, so a
-        // question holding more than one numbers them. A question holding exactly one keeps
-        // the bare label it has always had.
-        var lab = '<span class="pc-lab">' + esc(f.label) + (x.n > 1 ? " (" + x.i + "/" + x.n + ")" : "") + "</span>";
-        // Remove names the question AND the exact key: with ten files on one question, an id
-        // alone would delete whichever one the handler happened to read first.
-        var del = opts.edit
-          ? '<button type="button" class="pc-del" data-del-field="' + esc(f.id) + '" data-del-path="' + esc(p) +
-            '" title="Remove this file" aria-label="Remove this file">✕</button>'
-          : "";
-        if (isImagePath(p)) {
-          return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(p) + '" alt="">' + del + lab + "</div>";
-        }
-        // A document, or a video format a browser will not play, is still the person's answer:
-        // it is offered as a download rather than a player that would show a black rectangle. A
-        // document gets the page glyph; an unplayable video keeps the play glyph.
-        if (!isPlayableVideo(p)) {
-          return '<div class="photo-cell"><a class="imp-file pc-file" data-path="' + esc(p) + '" href="#" target="_blank" rel="noopener">' +
-            (isVideoPath(p) ? PLAY_SVG : FILE_SVG) + "<span>" + esc(fileLabel(p)) + "</span></a>" + del + lab + "</div>";
-        }
-        return '<div class="photo-cell"><button type="button" class="pc-video" data-vpath="' + esc(p) + '" title="Play">' +
-          PLAY_SVG + "</button>" + del + lab + "</div>";
-      }).join("") +
-      addable.map(function (f) {
-        var have = filePaths(d[f.id]).length;
-        var full = have >= MAX_FILES;
-        return '<div class="photo-cell"><button type="button" class="pc-add" data-add-field="' + esc(f.id) + '"' +
-          (full ? " disabled" : "") + ' title="' + esc(full ? f.label + " already holds " + MAX_FILES + " files" : "Add to " + f.label) + '">' +
-          ADD_SVG + "</button>" +
-          '<span class="pc-lab">' + esc(f.label) + (have ? " · add" : "") + "</span></div>";
-      }).join("") + "</div></div>";
+      shots.map(function (x) { return fileTileHtml(x, opts, false); }).join("") +
+      addable.map(function (f) { return fileAddTileHtml(f, d, false); }).join("") + "</div></div>";
+  }
+  // One tile. Shared by the stacked gallery and the per-question one so the two cannot drift
+  // — a remove button that works in one place and not the other is the failure that shape of
+  // duplication produces.
+  //
+  // `bare` drops the caption: under its own question the label is already above the tiles,
+  // and repeating it on every tile is noise. A question holding several still numbers them,
+  // because "3/7" is the only thing telling two identical thumbnails apart.
+  function fileTileHtml(x, opts, bare) {
+    var f = x.f, p = x.p;
+    var lab = bare
+      ? (x.n > 1 ? '<span class="pc-lab">' + x.i + "/" + x.n + "</span>" : "")
+      : '<span class="pc-lab">' + esc(f.label) + (x.n > 1 ? " (" + x.i + "/" + x.n + ")" : "") + "</span>";
+    // Remove names the question AND the exact key: with ten files on one question, an id
+    // alone would delete whichever one the handler happened to read first.
+    var del = (opts && opts.edit)
+      ? '<button type="button" class="pc-del" data-del-field="' + esc(f.id) + '" data-del-path="' + esc(p) +
+        '" title="Remove this file" aria-label="Remove this file">✕</button>'
+      : "";
+    if (isImagePath(p)) {
+      return '<div class="photo-cell"><img class="imp-thumb" data-path="' + esc(p) + '" alt="">' + del + lab + "</div>";
+    }
+    // A document, or a video format a browser will not play, is still the person's answer:
+    // it is offered as a download rather than a player that would show a black rectangle. A
+    // document gets the page glyph; an unplayable video keeps the play glyph.
+    if (!isPlayableVideo(p)) {
+      return '<div class="photo-cell"><a class="imp-file pc-file" data-path="' + esc(p) + '" href="#" target="_blank" rel="noopener">' +
+        (isVideoPath(p) ? PLAY_SVG : FILE_SVG) + "<span>" + esc(fileLabel(p)) + "</span></a>" + del + lab + "</div>";
+    }
+    return '<div class="photo-cell"><button type="button" class="pc-video" data-vpath="' + esc(p) + '" title="Play">' +
+      PLAY_SVG + "</button>" + del + lab + "</div>";
+  }
+  function fileAddTileHtml(f, d, bare) {
+    var have = filePaths((d || {})[f.id]).length;
+    var full = have >= MAX_FILES;
+    return '<div class="photo-cell"><button type="button" class="pc-add" data-add-field="' + esc(f.id) + '"' +
+      (full ? " disabled" : "") + ' title="' + esc(full ? f.label + " already holds " + MAX_FILES + " files" : "Add to " + f.label) + '">' +
+      ADD_SVG + "</button>" +
+      '<span class="pc-lab">' + (bare ? (have ? "add" : "Add a file") : esc(f.label) + (have ? " · add" : "")) + "</span></div>";
   }
 
   // ---- Table (grid) view -----------------------------------------------------
@@ -9361,6 +9410,141 @@
     }
     return null;
   }
+  // ---- what one answer is worth, in the browser ------------------------------------
+  // A JS mirror of step one of compute_scores() (the deployed version, whose five shapes
+  // are in blktable-migration/selfhost/16_scoring_patterns.sql). The database is what gets
+  // stored; this is so a chip can go green the moment somebody picks the answer, instead of
+  // after a round trip. The two MUST agree, and scoring-live.test.js pins them together
+  // case by case -- a colour that disagrees with the stored score is worse than no colour.
+  //
+  // The quirks are copied on purpose, not cleaned up:
+  //   * `compare` reads a blank number as 0, so a blank "Bottle Fridge Temperature" clears
+  //     "< 5" and earns the point. That is what Airtable did and what the years of history
+  //     were scored with, so the browser has to do it too.
+  //   * `contains_all` is a case-insensitive substring test on the whole comma-joined
+  //     answer, which is why "Clean, Organized" and "Organized, Clean" both earn.
+  //   * a wrong answer scores `else`, which on three of QC's questions is -2, not 0.
+  function scoreRulePoints(spec, val) {
+    if (!spec) return null;
+    var raw = val == null ? null : String(val);
+    var t = raw == null ? "" : raw.replace(/^\s+|\s+$/g, "");
+    var pts = Number(spec.points), els = Number(spec.else);
+    if (!isFinite(pts)) pts = 0;
+    if (!isFinite(els)) els = 0;
+    var trim = function (x) { return String(x == null ? "" : x).replace(/^\s+|\s+$/g, ""); };
+    var kind = spec.kind || "match", hit = false, i;
+    if (kind === "truthy") {
+      hit = t !== "" && ["no", "false", "0"].indexOf(t.toLowerCase()) === -1;
+    } else if (kind === "contains_all") {
+      hit = t !== "";
+      var toks = spec.tokens || [];
+      for (i = 0; hit && i < toks.length; i++) {
+        if (raw.toLowerCase().indexOf(trim(toks[i]).toLowerCase()) === -1) hit = false;
+      }
+    } else if (kind === "match_any") {
+      var any = spec.expect_any || [];
+      for (i = 0; i < any.length; i++) { if (raw != null && t === trim(any[i])) { hit = true; break; } }
+    } else if (kind === "compare") {
+      var num = t === "" ? 0 : Number(t), thr = Number(spec.threshold);
+      hit = !isFinite(num) || !isFinite(thr) ? false
+          : spec.op === "<" ? num < thr : spec.op === "<=" ? num <= thr
+          : spec.op === ">" ? num > thr : spec.op === ">=" ? num >= thr
+          : spec.op === "=" ? num === thr : false;
+    } else {
+      hit = raw != null && t === trim(spec.expect);
+    }
+    return hit ? pts : els;
+  }
+  // The most a question can be worth. score_weight wins when it is set; otherwise the
+  // rule's own numbers say so, which keeps a -2 penalty from claiming to be worth -2.
+  function scorerMaxPoints(sf) {
+    var o = (sf && sf.options) || {};
+    var w = Number(o.score_weight);
+    if (isFinite(w) && w > 0) return w;
+    var s = o.score || {};
+    var p = Number(s.points), e = Number(s.else);
+    var hi = Math.max(isFinite(p) ? p : 0, isFinite(e) ? e : 0);
+    return hi > 0 ? hi : 1;
+  }
+  // One vocabulary for the colour, used by the review panel, the editor and the public form,
+  // so the same answer is the same colour in all three.
+  function scoreClassOf(pts, maxP, answered) {
+    if (pts == null || !isFinite(pts)) return "na";
+    if (!answered) return "na";
+    return pts < 0 ? "neg" : pts >= maxP ? "plus" : pts > 0 ? "part" : "zero";
+  }
+  function scoreChipLabel(cls, pts) {
+    return cls === "na" ? "n/a" : pts < 0 ? "−" + Math.abs(pts) : pts > 0 ? "+" + pts : "0";
+  }
+  // Everything one scored question needs to paint itself: the colour, the points, and the
+  // chip. Returns null when the question is not scored, so callers can ask about any field.
+  // `answers` is a plain id -> value object, which is what both the stored record and the
+  // half-filled editor look like -- that is what lets review and filling-in share this.
+  function scoreRowMeta(sf, answers) {
+    if (!sf || !sf.options || !sf.options.score) return null;
+    var v = answers ? answers[sf.options.score.source] : null;
+    var answered = v != null && String(v) !== "";
+    var maxP = scorerMaxPoints(sf);
+    var pts = scoreRulePoints(sf.options.score, v);
+    var cls = scoreClassOf(pts, maxP, answered);
+    var open = '<span class="qp ' + cls + '" title="' + esc(scoreChipTitle(cls, pts, maxP)) + '"';
+    var body = ">" + scoreChipLabel(cls, pts) + "</span>";
+    return {
+      cls: cls, pts: pts, maxP: maxP, answered: answered,
+      chip: open + body,
+      // In an editor an unanswered question shows no chip at all: a new inspection would
+      // otherwise open as sixty-eight grey "n/a" marks, which is a wall rather than
+      // information. Reviewing a finished record is the opposite case -- there, "n/a" says
+      // the question was never asked, which is worth knowing -- so only the editors hide it.
+      chipEditor: open + (cls === "na" ? ' style="display:none"' : "") + body,
+    };
+  }
+  // Repaint every scored row of an open editor from the answers as they stand. Shared by the
+  // record panel and the New record panel so the two cannot drift; both hand it the same
+  // shape, which is all edValues() already returns.
+  function paintScoreRows(table, fields, map, answers, liveBoxId) {
+    Object.keys(map || {}).forEach(function (qid) {
+      var host = document.getElementById("ed-" + qid);
+      var row = (host && host.closest) ? host.closest(".m-field") : null;
+      if (!row) return;
+      var m = scoreRowMeta(map[qid], answers);
+      if (!m) return;
+      ["sc-plus", "sc-part", "sc-zero", "sc-neg", "sc-na"].forEach(function (c) { row.classList.remove(c); });
+      row.classList.add("sc-" + m.cls);
+      var chip = row.querySelector(".k .qp");
+      if (chip) {
+        chip.className = "qp " + m.cls;
+        chip.textContent = scoreChipLabel(m.cls, m.pts);
+        chip.title = scoreChipTitle(m.cls, m.pts, m.maxP);
+        chip.style.display = m.cls === "na" ? "none" : "";
+      }
+    });
+    var box = liveBoxId ? document.getElementById(liveBoxId) : null;
+    if (!box) return;
+    var tot = scoreLiveTotal(table, fields, answers);
+    if (!tot) { box.style.display = "none"; return; }
+    var pct = tot.possible ? Math.round(tot.earned / tot.possible * 100) : 0;
+    box.style.display = "";
+    box.innerHTML = '<b style="color:' + scoreTint(pct) + '">' + pct + "%</b>" +
+      '<span class="sc-of">' + tot.earned + " / " + tot.possible + " points</span>";
+  }
+  // The running total while a record is being filled in or corrected: the same roll-up the
+  // database will apply, over the answers as they stand right now.
+  function scoreLiveTotal(table, fields, answers) {
+    var roll = scoreRollup(table);
+    if (!roll) return null;
+    var map = questionScorerMap(table, fields), earned = 0;
+    var counts = {}; roll.of.forEach(function (id) { counts[id] = true; });
+    Object.keys(map).forEach(function (qid) {
+      var sf = map[qid];
+      if (!counts[sf.id]) return;
+      var m = scoreRowMeta(sf, answers);
+      if (m && m.answered) earned += m.pts;
+    });
+    var div = roll.divisor != null ? Number(roll.divisor) : NaN;
+    var possible = isFinite(div) && div > 0 ? div : roll.of.length;
+    return { earned: earned, possible: possible };
+  }
   function openCustomDetail(s, fields) {
     if (detailShowAllFor !== s.id) { detailShowAll = false; detailShowAllFor = s.id; }
     var d = s.data || {}, photoPath = null, photoFieldId = null;
@@ -9383,13 +9567,16 @@
     });
     // The score lives in the record's header, on the right of the record's own identity.
     var scoreSlot = "";
-    var scoredBlock = "";
+    var scoredKeyBlock = "";
+    var qsMap = (currentCustom && currentCustom.table) ? questionScorerMap(currentCustom.table, fields) : {};
     var sd = (currentCustom && currentCustom.table) ? scoredDetail(currentCustom.table, fields, d) : null;
     if (sd) {
       scoreSlot = scoreHeadHtml(sd);
-      scoredBlock = '<div class="scored-section"><div class="qsec-title">Scored answers</div>' +
-        scoreBreakdownHtml(sd) + scoreKeyHtml(sd) + scoreLostLineHtml(sd) +
-        scoreRawNoteHtml(currentCustom.table, d, sd) + sd.html + "</div>";
+      // What used to be a report under the record is now just its key, above the answers it
+      // explains. The per-question marks live on the questions themselves, so all that is
+      // left to say up here is what the colours mean and how the total was reached.
+      scoredKeyBlock = '<div class="scored-key">' + scoreBreakdownHtml(sd) + scoreKeyHtml(sd) +
+        scoreLostLineHtml(sd) + scoreRawNoteHtml(currentCustom.table, d, sd) + "</div>";
     } else {
       var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
                  currentCustom.table.config.score_field;
@@ -9442,11 +9629,10 @@
       // and offering it as free text invites someone to award themselves the point. It is
       // dropped from the read-only view too, where the breakdown says it better.
       if (isScorerField(f)) return false;
-      // The scored QUESTION is a different matter. In the read-only view the breakdown
-      // repeats its answer, so showing it twice is noise. In the editor it has to stay:
-      // hiding it would leave 68 of QC's questions uneditable, and the only way to correct
-      // a score is to correct the answer under it.
-      if (sd && !forEdit && questionScorerMap(currentCustom.table, fields)[f.id]) return false;
+      // A scored question stays exactly where the form put it, in both views, and wears its
+      // result there. It used to be pulled out of the read-only grid and reprinted in a
+      // report at the foot of the record, which meant reading an inspection twice: once for
+      // the answers and once for the marks.
       if (curated) return pickedIds.indexOf(f.id) !== -1;
       // A conditional question this record never reached is not a blank answer, it is a
       // question that was never asked — the same reason a retired question stays hidden.
@@ -9521,14 +9707,24 @@
       var grid = "";
       detailOrder(fields).forEach(function (f) {
         if (!showsOn(f, d)) return;
-        if (isFileField(f)) return;   // uploads get their own labelled gallery below
-        grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' +
-          esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d, s) + "</div></div>";
+        // An upload question shows its own files under itself. They used to be skipped here
+        // and piled into one gallery at the foot of the record, which for a QC inspection
+        // meant forty photos in a heap with no way to tell which question each answered.
+        if (isFileField(f)) {
+          var tiles = photoSectionHtml(fields, d, null, { only: f.id });
+          if (!tiles) return;
+          grid += '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>";
+          return;
+        }
+        var sm = scoreRowMeta(qsMap[f.id], d);
+        grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") +
+          (sm ? " sc-" + sm.cls : "") + '"><div class="k">' +
+          esc(f.label) + (sm ? sm.chip : "") + '</div><div class="v">' + cellValueHtml(f, d, s) + "</div></div>";
       });
       grid += importedBlockHtml(s.extra) + fpMeta(s);
       // the header already carries the number, the date and the shop
       body.innerHTML = scoreHead + alertBannerHtml(currentCustom && currentCustom.table, s) +
-        '<div class="m-grid">' + grid + "</div>" + scoredBlock + photoSectionHtml(fields, d) +
+        scoredKeyBlock + '<div class="m-grid">' + grid + "</div>" +
         '<div id="cd-kids"></div>' + moreLineHtml(d) + '<div class="chain" id="cd-chain"></div>' +
         '<div id="cd-notify"></div>';
       wireMoreLine(s, fields); wireLinkChips(); wireAlertBanner(s, fields); renderRecordNotify(s, fields);
@@ -9540,10 +9736,15 @@
     }
     // a conditional question is built either way and hidden when it does not apply — unless
     // it already holds an answer, which is history and stays on screen (edFieldRowHtml)
+    var mayEditHere = canEdit(currentCustom.table.id);
     var grid = detailOrder(fields).map(function (f) {
-      if (isFileField(f)) return "";
       if (!showsOn(f, d, true)) return "";      // a retired question this record never answered
-      return edFieldRowHtml(f, d);
+      // an upload question keeps its files, and its add/remove tiles, under itself
+      if (isFileField(f)) {
+        var tiles = photoSectionHtml(fields, d, null, { only: f.id, edit: mayEditHere });
+        return tiles ? '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>" : "";
+      }
+      return edFieldRowHtml(f, d, { scored: qsMap[f.id] });
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
     // The children are listed for anyone who can open the record; only a manager gets the
@@ -9561,12 +9762,13 @@
       (photoPath ? '<img class="m-photo" id="cd-photo" alt="" style="display:none;">' : "") +
       changePhotoBtn("cd-photo", (currentCustom && canEdit(currentCustom.table.id)) && !!photoPath) +
       '<div class="m-sub"><span id="ed-status" class="ed-status"></span></div>' +
-      // The gallery was missing from this branch entirely, so anyone who could EDIT a record
-      // could not see its uploads: the header only ever shows the first image, and a video is
-      // never the header. A video answer was therefore invisible to exactly the people who
-      // review them. The header's own photo is skipped so it is not shown twice.
-      '<div class="m-grid">' + grid + "</div>" + scoredBlock +
-      photoSectionHtml(fields, d, photoPath ? photoFieldId : null, { edit: canEdit(currentCustom.table.id) }) +
+      // Uploads are no longer a single pile at the foot of the record: every upload question
+      // carries its own files, and its own add and remove tiles, in the grid above.
+      scoredKeyBlock +
+      // the total as it stands, updated as answers change, so a correction's effect on the
+      // score is visible without waiting for the save to come back
+      (sd ? '<div class="sc-live" id="ed-live-score"></div>' : "") +
+      '<div class="m-grid">' + grid + "</div>" +
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>' +
       '<div id="cd-notify"></div>';
@@ -9601,10 +9803,21 @@
         row.style.display = (condMet(f, cur) || answered) ? "" : "none";
       });
     }
-    if (fields.some(function (f) { return f.show_if && f.show_if.field; })) {
-      var mgrid = body.querySelector(".m-grid");
-      if (mgrid) ["change", "input"].forEach(function (ev) { mgrid.addEventListener(ev, applyEdConds, true); });
+    // The colour follows the answer while it is being changed, so a correction shows what it
+    // is worth before the save comes back. Same arithmetic the database will apply -- see
+    // scoreRulePoints -- so the chip cannot promise a point the stored score then withholds.
+    function applyEdScores() {
+      if (!sd) return;
+      paintScoreRows(currentCustom.table, fields, qsMap, edValues(fields), "ed-live-score");
     }
+    if (sd || fields.some(function (f) { return f.show_if && f.show_if.field; })) {
+      var mgrid = body.querySelector(".m-grid");
+      if (mgrid) ["change", "input"].forEach(function (ev) {
+        mgrid.addEventListener(ev, applyEdConds, true);
+        mgrid.addEventListener(ev, applyEdScores, true);
+      });
+    }
+    applyEdScores();   // the running total has to read right before anything is touched
     wireAutosave(function () { return saveCustom(s, fields); });
     renderChain(s, currentCustom.table, document.getElementById("cd-chain"));
     document.getElementById("modal").classList.add("open"); wireImportedFiles();
@@ -10067,10 +10280,18 @@
     // Staff-only questions are shown: the person filling this in IS staff, and a table whose
     // status or price is staff-only would otherwise be uncreatable.
     var asked = (fields || []).filter(function (f) { return f.type !== "link"; });
-    var grid = asked.map(function (f) { return edFieldRowHtml(f, {}, { photo: "input", stars: true }); }).join("");
+    // A new inspection is the main place a QC form is actually filled in, so it scores as it
+    // goes: the chip on a question turns green or red the moment the answer is chosen, and
+    // the running total at the top is the figure the record will be saved with.
+    var nrMap = questionScorerMap(t, fields);
+    var nrScored = !!scoreRollup(t) && Object.keys(nrMap).length > 0;
+    var grid = asked.map(function (f) {
+      return edFieldRowHtml(f, {}, { photo: "input", stars: true, scored: nrMap[f.id], answers: {} });
+    }).join("");
     body.innerHTML =
       '<div class="rec-head"><div class="rh-main"><div class="rh-title">New record</div>' +
       '<div class="rh-meta">' + esc(t.name) + "</div></div></div>" +
+      (nrScored ? '<div class="sc-live" id="nr-live-score"></div>' : "") +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="nr-foot"><button type="button" class="btn-new" id="nr-save">Create record</button>' +
       '<span class="nr-msg" id="nr-msg"></span></div>';
@@ -10111,10 +10332,18 @@
         if (row) row.style.display = vis[f.id] ? "" : "none";
       });
     }
-    if (asked.some(function (f) { return f.show_if && f.show_if.field; })) {
+    function applyNrScores() {
+      if (!nrScored) return;
+      paintScoreRows(t, fields, nrMap, edValues(asked), "nr-live-score");
+    }
+    if (nrScored || asked.some(function (f) { return f.show_if && f.show_if.field; })) {
       var mg = body.querySelector(".m-grid");
-      if (mg) ["change", "input"].forEach(function (ev) { mg.addEventListener(ev, applyConds, true); });
+      if (mg) ["change", "input"].forEach(function (ev) {
+        mg.addEventListener(ev, applyConds, true);
+        mg.addEventListener(ev, applyNrScores, true);
+      });
       applyConds();
+      applyNrScores();
     }
 
     // A record whose table has a per-record child form (an Event has a signup form) gets its own

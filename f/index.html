@@ -47,6 +47,21 @@
   .card { background: var(--card); border: 1px solid var(--line-2);
     border-radius: 10px; padding: 24px 22px; }
   .field { margin-bottom: 16px; }
+  /* The mark on a question, while it is being answered. Same four colours and the same
+     meanings as the review panel in index.html -- green earned the point, yellow earned
+     part of it, red lost it, a penalty its own stronger red -- because the person filling
+     the form in and the person reading it afterwards should not be learning two schemes. */
+  .qp { display: inline-block; margin-inline-start: 7px; padding: 1px 7px; border-radius: 6px;
+        font-size: 11px; font-weight: 800; vertical-align: middle; }
+  .qp.plus { background: #1c5b34; color: #dcffe9; }
+  .qp.part { background: #7a5b16; color: #fff6e0; }
+  .qp.zero { background: #4a1d1d; color: #ffb3b3; }
+  .qp.neg  { background: #8c2f2f; color: #ffecec; }
+  .qp.na   { display: none; }
+  .sc-live { display: flex; align-items: baseline; gap: 9px; margin: 0 0 16px; padding: 10px 12px;
+             border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); }
+  .sc-live b { font-size: 20px; font-weight: 700; }
+  .sc-live .sc-of { color: var(--muted); font-size: 12px; }
   label { display: block; font-size: 0.82rem; color: var(--text); margin-bottom: 7px; font-weight: 600; }
   label .req { color: var(--silver); }
   label .ar { color: var(--muted); font-weight: 400; }
@@ -165,6 +180,9 @@
             <span class="ar" id="draft-note-ar" dir="rtl"></span>
             <button type="button" id="draft-clear">Start over · ابدأ من جديد</button>
           </div>
+          <!-- The running score, hidden until the table is scored AND something is answered.
+               A form that opens with "0%" reads as a verdict rather than a tally. -->
+          <div class="sc-live" id="sc-live" style="display:none"></div>
           <div id="fields"></div>
           <button type="button" class="submit" id="submit-btn">Submit</button>
           <div class="form-msg" id="form-msg"></div>
@@ -583,11 +601,137 @@
   var COUNTRY_ROWS = [];
   var submitDevice = null;   // set once the form declares it is one-per-browser
   var visible = {};  // field id -> is this question being asked right now
+  // Scoring, when the table has any. scorerMap is questionId -> the internal field holding
+  // its rule; scoreCounts is the set of scorers the headline roll-up sums, and scoreTotalOf
+  // its divisor, so the running total is the same arithmetic the database will apply.
+  var scorerMap = null, scoreCounts = null, scoreTotalOf = 0;
 
   // ---- Conditional questions (every table, current and future) --------------
   // app_fields.show_if = {field: "<other field id>", equals: ["Yes"]} asks this
   // question only when that answer matches. Absent — which is every field written
   // before this existed — means always asked, so nothing changes for older forms.
+  // ---- what an answer is worth, while it is being given -----------------------------
+  // A VERBATIM copy of the same six functions in index.html, which are themselves a mirror
+  // of step one of compute_scores() in the database. Three copies of one rule is not a
+  // pleasure, but these pages share no module system, and the alternative -- a form that
+  // paints an answer green and a stored score that then withholds the point -- is worse.
+  // docs/tests/scoring-live.test.js pulls all copies out by name and runs the same cases
+  // through each, so a change to one that is not made to the other fails the suite.
+  //
+  // The rules live on the SCORER fields, which are internal and never rendered, so the form
+  // has them in hand already: it fetches every field and filters by `internal` at render.
+
+  function scoreRulePoints(spec, val) {
+    if (!spec) return null;
+    var raw = val == null ? null : String(val);
+    var t = raw == null ? "" : raw.replace(/^\s+|\s+$/g, "");
+    var pts = Number(spec.points), els = Number(spec.else);
+    if (!isFinite(pts)) pts = 0;
+    if (!isFinite(els)) els = 0;
+    var trim = function (x) { return String(x == null ? "" : x).replace(/^\s+|\s+$/g, ""); };
+    var kind = spec.kind || "match", hit = false, i;
+    if (kind === "truthy") {
+      hit = t !== "" && ["no", "false", "0"].indexOf(t.toLowerCase()) === -1;
+    } else if (kind === "contains_all") {
+      hit = t !== "";
+      var toks = spec.tokens || [];
+      for (i = 0; hit && i < toks.length; i++) {
+        if (raw.toLowerCase().indexOf(trim(toks[i]).toLowerCase()) === -1) hit = false;
+      }
+    } else if (kind === "match_any") {
+      var any = spec.expect_any || [];
+      for (i = 0; i < any.length; i++) { if (raw != null && t === trim(any[i])) { hit = true; break; } }
+    } else if (kind === "compare") {
+      var num = t === "" ? 0 : Number(t), thr = Number(spec.threshold);
+      hit = !isFinite(num) || !isFinite(thr) ? false
+          : spec.op === "<" ? num < thr : spec.op === "<=" ? num <= thr
+          : spec.op === ">" ? num > thr : spec.op === ">=" ? num >= thr
+          : spec.op === "=" ? num === thr : false;
+    } else {
+      hit = raw != null && t === trim(spec.expect);
+    }
+    return hit ? pts : els;
+  }
+
+  function scorerMaxPoints(sf) {
+    var o = (sf && sf.options) || {};
+    var w = Number(o.score_weight);
+    if (isFinite(w) && w > 0) return w;
+    var s = o.score || {};
+    var p = Number(s.points), e = Number(s.else);
+    var hi = Math.max(isFinite(p) ? p : 0, isFinite(e) ? e : 0);
+    return hi > 0 ? hi : 1;
+  }
+
+  function scoreClassOf(pts, maxP, answered) {
+    if (pts == null || !isFinite(pts)) return "na";
+    if (!answered) return "na";
+    return pts < 0 ? "neg" : pts >= maxP ? "plus" : pts > 0 ? "part" : "zero";
+  }
+
+  function scoreChipLabel(cls, pts) {
+    return cls === "na" ? "n/a" : pts < 0 ? "−" + Math.abs(pts) : pts > 0 ? "+" + pts : "0";
+  }
+
+  function scoreChipTitle(cls, pts, maxP) {
+    if (cls === "na") return "Not asked on this record — no points either way";
+    if (cls === "neg") return "Wrong answer, and this question takes " + Math.abs(pts) + " off the total";
+    if (cls === "plus") return "Right answer — earned " + pts + " of " + maxP;
+    if (cls === "part") return "Partly right — earned " + pts + " of " + maxP;
+    return "Wrong answer — earned nothing of " + maxP;
+  }
+
+  function scoreRollup(table) {
+    var cfg = (table && table.config) || {};
+    if (!cfg.score_field || !Array.isArray(cfg.scoring)) return null;
+    for (var i = 0; i < cfg.scoring.length; i++) {
+      var r = cfg.scoring[i];
+      if (r && r.target === cfg.score_field && Array.isArray(r.of)) return r;
+    }
+    return null;
+  }
+  // questionId -> the internal scorer field that prices it, for the fields this form has.
+  function buildScorerMap(all) {
+    var map = {};
+    (all || []).forEach(function (f) {
+      var src = f && f.options && f.options.score && f.options.score.source;
+      if (src) map[src] = f;
+    });
+    return map;
+  }
+  // The chip on one question, as it stands. Nothing is shown until the question is answered:
+  // a form that opens with a grey "n/a" against every line is noise, and the colour is only
+  // information once there is an answer for it to describe.
+  function paintScores() {
+    if (!scorerMap) return;
+    var answers = {};
+    controls.forEach(function (c) { answers[c.f.id] = (c.value ? c.value() : null); });
+    var earned = 0, answered = 0;
+    Object.keys(scorerMap).forEach(function (qid) {
+      var sf = scorerMap[qid];
+      var v = answers[qid];
+      var has = v != null && String(v) !== "";
+      var maxP = scorerMaxPoints(sf);
+      var pts = scoreRulePoints(sf.options.score, v);
+      var cls = scoreClassOf(pts, maxP, has);
+      if (scoreCounts && scoreCounts[sf.id] && has) { earned += pts; answered++; }
+      var chip = document.getElementById("sc-" + qid);
+      if (!chip) return;
+      if (!has) { chip.style.display = "none"; chip.className = "qp"; chip.textContent = ""; return; }
+      chip.style.display = "";
+      chip.className = "qp " + cls;
+      chip.textContent = scoreChipLabel(cls, pts);
+      chip.title = scoreChipTitle(cls, pts, maxP);
+    });
+    var box = document.getElementById("sc-live");
+    if (box && scoreTotalOf) {
+      var pct = Math.round(earned / scoreTotalOf * 100);
+      box.style.display = answered ? "" : "none";
+      box.innerHTML = '<b>' + pct + "%</b><span class=\"sc-of\">" + earned + " / " + scoreTotalOf +
+        " points · " + answered + " answered</span>";
+    }
+  }
+
   function condMet(f, data) {
     var c = f && f.show_if;
     if (!c || !c.field) return true;
@@ -638,7 +782,10 @@
   function labelHtml(f) {
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
     var req = f.required ? ' <span class="req">*</span>' : "";
-    return esc(f.label) + ar + req;
+    // An empty chip, hidden until the question is answered, so paintScores has somewhere to
+    // write and the label does not reflow when the first answer arrives.
+    var sc = (scorerMap && scorerMap[f.id]) ? ' <span class="qp" id="sc-' + esc(f.id) + '" style="display:none"></span>' : "";
+    return esc(f.label) + ar + req + sc;
   }
 
   // Optional bilingual intro shown under the title, from app_tables.config.intro = {en, ar}.
@@ -1243,8 +1390,25 @@
     document.getElementById("head").style.display = "block";
     renderIntro(table.config && table.config.intro);
     document.getElementById("card").style.display = "block";
+    // Worked out BEFORE the questions are built, because labelHtml puts the chip in the
+    // label as it goes. The rules sit on the internal scorer fields, which is why the map is
+    // built from every field and not from the ones that render.
+    var roll = scoreRollup(table);
+    if (roll) {
+      scorerMap = buildScorerMap(fields);
+      scoreCounts = {}; roll.of.forEach(function (id) { scoreCounts[id] = true; });
+      var dv = roll.divisor != null ? Number(roll.divisor) : NaN;
+      scoreTotalOf = isFinite(dv) && dv > 0 ? dv : roll.of.length;
+      var lb = document.getElementById("sc-live");
+      if (lb) lb.style.display = "none";
+    }
     var host = document.getElementById("fields");
     fields.filter(function (f) { return !f.internal; }).forEach(function (f) { host.appendChild(buildField(f)); }); // staff-only fields never render publicly
+    // Every answer repaints: a chip goes green the moment the choice is made rather than
+    // after a submit. Delegated on the host so a question built later is covered too.
+    if (scorerMap) {
+      ["change", "input"].forEach(function (ev) { host.addEventListener(ev, paintScores, true); });
+    }
 
     // Read back before anything is typed, so the page somebody comes back to is the page
     // they left. A file question is named in the note because it is the one answer that
@@ -1276,6 +1440,7 @@
       e.preventDefault(); clearDraft(draftK); draftK = ""; location.reload();
     });
     applyConditions();
+    paintScores();   // a restored draft arrives already answered, so it arrives coloured
   }
 
   function submitForm() {

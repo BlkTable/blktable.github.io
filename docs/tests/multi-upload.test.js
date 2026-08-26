@@ -54,7 +54,7 @@ const A = load(APP,
   ['PHOTO_MAX_BYTES', 'MEDIA_MAX_BYTES', 'MAX_FILES', 'VIDEO_EXT', 'VIDEO_PLAYABLE', 'IMAGE_EXT', 'PLAY_SVG', 'FILE_SVG', 'ADD_SVG'],
   ['isFileField', 'isFileType', 'isVideoPath', 'isPlayableVideo', 'isImagePath', 'fileLabel', 'esc',
    'filePaths', 'fileValue', 'firstPath', 'coverPath', 'recordFilePaths',
-   'photoSectionHtml', 'coverHtml', 'customCellText', 'otherKeyFor', 'isChoiceField', 'isOtherChoice', 'ageText',
+   'photoSectionHtml', 'fileTileHtml', 'fileAddTileHtml', 'coverHtml', 'customCellText', 'otherKeyFor', 'isChoiceField', 'isOtherChoice', 'ageText',
    'groupUploads']);
 
 // The public form carries its own copy of the rules and its own file ceiling.
