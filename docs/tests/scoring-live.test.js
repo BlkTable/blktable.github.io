@@ -50,10 +50,17 @@ const both = (name, spec, val, expected) => {
 };
 
 // ---- the two copies are actually the same code ----
-t('both pages carry byte-identical scoring functions', () => {
+// Newlines are normalised before comparing. They have to be: core.autocrlf rewrites line
+// endings on checkout, so whether these two files agree byte-for-byte depends on how the
+// clone was made rather than on the code — this asserted the stricter thing at first and
+// failed on a worktree where one file came back CRLF and the other LF, with six functions
+// character-for-character identical apart from the \r. Any real drift still fails, because
+// only \r is ignored and nothing else is.
+t('both pages carry the same scoring functions', () => {
+  const nl = (s) => String(s).replace(/\r\n/g, '\n');
   const a = scripts('index.html'), b = scripts('f/index.html');
   for (const fn of CORE) {
-    assert.strictEqual(grab(b, fn, 'f/index.html'), grab(a, fn, 'index.html'),
+    assert.strictEqual(nl(grab(b, fn, 'f/index.html')), nl(grab(a, fn, 'index.html')),
       fn + ' has drifted between index.html and f/index.html');
   }
 });
@@ -278,6 +285,36 @@ t('no scoring on the table means paintScores does nothing at all', () => {
   F.set([{ f: { id: 'q1' }, value: () => 'Clean' }], null, { counts: null, of: 0 });
   F.paintScores();   // must not throw
   assert.strictEqual(F.el('sc-q1').className, '', 'an unscored table paints nothing');
+});
+
+// ---- every control that can hold a scored answer must tell the page ----
+// The gap this closes: the earlier tests asserted the listener was WIRED, and it was. They
+// did not ask whether each kind of control reaches it. A dropdown is a custom combo -- it
+// assigns input.value in script and calls its own onChange, and assigning .value fires no
+// input or change event -- so the delegated listener never heard the commonest answer of all.
+// Typing a number coloured its question; picking from a dropdown did not, which is 63 of
+// QC's 70 scored questions.
+const FORM_SRC = fs.readFileSync('f/index.html', 'utf8');
+t('an answer changing has one named path, and it repaints', () => {
+  assert.ok(/function answerChanged\(\) \{ applyConditions\(\); paintScores\(\); \}/.test(FORM_SRC),
+    'both halves of "an answer changed" belong in one place');
+});
+t('the dropdown widget goes through it — every call site', () => {
+  const sites = FORM_SRC.match(/buildCombo\(f, dopts, function \(v\) \{[^}]*\}/g) || [];
+  assert.ok(sites.length >= 2, 'expected the combo call sites, found ' + sites.length);
+  for (const s of sites) {
+    assert.ok(/answerChanged\(\)/.test(s), 'a combo that still calls applyConditions alone: ' + s);
+    assert.ok(!/applyConditions\(\)/.test(s), 'and it must not call applyConditions directly: ' + s);
+  }
+});
+t('the native-event path is still wired for the controls that do fire events', () => {
+  // a checkbox and a number box announce themselves, so those stay on delegation
+  assert.ok(/host\.addEventListener\(ev, paintScores, true\)/.test(FORM_SRC));
+});
+t('paintScores is reachable from both, so no control type is left out', () => {
+  // dropdown -> answerChanged -> paintScores;  number/checkbox -> delegated -> paintScores
+  assert.ok(/answerChanged\(\) \{ applyConditions\(\); paintScores\(\)/.test(FORM_SRC));
+  assert.ok(/\["change", "input"\]\.forEach\(function \(ev\) \{ host\.addEventListener/.test(FORM_SRC));
 });
 
 // ---- the editors ----

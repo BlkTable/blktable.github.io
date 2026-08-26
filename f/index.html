@@ -778,6 +778,16 @@
     });
   }
   function ctlVisible(c) { return visible[c.f.id] !== false; }
+  // An answer changed: re-decide which questions are asked, and repaint what they scored.
+  //
+  // One named path because a dropdown does not announce itself the way a text box does. The
+  // choice widget is a custom combo: picking an option assigns input.value in script and
+  // calls its onChange, and assigning .value fires no input or change event, so the
+  // delegated listener on #fields never hears it. Live scoring shipped listening only for
+  // those native events, so typing a number coloured its question and picking from a
+  // dropdown did not -- which is 63 of QC's 70 scored questions, i.e. very nearly all of
+  // them. Any future control with its own callback calls this and is covered.
+  function answerChanged() { applyConditions(); paintScores(); }
 
   function labelHtml(f) {
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
@@ -1130,7 +1140,7 @@
       };
       // the combobox settles a choice in code (click, arrow-Enter, blur-resolve) and fires
       // no DOM event, so it tells the conditional engine itself
-      var combo = buildCombo(f, dopts, function (v) { toggleOther(v); applyConditions(); });
+      var combo = buildCombo(f, dopts, function (v) { toggleOther(v); answerChanged(); });
       wrap.appendChild(combo.wrap);
       if (hasOther) wrap.appendChild(otherWrap);
       controls.push({
@@ -1177,7 +1187,7 @@
                          label: b.name + (b.name_ar ? " / " + b.name_ar : "") + (cn ? " — " + cn : "") });
           });
       });
-      var combo = buildCombo(f, dopts, function (v) { applyConditions(); });
+      var combo = buildCombo(f, dopts, function (v) { answerChanged(); });
       wrap.appendChild(combo.wrap);
       controls.push({
         f: f, el: combo.input,
