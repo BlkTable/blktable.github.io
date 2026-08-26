@@ -2242,6 +2242,13 @@
             <textarea id="bld-intro" rows="2" placeholder="Intro (English)"></textarea>
             <textarea id="bld-intro-ar" rows="2" placeholder="مقدمة (عربي)" dir="rtl"></textarea>
           </div>
+          <!-- Job Applications only, because it is the only form with an interview to invite
+               anybody to. The wording is HR's, so it is edited here rather than being a code
+               change every time a sentence in it should read differently. -->
+          <div class="fp-label" id="bld-invite-lab" style="margin: 12px 0 6px; display:none;">Interview invite message <span style="color:var(--muted);font-weight:400;">— the WhatsApp message sent when you approve an applicant and set a time. Write {Full name}, {Date}, {Time} and {Location} where those belong (‏{الاسم} ‏{التاريخ} ‏{الوقت} ‏{المكان} work too). Leave blank to use the wording the app ships with.</span></div>
+          <div class="bld-two" id="bld-invite-row" style="display:none;">
+            <textarea id="bld-invite" rows="10" dir="auto" placeholder="كيف حالك {Full name}؟"></textarea>
+          </div>
           <!-- Who the form is for. A form belongs to ONE country, recorded on the table, so
                nothing has to ask the public which country they are in. Shared with
                franchisees is the exception and it is a FAMILY, not a flag: a parent form
@@ -4436,17 +4443,39 @@
   // ---- Approve (schedule interview + WhatsApp invite) & Reject (delete) ----
   var schedApp = null;
   var BLK_LOCATION = "https://maps.app.goo.gl/9ELvkFsNGtPF4qdE9";
+  // The wording the app ships with. HR edits their own in the Job Applications form editor
+  // (config.interviewMsg); this is what an applicant gets until somebody saves one, and
+  // again the moment somebody clears the box — so approving an applicant can never send a
+  // blank WhatsApp.
+  var DEFAULT_INTERVIEW_MSG =
+    "كيف حالك {Full name}؟ 👋\n\n" +
+    "شكراً على تقديمك لوظيفة عنا في قهوة BLK.\n\n" +
+    "حابين نعمل معك مقابلة ونتعرف عليك، هي تفاصيل المقابلة:\n\n" +
+    "📅 التاريخ: {Date}\n" +
+    "🕐 الوقت: {Time}\n" +
+    "📍 المكان: {Location}\n\n" +
+    "لا تنسى ترد علينا عشان نأكد حضورك، وإذا في تعارض بالوقت احكيلنا عشان نرتبلك وقت تاني.\n\n" +
+    "بانتظارك وبنتمنى نشوفك!\n\n" +
+    "مع تحياتنا";
+  // Same {Question name} convention a custom table's WhatsApp action already uses, so there
+  // is one thing to learn — and each token in Arabic too, because the message is Arabic and
+  // switching keyboards mid-sentence to type "{Full name}" is a reason not to bother.
+  var INTERVIEW_TOKENS = {
+    "full name": "name", "name": "name", "الاسم": "name",
+    "date": "date", "التاريخ": "date",
+    "time": "time", "الوقت": "time",
+    "location": "location", "المكان": "location"
+  };
+  function interviewTemplate() {
+    var t = (builtinConfig.job_applications || {}).interviewMsg || "";
+    return t.trim() ? t : DEFAULT_INTERVIEW_MSG;
+  }
   function interviewMessage(name, dateText, timeText) {
-    return "هلا " + (name || "") + " 👋\n\n" +
-      "شكراً على تقديمك لوظيفة عندنا في قهوة BLK.\n\n" +
-      "حبينا نعزمك على مقابلة، وهذي التفاصيل:\n\n" +
-      "📅 التاريخ: " + dateText + "\n" +
-      "🕐 الوقت: " + timeText + "\n" +
-      "📍 المكان: " + BLK_LOCATION + "\n\n" +
-      "لا تنسى ترد علينا تأكد حضورك، وإذا في تعارض بالوقت قولنا نرتب لك وقت ثاني 🙌\n\n" +
-      "بانتظارك ونتمنى نشوفك!\n\n" +
-      "مع تحياتنا،\n" +
-      "فريق التوظيف – قهوة BLK";
+    var vals = { name: name || "", date: dateText || "", time: timeText || "", location: BLK_LOCATION };
+    return interviewTemplate().replace(/\{([^}]+)\}/g, function (m, tok) {
+      var k = INTERVIEW_TOKENS[tok.trim().toLowerCase()];
+      return k ? vals[k] : "";
+    });
   }
   function openSchedule(a) {
     schedApp = a;
@@ -5744,6 +5773,11 @@
   var BUILTIN_PLACEHOLDER = { job_applications: "d8a6f660-6f87-4705-8c9d-ebcef9f7ef75", casting: "97c0af4e-ca12-4010-ba46-c0a433f69a4c" };
   var builtinExtra = { job_applications: [], casting: [] };
   var builtinHidden = { job_applications: [], casting: [] };
+  // Each built-in form's whole config, as get_form_config hands it back. `hidden` is one key
+  // out of it and the interview invite is another. It has to come from the RPC and not from
+  // the app_tables row below: that row is admin-only, so a manager who can approve an
+  // applicant would otherwise send the shipped wording instead of the one HR saved.
+  var builtinConfig = { job_applications: {}, casting: {} };
   // The two hand-coded forms have a row in app_tables like every other table. Their name
   // lives there, which is what makes renaming them possible at all — everything that used
   // to print their name as a literal now asks builtinName() instead.
@@ -5757,7 +5791,11 @@
   function loadBuiltinExtra() {
     ["job_applications", "casting"].forEach(function (k) {
       db.rpc("get_extra_fields", { p_key: k }).then(function (res) { if (res && !res.error) builtinExtra[k] = res.data || []; });
-      db.rpc("get_form_config", { p_key: k }).then(function (res) { if (res && !res.error && res.data) builtinHidden[k] = res.data.hidden || []; });
+      db.rpc("get_form_config", { p_key: k }).then(function (res) {
+        if (!res || res.error || !res.data) return;
+        builtinConfig[k] = res.data;
+        builtinHidden[k] = res.data.hidden || [];
+      });
     });
     // Staff-only: anon has no read on app_tables, so a failure here just leaves the default name.
     db.from("app_tables").select("id,name,name_ar,config")
@@ -10799,7 +10837,7 @@
     bldGrow(el);
   }
   function growAllBld() {
-    ["bld-name", "bld-name-ar", "bld-intro", "bld-intro-ar"]
+    ["bld-name", "bld-name-ar", "bld-intro", "bld-intro-ar", "bld-invite"]
       .forEach(function (id) { bldGrow(document.getElementById(id)); });
     [].slice.call(bldHost().querySelectorAll("textarea")).forEach(bldGrow);
   }
@@ -10807,6 +10845,7 @@
   wireBldGrow(document.getElementById("bld-name-ar"));
   wireBldGrow(document.getElementById("bld-intro"), true);      // intro is multi-line — Enter must work
   wireBldGrow(document.getElementById("bld-intro-ar"), true);
+  wireBldGrow(document.getElementById("bld-invite"), true);     // a message with paragraphs in it
   // config.intro = {en, ar} — the one intro standard, used by every public form (f/, apply/, cast/).
   function serializeIntro() {
     var en = (document.getElementById("bld-intro").value || "").trim();
@@ -10837,6 +10876,22 @@
   function setIntroInputs(intro) {
     document.getElementById("bld-intro").value = (intro && intro.en) || "";
     document.getElementById("bld-intro-ar").value = (intro && intro.ar) || "";
+  }
+  // config.interviewMsg — the WhatsApp invite for Job Applications. Blank is a real answer
+  // and means "use the wording the app ships with", so it is stored as null rather than as
+  // an empty string nobody could tell apart from a message somebody meant to be empty.
+  function serializeInviteMsg() {
+    var el = document.getElementById("bld-invite");
+    var v = el ? (el.value || "").trim() : "";
+    return v || null;
+  }
+  function setInviteInput(msg) {
+    var el = document.getElementById("bld-invite");
+    if (!el) return;
+    el.value = msg || "";
+    // The box shows the default rather than sitting empty, so editing the message starts
+    // from the message instead of from a blank page.
+    el.placeholder = DEFAULT_INTERVIEW_MSG;
   }
   // Which of the points boxes make sense for this question's type. A priced choice list
   // prices its choices in the Options box, so it shows its worked-out maximum instead of
@@ -11073,6 +11128,11 @@
     ["bld-ptitle-lab", "bld-ptitle-row"].forEach(function (id) {
       var el = document.getElementById(id); if (el) el.style.display = isBuiltin ? "" : "none";
     });
+    // The invite belongs to the one form that has an interview to invite anybody to.
+    var showInvite = isBuiltin && builtinEditKey === "job_applications";
+    ["bld-invite-lab", "bld-invite-row"].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.style.display = showInvite ? "" : "none";
+    });
     var qlab = document.getElementById("bld-q-lab");
     if (qlab) qlab.innerHTML = isBuiltin
       ? 'Extra questions <span style="color:var(--muted);font-weight:400;">— added below the built-in ones. Use “show after” to place one mid-form.</span>'
@@ -11239,6 +11299,7 @@
     document.getElementById("bld-name-ar").value = builtinNameAr(formKey);
     setIntroInputs(null);
     setPublicTitleInputs(null, formKey);
+    setInviteInput(null);
     msg.textContent = "Loading…";
     bldHost().innerHTML = "";
     return db.from("app_tables").select("name,name_ar,config").eq("id", editingTableId).single().then(function (cRes) {
@@ -11251,6 +11312,7 @@
       document.getElementById("bld-builtin-note").innerHTML = builtinFieldsHtml(formKey, cfg.hidden || []);
       setIntroInputs(cfg.intro);
       setPublicTitleInputs(cfg.title, formKey);
+      setInviteInput(cfg.interviewMsg);
 
       return db.from("app_fields").select("*").eq("table_id", editingTableId).order("position", { ascending: true });
     }).then(function (res) {
@@ -11858,7 +11920,13 @@
       // /cast can read it. (That is not true of a CUSTOM form, whose public page reads the
       // whitelisted config_public column instead — which is why this control is offered for
       // the two built-in forms only.)
-      tableUpdate.config = Object.assign({}, prevCfg, { hidden: hidden, intro: serializeIntro(), title: serializePublicTitle() });
+      // interviewMsg is the one key here that is NOT for the public page — an applicant never
+      // sees it until it arrives on WhatsApp. Only the form that shows the box writes it, so
+      // saving Casting cannot clear a message it was never offered a box to edit.
+      tableUpdate.config = Object.assign({}, prevCfg, {
+        hidden: hidden, intro: serializeIntro(), title: serializePublicTitle(),
+        interviewMsg: builtinEditKey === "job_applications" ? serializeInviteMsg() : (prevCfg.interviewMsg || null)
+      });
     } else {
       var alertProblems = [];
       var alerts = serializeAlerts(alertProblems);
@@ -11895,6 +11963,8 @@
       if (wasBuiltin && bk) {
         builtinTable[bk] = { id: tid, name: name, name_ar: nameAr || null, config: tableUpdate.config };
         builtinHidden[bk] = tableUpdate.config.hidden || [];
+        // so the next invite sent uses the wording just saved, without a reload
+        builtinConfig[bk] = tableUpdate.config;
         paintBuiltinNames();
       }
       msg.set("Saved.", "ok");
