@@ -789,7 +789,30 @@
   .q-scored .ql { flex: 1; min-width: 0; }
   .q-scored .qq { font-size: var(--fs-3); color: var(--silver-lo); margin-bottom: 4px; }
   .q-scored .qp { flex: 0 0 auto; align-self: center; font-weight: 800; font-size: var(--fs-3); border-radius: 8px; padding: 3px 9px; min-width: 46px; text-align: center; }
-  .qp.plus { background: #1c5b34; color: #dcffe9; } .qp.zero { background: #2a1414; color: #ff9d9d; } .qp.na { background: var(--bg-2); color: var(--muted); }
+  /* Green earned the point, yellow earned part of it, red lost it, grey was never asked.
+     Partial used to share the grey "na" class, so "scored half" and "not scored at all"
+     looked the same; and a penalty question (three of QC's 68 score -2 for a wrong answer,
+     not 0) printed as an ordinary zero, which is the one case where losing the point costs
+     more than the point. Grey stays deliberately outside the traffic light: a question the
+     form never asked is not a failure, and colouring it red would read as one. */
+  .qp.plus { background: #1c5b34; color: #dcffe9; }
+  .qp.part { background: #7a5b16; color: #fff6e0; }
+  /* was #2a1414, which is near-black: as a 9px key swatch it read as "no colour" rather
+     than as red, and red is the whole point of a lost point */
+  .qp.zero { background: #4a1d1d; color: #ffb3b3; }
+  .qp.neg  { background: #8c2f2f; color: #ffecec; }
+  .qp.na   { background: var(--bg-2); color: var(--muted); }
+  /* The key sits above the list, because four colours with no legend is a puzzle. */
+  .qp-key { display: flex; flex-wrap: wrap; gap: 8px 15px; margin: 0 0 10px; font-size: var(--fs-1); color: var(--muted); }
+  .qp-key span { display: inline-flex; align-items: center; gap: 5px; }
+  .qp-key i { width: 9px; height: 9px; border-radius: 3px; }
+  .q-scored .qa { font-size: var(--fs-2); }
+  /* A lost point is what the reader is scanning for, so the row says so rather than
+     leaving the colour to carry it alone. */
+  .q-scored.lost { background: rgba(140, 47, 47, 0.07); }
+  .q-scored.lost .qq { color: var(--silver); }
+  /* in no total, so it must not read as though it were pulling the score down */
+  .q-scored.outside { opacity: 0.62; }
   /* ---- the record's header: identity on the left, score on the right ---- */
   /* Sticky: a QC record is 171 questions long, and the score is the thing you keep
      wanting to see while you scroll through them. */
@@ -4140,6 +4163,13 @@
     var out = {};
     (fields || []).forEach(function (f) {
       if (isFileField(f)) return;
+      // A computed score is not an answer and is never read back out of the editor. The
+      // panel already declines to render one, so this is the second lock rather than the
+      // first: any future view that renders a scorer -- a curated detail_fields list naming
+      // one, a new panel built from edFieldRowHtml -- still cannot write it. Leaving it out
+      // of `cur` means saveCustom keeps the stored value untouched, and the database
+      // recomputes it from the answer anyway.
+      if (isScorerField(f)) return;
       if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
       var el = document.getElementById("ed-" + f.id); if (!el) return;
       out[f.id] = (f.type === "multi_select" || f.type === "record_multi") ? edChecksValue(el) : (el.value || "").trim();
@@ -9106,17 +9136,32 @@
     if (cfg.scorecard) return scoredDetailFromRules(fields, d);
     var qIds = Object.keys(map);
     if (!qIds.length) return null;
+    // Only the questions the headline roll-up actually sums belong in the breakdown. QC
+    // scores 70 questions and sums 68 of them: "Eliminate Search" and "Thermos Pot
+    // Freshness" are scored in Airtable and deliberately left out of the total, so showing
+    // them here would make the rows add up to more than the score they are explaining.
+    var roll = scoreRollup(table);
+    var counts = null;
+    if (roll) { counts = {}; roll.of.forEach(function (id) { counts[id] = true; }); }
+    var outside = [];
     var bySection = {}; var order = [];
     fields.forEach(function (qf) {
-      if (!map[qf.id]) return;
-      // the section can be named on the question or on its scorer; either is honoured
       var sf0 = map[qf.id];
+      if (!sf0) return;
+      // Scored, but not by the roll-up behind the headline. QC has three: Airtable's
+      // percentage formula leaves out Food Display Score, and Eliminate Search and Thermos
+      // Pot Freshness are in neither total. They are still shown, at the foot and marked,
+      // because a scored question missing from a list called "Scored answers" reads as a
+      // bug in the panel -- but they are in no total, or the rows would not add up to the
+      // score they exist to explain.
+      if (counts && !counts[sf0.id]) { outside.push(qf); return; }
+      // the section can be named on the question or on its scorer; either is honoured
       var sec = (qf.options && qf.options.score_section) ||
                 (sf0 && sf0.options && sf0.options.score_section) || "Score";
       if (!bySection[sec]) { bySection[sec] = []; order.push(sec); }
       bySection[sec].push(qf);
     });
-    var earned = 0, possible = 0, sections = [], html = "";
+    var earned = 0, possible = 0, sections = [], html = "", lost = 0, notAsked = 0;
     order.forEach(function (sec) {
       var se = 0, sp = 0, rows = "";
       bySection[sec].forEach(function (qf) {
@@ -9126,19 +9171,92 @@
         var na = (ptsRaw == null || isNaN(ptsRaw));
         var pts = na ? 0 : ptsRaw;
         var maxP = (sf.options && sf.options.score_weight) || 1;
-        if (!na) { se += pts; sp += maxP; earned += pts; possible += maxP; }
-        var cls = na ? "na" : (pts >= maxP ? "plus" : (pts > 0 ? "na" : "zero"));
-        var lbl = na ? "n/a" : (pts > 0 ? "+" + pts : "0");
-        rows += '<div class="q-scored"><div class="ql"><div class="qq">' + esc(qf.label) + '</div>' +
+        se += pts; sp += maxP; earned += pts; possible += maxP;
+        // green earned it, yellow earned part of it, red lost it, grey was never asked --
+        // and a negative is its own red, because three of QC's questions take a point off
+        // rather than merely withholding one
+        var cls = na ? "na" : pts < 0 ? "neg" : pts >= maxP ? "plus" : pts > 0 ? "part" : "zero";
+        var lbl = na ? "n/a" : pts < 0 ? "−" + Math.abs(pts) : pts > 0 ? "+" + pts : "0";
+        if (na) notAsked++; else if (pts < maxP) lost++;
+        rows += '<div class="q-scored' + (!na && pts < maxP ? " lost" : "") + '">' +
+          '<div class="ql"><div class="qq">' + esc(qf.label) + '</div>' +
           '<div class="qa">' + (answered ? cellValueHtml(qf, d, null) : '<span class="empty-box"></span>') + '</div></div>' +
-          '<div class="qp ' + cls + '">' + lbl + '</div></div>';
+          '<div class="qp ' + cls + '" title="' + esc(scoreChipTitle(cls, pts, maxP)) + '">' + lbl + '</div></div>';
       });
       sections.push({ name: sec, earned: se, possible: sp });
       // a lone default section needs no heading — "Scored answers" already said it
       var showHead = !(order.length === 1 && sec === "Score");
       html += (showHead ? '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' : "") + rows;
     });
-    return { html: html, earned: earned, possible: possible, sections: sections };
+    // The divisor is the scorecard's own denominator and it does not move with the record:
+    // QC divides by 68 whether or not this shop was asked all 68, which is exactly why the
+    // total shown here has to come from the roll-up rather than from counting rows.
+    var div = roll && roll.divisor != null ? Number(roll.divisor) : NaN;
+    if (isFinite(div) && div > 0) possible = div;
+    if (outside.length) {
+      html += '<div class="qsec-head"><span>Scored, but outside the total</span>' +
+        '<span class="sub">' + outside.length + '</span></div>';
+      outside.forEach(function (qf) {
+        var sf = map[qf.id];
+        var ptsRaw = (d[sf.id] == null || d[sf.id] === "") ? null : parseFloat(d[sf.id]);
+        var na = (ptsRaw == null || isNaN(ptsRaw));
+        var pts = na ? 0 : ptsRaw;
+        var maxP = (sf.options && sf.options.score_weight) || 1;
+        var answered = d[qf.id] != null && d[qf.id] !== "";
+        var cls = na ? "na" : pts < 0 ? "neg" : pts >= maxP ? "plus" : pts > 0 ? "part" : "zero";
+        var lbl = na ? "n/a" : pts < 0 ? "−" + Math.abs(pts) : pts > 0 ? "+" + pts : "0";
+        html += '<div class="q-scored outside"><div class="ql"><div class="qq">' + esc(qf.label) + '</div>' +
+          '<div class="qa">' + (answered ? cellValueHtml(qf, d, null) : '<span class="empty-box"></span>') + '</div></div>' +
+          '<div class="qp ' + cls + '" title="Scored, but this question is in no total">' + lbl + '</div></div>';
+      });
+    }
+    return { html: html, earned: earned, possible: possible, sections: sections,
+             lost: lost, notAsked: notAsked, outside: outside.length };
+  }
+  // What a chip means, spelled out for the pointer -- the colour is the quick read and this
+  // is the confirmation, so neither has to be guessed.
+  function scoreChipTitle(cls, pts, maxP) {
+    if (cls === "na") return "Not asked on this record — no points either way";
+    if (cls === "neg") return "Wrong answer, and this question takes " + Math.abs(pts) + " off the total";
+    if (cls === "plus") return "Right answer — earned " + pts + " of " + maxP;
+    if (cls === "part") return "Partly right — earned " + pts + " of " + maxP;
+    return "Wrong answer — earned nothing of " + maxP;
+  }
+  // The one sentence somebody opening a 68-question inspection actually wants: how many
+  // points went, and how many questions were never asked. Without it the answer is only
+  // available by counting red rows.
+  function scoreLostLineHtml(sd) {
+    if (!sd) return "";
+    var bits = [];
+    if (sd.lost) bits.push(sd.lost + (sd.lost === 1 ? " question lost a point" : " questions lost points"));
+    if (sd.notAsked) bits.push(sd.notAsked + " not asked");
+    if (sd.outside) bits.push(sd.outside + " scored but outside the total");
+    if (!bits.length) return '<div class="qp-key">Every scored question earned its point.</div>';
+    return '<div class="qp-key">' + esc(bits.join(" · ")) + "</div>";
+  }
+  // QC keeps two totals and they do not agree: Airtable's "out of 68" column sums 68
+  // scorers while its percentage sums 67 of them and still divides by 68, so a shop that
+  // earns the Food Display point sees 29 in one column and 28/68 in the other. The panel
+  // explains the percentage, because that is the figure config.score_field names and the
+  // one every card and pill in the app already shows. Saying so is better than leaving
+  // somebody to find a one-point difference and read it as a bug in this panel.
+  function scoreRawNoteHtml(table, d, sd) {
+    var cfg = (table && table.config) || {};
+    var rawId = cfg.score_raw_field;
+    if (!rawId || !sd || !d) return "";
+    var raw = parseFloat(d[rawId]);
+    if (!isFinite(raw) || raw === sd.earned) return "";
+    return '<div class="qp-key">This table also keeps a separate total that reads ' + esc(String(raw)) +
+      ', because the two roll-ups it was imported with do not sum the same questions.</div>';
+  }
+  // Four colours with no legend is a puzzle, and this panel is read by area leaders rather
+  // than by whoever built it.
+  function scoreKeyHtml(sd) {
+    var bits = [["plus", "Right"], ["part", "Partly right"], ["zero", "Lost"], ["neg", "Penalty"]];
+    if (sd && sd.notAsked) bits.push(["na", "Not asked"]);
+    return '<div class="qp-key">' + bits.map(function (b) {
+      return '<span><i class="qp ' + b[0] + '"></i>' + esc(b[1]) + "</span>";
+    }).join("") + "</div>";
   }
   // The same breakdown as the imported path, computed from app_fields.scoring. Grouped by
   // scoring.section, and a question that does not apply on this record reads "n/a" and is
@@ -9152,7 +9270,7 @@
       if (!bySection[sec]) { bySection[sec] = []; order.push(sec); }
       bySection[sec].push(f);
     });
-    var earned = 0, possible = 0, sections = [], html = "";
+    var earned = 0, possible = 0, sections = [], html = "", lost = 0, notAsked = 0;
     order.forEach(function (sec) {
       var se = 0, sp = 0, rows = "";
       bySection[sec].forEach(function (f) {
@@ -9161,17 +9279,22 @@
         var pts = applies ? questionEarned(f, d) : 0;
         if (applies) { se += pts; sp += maxP; earned += pts; possible += maxP; }
         var answered = d && d[f.id] != null && d[f.id] !== "";
-        var cls = !applies ? "na" : (pts >= maxP ? "plus" : (pts > 0 ? "na" : "zero"));
-        var lbl = !applies ? "n/a" : (pts > 0 ? "+" + pts : "0");
-        rows += '<div class="q-scored"><div class="ql"><div class="qq">' + esc(f.label) + '</div>' +
+        // same four colours as the imported path: a reader should not have to know which
+        // engine scored the record in front of them
+        var cls = !applies ? "na" : pts < 0 ? "neg" : pts >= maxP ? "plus" : pts > 0 ? "part" : "zero";
+        var lbl = !applies ? "n/a" : pts < 0 ? "−" + Math.abs(pts) : pts > 0 ? "+" + pts : "0";
+        if (!applies) notAsked++; else if (pts < maxP) lost++;
+        rows += '<div class="q-scored' + (applies && pts < maxP ? " lost" : "") + '">' +
+          '<div class="ql"><div class="qq">' + esc(f.label) + '</div>' +
           '<div class="qa">' + (answered ? cellValueHtml(f, d, null) : '<span class="empty-box"></span>') + '</div></div>' +
-          '<div class="qp ' + cls + '">' + lbl + '</div></div>';
+          '<div class="qp ' + cls + '" title="' + esc(scoreChipTitle(cls, pts, maxP)) + '">' + lbl + '</div></div>';
       });
       sections.push({ name: sec, earned: se, possible: sp });
       var showHead = !(order.length === 1 && sec === "Score");
       html += (showHead ? '<div class="qsec-head"><span>' + esc(sec) + '</span><span class="sub">' + se + '/' + sp + '</span></div>' : "") + rows;
     });
-    return { html: html, earned: earned, possible: possible, sections: sections };
+    return { html: html, earned: earned, possible: possible, sections: sections,
+             lost: lost, notAsked: notAsked };
   }
   function scoreTint(pct) {
     return pct >= 90 ? "#2fbf6b" : pct >= 75 ? "#4a9eff" : pct >= 50 ? "#eab308" : "#ff6b6b";
@@ -9195,22 +9318,49 @@
         '<i class="bmini"><b style="width:' + p + '%;background:' + scoreTint(p) + '"></b></i></span></div>';
     }).join("") + "</div>";
   }
-  // questionFieldId -> scorer field. Two supported shapes (populated later in the DB):
-  //   scorer field carries options.score_of = "<questionFieldId>", OR
+  // questionFieldId -> scorer field. Three supported shapes:
+  //   scorer field carries options.score.source — the scoring RULE's own source question,
+  //   scorer field carries options.score_of = "<questionFieldId>", or
   //   question field carries options.scorer  = "<scorerFieldId>".
+  //
+  // options.score.source is the one that matters, and it is why this needs no new column in
+  // the database. The rule that computes a scorer already names the question it reads; a
+  // separate score_of would be the same fact written twice, free to drift, and the drift
+  // would be invisible — the breakdown would quietly pair a score with the wrong question.
+  // The other two shapes stay for a scorer somebody wires up by hand with no rule behind it.
   function questionScorerMap(table, fields) {
     if (table.__qsMap) return table.__qsMap;
     var byId = {}; fields.forEach(function (f) { byId[f.id] = f; });
     var map = {};
     fields.forEach(function (f) {
       var o = f.options || {};
-      if (o.score_of && byId[o.score_of]) map[o.score_of] = f;          // scorer -> its question
-      else if (o.scorer && byId[o.scorer]) map[f.id] = byId[o.scorer];  // question -> its scorer
+      var src = o.score && o.score.source;
+      if (src && byId[src]) map[src] = f;                              // rule -> its question
+      else if (o.score_of && byId[o.score_of]) map[o.score_of] = f;    // scorer -> its question
+      else if (o.scorer && byId[o.scorer]) map[f.id] = byId[o.scorer]; // question -> its scorer
     });
     if (Object.keys(map).length) table.__qsMap = map;   // don't cache the empty (dormant) map
     return map;
   }
-  function isScorerField(f) { var o = f.options || {}; return !!(o.score_of); }
+  // A field whose value the database computes. Never an editable box, never read back out
+  // of the editor: it is derived from an answer, and the only way to change it is to change
+  // that answer. options.score is the rule itself, so carrying one is what makes a field
+  // computed — score_of alone is only a display pairing.
+  function isScorerField(f) { var o = f.options || {}; return !!(o.score_of || o.score); }
+  // The roll-up that produces the table's headline score, so the breakdown can be totalled
+  // the same way the database totals it. Without this the panel counted whichever questions
+  // happened to be scored and divided by that, which for QC is 70 rules against a roll-up
+  // that sums 68 of them and always divides by 68 — two different percentages for one
+  // record, on the same screen, neither obviously wrong.
+  function scoreRollup(table) {
+    var cfg = (table && table.config) || {};
+    if (!cfg.score_field || !Array.isArray(cfg.scoring)) return null;
+    for (var i = 0; i < cfg.scoring.length; i++) {
+      var r = cfg.scoring[i];
+      if (r && r.target === cfg.score_field && Array.isArray(r.of)) return r;
+    }
+    return null;
+  }
   function openCustomDetail(s, fields) {
     if (detailShowAllFor !== s.id) { detailShowAll = false; detailShowAllFor = s.id; }
     var d = s.data || {}, photoPath = null, photoFieldId = null;
@@ -9238,7 +9388,8 @@
     if (sd) {
       scoreSlot = scoreHeadHtml(sd);
       scoredBlock = '<div class="scored-section"><div class="qsec-title">Scored answers</div>' +
-        scoreBreakdownHtml(sd) + sd.html + "</div>";
+        scoreBreakdownHtml(sd) + scoreKeyHtml(sd) + scoreLostLineHtml(sd) +
+        scoreRawNoteHtml(currentCustom.table, d, sd) + sd.html + "</div>";
     } else {
       var shId = currentCustom && currentCustom.table && currentCustom.table.config &&
                  currentCustom.table.config.score_field;
@@ -9286,7 +9437,16 @@
       // and as a computed value it should never have been an editable box
       if (scoreSlot && currentCustom && currentCustom.table.config &&
           f.id === currentCustom.table.config.score_field) return false;
-      if (sd && (questionScorerMap(currentCustom.table, fields)[f.id] || isScorerField(f))) return false;
+      // A computed score is never a box you can type in. This does not wait on `sd`: even
+      // with no breakdown to move it into, "Floors Score" is derived from the Floors answer,
+      // and offering it as free text invites someone to award themselves the point. It is
+      // dropped from the read-only view too, where the breakdown says it better.
+      if (isScorerField(f)) return false;
+      // The scored QUESTION is a different matter. In the read-only view the breakdown
+      // repeats its answer, so showing it twice is noise. In the editor it has to stay:
+      // hiding it would leave 68 of QC's questions uneditable, and the only way to correct
+      // a score is to correct the answer under it.
+      if (sd && !forEdit && questionScorerMap(currentCustom.table, fields)[f.id]) return false;
       if (curated) return pickedIds.indexOf(f.id) !== -1;
       // A conditional question this record never reached is not a blank answer, it is a
       // question that was never asked — the same reason a retired question stays hidden.
