@@ -302,6 +302,19 @@ t('the create panel only wires scoring when the table actually scores', () => {
   assert.ok(/var nrScored = !!scoreRollup\(t\) && Object\.keys\(nrMap\)\.length > 0/.test(APP),
     'a table with no roll-up must not grow a score box');
 });
+t('the create panel does not offer a computed score as a question', () => {
+  // It filtered on type alone, so creating a QC inspection opened with seventy
+  // "<Question> Score" boxes above the questions they are computed from. Nothing was ever
+  // saved from them, which is why it went unnoticed — edValues() skips a scorer either way.
+  assert.ok(/return f\.type !== "link" && !isScorerField\(f\)/.test(APP),
+    'openNewRecord must drop computed scorers, not just link fields');
+});
+t('a computed score is refused by every path that could show or save it', () => {
+  // one list, so a new panel cannot quietly reintroduce the boxes
+  assert.ok(/if \(isScorerField\(f\)\) return false;/.test(APP), 'the record panel does not draw one');
+  assert.ok(/if \(isScorerField\(f\)\) return;/.test(APP), 'edValues does not read one back');
+  assert.ok(/!isScorerField\(f\)/.test(APP), 'and the create panel does not ask for one');
+});
 t('an unanswered question carries a hidden chip in an editor, a visible one in review', () => {
   // 68 grey "n/a" marks on a blank inspection is a wall; on a finished record the same mark
   // says the question was never asked, which is worth reading.
