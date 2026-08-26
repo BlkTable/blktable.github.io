@@ -195,8 +195,17 @@ t('no marker text is ever appended to the label string', () => {
     'appending markup to an escaped label is what printed it as words');
 });
 t('the marker is passed as a flag from edFieldRowHtml', () => {
-  assert.ok(/return edRow\(label, inner,[\s\S]{0,120}?mustAnswer\)/.test(SRC),
+  assert.ok(/return edRow\(label, inner,[\s\S]{0,200}?mustAnswer[,)]/.test(SRC),
     'edRow must receive the required flag, not a pre-marked label');
+});
+t('the scoring chip is passed the same way, and for the same reason', () => {
+  // The label is a person's typed words and stays escaped, so anything that has to be markup
+  // — the required marker, now the score chip — arrives as its own argument rather than being
+  // concatenated into the label and escaped along with it.
+  assert.ok(/function edRow\(label, inner, full, rowId, hidden, required, chip, cls\)/.test(SRC),
+    'edRow must take the chip and class as arguments');
+  assert.ok(/\(chip \|\| ""\)/.test(SRC), 'and drop it in as markup, not through esc()');
+  assert.ok(/esc\(label\)/.test(SRC), 'while the label itself is still escaped');
 });
 t('only the create panel marks required, because only it refuses a save', () => {
   assert.ok(/opts\.stars && f\.required/.test(SRC),
