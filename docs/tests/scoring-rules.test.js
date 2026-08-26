@@ -208,7 +208,8 @@ function loadWith(file, names, stubs) {
 }
 const SD = loadWith('index.html',
   ['scoredDetail', 'scoredDetailFromRules', 'questionScorerMap', 'questionApplies', 'questionEarned',
-   'questionMaxPoints', 'choicePoints', 'naChoices', 'condMet', 'esc'],
+   'questionMaxPoints', 'choicePoints', 'naChoices', 'condMet', 'esc',
+   'scoreRollup', 'scoreChipTitle', 'isScorerField', 'scoreRawNoteHtml'],
   'function cellValueHtml(f, d, s) { return "<i>" + ((d && d[f.id]) || "") + "</i>"; }');
 
 t('a table that is not scored at all returns nothing', () => {
@@ -282,6 +283,183 @@ t('mirror 5: unanswered questions still count, so this is 0 of 7 and not a null'
   // Only q3 is N/A and only q4 was never asked. q1 and q2 were asked and missed, so the
   // record scores zero out of seven rather than having no score at all.
   assert.strictEqual(pct({ q3: 'Not applicable' }), 0);
+});
+
+// ---- the IMPORTED scorecard: QC, Shop Audit, Mystery Shopper ----
+// The other path. A builder-made scorecard prices the questions themselves; an imported one
+// has a computed "<Question> Score" column per question plus a roll-up in
+// app_tables.config.scoring that sums a named list and divides by a fixed number. Both end
+// up in the same panel, so both are checked here.
+//
+// The bug these pin down: the panel used to count whichever questions happened to be scored
+// and divide by that. QC carries 70 rules and a roll-up that sums 68 of them and always
+// divides by 68, so the panel and the stored score disagreed on the same record. The
+// breakdown now comes from the roll-up, which is the same list the database sums.
+const IMP_TABLE = {
+  config: {
+    score_field: 'pct',
+    scoring: [
+      // the headline: sums three of the four scorers, always over 4
+      { target: 'pct', kind: 'sum', divisor: 4, of: ['s1', 's2', 's3'] },
+      { target: 'raw', kind: 'sum', divisor: null, of: ['s1', 's2', 's3', 's4'] },
+    ],
+  },
+};
+const IMP_FIELDS = [
+  { id: 'q1', label: 'Floors', type: 'dropdown' },
+  { id: 's1', label: 'Floors Score', type: 'short_text', options: { score: { kind: 'match', source: 'q1', expect: 'Clean', points: 1, else: 0 } } },
+  { id: 'q2', label: 'Espresso Calibration', type: 'dropdown' },
+  { id: 's2', label: 'Calibration Score', type: 'short_text', options: { score: { kind: 'match', source: 'q2', expect: 'Yes', points: 1, else: -2 } } },
+  { id: 'q3', label: 'Sink Area', type: 'dropdown' },
+  { id: 's3', label: 'Sink Area Score', type: 'short_text', options: { score: { kind: 'match', source: 'q3', expect: 'Clean', points: 1, else: 0 } } },
+  // scored in Airtable and deliberately left out of the headline roll-up
+  { id: 'q4', label: 'Eliminate Search', type: 'dropdown' },
+  { id: 's4', label: 'Eliminate Search Score', type: 'short_text', options: { score: { kind: 'match', source: 'q4', expect: 'Complete', points: 1, else: -2 } } },
+];
+function imp(data) { return SD.scoredDetail(IMP_TABLE, IMP_FIELDS, data); }
+
+t('a scorer is paired to its question by the rule\'s own source, with no score_of column', () => {
+  const map = SD.questionScorerMap({}, IMP_FIELDS);
+  assert.strictEqual(map.q1 && map.q1.id, 's1');
+  assert.strictEqual(map.q3 && map.q3.id, 's3');
+});
+t('the roll-up divisor is the denominator, not the number of questions asked', () => {
+  // one question of three answered: the score is 1 of 4, exactly as the database computes it
+  const sd = imp({ q1: 'Clean', s1: '1' });
+  assert.strictEqual(sd.possible, 4, 'expected the divisor, got ' + sd.possible);
+  assert.strictEqual(sd.earned, 1);
+});
+t('a scorer the headline roll-up does not sum is shown, apart, and in no total', () => {
+  // Hiding it made the rows add up to the score, but a scored question missing from a list
+  // called "Scored answers" reads as a bug in the panel. It is shown at the foot instead,
+  // marked, and left out of the arithmetic.
+  const sd = imp({ q1: 'Clean', s1: '1', q4: 'Complete', s4: '1' });
+  assert.ok(sd.html.includes('Floors'), 'expected the summed question');
+  assert.strictEqual(sd.outside, 1);
+  assert.ok(sd.html.includes('Eliminate Search'), 'it must still be visible');
+  assert.ok(sd.html.includes('Scored, but outside the total'), 'under its own heading');
+  assert.ok(sd.html.includes('q-scored outside'), 'and marked as outside');
+  assert.strictEqual(sd.earned, 1, 'but its point must not be added in');
+  // and it comes after every counted question, not interleaved with them
+  assert.ok(sd.html.indexOf('Eliminate Search') > sd.html.indexOf('Floors'));
+});
+t('the uncounted tail is absent entirely when every scorer counts', () => {
+  const tbl = { config: { score_field: 'pct', scoring: [{ target: 'pct', divisor: 4, of: ['s1', 's2', 's3', 's4'] }] } };
+  const sd = SD.scoredDetail(tbl, IMP_FIELDS, { q1: 'Clean', s1: '1' });
+  assert.strictEqual(sd.outside, 0);
+  assert.ok(!sd.html.includes('outside the total'));
+});
+t('right is green, partly right is yellow, wrong is red, a penalty is its own red', () => {
+  const sd = imp({ q1: 'Clean', s1: '1', q2: 'No', s2: '-2', q3: 'Dirty', s3: '0' });
+  assert.ok(sd.html.includes('qp plus'), 'a full point must be green');
+  assert.ok(sd.html.includes('qp neg'), 'a negative must be its own class, not a plain zero');
+  assert.ok(sd.html.includes('qp zero'), 'nothing earned must be red');
+  assert.ok(sd.html.includes('−2'), 'a penalty must read as a minus, got: ' + sd.html);
+  assert.strictEqual(sd.earned, -1, '1 + (-2) + 0');
+});
+t('a half point is yellow and not grey', () => {
+  const half = [{ id: 'q1', label: 'Floors', type: 'dropdown' },
+                { id: 's1', label: 'Floors Score', type: 'short_text',
+                  options: { score_weight: 2, score: { kind: 'match', source: 'q1', expect: 'Clean', points: 2, else: 0 } } }];
+  const tbl = { config: { score_field: 'pct', scoring: [{ target: 'pct', divisor: 2, of: ['s1'] }] } };
+  const sd = SD.scoredDetail(tbl, half, { q1: 'Half', s1: '1' });
+  assert.ok(sd.html.includes('qp part'), 'partly earned must be yellow, got: ' + sd.html);
+  assert.ok(!sd.html.includes('qp na'), 'and must not be the grey "not asked" colour');
+});
+t('a question with no computed score reads n/a and is counted as not asked', () => {
+  const sd = imp({ q1: 'Clean', s1: '1' });          // s2 and s3 absent entirely
+  assert.ok(sd.html.includes('n/a'), 'expected an n/a row');
+  assert.strictEqual(sd.notAsked, 2);
+  assert.strictEqual(sd.lost, 0, 'never asked is not the same as lost');
+});
+t('lost counts the questions that were scored and did not earn full marks', () => {
+  const sd = imp({ q1: 'Clean', s1: '1', q2: 'No', s2: '-2', q3: 'Dirty', s3: '0' });
+  assert.strictEqual(sd.lost, 2);
+  assert.strictEqual(sd.notAsked, 0);
+});
+t('the panel total equals the stored percentage, which is the whole point', () => {
+  // the figures the live database returned for Fuhais on 2026-08-26: 29 of 68
+  const of = [], flds = [];
+  for (let i = 0; i < 68; i++) {
+    of.push('s' + i);
+    flds.push({ id: 'q' + i, label: 'Q' + i, type: 'dropdown' });
+    flds.push({ id: 's' + i, label: 'Q' + i + ' Score', type: 'short_text',
+                options: { score: { kind: 'match', source: 'q' + i, expect: 'Clean', points: 1, else: 0 } } });
+  }
+  const tbl = { config: { score_field: 'pct', scoring: [{ target: 'pct', divisor: 68, of: of }] } };
+  const data = {};
+  for (let i = 0; i < 68; i++) { data['q' + i] = i < 29 ? 'Clean' : 'Dirty'; data['s' + i] = i < 29 ? '1' : '0'; }
+  const sd = SD.scoredDetail(tbl, flds, data);
+  assert.strictEqual(sd.earned, 29);
+  assert.strictEqual(sd.possible, 68);
+  assert.strictEqual(Math.round(sd.earned / sd.possible * 10000) / 10000, 0.4265);
+});
+t('a table with a score_field but no roll-up still totals by counting the questions', () => {
+  const tbl = { config: { score_field: 'pct' } };     // no config.scoring at all
+  assert.strictEqual(SD.scoreRollup(tbl), null);
+  const sd = SD.scoredDetail(tbl, IMP_FIELDS, { q1: 'Clean', s1: '1', q2: 'Yes', s2: '1', q3: 'Clean', s3: '1', q4: 'Complete', s4: '1' });
+  assert.strictEqual(sd.possible, 4, 'all four scorers count when nothing says otherwise');
+  assert.strictEqual(sd.earned, 4);
+});
+
+// ---- a computed score is not an answer ----
+t('a field carrying a scoring rule is computed, so it is never an editable box', () => {
+  assert.strictEqual(SD.isScorerField(IMP_FIELDS[1]), true, 'options.score makes it computed');
+  assert.strictEqual(SD.isScorerField(IMP_FIELDS[0]), false, 'a plain question is not');
+  assert.strictEqual(SD.isScorerField({ options: { score_of: 'q1' } }), true, 'a hand-wired scorer too');
+  assert.strictEqual(SD.isScorerField({}), false);
+  assert.strictEqual(SD.isScorerField({ options: null }), false);
+});
+t('the panel says so when the table keeps a second, disagreeing total', () => {
+  // QC's "out of 68" column sums 68 scorers while its percentage sums 67 and still divides
+  // by 68, so a shop that earns the Food Display point reads 29 in one and 28/68 in the
+  // other. Unexplained, that one-point gap reads as a bug in this panel.
+  const tbl = { config: { score_field: 'pct', score_raw_field: 'raw',
+                          scoring: [{ target: 'pct', divisor: 4, of: ['s1', 's2', 's3'] }] } };
+  const d = { q1: 'Clean', s1: '1', q4: 'Complete', s4: '1', raw: '2' };
+  const sd = SD.scoredDetail(tbl, IMP_FIELDS, d);
+  assert.strictEqual(sd.earned, 1);
+  assert.ok(/reads 2\b/.test(SD.scoreRawNoteHtml(tbl, d, sd)), 'expected the gap to be named');
+  // and nothing is said when the two agree
+  assert.strictEqual(SD.scoreRawNoteHtml(tbl, { raw: '1' }, sd), '');
+  assert.strictEqual(SD.scoreRawNoteHtml({ config: {} }, d, sd), '', 'no raw column, nothing to say');
+});
+t('every chip explains itself on hover', () => {
+  assert.ok(/not asked/i.test(SD.scoreChipTitle('na', 0, 1)));
+  assert.ok(/takes 2 off/i.test(SD.scoreChipTitle('neg', -2, 1)));
+  assert.ok(/right answer/i.test(SD.scoreChipTitle('plus', 1, 1)));
+  assert.ok(/partly/i.test(SD.scoreChipTitle('part', 1, 2)));
+  assert.ok(/wrong/i.test(SD.scoreChipTitle('zero', 0, 1)));
+});
+
+// The points are not typeable. This is the lock rather than the tidy-up: the panel already
+// declines to render a computed score as a box, and this checks that even when a box for one
+// somehow exists on the page, the editor does not read it back. edValues feeds both saving
+// and the conditional-question check, so a value it refuses to return cannot be written.
+const ED = loadWith('index.html', ['edValues', 'isScorerField'],
+  'var edPhoneReg = {};' +
+  'function isFileField(f) { return f.type === "photo"; }' +
+  'function edChecksValue(el) { return el.value; }' +
+  // every field has a filled-in box on this imaginary page, scorers included
+  'var document = { getElementById: function (id) { return { value: "999" }; } };');
+
+t('a typed-in score is not read back out of the editor', () => {
+  const flds = [
+    { id: 'q1', type: 'dropdown' },
+    { id: 's1', type: 'short_text', options: { score: { kind: 'match', source: 'q1', points: 1, else: 0 } } },
+    { id: 's2', type: 'short_text', options: { score_of: 'q1' } },
+  ];
+  const out = ED.edValues(flds);
+  assert.strictEqual(out.q1, '999', 'an ordinary answer is still read');
+  assert.ok(!('s1' in out), 'a field with a scoring rule must not be readable from the editor');
+  assert.ok(!('s2' in out), 'nor a hand-wired scorer');
+});
+t('leaving a score out of the editor values means the stored one is kept, not cleared', () => {
+  // saveCustom starts from the existing data and only overwrites what edValues returned, so
+  // a key that is absent is a key left untouched -- which is what lets the database's own
+  // computed value survive an edit to some other answer on the same record.
+  const flds = [{ id: 's1', type: 'short_text', options: { score: { source: 'q1' } } }];
+  assert.strictEqual(Object.keys(ED.edValues(flds)).length, 0);
 });
 
 if (!process.exitCode) console.log(n + ' passed');
