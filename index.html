@@ -1113,9 +1113,6 @@
   .vk-ico.v-form { background: #ff6f2c; }
   .vk-find { margin: 4px 0 2px 22px; }
   .vk-find input { height: 26px; padding: 0 8px; font-size: var(--fs-2); border-radius: 5px; }
-  .vk-new { color: var(--accent) !important; font-weight: 600; }
-  .vk-new:hover { color: var(--accent-hi) !important; }
-  .side-kid-branches { display: flex; flex-direction: column; gap: 2px; }
 
   /* ---- menus: create, view types, row height, base name ---- */
   .at-menu { position: fixed; z-index: 320; min-width: 210px; margin: 0; padding: 6px; list-style: none;
@@ -2040,7 +2037,7 @@
               </div>
             </div>
             <div class="base-pane" data-pane="custom:data">
-              <!-- branch grouping is in the sidebar only, by design -->
+              <!-- scoping a table to one branch is the standard Filter's job now -->
               <div class="pipe-tabs" id="custom-tabs" style="display:none;"></div>
               <div class="selbar" id="custom-selbar">
                 <b id="sel-n">0</b><span>selected</span>
@@ -3508,6 +3505,56 @@
     if (!key) return;
     lastOpened[key] = new Date().toISOString();
     try { localStorage.setItem("blk_last_opened", JSON.stringify(lastOpened)); } catch (e) {}
+    sortSideByRecent();   // the rail re-orders on the press, not on the next reload
+  }
+  // ---- The sidebar is ordered by what you opened last -----------------------
+  // One rule for every line in the Workspace rail, so it holds for the tables that do
+  // not exist yet: a table's line carries its own last-opened stamp, a fold carries the
+  // newest stamp of the tables inside it, and the rail is ordered by that stamp, newest
+  // on top. Anything nobody has opened keeps the order it arrived in (created_at), below
+  // everything that has. Built-in lines are in the same stream as the custom tables —
+  // they are re-parented into the slot by loadCustomTables — so "the last thing I opened"
+  // is true of Job Applications too.
+  //
+  // Workspace folds (Operate, OLD) are the one deliberate exception: they stay at the
+  // bottom and only their contents re-order. Opening one of the 219 migrated tables
+  // should not lift that fold over the handful you work in every day.
+  var SIDE_ATTACH = ["side-kids", "side-cat-items"];   // what belongs to the line above it
+  function sideStamp(nodes) {
+    var best = "";
+    nodes.forEach(function (n) {
+      if (!n.querySelectorAll) return;
+      var items = (n.classList.contains("side-item") ? [n] : [])
+        .concat([].slice.call(n.querySelectorAll(".side-item")));
+      items.forEach(function (el) {
+        var v = lastOpened[el.getAttribute("data-custom") || el.getAttribute("data-view") || ""] || "";
+        if (v > best) best = v;   // ISO timestamps, so string order is time order
+      });
+    });
+    return best;
+  }
+  function sortSideByRecent(host) {
+    host = host || document.getElementById("custom-tables-slot");
+    if (!host) return;
+    // A line and whatever hangs under it (its countries rail, a fold's contents) move as
+    // one unit, or a fold would be re-ordered away from the tables it holds.
+    var units = [];
+    [].slice.call(host.children).forEach(function (n) {
+      var follows = SIDE_ATTACH.some(function (c) { return n.classList.contains(c); });
+      if (follows && units.length) units[units.length - 1].nodes.push(n);
+      else units.push({ nodes: [n], at: units.length });
+    });
+    units.forEach(function (u) {
+      u.nodes.forEach(function (n) { if (n.classList.contains("side-cat-items")) sortSideByRecent(n); });
+      u.stamp = u.nodes[0].classList.contains("side-ws") ? "" : sideStamp(u.nodes);
+    });
+    units.sort(function (a, b) {
+      if (a.stamp === b.stamp) return a.at - b.at;   // never opened: keep the arrival order
+      if (!a.stamp) return 1;
+      if (!b.stamp) return -1;
+      return a.stamp < b.stamp ? 1 : -1;
+    });
+    units.forEach(function (u) { u.nodes.forEach(function (n) { host.appendChild(n); }); });
   }
 
   // ---- Migrated records: surface everything that came across from Airtable ----
@@ -5874,6 +5921,22 @@
     return (customTables || []).filter(function (t) { return !(t.config && t.config.child_only); });
   }
 
+  // The two built-in lines that are written into the markup rather than built from
+  // app_tables, with the rail that belongs under each. Named here so the recency sort can
+  // treat them as ordinary sidebar lines; a third built-in only has to be added here.
+  var BUILTIN_SIDE = [{ v: "job_applications", kids: "ja-kids" }, { v: "casting", kids: null }];
+  function builtinSideNodes() {
+    var out = [];
+    BUILTIN_SIDE.forEach(function (b) {
+      var btn = document.querySelector('#side-tables .side-item[data-view="' + b.v + '"]');
+      if (!btn) return;
+      out.push(btn);
+      var kids = b.kids ? document.getElementById(b.kids) : null;
+      if (kids) out.push(kids);
+    });
+    return out;
+  }
+
   // Returns its promise so a caller that must act on the RELOADED list (restarting a
   // form, which then opens the new table) can wait for it instead of guessing with a
   // timeout. Callers that don't care can carry on ignoring it.
@@ -5892,6 +5955,11 @@
         return !t.builtin_key && isArchived(t);
       }).length;
       var slot = document.getElementById("custom-tables-slot");
+      // The built-in lines join the custom ones in the slot so one sort orders them all.
+      // They are re-parented, never rebuilt — #ja-caret and #ja-kids hang off these very
+      // nodes — so lift them out before the slot is emptied and put them back after.
+      var builtins = builtinSideNodes();
+      builtins.forEach(function (n) { slot.parentNode.insertBefore(n, slot); });
       slot.innerHTML = "";
       function sideItem(t) {
         var b = document.createElement("button");
@@ -5960,6 +6028,10 @@
           slot.appendChild(head); slot.appendChild(wrap);
         });
       }
+      // Built-ins back at the head of the slot, in their markup order, then the whole rail
+      // is put in last-opened order — including them.
+      builtins.slice().reverse().forEach(function (n) { slot.insertBefore(n, slot.firstChild); });
+      sortSideByRecent(slot);
       // One quiet line in the sidebar footer, only when something is actually archived.
       var archSlot = document.getElementById("side-archive-slot");
       if (archSlot) {
@@ -6155,29 +6227,16 @@
       });
     });
   }
-  // Branch chips on the page, and the same list under the table in the sidebar.
+  // The countries a table's records fall under, listed beneath it in the sidebar.
+  // The branch list used to sit here too, under its own "Branches" heading. It is gone:
+  // a table can have 32 shops, so the rail read as a wall of names under every table you
+  // pressed, and the standard Filter does the same job for any field. `currentCustom.branch`
+  // itself stays — a saved view can still be locked to one branch.
   function renderCustomScope() {
-    var br = customFacets.branches || {};
-    var names = Object.keys(br).sort(function (a, b) { return br[b] - br[a]; });
     var kids = document.getElementById("custom-kids");
     if (!kids || !currentCustom || !currentCustom.table) return;
-    var meaningful = names.filter(function (n) { return n !== "__none"; }).length > 1;
     // The view rail belongs to whichever table is open, so it is always visible;
-    // the branch list can be long (32 shops), so that half stays behind the caret.
-    var branchHtml = "";
-    if (meaningful) {
-      var label = function (n) { return n === "__none" ? "No branch" : n; };
-      // "All" first, so a branch choice can be cleared from the sidebar
-      branchHtml = '<div class="kid-head">Branches</div>' +
-        '<button class="side-kid' + (currentCustom.branch ? "" : " active") +
-        '" data-b=""><span>All branches</span><span class="kid-n">' +
-        (customFacets.all_total || 0) + "</span></button>" +
-        names.map(function (n) {
-          return '<button class="side-kid' + (currentCustom.branch === n ? " active" : "") +
-            '" data-b="' + esc(n) + '"><span>' + esc(label(n)) + '</span><span class="kid-n">' + br[n] + "</span></button>";
-        }).join("");
-    }
-    // country is the parent of branch, so its list renders above the branch list
+    // the country list stays behind the caret.
     var co = customFacets.countries || {};
     var codes = Object.keys(co).sort(function (a, b) { return co[b] - co[a]; });
     var countryMeaningful = codes.filter(function (c) { return c !== "__none"; }).length > 1;
@@ -6196,9 +6255,11 @@
     var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
     if (item && item.parentNode) item.parentNode.insertBefore(kids, item.nextSibling);
     kids.innerHTML = viewsHtml() +
-      (countryHtml ? '<div class="side-kid-countries"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + countryHtml + "</div>" : "") +
-      (branchHtml ? '<div class="side-kid-branches"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + branchHtml + "</div>" : "");
-    kids.style.display = "flex";
+      (countryHtml ? '<div class="side-kid-countries"' + (customKidsOpen ? "" : ' style="display:none;"') + ">" + countryHtml + "</div>" : "");
+    // A table with no saved views and one country has nothing to put here. The rail used
+    // to be kept open by the "Create new…" line; empty and still shown, it reads as a gap
+    // under the table you just pressed.
+    kids.style.display = kids.innerHTML ? "flex" : "none";
   }
   var customKidsOpen = false;
   try { customKidsOpen = localStorage.getItem("blk_custom_kids") === "1"; } catch (e) {}
@@ -6214,9 +6275,9 @@
       .then(function (r) { customViews = (r.error ? [] : (r.data || [])); return customViews; })
       .catch(function () { customViews = []; return customViews; });
   }
-  // Airtable's view rail: each view carries the colour of its type, there is a
-  // "find a view" box once the list is long enough to need one, and "Create new…"
-  // offers the view types the app actually has.
+  // Airtable's view rail: each view carries the colour of its type, and there is a
+  // "find a view" box once the list is long enough to need one. Making one is on the
+  // ＋ Create button at the foot of the rail, not a second blue line in here.
   var viewFind = "";
   function viewsHtml() {
     var q = viewFind.trim().toLowerCase();
@@ -6238,7 +6299,8 @@
     if (mine.length) h += '<div class="kid-head">My views</div>' + mine.map(row).join("");
     if (shared.length) h += '<div class="kid-head">Shared views</div>' + shared.map(row).join("");
     if (q && !visible.length) h += '<div class="kid-head">No view matches</div>';
-    h += '<button class="side-kid vk-new" id="vk-new">＋ Create new…</button>';
+    // No "Create new…" line here: saving the open table as a view is on the one blue
+    // ＋ Create button at the foot of the rail, which offers the same three view types.
     return h;
   }
   // Delegated on the sidebar so it keeps working every time the rail is redrawn.
@@ -6251,18 +6313,6 @@
     renderCustomScope();
     var again = document.getElementById("vk-find");
     if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
-  });
-  document.querySelector(".sidebar").addEventListener("click", function (e) {
-    var b = e.target && e.target.closest ? e.target.closest("#vk-new") : null;
-    if (!b) return;
-    e.stopPropagation();
-    if (!currentCustom || !currentCustom.table) return;
-    openAtMenu(b, [{ head: true, label: "Save this table as a view" }].concat(
-      VIEW_TYPES.map(function (vt) {
-        return { label: vt.label, icon: viewTypeIcon(vt.v), hint: vt.note,
-                 on: function () { setCustomViewType(vt.v); saveCurrentView(); } };
-      })
-    ));
   });
   function applyView(v) {
     if (!v || !currentCustom) return;
@@ -10628,38 +10678,30 @@
     openPolls(currentCustom.table);
   });
   document.getElementById("custom-edit").addEventListener("click", function () { if (currentCustom) openFormEditor(currentCustom.table); });
-  // branch scope: chips on the page and the children in the sidebar do the same thing
+  // the children under a table in the sidebar: its saved views, then its countries
   document.getElementById("custom-kids").addEventListener("click", function (e) {
     var del = e.target.closest(".vk-del");
     if (del) { e.stopPropagation(); deleteView(del.closest("[data-view-id]").getAttribute("data-view-id")); return; }
     var vk = e.target.closest("[data-view-id]");
     if (vk) { applyView(customViews.filter(function (x) { return x.id === vk.getAttribute("data-view-id"); })[0]); return; }
     var c = e.target.closest(".side-kid[data-c]");
-    if (c && currentCustom) {
-      currentCustom.country = c.getAttribute("data-c") || null;
-      document.getElementById("custom-search").value = "";
-      loadCustomSubs();
-      return;
-    }
-    var b = e.target.closest(".side-kid[data-b]"); if (!b || !currentCustom) return;
-    currentCustom.branch = b.getAttribute("data-b") || null;
+    if (!c || !currentCustom) return;
+    currentCustom.country = c.getAttribute("data-c") || null;
     document.getElementById("custom-search").value = "";
     loadCustomSubs();
   });
-  // pressing a custom table's own sidebar line reveals its branches
+  // pressing a custom table's own sidebar line reveals its countries
   document.getElementById("side-tables").addEventListener("click", function (e) {
     var item = e.target && e.target.closest ? e.target.closest(".side-item[data-custom]") : null;
     if (!item || (e.target.closest && e.target.closest(".side-gear"))) return;
     if (currentCustom && currentCustom.table.id === item.getAttribute("data-custom")) {
       customKidsOpen = !customKidsOpen;
       try { localStorage.setItem("blk_custom_kids", customKidsOpen ? "1" : "0"); } catch (err) {}
-      // only the branch and country halves fold away — the view rail belongs to the open table
-      var br = document.querySelector("#custom-kids .side-kid-branches");
-      if (br) br.style.display = customKidsOpen ? "" : "none";
+      // only the country half folds away — the view rail belongs to the open table
       var cy = document.querySelector("#custom-kids .side-kid-countries");
       if (cy) cy.style.display = customKidsOpen ? "" : "none";
     } else {
-      customKidsOpen = true;   // opening a different table shows its branches
+      customKidsOpen = true;   // opening a different table shows its countries
     }
   });
   // ---- QR codes for public form links (with centered BLK logo) ----
@@ -12742,7 +12784,7 @@
       "<b>Hover a row</b> — tick it to select, or press ⤢ to open the record" +
       "</div></div>" +
       '<div class="m-field full"><div class="k">Saving how you look at a table</div><div class="v" style="line-height:1.8;">' +
-      'Set up a filter, sort and columns, then <b>Create new…</b> under the table in the sidebar saves it as a view. ' +
+      'Set up a filter, sort and columns, then the blue <b>＋ Create</b> button at the foot of the sidebar saves it as a view. ' +
       "Personal views are yours alone; only admins can share one with everyone." +
       "</div></div>" +
       '<div class="m-field full"><div class="k">Finishing with a table</div><div class="v" style="line-height:1.8;">' +
