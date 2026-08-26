@@ -94,4 +94,15 @@ t('.side-fold is as wide as the emblem it lines up with', () => {
   assert.strictEqual(w(fold), w(mark), '.side-fold is ' + w(fold) + 'px, .tmark is ' + w(mark) + 'px');
 });
 
+t('and so is the ＋ on the New workspace row, which is a third thing in that slot', () => {
+  // It appears only while a table is being dragged, so it is the one row nobody sees in a
+  // screenshot — and the easiest to leave half a character out of line with the rest.
+  const css = fs.readFileSync('index.html', 'utf8');
+  const plus = (css.match(/\.side-ws-plus \{[^}]*\}/) || [''])[0];
+  const mark = (css.match(/\n  \.tmark \{[^}]*\}/) || [''])[0];
+  const w = s => (s.match(/width:\s*(\d+)px/) || [])[1];
+  assert.ok(plus, 'no .side-ws-plus rule in the stylesheet');
+  assert.strictEqual(w(plus), w(mark), '.side-ws-plus is ' + w(plus) + 'px, .tmark is ' + w(mark) + 'px');
+});
+
 console.log(n + ' sidebar-group tests passed');
