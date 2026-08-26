@@ -278,14 +278,27 @@ t('nothing writes an unreachable key into a built-in form config', () => {
   // the public heading became editable) failed a test about unreachable keys. Asserting the
   // rule instead of the list cannot go stale, and it still catches the thing that matters:
   // a control that writes a key nobody reads looks like it worked and does nothing.
+  //
+  // A key is written for one of two audiences. Most are for the PUBLIC page, and /apply and
+  // /cast must read them off get_form_config. The interview invite is for the DASHBOARD —
+  // no applicant ever loads it, it is the WhatsApp message the dashboard sends — so it is
+  // allowed to be read by index.html instead. What is NOT allowed either way is a key
+  // nobody reads at all.
+  //
+  // The dashboard read must come off builtinConfig, the get_form_config cache, and not off
+  // the app_tables row: only an admin can select that row, so a manager who can approve an
+  // applicant would silently send the shipped default instead of the wording HR saved.
   const keys = (write[1].match(/(\w+)\s*:/g) || []).map(function (k) { return k.replace(/\s*:$/, ''); });
   assert.ok(keys.length, 'the built-in branch writes no keys at all');
   keys.forEach(function (k) {
-    [['apply/index.html', APPLY], ['cast/index.html', CAST]].forEach(function (p) {
-      assert.ok(p[1].indexOf('res.data.' + k) !== -1,
-        'the editor writes config.' + k + ' but ' + p[0] + ' never reads it — ' +
-        'a control that writes a key nobody reads looks like it worked and does nothing');
-    });
+    const publicPages = [['apply/index.html', APPLY], ['cast/index.html', CAST]];
+    const readsPublicly = publicPages.every(function (p) { return p[1].indexOf('res.data.' + k) !== -1; });
+    const readsInDashboard = new RegExp('builtinConfig[^;\\n]*\\.' + k + '\\b').test(SRC);
+    assert.ok(readsPublicly || readsInDashboard,
+      'the editor writes config.' + k + ' but neither the public pages nor the dashboard ' +
+      'reads it back — a control that writes a key nobody reads looks like it worked and ' +
+      'does nothing. Public keys are read as res.data.' + k + ' in apply/ and cast/; a ' +
+      'dashboard-only key is read off builtinConfig, never off the admin-only app_tables row');
   });
 });
 t('a task table keeps its Form tab, because its fields still need editing', () => {
