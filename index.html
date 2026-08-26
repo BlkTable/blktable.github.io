@@ -1076,6 +1076,12 @@
   /* New record panel: the same editor rows as the record panel, with a footer that commits */
   .nr-foot { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
   .nr-msg { color: var(--danger); font-size: var(--fs-2); }
+  /* Answers kept from the last time this panel was open, and the way back to an empty one */
+  .nr-kept { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 14px;
+    padding: 8px 11px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line);
+    color: var(--muted); font-size: var(--fs-2); }
+  .nr-kept-btn { background: none; border: none; padding: 0; font: inherit; color: var(--silver);
+    text-decoration: underline; cursor: pointer; }
   /* A parent record's children, listed inside it — the signups on an event */
   .kid-rows { display: flex; flex-direction: column; gap: 6px; }
   .kid-row { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 8px;
@@ -4416,9 +4422,23 @@
     });
   }
 
-  function closeModal() { clearAutosave(); document.getElementById("modal").classList.remove("open"); currentApp = null; }
+  // Closing on purpose still writes out whatever was typed: the ✕ and Escape are how somebody
+  // steps away from a half-filled new record meaning to come back to it.
+  function closeModal() {
+    clearAutosave();
+    if (nrPanel) { nrPanel.flush(); nrPanel = null; }
+    document.getElementById("modal").classList.remove("open");
+    currentApp = null;
+  }
   document.getElementById("modal-close").addEventListener("click", closeModal);
-  document.getElementById("modal").addEventListener("click", function (e) { if (e.target === this) closeModal(); });
+  // A click on the backdrop is as often a miss as an instruction, and it used to empty a
+  // half-typed record either way. A New record panel with something in it now stays put; every
+  // other panel on this overlay closes on a backdrop click exactly as it always did.
+  document.getElementById("modal").addEventListener("click", function (e) {
+    if (e.target !== this) return;
+    if (nrKeepsPanelOpen(!!nrPanel, nrPanel && nrPanel.answers())) return;
+    closeModal();
+  });
 
   // Escape closes whichever panel is on top. Written against the ✕ rather than a list of
   // close functions so every overlay — the ones here and any added later — gets it for free;
@@ -10273,6 +10293,121 @@
     return out;
   }
 
+  // ---- A half-filled new record survives a stray click (all tables, current and future) ----
+  // Every answer lived only in the DOM, and this overlay closes on any click outside the
+  // frame, so one misplaced click emptied a record somebody had spent ten minutes typing and
+  // left nothing to go back to. Creating an event is where it hurt most, but the panel is the
+  // same one for every table, so the draft is wired once here: every table that exists and
+  // every table added later gets it without being asked for.
+  //
+  // Only this browser ever sees them. Nothing is sent anywhere, and a record that is actually
+  // created clears its own draft, so the next new record opens on an empty panel.
+  var NR_DRAFT_PREFIX = "blk_nrdraft_";                  // deliberately not the public forms'
+  var NR_DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;     // a week; older reads as a new visit
+  var nrDraftK = "";          // key of the panel on screen; "" means nothing is being kept
+  var nrDraftTimer = null;
+  var nrPanel = null;         // {answers(), flush()} while the New record panel is on screen
+
+  // One draft per table per person. The table is named by id rather than slug, so renaming a
+  // table does not orphan the record somebody is halfway through typing into it. The person
+  // is named because an office laptop is one browser used by several: the answers one manager
+  // abandoned must not greet the next one who opens the same panel.
+  function nrDraftKey(tableId, userId) {
+    if (!tableId) return "";
+    return NR_DRAFT_PREFIX + tableId + (userId ? "__" + userId : "");
+  }
+  // What came out of storage is usable only if it is this shape and recent. Anything else —
+  // an older format, a half-written record, a draft from last month, a clock that was wrong
+  // when it was written — reads as no draft at all.
+  function nrDraftFresh(rec, now) {
+    if (!rec || rec.v !== 1 || !rec.a || typeof rec.a !== "object") return false;
+    var at = Number(rec.at);
+    if (!(at > 0) || at > now + 60000) return false;
+    return (now - at) <= NR_DRAFT_MAX_AGE_MS;
+  }
+  function nrReadDraft(key, now) {
+    if (!key) return null;
+    try {
+      var raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      var rec = JSON.parse(raw);
+      if (!nrDraftFresh(rec, now)) { window.localStorage.removeItem(key); return null; }
+      return rec.a;
+    } catch (e) { return null; }
+  }
+  // Nothing typed is not a draft, and neither is a panel somebody has just emptied. Writing
+  // one anyway would leave a row in this browser for every table the panel was ever opened
+  // on, and bring back the answers they had only just deleted.
+  function nrWriteDraft(key, answers, now) {
+    if (!key) return false;
+    var keys = answers ? Object.keys(answers) : [];
+    if (!keys.length) { nrClearDraft(key); return false; }
+    try {
+      window.localStorage.setItem(key, JSON.stringify({ v: 1, at: now, a: answers }));
+      return true;
+    } catch (e) { return false; }   // private mode, or storage full: the panel still works
+  }
+  function nrClearDraft(key) {
+    if (!key) return;
+    try { window.localStorage.removeItem(key); } catch (e) {}
+  }
+  // Which answers are worth keeping. `cur` comes from edValues(), which already skips a file
+  // question and a computed score, so the only judgement left here is that a blank box is not
+  // an answer. Whether a question is being asked right now is deliberately not consulted: the
+  // answer stays on screen when somebody changes their mind back, so it stays here too. What
+  // travels into the record is decided separately, by newRecordData, and is not this one's
+  // business.
+  function nrDraftAnswers(cur, others) {
+    var out = {};
+    Object.keys(cur || {}).forEach(function (id) {
+      var v = cur[id];
+      if (v == null || String(v).trim() === "") return;
+      out[id] = String(v);
+    });
+    Object.keys(others || {}).forEach(function (id) {
+      var ov = others[id];
+      if (ov == null || String(ov).trim() === "") return;
+      out[otherKeyFor({ id: id })] = String(ov);
+    });
+    return out;
+  }
+  // A draft is only ever read when its own panel is opened again, so one belonging to a table
+  // nobody goes back to would sit in this browser for good. Every load sweeps out the expired
+  // ones, whichever table they belong to, which is also the only thing that keeps somebody's
+  // half-typed answers from outliving the week they were promised. The public forms keep
+  // theirs under their own prefix and sweep them on their own load; this page shares an origin
+  // with them and leaves them alone.
+  function nrSweepDrafts(now) {
+    var dead = [];
+    try {
+      var ls = window.localStorage;
+      for (var i = 0; i < ls.length; i++) {
+        var k = ls.key(i);
+        if (!k || k.indexOf(NR_DRAFT_PREFIX) !== 0) continue;
+        var rec = null;
+        try { rec = JSON.parse(ls.getItem(k)); } catch (e) {}
+        if (!nrDraftFresh(rec, now)) dead.push(k);
+      }
+      dead.forEach(function (k) { ls.removeItem(k); });
+    } catch (e) { return 0; }   // a browser with no storage has nothing to sweep
+    return dead.length;
+  }
+  // The stray click that started all this. The draft makes it survivable, but not closing at
+  // all is what was asked for, so a New record panel with something in it holds its ground and
+  // only the ✕ and Escape close it. This asks whether the New record panel is the one on
+  // screen rather than trusting the overlay to know, so every other panel sharing the overlay
+  // still closes on a backdrop click exactly as it did before.
+  function nrKeepsPanelOpen(nrOpen, answers) {
+    if (!nrOpen) return false;
+    return !!(answers && Object.keys(answers).length);
+  }
+  // A phone discarding this tab is the one close nobody chooses and nobody can be warned
+  // about, so the last 400ms of typing is written out before the tab goes.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden" && nrPanel) nrPanel.flush();
+  });
+  nrSweepDrafts(Date.now());
+
   function openNewRecord(t, fields) {
     clearAutosave();                 // this panel commits on a button; it must never autosave
     currentApp = null;
@@ -10293,12 +10428,27 @@
     // the running total at the top is the figure the record will be saved with.
     var nrMap = questionScorerMap(t, fields);
     var nrScored = !!scoreRollup(t) && Object.keys(nrMap).length > 0;
+    // What was typed the last time this panel was open, if anything. Restoring needs no code
+    // per question type: edFieldRowHtml already fills every kind of box from a values object,
+    // and this panel used to hand it an empty one. Phone country codes, the free text behind
+    // an "other" choice, multi-select ticks and the age beside a date of birth all come back
+    // through the same door the record panel uses, so a question type added later is restored
+    // without anybody remembering to teach it how.
+    nrDraftK = nrDraftKey(t && t.id, myUserId);
+    var nrKept = nrReadDraft(nrDraftK, Date.now());
+    var nrPrefill = nrKept || {};
     var grid = asked.map(function (f) {
-      return edFieldRowHtml(f, {}, { photo: "input", stars: true, scored: nrMap[f.id], answers: {} });
+      return edFieldRowHtml(f, nrPrefill, { photo: "input", stars: true, scored: nrMap[f.id], answers: nrPrefill });
     }).join("");
+    // A file cannot be written to storage, so a table that asks for one says so rather than
+    // letting somebody press Create believing the photo they chose last time is still attached.
+    var nrKeptFiles = nrKept && asked.some(isFileField);
     body.innerHTML =
       '<div class="rec-head"><div class="rh-main"><div class="rh-title">New record</div>' +
       '<div class="rh-meta">' + esc(t.name) + "</div></div></div>" +
+      (nrKept ? '<div class="nr-kept"><span>Kept what you had already filled in.' +
+        (nrKeptFiles ? " Files need choosing again." : "") + '</span>' +
+        '<button type="button" class="nr-kept-btn" id="nr-blank">Start blank</button></div>' : "") +
       (nrScored ? '<div class="sc-live" id="nr-live-score"></div>' : "") +
       '<div class="m-grid">' + grid + "</div>" +
       '<div class="nr-foot"><button type="button" class="btn-new" id="nr-save">Create record</button>' +
@@ -10344,15 +10494,48 @@
       if (!nrScored) return;
       paintScoreRows(t, fields, nrMap, edValues(asked), "nr-live-score");
     }
-    if (nrScored || asked.some(function (f) { return f.show_if && f.show_if.field; })) {
-      var mg = body.querySelector(".m-grid");
-      if (mg) ["change", "input"].forEach(function (ev) {
-        mg.addEventListener(ev, applyConds, true);
-        mg.addEventListener(ev, applyNrScores, true);
-      });
-      applyConds();
-      applyNrScores();
+    // Written out 400ms after the last keystroke rather than on every one, so a long answer
+    // is one write instead of ninety.
+    function nrSaveNow() {
+      if (nrDraftTimer) { clearTimeout(nrDraftTimer); nrDraftTimer = null; }
+      nrWriteDraft(nrDraftK, nrDraftAnswers(edValues(asked), othersNow()), Date.now());
     }
+    function nrQueueSave() {
+      if (!nrDraftK) return;
+      if (nrDraftTimer) clearTimeout(nrDraftTimer);
+      nrDraftTimer = setTimeout(nrSaveNow, 400);
+    }
+    // Forgetting the draft without writing it: a record that was created, and a panel somebody
+    // asked to start blank. Any save still queued has to go with it, or it would land a moment
+    // later and put the answers back.
+    function nrForget() {
+      if (nrDraftTimer) { clearTimeout(nrDraftTimer); nrDraftTimer = null; }
+      nrClearDraft(nrDraftK);
+      nrPanel = null;
+    }
+    // What the overlay asks when somebody clicks outside the frame, and what the ✕, Escape and
+    // a tab being discarded flush through. Set for as long as this panel is the one on screen.
+    nrPanel = { answers: function () { return nrDraftAnswers(edValues(asked), othersNow()); }, flush: nrSaveNow };
+
+    // Everything that happens as answers are typed: questions appearing and disappearing, the
+    // running score, and the draft. Wired whatever the table looks like, because the draft is
+    // wanted on a table with no gated question and no scorecard just the same.
+    var mg = body.querySelector(".m-grid");
+    if (mg) ["change", "input"].forEach(function (ev) {
+      mg.addEventListener(ev, applyConds, true);
+      mg.addEventListener(ev, applyNrScores, true);
+      mg.addEventListener(ev, nrQueueSave, true);
+    });
+    // Run once now so a restored answer that reveals a question behind it, or scores a point,
+    // shows that on the panel it is restored into rather than on the next keystroke.
+    applyConds();
+    applyNrScores();
+
+    var blankBtn = document.getElementById("nr-blank");
+    if (blankBtn) blankBtn.addEventListener("click", function () {
+      nrForget();
+      openNewRecord(t, fields);      // the same panel, rebuilt with nothing in it
+    });
 
     // A record whose table has a per-record child form (an Event has a signup form) gets its own
     // public link. Surface it right after creation so the creator can share it without digging
@@ -10421,6 +10604,7 @@
         return db.rpc("create_record", { p_table: t.id, p_data: newRecordData(asked, cur, photos, othersNow()) });
       }).then(function (res) {
         if (res && res.error) throw res.error;
+        nrForget();                  // the record exists now; its draft must not outlive it
         document.getElementById("modal").classList.remove("open");
         var newId = res && res.data;
         if (currentCustom && currentCustom.table && currentCustom.table.id === t.id) openCustomTable(t);
