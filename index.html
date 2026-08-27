@@ -7123,10 +7123,15 @@
     var xs = String(raw).split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
     return xs.length ? xs : ["jo"];
   }
-  // The stored form of a branch question's scope: the countries the form covers. Falls back
-  // to "jo" for a table with none ticked, because that is what every branch question written
-  // before the ticks existed already means and a blank would offer no shops at all.
-  function branchScopeList(codes) { return (codes || []).join(", ") || "jo"; }
+  // The stored form of a branch question's scope: the countries the form covers. With none
+  // ticked the question keeps `had`, the list it already has — a table that has never been
+  // given countries must not have its shops narrowed by a save about something else. Only a
+  // question with no list either falls back to "jo", which is what every branch question
+  // written before the ticks existed already means; a blank would offer no shops at all.
+  function branchScopeList(codes, had) {
+    if ((codes || []).length) return codes.join(", ");
+    return String(had || "").trim() || "jo";
+  }
   // Which shops a branch question offers RIGHT NOW. The question's own scope is the form's
   // countries; once the country question is answered it narrows to that one. `answer` is the
   // English country name the country question stores, folded back to its code — never a
@@ -12269,7 +12274,13 @@
         // country's shops after; a form covering one offers only that one's, and never asks.
         // Either way the grouping is `branches.list_key`, which is the country group kept in
         // the Countries manager — no shop is ever sorted by reading a country out of its name.
-        options = { list: branchScopeList(builderScope().countries) };
+        //
+        // With NO country ticked there is nothing to derive from, and the question KEEPS the
+        // list it already has. Three live tables depend on this — Customer Complaints, Shop
+        // Audit and Shop Spot Check (QC) all ask for Lebanon's shops as well as Jordan's and
+        // none of them has a country ticked yet — so deriving "jo" here would take Lebanon's
+        // shops off three working forms on the next unrelated save, and say nothing.
+        options = { list: branchScopeList(builderScope().countries, rows[i].querySelector(".opts").value) };
       }
       var afterSel = rows[i].querySelector(".fafter");
       // "ask only if" points at another row. If that row is already a saved field the
