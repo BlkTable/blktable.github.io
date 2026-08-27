@@ -249,4 +249,56 @@ t('every=true rule with no auto checked emits a rule with when=always and no sen
   assert.ok(!rules[0].send, 'no send when auto is unchecked');
 });
 
+
+// ---- A Slack rule must actually say something ----
+// The Slack body is built only from send.params (notify_render_slack does a bare string_agg
+// over them). Zero message lines renders NULL, the drain refuses "no channel or empty body",
+// and the rule fails silently forever. The rule-level message box (.al-tpl) is NOT the Slack
+// text, so a rule can look complete in the editor and still be mute. Caught here instead.
+
+t('slack rule with a channel but no message lines pushes a problem and emits no send', () => {
+  const { rules, problems } = runOne({
+    every: true,
+    autoChecked: true,
+    channel: 'slack',
+    slackCh: 'C0BT4B4C2V7',
+    label: 'Complaints',
+    tpl: 'There is a complaint',   // typed in the message box, which Slack never reads
+    params: [],
+  });
+  assert.ok(problems.some(p => p.includes('Slack') && p.includes('message')),
+    'expected a Slack-needs-a-message problem: ' + JSON.stringify(problems));
+  assert.strictEqual(rules.length, 1);
+  assert.ok(!rules[0].send, 'send must be absent when a slack rule has no message lines');
+});
+
+t('slack rule whose only message line is blank fixed text is treated as having none', () => {
+  const { rules, problems } = runOne({
+    every: true,
+    autoChecked: true,
+    channel: 'slack',
+    slackCh: '#alerts',
+    label: 'Blank line',
+    params: [{ text: '   ' }],
+  });
+  assert.ok(problems.some(p => p.includes('Slack') && p.includes('message')),
+    'a whitespace-only fixed text is dropped by the serializer, so it counts as no lines: ' + JSON.stringify(problems));
+  assert.ok(!rules[0].send, 'send must be absent');
+});
+
+t('slack rule with one message line still serializes clean', () => {
+  const { rules, problems } = runOne({
+    every: true,
+    autoChecked: true,
+    channel: 'slack',
+    slackCh: '#alerts',
+    label: 'Complaints',
+    params: [{ text: 'There is a complaint' }],
+  });
+  assert.strictEqual(problems.length, 0, 'no problems: ' + JSON.stringify(problems));
+  assert.ok(rules[0].send, 'send must be present');
+  assert.strictEqual(rules[0].send.params.length, 1);
+  assert.strictEqual(rules[0].send.params[0].text, 'There is a complaint');
+});
+
 if (!process.exitCode) console.log('slack-alerts: ' + n + ' tests passed');

@@ -6253,8 +6253,16 @@
               var lbl = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : v;
               return v ? { field: v, label: lbl } : null;
             }).filter(Boolean);
-            out.channel = "slack";
-            out.send = { slack_channel: slackCh, params: slackSpecs };
+            // The message lines ARE the Slack message: the server builds the post out of
+            // these and nothing else. The message box above is the manual-send text and is
+            // never read on this path, so a rule with no lines posts an empty body, which
+            // Slack refuses. Say so here rather than let it fail silently every time.
+            if (!slackSpecs.length) {
+              problems.push("Alert " + (i + 1) + " sends to Slack but has no message. Add at least one message line - the message box above is only used when you send by hand.");
+            } else {
+              out.channel = "slack";
+              out.send = { slack_channel: slackCh, params: slackSpecs };
+            }
           }
         } else {
           var tmpl = r.querySelector(".al-tmpl").value.trim();
