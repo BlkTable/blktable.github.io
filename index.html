@@ -6151,6 +6151,7 @@
         '<div class="al-slack-fields" style="display:none;">' +
           '<input class="al-slack-channel" placeholder="Slack channel name or ID, e.g. #alerts or C0..." style="width:100%;box-sizing:border-box;">' +
           '<p class="al-hint">The bot must be invited to the channel before it can post. /invite @BLKTable in Slack.</p>' +
+          '<p class="al-hint">The lines you add below <em>are</em> the Slack message, one line each &mdash; the two boxes at the top of this alert are only used by the Notify button. Add a line of fixed text for what happened, and a Record link line so somebody can open the record.</p>' +
         '</div>' +
         '<div class="al-params"></div>' +
         '<button type="button" class="linkbtn al-add-p">＋ Add a value</button>' +
@@ -6194,11 +6195,17 @@
     var slackFields = row.querySelector(".al-slack-fields");
     var waRecip = row.querySelector(".al-wa-recip");
     if (send && send.slack_channel) row.querySelector(".al-slack-channel").value = send.slack_channel;
+    var addP = row.querySelector(".al-add-p");
     function syncChannel() {
       var isSlack = channel.value === "slack";
       waFields.style.display = isSlack ? "none" : "";
       slackFields.style.display = isSlack ? "" : "none";
       waRecip.style.display = isSlack ? "none" : "";
+      // "Add a value" is WhatsApp's language: a value fills the {{1}}, {{2}} of an approved
+      // template. On Slack there is no template and these lines are the whole message, so
+      // the button says so — the old label sent people hunting for a message box that the
+      // Slack path never reads.
+      addP.textContent = isSlack ? "＋ Add a message line" : "＋ Add a value";
     }
     syncChannel(); channel.addEventListener("change", syncChannel);
     row.querySelector(".al-add-p").addEventListener("click", function () { addAlertParamRow(params); });
@@ -6258,7 +6265,7 @@
             // never read on this path, so a rule with no lines posts an empty body, which
             // Slack refuses. Say so here rather than let it fail silently every time.
             if (!slackSpecs.length) {
-              problems.push("Alert " + (i + 1) + " sends to Slack but has no message. Add at least one message line - the message box above is only used when you send by hand.");
+              problems.push("Alert " + (i + 1) + " sends to Slack but has no message. Under the channel, click “＋ Add a message line” and pick “fixed text” for what happened, or a question to include its answer. The two boxes at the top of the alert are only used by the Notify button.");
             } else {
               out.channel = "slack";
               out.send = { slack_channel: slackCh, params: slackSpecs };
