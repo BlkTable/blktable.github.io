@@ -74,16 +74,37 @@ t('a branch question no longer has a list typed into it', () => {
 });
 t('the scope is written from the countries ticked on the table', () => {
   const s = grab(SRC, 'runBuilderSave');
-  assert.ok(/options = \{ list: branchScopeList\(builderScope\(\)\.countries\) \}/.test(s),
+  assert.ok(/options = \{ list: branchScopeList\(builderScope\(\)\.countries,/.test(s),
     'a branch question is not scoped from the country ticks');
 });
-t('a table with no country ticked still means Jordan', () => {
-  // What every branch question written before the ticks existed already means. A blank
-  // would offer no shops at all.
-  assert.strictEqual(D.branchScopeList([]), 'jo');
-  assert.strictEqual(D.branchScopeList(null), 'jo');
+t('ticked countries are what the question is scoped to', () => {
   assert.strictEqual(D.branchScopeList(['jo']), 'jo');
   assert.strictEqual(D.branchScopeList(['jo', 'lebanon']), 'jo, lebanon');
+  assert.strictEqual(D.branchScopeList(['jo', 'lebanon'], 'syria'), 'jo, lebanon', 'the ticks must win over the old list');
+});
+t('NOTHING ticked keeps the list the question already had', () => {
+  // Three live tables depend on this. Customer Complaints (1,440 records), Shop Audit and
+  // Shop Spot Check (QC) (1,591) all ask for Lebanon's shops as well as Jordan's, and none
+  // of them has a country ticked. Deriving "jo" here would take Lebanon's shops off three
+  // working forms on the next unrelated save, and say nothing about it.
+  assert.strictEqual(D.branchScopeList([], 'lebanon, jo'), 'lebanon, jo');
+  assert.strictEqual(D.branchScopeList(null, 'jo, lebanon, syria, iraq'), 'jo, lebanon, syria, iraq');
+  assert.strictEqual(D.branchScopeList([], '  lebanon, jo  '), 'lebanon, jo');
+});
+t('and only a question with no list at all falls back to Jordan', () => {
+  // What every branch question written before any of this already means. A blank would
+  // offer no shops at all.
+  assert.strictEqual(D.branchScopeList([], ''), 'jo');
+  assert.strictEqual(D.branchScopeList([], null), 'jo');
+  assert.strictEqual(D.branchScopeList([]), 'jo');
+  assert.strictEqual(D.branchScopeList(null), 'jo');
+});
+t('the save reads the list off the row, so it has something to keep', () => {
+  // The Options box is hidden for a branch question now but still holds its value. Reading
+  // builderScope() alone is what would have lost it.
+  const s = grab(SRC, 'runBuilderSave');
+  assert.ok(/branchScopeList\(builderScope\(\)\.countries, rows\[i\]\.querySelector\("\.opts"\)\.value\)/.test(s),
+    'the existing branch list is not passed in, so nothing can be kept');
 });
 
 // ---- Narrowing, on both pages ---------------------------------------------------------------
