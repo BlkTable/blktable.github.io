@@ -25,7 +25,7 @@ const API = load(
   ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','COUNTRY_Q_LABEL','COUNTRY_Q_LABEL_AR'],
   // builderConfig reads the four serializers off the builder's DOM; stubbed with markers so
   // what it does with them is visible.
-  { serializeStages: () => ['S'], serializeActions: () => ['A'], serializeLayers: () => ['L'], serializeIntro: () => ({ en: 'i' }) }
+  { serializeStages: () => ['S'], serializeActions: () => ['A'], serializeLayers: () => ['L'], serializeIntro: () => ({ en: 'i' }), serializeDecision: () => ({ on: false }) }
 );
 API.rebuildCountryIndex();
 const asW = o => JSON.parse(JSON.stringify(o));
@@ -197,9 +197,9 @@ t('the public form takes its names from the countries table, not a second hard-c
 });
 
 // ---- builderConfig / fieldRowsFor ---------------------------------------------------
-t('builderConfig always writes the four builder keys', () => {
+t('builderConfig always writes the five builder keys', () => {
   const c = asW(API.builderConfig());
-  assert.deepStrictEqual(Object.keys(c).sort(), ['actions', 'intro', 'layers', 'statuses']);
+  assert.deepStrictEqual(Object.keys(c).sort(), ['actions', 'decision', 'intro', 'layers', 'statuses']);
 });
 t('builderConfig adds what this save adds, and skips a null', () => {
   assert.strictEqual(API.builderConfig({ country: 'jo' }).country, 'jo');

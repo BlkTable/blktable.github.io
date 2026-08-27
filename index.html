@@ -2130,6 +2130,24 @@
       </div>
     </div>
 
+    <!-- Approve a record on any table. The one above is Job Applications', bound to that
+         table's own columns; this one writes app_submissions like every custom table does. -->
+    <div class="modal-overlay" id="dec-modal">
+      <div class="modal" style="max-width: 400px;">
+        <button class="modal-close" id="dec-close" aria-label="Close">✕</button>
+        <div class="m-name" id="dec-name">—</div>
+        <div class="m-sub" id="dec-note">—</div>
+        <div id="dec-when-wrap">
+          <label class="sched-label" id="dec-when-lab">Date &amp; time</label>
+          <input type="datetime-local" id="dec-when">
+        </div>
+        <div class="m-actions" style="margin-top:16px;">
+          <button class="btn-wa" id="dec-go">Approve</button>
+        </div>
+        <div class="m-msg" id="dec-msg"></div>
+      </div>
+    </div>
+
     <!-- Admin: delete a whole table (math-gated) -->
     <ul id="form-menu"></ul>
 
@@ -2276,6 +2294,27 @@
             <div class="fp-label" style="margin: 16px 0 6px;">Workflow stages <span style="color:var(--muted);font-weight:400;">— optional. Add stages (e.g. New / Approved / Rejected) to get tabs + move buttons.</span></div>
             <div id="bld-stages"></div>
             <button type="button" class="btn-save" id="bld-add-stage" style="margin-top: 4px;">＋ Add stage</button>
+          </div>
+          <!-- Approve / Reject. Job Applications has had this since the beginning and no
+               other table could get it: a ✓ and a ✕ on every record, and on approve a date
+               and a WhatsApp message. It is a decision, not a stage move — which is why it
+               is offered here rather than left to somebody naming a stage "Approved". -->
+          <div class="bld-decision-wrap" id="bld-decision-wrap">
+            <div class="fp-label" style="margin: 16px 0 6px;">Approve / Reject <span style="color:var(--muted);font-weight:400;">— optional. Puts ✓ and ✕ on every record, and tabs to read them by. Approving can also ask for a date and send a WhatsApp, the way an interview invite does.</span></div>
+            <label class="u-chk"><input type="checkbox" id="bld-dec-on"> Let this table be approved and rejected</label>
+            <div id="bld-dec-body" style="display:none; margin-top: 8px;">
+              <div class="bld-two">
+                <input id="bld-dec-approve" placeholder="Approve button (default: Approve)">
+                <input id="bld-dec-reject" placeholder="Reject button (default: Reject)">
+              </div>
+              <label class="u-chk" style="margin-top: 8px;"><input type="checkbox" id="bld-dec-sched"> Approving asks for a date &amp; time first</label>
+              <div id="bld-dec-sched-body" style="display:none; margin-top: 8px;">
+                <input id="bld-dec-when" placeholder="What the date is for (default: Date &amp; time)">
+              </div>
+              <div class="fp-label" style="margin: 12px 0 6px;">Message on approval <span style="color:var(--muted);font-weight:400;">— optional. Sent on WhatsApp to the table's phone answer. Write {Question name} to drop an answer in, and {Date}, {Time} and {Location} for the ones below (‏{التاريخ} ‏{الوقت} ‏{المكان} work too). Leave blank and approving sends nothing.</span></div>
+              <textarea id="bld-dec-msg" rows="6" dir="auto" placeholder="كيف حالك {Full name}؟ 👋"></textarea>
+              <input id="bld-dec-loc" placeholder="Where — fills {Location} in the message" style="margin-top: 8px;">
+            </div>
           </div>
           <div class="bld-actions-wrap" id="bld-actions-wrap">
             <div class="fp-label" style="margin: 16px 0 6px;">Record actions <span style="color:var(--muted);font-weight:400;">— optional. Buttons on each record: WhatsApp / Call / Email (uses the table's phone/email field).</span></div>
@@ -4912,12 +4951,24 @@
   }
   // Resolve + fire a record action (WhatsApp / Call / Email)
   function fieldValueByType(s, fields, type) { var f = (fields || []).filter(function (x) { return x.type === type; })[0]; return f ? (s.data || {})[f.id] : null; }
-  function fillTemplate(tpl, s, fields) {
+  // `extra` is a handful of values that are not answers to questions — the date an approval
+  // was set for, and where. Named in English and in Arabic for the same reason the interview
+  // invite is: the message is Arabic, and switching keyboards mid-sentence to type
+  // "{Location}" is a reason not to bother. A question whose LABEL is one of these names
+  // still wins, because that is the person's own question and they meant it.
+  var TEMPLATE_EXTRA_NAMES = {
+    "date": "date", "التاريخ": "date",
+    "time": "time", "الوقت": "time",
+    "location": "location", "المكان": "location"
+  };
+  function fillTemplate(tpl, s, fields, extra) {
     var d = s.data || {};
     return (tpl || "").replace(/\{([^}]+)\}/g, function (m, name) {
       name = name.trim().toLowerCase();
       var f = (fields || []).filter(function (x) { return (x.label || "").toLowerCase() === name || (x.label_ar || "").toLowerCase() === name; })[0];
-      return f && d[f.id] != null ? String(d[f.id]) : "";
+      if (f) return d[f.id] != null ? String(d[f.id]) : "";
+      var k = extra && TEMPLATE_EXTRA_NAMES[name];
+      return k && extra[k] != null ? String(extra[k]) : "";
     });
   }
   function doRecordAction(a, s, fields) {
@@ -6518,6 +6569,146 @@
       loadViews(currentCustom.table.id).then(renderCustomScope);
     });
   }
+  // ---- Approve / Reject ---------------------------------------------------------------
+  // A decision, not a stage move. Job Applications has had one since the beginning — ✓ and
+  // ✕ on every card, three tabs, and on approve a date and a WhatsApp invite — and no other
+  // table could get it. Naming a stage "Approved" gave you a → button and nothing else.
+  //
+  // It is built ON the stage machinery rather than beside it: the decision writes
+  // app_submissions.status, which is the same column the stages read, so the tabs, the
+  // counts, the filters and the CSV all work with nothing added. What the config adds is
+  // the two buttons, the date, and the message.
+  var DECISION_STAGES = [
+    { key: "new", label: "New", color: "gray" },
+    { key: "approved", label: "Approved", color: "green" },
+    { key: "rejected", label: "Rejected", color: "red" }
+  ];
+  function decisionCfg(t) {
+    var d = t && t.config && t.config.decision;
+    if (!d || !d.on) return null;
+    return { on: true,
+             approve: (d.approve || "").trim() || "Approve",
+             reject: (d.reject || "").trim() || "Reject",
+             schedule: !!d.schedule,
+             when_label: (d.when_label || "").trim() || "Date & time",
+             message: d.message || "",
+             location: d.location || "" };
+  }
+  function customDecision() { return currentCustom ? decisionCfg(currentCustom.table) : null; }
+  // Which of the two buttons a record is offered. Mirrors Job Applications: undecided gets
+  // both, and a decided record gets the other one, so a decision made by mistake is one
+  // click to undo rather than a trip through the stage menu.
+  function decisionButtons(s) {
+    var st = s && s.status;
+    return { approve: st !== "approved", reject: st !== "rejected" };
+  }
+  // The date an approval was set for, and whether its message has gone out. Both live in
+  // `extra` rather than in `data`: they are not answers to questions, and a question is what
+  // `data` means everywhere else — the grid, the CSV and the public form all read it that way.
+  function decisionWhen(s) { return (s && s.extra && s.extra.decided_at) || null; }
+  function decisionSent(s) { return !!(s && s.extra && s.extra.msg_sent); }
+  // Arabic-Latin numerals, the way the interview invite prints them, so a date in an Arabic
+  // message does not arrive half in one script and half in the other.
+  function decisionDateText(iso) {
+    if (!iso) return { date: "", time: "" };
+    var w = new Date(iso);
+    if (isNaN(w.getTime())) return { date: "", time: "" };
+    try {
+      return { date: w.toLocaleDateString("ar-u-nu-latn", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
+               time: w.toLocaleTimeString("ar-u-nu-latn", { hour: "numeric", minute: "2-digit" }) };
+    } catch (e) {
+      return { date: w.toLocaleDateString(), time: w.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) };
+    }
+  }
+  // The WhatsApp an approval sends, or null if there is nothing to send — no template, or no
+  // phone answer to send it to. Null rather than a half-built link, because "Send" opening
+  // wa.me with an empty number is worse than no button.
+  function decisionMessageUrl(cfg, s, fields) {
+    if (!cfg || !cfg.message) return null;
+    var ph = fieldValueByType(s, fields, "phone");
+    var num = ph ? String(ph).replace(/[^\d]/g, "") : "";
+    if (!num) return null;
+    var when = decisionDateText(decisionWhen(s));
+    var text = fillTemplate(cfg.message, s, fields, { date: when.date, time: when.time, location: cfg.location });
+    return "https://wa.me/" + num + (text ? "?text=" + encodeURIComponent(text) : "");
+  }
+  // Writing the decision. `status` is the same column the stages read, so the tabs and the
+  // counts follow with nothing added; `extra` is MERGED rather than replaced, because a
+  // record's extra also carries the import marker, the test marker and the device key.
+  function setDecision(s, status, whenIso) {
+    var extra = Object.assign({}, s.extra || {});
+    if (status === "approved") { extra.decided_at = whenIso || null; extra.msg_sent = false; }
+    return db.from("app_submissions").update({ status: status, extra: extra }).eq("id", s.id).then(function (r) {
+      if (r.error) { window.alert("Could not save the decision.\n\n" + (r.error.message || "")); return false; }
+      s.status = status; s.extra = extra;
+      renderCustom();
+      return true;
+    });
+  }
+  function markDecisionSent(s) {
+    var extra = Object.assign({}, s.extra || {}, { msg_sent: true });
+    return db.from("app_submissions").update({ extra: extra }).eq("id", s.id).then(function (r) {
+      if (!r.error) { s.extra = extra; renderCustom(); }
+    });
+  }
+  // Approving. Three shapes, and which one you get is the table's own setting: straight
+  // through, ask for a date first, or ask and then offer the message. Rejecting is always
+  // one click — there is nothing to schedule and nothing to send.
+  var decRec = null, decFields = null;
+  function approveRecord(s, fields) {
+    var cfg = customDecision(); if (!cfg) return;
+    if (!cfg.schedule) {
+      setDecision(s, "approved", null).then(function (ok) { if (ok) offerDecisionMessage(cfg, s, fields); });
+      return;
+    }
+    decRec = s; decFields = fields;
+    document.getElementById("dec-name").textContent = decisionTitle(s, fields);
+    document.getElementById("dec-when-lab").textContent = cfg.when_label;
+    document.getElementById("dec-when").value = "";
+    document.getElementById("dec-msg").textContent = "";
+    document.getElementById("dec-go").textContent = cfg.approve;
+    document.getElementById("dec-note").textContent = cfg.message
+      ? "Set the " + cfg.when_label.toLowerCase() + ", then send the message."
+      : "Set the " + cfg.when_label.toLowerCase() + ".";
+    document.getElementById("dec-modal").classList.add("open");
+  }
+  // What to call the record in the modal, which is whatever the card calls it — the first
+  // summary field. A modal headed "—" while you decide somebody's application is not a
+  // detail: it is the only thing confirming you clicked the row you meant.
+  function decisionTitle(s, fields) {
+    var f = summaryFields(currentCustom.table, fields)[0];
+    var txt = f ? cardText(f, s.data || {}, s) : "";
+    return String(txt || "").trim() || recordNumber(s);
+  }
+  function closeDecision() { document.getElementById("dec-modal").classList.remove("open"); decRec = null; decFields = null; }
+  // Offered rather than sent: wa.me opens WhatsApp with the message typed out and a human
+  // presses send, which is the same thing the interview invite and every record action do.
+  function offerDecisionMessage(cfg, s, fields) {
+    var url = decisionMessageUrl(cfg, s, fields);
+    if (!url) return;
+    if (!window.confirm("Approved. Send the message now?")) return;
+    window.open(url, "_blank");
+    markDecisionSent(s);
+  }
+  document.getElementById("dec-close").addEventListener("click", closeDecision);
+  document.getElementById("dec-modal").addEventListener("click", function (e) { if (e.target === this) closeDecision(); });
+  document.getElementById("dec-go").addEventListener("click", function () {
+    if (!decRec) return;
+    var cfg = customDecision(); if (!cfg) return;
+    var m = document.getElementById("dec-msg"), v = document.getElementById("dec-when").value;
+    // Asked for, so required: an approval with no date saved anyway is a record that looks
+    // decided and tells nobody when.
+    if (!v) { m.textContent = "Please choose the " + cfg.when_label.toLowerCase() + "."; return; }
+    var when = new Date(v);
+    if (isNaN(when.getTime())) { m.textContent = "That date could not be read."; return; }
+    var s = decRec, fields = decFields;
+    m.textContent = "Saving…";
+    setDecision(s, "approved", when.toISOString()).then(function (ok) {
+      if (!ok) { m.textContent = "Could not save. Please try again."; return; }
+      closeDecision();
+      offerDecisionMessage(cfg, s, fields);
+    });
+  });
   function customStages() { return (currentCustom && currentCustom.table.config && currentCustom.table.config.statuses) || []; }
   function subStage(s, stages) { return s.status || (stages[0] && stages[0].key) || null; }
   function setSubStatus(s, key) {
@@ -6532,6 +6723,7 @@
     var fields = currentCustom.fields, subs = currentCustom.subs;
     var stages = customStages();
     var tableActions = (currentCustom.table.config && currentCustom.table.config.actions) || [];
+    var decision = customDecision();
     var mayEdit = canEdit(currentCustom.table.id);
     var mayManageTbl = canManage(currentCustom.table.id);
     var listEl = document.getElementById("custom-list"), emptyEl = document.getElementById("custom-empty"), tabsEl = document.getElementById("custom-tabs");
@@ -6687,8 +6879,19 @@
         }
       }
       var initial = esc(String(summary.length ? cardText(summary[0], d, s) : "?").trim().charAt(0).toUpperCase() || "?");
+      // A table with a decision gets ✓ and ✕ instead of a row of "→ Stage" buttons. Not as
+      // well as: two ways to file the same record in the same place, sitting side by side,
+      // is how one of them quietly stops being used and then stops being maintained. The
+      // stages still exist — they are what the tabs and the counts read — and a record can
+      // still be moved from the ⋯ menu.
       var moveHtml = "";
-      if (stages.length && mayEdit) {
+      if (decision && mayManageTbl) {
+        var db2 = decisionButtons(s);
+        moveHtml = '<div class="move-btns">' +
+          (db2.reject ? '<button type="button" class="btn-circle bad btn-reject" data-decide="rejected" title="' + esc(decision.reject) + '">✕</button>' : "") +
+          (db2.approve ? '<button type="button" class="btn-circle good btn-approve" data-decide="approved" title="' + esc(decision.approve) + '">✓</button>' : "") +
+          "</div>";
+      } else if (stages.length && mayEdit) {
         var cur = subStage(s, stages);
         moveHtml = '<div class="move-btns">' + stages.filter(function (st) { return st.key !== cur; }).map(function (st) {
           return '<button type="button" class="sc-' + esc(st.color || "gray") + '" data-move="' + esc(st.key) + '">→ ' + esc(st.label) + "</button>";
@@ -6726,13 +6929,25 @@
       var headHtml = '<div class="card-head">' +
         '<div class="name">' + esc(titleTxt) + tag + starHtml + "</div>" +
         '<div class="card-meta">' + metaBits.join("") + "</div></div>";
+      // What an approval left behind: the date it was set for, whether its message has gone
+      // out, and — where there IS a message but nowhere to send it — why not. An approved
+      // record that shows neither reads exactly like one nobody has got to yet.
+      var decHtml = "";
+      if (decision && s.status === "approved") {
+        var dw = decisionWhen(s);
+        if (dw) decHtml += '<div class="card-when">📅 ' + esc(fmtInterview(dw)) + "</div>";
+        if (decision.message) {
+          if (decisionSent(s)) decHtml += '<div class="card-sent">✓ Message sent</div>';
+          else if (!decisionMessageUrl(decision, s, fields)) decHtml += '<div class="card-note">No phone answer to message</div>';
+        }
+      }
       if (kcards) {
         el.className = "ja-card is-rec" + (mine ? " is-mine" : "");
         if (tint) { el.style.borderTopColor = tint; el.style.borderTopWidth = "3px"; }
         el.innerHTML =
           (photoField && coverPath(d[photoField.id]) ? coverHtml(coverPath(d[photoField.id]), cardCfg.fit) : '') +
           '<div class="body" style="text-align:left">' +
-            threadHtml + headHtml + fldsHtml +
+            threadHtml + headHtml + fldsHtml + decHtml +
             '<div class="card-foot">' + (scoreStat || '<span></span>') + '<span class="when">' + fmtDate(s.created_at) + '</span></div>' +
             actions +
           '</div>';
@@ -6748,6 +6963,9 @@
               if (branchTxt && String(cardText(f, d, s)).trim() === String(branchTxt).trim()) return false;
               return true;
             }).map(function (f) { return esc(cardText(f, d, s)); }).filter(function (x) { return x && x !== "—"; }).join(" · ") +
+            // The same two facts the card shows, on the one line a row has for them.
+            (decHtml ? " · " + (decisionWhen(s) ? "📅 " + esc(fmtInterview(decisionWhen(s))) : "") +
+                       (decision && decision.message && decisionSent(s) ? " ✓ sent" : "") : "") +
           '</div></div>' +
           scoreHtml + '<div class="row-actions">' + actions + '</div>';
       }
@@ -6764,6 +6982,13 @@
         },
         menuActions);
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
+      [].slice.call(el.querySelectorAll("[data-decide]")).forEach(function (b) {
+        b.addEventListener("click", function (e) {
+          e.stopPropagation();   // the card itself opens the record; the decision must not
+          if (b.getAttribute("data-decide") === "approved") approveRecord(s, fields);
+          else setDecision(s, "rejected", null);
+        });
+      });
       kcont.appendChild(el);
       // A video has no thumbnail — the hourly sweeper builds them from images. Asking for one
       // 404s and falls back to the full file, which as a CSS background paints nothing at all,
@@ -11060,6 +11285,40 @@
     var ar = (document.getElementById("bld-intro-ar").value || "").trim();
     return (en || ar) ? { en: en, ar: ar } : null;
   }
+  // ---- Builder: Approve / Reject -------------------------------------------------------
+  // Switched OFF is written as {on:false} rather than as nothing, so a table that had the
+  // decision and lost it keeps its labels and its message: ticking the box back on gets
+  // them back instead of a blank form to retype.
+  function serializeDecision() {
+    var on = !!(document.getElementById("bld-dec-on") || {}).checked;
+    var val = function (id) { return ((document.getElementById(id) || {}).value || "").trim(); };
+    return { on: on, approve: val("bld-dec-approve"), reject: val("bld-dec-reject"),
+             schedule: !!(document.getElementById("bld-dec-sched") || {}).checked,
+             when_label: val("bld-dec-when"), message: val("bld-dec-msg"), location: val("bld-dec-loc") };
+  }
+  function setDecisionInputs(d) {
+    d = d || {};
+    var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v || ""; };
+    var tick = function (id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; };
+    tick("bld-dec-on", d.on); tick("bld-dec-sched", d.schedule);
+    set("bld-dec-approve", d.approve); set("bld-dec-reject", d.reject);
+    set("bld-dec-when", d.when_label); set("bld-dec-msg", d.message); set("bld-dec-loc", d.location);
+    syncDecisionRows();
+  }
+  // Ticking it on adds the three stages if the table has none, because the decision writes
+  // `status` and without stages there is nothing to read the two piles apart with — the ✓
+  // would file records somewhere with no tab. Rows, not a silent config write, so they can
+  // be renamed and recoloured like any other stage before the table is saved.
+  function syncDecisionRows() {
+    var on = !!(document.getElementById("bld-dec-on") || {}).checked;
+    var body = document.getElementById("bld-dec-body"); if (body) body.style.display = on ? "" : "none";
+    var sb = document.getElementById("bld-dec-sched-body");
+    if (sb) sb.style.display = (on && (document.getElementById("bld-dec-sched") || {}).checked) ? "" : "none";
+    if (!on) return;
+    var have = serializeStages().map(function (s) { return s.key; });
+    if (have.indexOf("approved") !== -1 && have.indexOf("rejected") !== -1) return;
+    DECISION_STAGES.forEach(function (st) { if (have.indexOf(st.key) === -1) addStageRow(st); });
+  }
   // The heading /apply and /cast print, which is NOT the dashboard name — the page says
   // "Job Application · طلب توظيف" while the table is called "Job Applications". Renaming the
   // table therefore could not reach the page, and this is what carries it: config.title,
@@ -11272,6 +11531,7 @@
       introAr: document.getElementById("bld-intro-ar").value,
       purpose: builderPurpose,
       countries: builderScope().countries,
+      decision: serializeDecision(),
       fields: rows.map(function (r) {
         // a draft has no field ids yet, so a condition is remembered by row position
         var cs = r.querySelector(".fcond"), ci = null;
@@ -11309,6 +11569,7 @@
     document.getElementById("bld-stages").innerHTML = "";
     document.getElementById("bld-actions").innerHTML = "";
     document.getElementById("bld-layers").innerHTML = "";
+    setDecisionInputs(null);
     addBuilderField();
   }
   function setBuilderChrome(mode, name) {
@@ -11347,6 +11608,9 @@
     // views, so they are not offered there rather than offered and quietly ignored.
     var sw = document.getElementById("bld-stages-wrap"); if (sw) sw.style.display = isBuiltin ? "none" : "";
     var aw = document.getElementById("bld-actions-wrap"); if (aw) aw.style.display = isBuiltin ? "none" : "";
+    // Job Applications already HAS approve/reject, hand-coded and wired to its own columns.
+    // Offering it a second one would put two ✓s on the same card writing two different places.
+    var dw = document.getElementById("bld-decision-wrap"); if (dw) dw.style.display = isBuiltin ? "none" : "";
     var lw = document.getElementById("bld-layers-wrap"); if (lw) lw.style.display = isBuiltin ? "none" : "";
     // An alert names a question by id, and a form being created has no saved questions to
     // name yet — so it is offered when editing, where the ids exist.
@@ -11629,6 +11893,7 @@
       document.getElementById("bld-name-ar").value = d.nameAr || "";
       setIntroInputs({ en: d.intro, ar: d.introAr });
       fillBuilderCountries(d.countries || []);
+      setDecisionInputs(d.decision);
       bldHost().innerHTML = "";
       (d.fields && d.fields.length ? d.fields : [null]).forEach(function (f) { addBuilderField(f); });
       resolveCondPending();
@@ -11720,6 +11985,8 @@
     ((table.config && table.config.actions) || []).forEach(function (a) { addActionRow(a); });
     document.getElementById("bld-layers").innerHTML = "";
     ((table.config && table.config.layers) || []).forEach(function (l) { addLayerRow(l); });
+    // After the stages, because ticking it on fills in the three it needs when there are none.
+    setDecisionInputs(table.config && table.config.decision);
     // returns the load, so the Form tab can wait for the rows before showing them
     return db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
       msg.textContent = "";
@@ -11761,6 +12028,8 @@
   builder.addEventListener("input", saveDraft);
   builder.addEventListener("change", saveDraft);
   document.getElementById("bld-countries").addEventListener("change", syncScopeNote);
+  document.getElementById("bld-dec-on").addEventListener("change", syncDecisionRows);
+  document.getElementById("bld-dec-sched").addEventListener("change", syncDecisionRows);
   document.getElementById("bld-add-field").addEventListener("click", function () { addBuilderField(); saveDraft(); });
   document.getElementById("bld-add-stage").addEventListener("click", function () { addStageRow(); });
   document.getElementById("bld-add-action").addEventListener("click", function () { addActionRow(); });
@@ -12016,7 +12285,8 @@
   // form and its country sub-forms cannot end up with different stages or a different
   // intro because two call sites built the object separately.
   function builderConfig(extra) {
-    var cfg = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(), intro: serializeIntro() };
+    var cfg = { statuses: serializeStages(), actions: serializeActions(), layers: serializeLayers(),
+                intro: serializeIntro(), decision: serializeDecision() };
     Object.keys(extra || {}).forEach(function (k) { if (extra[k] != null) cfg[k] = extra[k]; });
     return cfg;
   }
@@ -12115,6 +12385,7 @@
         statuses: serializeStages(), actions: serializeActions(),
         layers: serializeLayers(), intro: serializeIntro(), alerts: alerts,
         countries: editCountries, country: scopeCountry(editCountries),
+        decision: serializeDecision(),
       });
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
