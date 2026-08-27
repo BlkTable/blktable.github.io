@@ -295,12 +295,21 @@ t('no scoring on the table means paintScores does nothing at all', () => {
 // Typing a number coloured its question; picking from a dropdown did not, which is 63 of
 // QC's 70 scored questions.
 const FORM_SRC = fs.readFileSync('f/index.html', 'utf8');
-t('an answer changing has one named path, and it repaints', () => {
-  assert.ok(/function answerChanged\(\) \{ applyConditions\(\); paintScores\(\); \}/.test(FORM_SRC),
-    'both halves of "an answer changed" belong in one place');
+t('an answer changing has one named path, and everything that follows an answer is on it', () => {
+  // Every consequence of an answer belongs in this one function. Three of them now: the
+  // questions that appear, the scores that repaint, and the shops a branch question offers
+  // once the country is known. A fourth added at a call site instead is a consequence that
+  // fires for some controls and not others, which is exactly the bug this test was born from.
+  const m = FORM_SRC.match(/function answerChanged\(\) \{([^}]*)\}/);
+  assert.ok(m, 'answerChanged is no longer a single-line function');
+  ['applyConditions()', 'paintScores()', 'applyBranchScope()'].forEach(function (call) {
+    assert.ok(m[1].indexOf(call) !== -1, call + ' does not follow an answer changing');
+  });
 });
 t('the dropdown widget goes through it — every call site', () => {
-  const sites = FORM_SRC.match(/buildCombo\(f, dopts, function \(v\) \{[^}]*\}/g) || [];
+  // Matched on the callback rather than on the options argument: the branch question now
+  // builds its list from the country, so "dopts" is not what every call site passes.
+  const sites = FORM_SRC.match(/buildCombo\(f, .*?, function \(v\) \{[^}]*\}/g) || [];
   assert.ok(sites.length >= 2, 'expected the combo call sites, found ' + sites.length);
   for (const s of sites) {
     assert.ok(/answerChanged\(\)/.test(s), 'a combo that still calls applyConditions alone: ' + s);

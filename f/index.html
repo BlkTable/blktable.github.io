@@ -972,7 +972,7 @@
   // those native events, so typing a number coloured its question and picking from a
   // dropdown did not -- which is 63 of QC's 70 scored questions, i.e. very nearly all of
   // them. Any future control with its own callback calls this and is covered.
-  function answerChanged() { applyConditions(); paintScores(); }
+  function answerChanged() { applyConditions(); paintScores(); applyBranchScope(); }
 
   function labelHtml(f) {
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
@@ -1198,12 +1198,102 @@
       e.preventDefault(); var i = parseInt(t.getAttribute("data-i"), 10); if (filtered[i]) pick(filtered[i]);
     });
     input.addEventListener("blur", function () { setTimeout(function () { var r = resolve(); if (r) { value = r; input.value = labelFor(r); input.classList.remove("invalid"); } else { input.value = value ? labelFor(value) : ""; } typing = false; closeList(); if (onChange) onChange(value); }, 120); });
-    return { wrap: box, input: input, getValue: function () { return resolve() || null; }, setValue: function (v) { value = v || ""; input.value = value ? labelFor(value) : ""; } };
+    return { wrap: box, input: input, getValue: function () { return resolve() || null; },
+      setValue: function (v) { value = v || ""; input.value = value ? labelFor(value) : ""; },
+      // Swap the whole list out — what the branch question does when the country is answered.
+      // A choice that is no longer on the list is dropped rather than left showing: a box
+      // still reading "Abdoun" under Lebanon submits a Jordanian shop against a Lebanese
+      // record, which is exactly the mistake narrowing the list is here to prevent.
+      setOptions: function (next) {
+        options = next || [];
+        if (value && !options.some(function (o) { return o.value === value; })) { value = ""; input.value = ""; }
+        else if (value) input.value = labelFor(value);
+        hi = -1;
+        if (box.classList.contains("open")) render();
+      } };
   }
   // Full country list for the "country" field type. Stored value is the English name, so it
   // reads the same in the grid, in show_if and in exports as any other single answer.
-  // NB: named COUNTRY_NAMES, not COUNTRIES — the phone picker already owns `COUNTRIES`.
-  var COUNTRY_NAMES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Brazzaville)","Congo (Kinshasa)","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czechia","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+  // NB: named COUNTRY_NAMES_ALL, not COUNTRIES — the phone picker already owns `COUNTRIES`.
+  var COUNTRY_NAMES_ALL = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Brazzaville)","Congo (Kinshasa)","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czechia","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+  // What THIS country question offers. A form covering more than one country carries
+  // `options.only` — the countries it was built for — and must offer those and no others:
+  // 195 choices where two are meant is how a Jordan-and-Iraq form collects a Syria record
+  // that no reviewer can account for. Names come from the countries table so they read the
+  // same as everywhere else, with the full world list left for a country question that was
+  // added by hand and genuinely means "anywhere".
+  function countryChoiceNames(f) {
+    var only = f && f.options && f.options.only;
+    if (!only || !only.length) return COUNTRY_NAMES_ALL;
+    return only.map(function (code) {
+      var c = COUNTRY_ROWS.filter(function (x) { return x.code === code; })[0];
+      return c ? c.name_en : null;
+    }).filter(Boolean);
+  }
+
+  // ---- Which shops a branch question offers ---------------------------------------------
+  // The question's own scope is the countries the FORM covers, written on it by the builder
+  // from the country groups ticked there — never typed twice, and never worked out by reading
+  // a country's name out of a shop's name. Grouping is `branches.list_key`, the country group
+  // kept in the app.
+  //
+  // `answer` is the country question's answer, once there is one. A form covering two
+  // countries offers both countries' shops until the country is picked, and only that
+  // country's shops after — which is the whole reason one form can now serve both places.
+  function branchListKeysOf(f) {
+    var xs = String((f.options && f.options.list) || "jo").split(",")
+      .map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    return xs.length ? xs : ["jo"];
+  }
+  // The English name the country question stores, folded back to the code the shops are
+  // grouped by. An answer outside the form's own countries narrows nothing, rather than
+  // emptying the box.
+  function countryCodeOf(name) {
+    if (!name) return null;
+    var want = String(name).trim().toLowerCase();
+    var row = COUNTRY_ROWS.filter(function (c) {
+      return String(c.name_en || "").toLowerCase() === want || String(c.name_ar || "").trim() === String(name).trim();
+    })[0];
+    return row ? row.code : null;
+  }
+  function branchScopeKeysOf(f, answer) {
+    var keys = branchListKeysOf(f);
+    var code = countryCodeOf(answer);
+    return (code && keys.indexOf(code) !== -1) ? [code] : keys;
+  }
+  function branchOptionsFor(f, answer) {
+    var keys = branchScopeKeysOf(f, answer);
+    var multi = keys.length > 1;
+    var out = [];
+    keys.forEach(function (lk) {
+      // The country is put in the LABEL rather than in a heading, because this control is a
+      // type-to-search box: with the country in the text, typing "leb" narrows to Lebanon's
+      // shops. A heading would be invisible the moment anyone typed. Once the country IS
+      // answered there is only one list, so the suffix goes and stops being noise.
+      var cn = multi ? countryNameFor(lk) : "";
+      // A shop that has closed is switched off in the branches table, not deleted — so the
+      // answers naming it still read correctly and nobody is offered it again. Missing
+      // counts as open, which is what every row written before this said.
+      BRANCHES.filter(function (b) { return (b.list_key || "jo") === lk && b.is_active !== false; })
+        .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
+        .forEach(function (b) {
+          out.push({ value: b.name, label: b.name + (b.name_ar ? " / " + b.name_ar : "") + (cn ? " — " + cn : "") });
+        });
+    });
+    return out;
+  }
+  // The country question's answer right now, or null. Found by TYPE, so a renamed question
+  // still answers.
+  function currentCountryAnswer() {
+    var c = controls.filter(function (x) { return x.f && x.f.type === "country"; })[0];
+    return c ? c.value() : null;
+  }
+  // Re-scope every branch question to whatever the country now says. Called from
+  // answerChanged, so it runs on the same beat as the conditional questions and the scores.
+  function applyBranchScope() {
+    var answer = currentCountryAnswer();
+    controls.forEach(function (c) { if (c.rescope) c.rescope(answer); });
+  }
 
   function buildField(f) {
     var wrap = document.createElement("div");
@@ -1301,7 +1391,7 @@
       });
     } else if (f.type === "dropdown" || f.type === "country") {
       var otherVals = {};
-      var srcOpts = f.type === "country" ? COUNTRY_NAMES : (f.options || []);
+      var srcOpts = f.type === "country" ? countryChoiceNames(f) : (f.options || []);
       var dopts = srcOpts.map(function (o) {
         var v = typeof o === "string" ? o : o.en;
         var arv = typeof o === "string" ? "" : (o.ar || "");
@@ -1348,31 +1438,7 @@
         }
       });
     } else if (f.type === "branch") {
-      // A branch question may name more than one list — "jo, lebanon" — so one form can
-      // ask for shops in several countries instead of needing one form per country.
-      // Empty still means Jordan, which is what every question written before this said.
-      var listKeys = String((f.options && f.options.list) || "jo").split(",")
-        .map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
-      if (!listKeys.length) listKeys = ["jo"];
-      var multi = listKeys.length > 1;
-      var dopts = [];
-      listKeys.forEach(function (lk) {
-        // The country is put in the LABEL rather than in a heading, because this control is
-        // a type-to-search box: with the country in the text, typing "leb" narrows to
-        // Lebanon's shops. A heading would be invisible the moment anyone typed. A form
-        // offering one list is untouched, so all 226 existing forms render as they did.
-        var cn = multi ? countryNameFor(lk) : "";
-        // A shop that has closed is switched off in the branches table, not deleted — so
-        // the answers naming it still read correctly and nobody is offered it again.
-        // Missing counts as open, which is what every row written before this said.
-        BRANCHES.filter(function (b) { return (b.list_key || "jo") === lk && b.is_active !== false; })
-          .sort(function (a, b) { return (a.position || 0) - (b.position || 0); })
-          .forEach(function (b) {
-            dopts.push({ value: b.name,
-                         label: b.name + (b.name_ar ? " / " + b.name_ar : "") + (cn ? " — " + cn : "") });
-          });
-      });
-      var combo = buildCombo(f, dopts, function (v) { answerChanged(); });
+      var combo = buildCombo(f, branchOptionsFor(f, null), function (v) { answerChanged(); });
       wrap.appendChild(combo.wrap);
       controls.push({
         f: f, el: combo.input,
@@ -1380,7 +1446,10 @@
         value: function () { return combo.getValue(); },
         // a shop switched off since the draft was written is no longer an option, and
         // setValue on a name the list does not hold leaves the box empty rather than wrong
-        setDraft: function (v) { combo.setValue(v); }
+        setDraft: function (v) { combo.setValue(v); },
+        // What answerChanged calls when the country question is answered. The control keeps
+        // the swap to itself, so the caller does not have to know a branch box is a combo.
+        rescope: function (answer) { combo.setOptions(branchOptionsFor(f, answer)); }
       });
     } else if (f.type === "yesno") {
       var sel = document.createElement("select"); sel.id = id;
@@ -1626,7 +1695,11 @@
     sweepDrafts(Date.now());
     var hasFileQ = controls.some(function (c) { return c.isPhoto; });
     var keptAnswers = restoreAnswers(controls, readDraft(draftK, Date.now()));
-    if (keptAnswers) showDraftNote(hasFileQ, 0);
+    // Restoring answers one at a time fires nothing, so the consequences of those answers
+    // have to be applied once at the end: the questions a restored answer reveals, the score
+    // it is worth, and the shops a restored country leaves in the branch box. Without this a
+    // draft comes back with a country chosen and both countries' shops still listed.
+    if (keptAnswers) { showDraftNote(hasFileQ, 0); answerChanged(); }
     // The files come a moment behind the answers, because IndexedDB is asynchronous. So the
     // note is written twice where there are both: once for the answers, so the page is not
     // silent while the photos are being read, and again when they arrive. Somebody who only
