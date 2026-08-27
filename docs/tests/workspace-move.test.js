@@ -177,7 +177,14 @@ t('a table with no workspace at all is still offered all three', () => {
 
 // ---- the wiring, read out of the page as source ------------------------------
 t('a sidebar table row is draggable', () => {
-  assert.ok(/b\.draggable = true/.test(SRC), 'sidebar rows never become draggable');
+  // Except while the rail is in select mode: dragging a row into a workspace and ticking it
+  // are the same press, so a row left draggable there lifts when you meant to tick it.
+  // sideSelPrune's own file covers the ticking; what matters here is that a row NOT being
+  // ticked still lifts. paintSideSel re-sets this on every tick and on every reload, so a
+  // row drawn during select mode does not stay unliftable after it is switched off.
+  assert.ok(/b\.draggable = !sideSelMode/.test(SRC), 'sidebar rows never become draggable');
+  assert.ok(/el\.draggable = !sideSelMode/.test(SRC),
+            'leaving select mode does not give the rows back their drag');
 });
 
 t('and whether it may be lifted is read when it is lifted, not when it is drawn', () => {
