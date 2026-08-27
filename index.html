@@ -4497,7 +4497,12 @@
     else if (f.type === "phone") inner = edPhone(id, v);
     else if (f.type === "country") inner = edSelect(id, v, [""].concat(countryChoiceNames(f)));
     else if (f.type === "branch") {
-      var brOpts = branchDropdownOptions(allBranches, branchListKeys(f)).map(function (o) { return o.en; });
+      // Narrowed by the country this record is for, where it has one. `d` is the record's
+      // own answers, so a record filed under Lebanon offers Lebanon's shops and no others.
+      // A shop already answered stays on the list whatever the country says, because the
+      // editor must be able to show what is stored — including a shop since closed, or one
+      // answered before the country was.
+      var brOpts = branchDropdownOptions(allBranches, branchScopeKeys(f, countryAnswerIn(opts.fields, d))).map(function (o) { return o.en; });
       if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
       inner = edSelect(id, v, [""].concat(brOpts));
     }
@@ -5310,10 +5315,15 @@
   ];
   // Which field types use the free-text "options" box, and what it should say when they do.
   // Choice fields list their choices there; a link field puts its URL and button text there.
-  function typeUsesOpts(v) { return v === "dropdown" || v === "multi_select" || v === "link" || v === "branch"; }
+  //
+  // `branch` used to be here too, with a box you typed "jo, lebanon" into. It is not any
+  // more: the shops a branch question offers are the shops of the countries the FORM covers,
+  // ticked once at the top. Two places to say which countries a form is for is one place to
+  // get them out of step, and the symptom is a form asking for Iraq's shops on a table
+  // nobody ever ticked Iraq on.
+  function typeUsesOpts(v) { return v === "dropdown" || v === "multi_select" || v === "link"; }
   function optsPlaceholder(v) {
     if (v === "link") return "URL | Button text (English) | نص الزر (عربي), e.g. https://airtable.com/… | Apply now | قدّم الآن";
-    if (v === "branch") return "Branch lists: jo, lebanon, iraq — name more than one to ask for shops in several countries (default jo)";
     return "Options, one per line (or comma-separated): English|عربي, add |other to a choice to open a free-text box";
   }
   var customTables = [];
@@ -7112,6 +7122,56 @@
     var raw = (f && f.options && f.options.list) || "";
     var xs = String(raw).split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
     return xs.length ? xs : ["jo"];
+  }
+  // The stored form of a branch question's scope: the countries the form covers. Falls back
+  // to "jo" for a table with none ticked, because that is what every branch question written
+  // before the ticks existed already means and a blank would offer no shops at all.
+  function branchScopeList(codes) { return (codes || []).join(", ") || "jo"; }
+  // Which shops a branch question offers RIGHT NOW. The question's own scope is the form's
+  // countries; once the country question is answered it narrows to that one. `answer` is the
+  // English country name the country question stores, folded back to its code — never a
+  // country read out of a shop's name.
+  function branchScopeKeys(f, answer) {
+    var keys = branchListKeys(f);
+    if (!answer) return keys;
+    var code = canonicalCountry(answer);
+    return (code && keys.indexOf(code) !== -1) ? [code] : keys;
+  }
+  // The country a record's country question has been answered with, or null. Found by TYPE,
+  // so a renamed question still answers.
+  function countryAnswerIn(fields, data) {
+    var f = (fields || []).filter(function (x) { return x.type === "country"; })[0];
+    return f && data ? (data[f.id] || null) : null;
+  }
+  // The branch question follows the country question, live: pick Lebanon and Lebanon's shops
+  // are what is left in the box. `cur` is what is on screen now; `stored` is what the record
+  // opened with, and a shop it already names stays on the list whatever the country says —
+  // an editor that cannot show what is saved is worse than one that offers a stale choice.
+  // A NEW record has no stored answer, so it narrows strictly.
+  // Only a table that asks BOTH has a list to narrow: one country and the branch question
+  // already offers only that country's shops, with nothing to react to.
+  function needsBranchScope(fields) {
+    return (fields || []).some(function (f) { return f.type === "country"; }) &&
+           (fields || []).some(function (f) { return f.type === "branch"; });
+  }
+  function applyBranchScope(fields, cur, stored) {
+    var answer = countryAnswerIn(fields, cur);
+    (fields || []).forEach(function (f) {
+      if (f.type !== "branch") return;
+      var sel = document.getElementById("ed-" + f.id);
+      if (!sel || sel.tagName !== "SELECT") return;
+      var names = branchDropdownOptions(allBranches, branchScopeKeys(f, answer)).map(function (o) { return o.en; });
+      var was = (stored || {})[f.id];
+      if (was && names.indexOf(was) === -1) names.push(was);
+      var now = sel.value;
+      if (names.join(" ") === [].slice.call(sel.options).slice(1).map(function (o) { return o.value; }).join(" ")) return;
+      sel.innerHTML = [""].concat(names).map(function (nm) {
+        return '<option value="' + esc(nm) + '"' + (nm === now ? " selected" : "") + ">" + esc(nm || "—") + "</option>";
+      }).join("");
+      // A shop that is not this country's, and not what the record already said, cannot stay
+      // chosen: filing a Jordanian shop against a Lebanese record is what this exists to stop.
+      if (names.indexOf(now) === -1) sel.value = "";
+    });
   }
   // Is this shop still offered? A shop that closes is switched OFF rather than deleted,
   // because its name is the answer on every record ever filed against it. Missing counts as
@@ -10222,7 +10282,7 @@
         var tiles = photoSectionHtml(fields, d, null, { only: f.id, edit: mayEditHere });
         return tiles ? '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>" : "";
       }
-      return edFieldRowHtml(f, d, { scored: qsMap[f.id] });
+      return edFieldRowHtml(f, d, { scored: qsMap[f.id], fields: fields });
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
     // The children are listed for anyone who can open the record; only a manager gets the
@@ -10280,6 +10340,8 @@
         var answered = cur[f.id] != null && cur[f.id] !== "";
         row.style.display = (condMet(f, cur) || answered) ? "" : "none";
       });
+      // `d` is what the record opened with, so the shop it already names is never taken away.
+      applyBranchScope(fields, cur, d);
     }
     // The colour follows the answer while it is being changed, so a correction shows what it
     // is worth before the save comes back. Same arithmetic the database will apply -- see
@@ -10288,7 +10350,10 @@
       if (!sd) return;
       paintScoreRows(currentCustom.table, fields, qsMap, edValues(fields), "ed-live-score");
     }
-    if (sd || fields.some(function (f) { return f.show_if && f.show_if.field; })) {
+    // Also when the table has a country question AND a branch question, because then the
+    // branch list follows the country and there may be no conditional and no score to have
+    // wired this up. Without it the shops narrow when the record opens and never again.
+    if (sd || fields.some(function (f) { return f.show_if && f.show_if.field; }) || needsBranchScope(fields)) {
       var mgrid = body.querySelector(".m-grid");
       if (mgrid) ["change", "input"].forEach(function (ev) {
         mgrid.addEventListener(ev, applyEdConds, true);
@@ -10772,7 +10837,7 @@
     var nrMap = questionScorerMap(t, fields);
     var nrScored = !!scoreRollup(t) && Object.keys(nrMap).length > 0;
     var grid = asked.map(function (f) {
-      return edFieldRowHtml(f, {}, { photo: "input", stars: true, scored: nrMap[f.id], answers: {} });
+      return edFieldRowHtml(f, {}, { photo: "input", stars: true, scored: nrMap[f.id], answers: {}, fields: fields });
     }).join("");
     body.innerHTML =
       '<div class="rec-head"><div class="rh-main"><div class="rh-title">New record</div>' +
@@ -10817,12 +10882,15 @@
         var row = (f.show_if && f.show_if.field) ? document.getElementById("cond-" + f.id) : null;
         if (row) row.style.display = vis[f.id] ? "" : "none";
       });
+      // Nothing stored to protect on a new record, so the shops narrow strictly to whichever
+      // country was picked.
+      applyBranchScope(asked, cur, null);
     }
     function applyNrScores() {
       if (!nrScored) return;
       paintScoreRows(t, fields, nrMap, edValues(asked), "nr-live-score");
     }
-    if (nrScored || asked.some(function (f) { return f.show_if && f.show_if.field; })) {
+    if (nrScored || asked.some(function (f) { return f.show_if && f.show_if.field; }) || needsBranchScope(asked)) {
       var mg = body.querySelector(".m-grid");
       if (mg) ["change", "input"].forEach(function (ev) {
         mg.addEventListener(ev, applyConds, true);
@@ -12195,22 +12263,13 @@
           options = { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" };
         }
       } else if (type === "branch") {
-        // One question may now offer the shops of several countries: "jo, lebanon". The
-        // lists are checked against the countries actually on file rather than a hard-coded
-        // three, so adding a country in the Countries manager is enough to be able to ask
-        // for its branches. Duplicates are dropped so "jo, jo" cannot list Amman twice.
-        var lks = (rows[i].querySelector(".opts").value.trim() || "jo").toLowerCase()
-          .split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-        var known = COUNTRY_LIST.map(function (c) { return c.code; });
-        var seen = {}, clean = [];
-        for (var lki = 0; lki < lks.length; lki++) {
-          if (known.indexOf(lks[lki]) === -1) {
-            msg.set('Branch list "' + lks[lki] + '" is not a country we have. Use one or more of: ' + known.join(", ") + ".", "err");
-            return;
-          }
-          if (!seen[lks[lki]]) { seen[lks[lki]] = 1; clean.push(lks[lki]); }
-        }
-        options = { list: clean.join(", ") };
+        // The shops a branch question offers are the shops of the countries THIS FORM
+        // covers — the country groups ticked at the top, never a second list typed here.
+        // A form covering two offers both until its country question is answered, and that
+        // country's shops after; a form covering one offers only that one's, and never asks.
+        // Either way the grouping is `branches.list_key`, which is the country group kept in
+        // the Countries manager — no shop is ever sorted by reading a country out of its name.
+        options = { list: branchScopeList(builderScope().countries) };
       }
       var afterSel = rows[i].querySelector(".fafter");
       // "ask only if" points at another row. If that row is already a saved field the
