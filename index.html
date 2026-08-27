@@ -549,6 +549,42 @@
   .side-ws-plus { flex: 0 0 auto; width: 20px; height: 20px; display: inline-flex;
     align-items: center; justify-content: center; font-size: var(--fs-3); }
   body.ws-dragging-on .side-gear { opacity: 0; pointer-events: none; }
+
+  /* ---- Ticking several tables in the rail ----------------------------------
+     Select mode is a class on the rail, not a re-render: entering it, leaving it and every
+     tick are CSS, so ticking twelve tables is twelve class flips rather than twelve rebuilds
+     of a list that can hold 270 entries. */
+  .side-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .side-hd .side-label { flex: 1; min-width: 0; margin-bottom: 0; }
+  .side-selbtn { flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--line-2); border-radius: 6px;
+    background: none; color: var(--muted); font: inherit; font-size: var(--fs-1); letter-spacing: 0.06em;
+    text-transform: uppercase; cursor: pointer; }
+  .side-selbtn:hover { color: var(--silver); border-color: var(--silver-lo); }
+  .side-selbtn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  /* The tick box stands IN the colour mark's 20px slot rather than beside it — the same 20px
+     .side-fold occupies — so switching select mode on does not shunt every table name to the
+     right and make the whole rail visibly jump. */
+  .side-chk { display: none; flex: 0 0 auto; width: 20px; height: 20px; border-radius: 5px;
+    align-items: center; justify-content: center; font-size: var(--fs-2); font-weight: 800;
+    line-height: 1; border: 1px solid var(--silver-lo); color: var(--accent-ink); }
+  #side-tables.selecting .side-item[data-custom] .side-chk { display: inline-flex; }
+  #side-tables.selecting .side-item[data-custom] .tmark { display: none; }
+  /* one press, one meaning: while you are ticking, the ⋯ is not also under the pointer */
+  #side-tables.selecting .side-gear { display: none; }
+  .side-item.side-picked { background: rgba(255,255,255,0.07); }
+  .side-item.side-picked .side-chk { background: var(--accent); border-color: var(--accent); }
+  .side-selbar { display: none; flex-direction: column; gap: 6px; margin: 6px 0 2px; padding: 8px;
+    border: 1px solid var(--line-2); border-radius: 8px; background: rgba(255,255,255,0.04); }
+  .side-selbar.on { display: flex; }
+  .ssel-head { display: flex; align-items: center; gap: 6px; font-size: var(--fs-2); color: var(--silver); }
+  .ssel-head b { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+  .ssel-x { flex: 0 0 auto; padding: 0 3px; background: none; border: none; color: var(--muted);
+    font: inherit; cursor: pointer; }
+  .ssel-x:hover { color: var(--silver); }
+  .ssel-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ssel-btn { padding: 5px 9px; border: 1px solid var(--line-2); border-radius: 6px; background: none;
+    color: var(--silver); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+  .ssel-btn:hover { background: rgba(255,255,255,0.08); color: var(--silver-hi); }
   .dup-opt { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: var(--fs-3); }
   .dup-opt input { width: 16px; height: 16px; flex: 0 0 auto; }
   .home-group-title { color: var(--muted); font-size: var(--fs-3); letter-spacing: .06em; text-transform: uppercase;
@@ -1724,7 +1760,10 @@
             <nav class="side-list" id="side-starred"></nav>
           </div>
           <div class="side-group">
-            <div class="side-label" id="ws-top" title="Drop a table here to move it to the top level">Workspace</div>
+            <div class="side-hd">
+              <div class="side-label" id="ws-top" title="Drop a table here to move it to the top level">Workspace</div>
+              <button class="side-selbtn" id="side-select-toggle" type="button" style="display:none;" title="Tick several tables, then archive, restore or move the lot">Select</button>
+            </div>
             <nav class="side-list" id="side-tables">
               <button class="side-item active" data-view="job_applications" title="Job Applications"><span class="tmark" data-tmark="job_applications"></span><span class="side-label">Job Applications</span><span class="side-caret" id="ja-caret">▸</span><span class="side-gear" title="Options">⋯</span></button>
               <div class="side-kids" id="ja-kids" style="display:none;"></div>
@@ -1739,6 +1778,17 @@
           <button class="side-item side-nav-item" id="side-forms"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg><span class="side-label">Public forms</span></button>
           <button class="side-item side-nav-item" id="side-history" style="display:none;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l3 2"></path></svg><span class="side-label">History</span></button>
           <button class="side-item side-nav-item" id="side-help"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.6v.4"></path><circle cx="12" cy="17" r="0.6" fill="currentColor"></circle></svg><span class="side-label">Help &amp; shortcuts</span></button>
+          <!-- What a ticked set of tables can have done to it. Deleting is deliberately not
+               here: it takes every record with it and has no undo, so it stays on the ⋯ menu,
+               chosen one table at a time and behind a typed sum. -->
+          <div class="side-selbar" id="side-selbar">
+            <div class="ssel-head"><b id="ssel-n">0 tables selected</b><button class="ssel-x" id="ssel-clear" type="button" title="Clear the selection and leave select mode">✕</button></div>
+            <div class="ssel-acts">
+              <button class="ssel-btn" id="ssel-archive" type="button">Archive</button>
+              <button class="ssel-btn" id="ssel-restore" type="button" style="display:none;">Restore</button>
+              <button class="ssel-btn" id="ssel-move" type="button">Move to…</button>
+            </div>
+          </div>
           <span id="side-archive-slot"></span>
           <button class="side-create" id="side-create" style="display:none;">＋ Create</button>
         </div>
@@ -2674,6 +2724,12 @@
         // Sharing a table out is an admin act, so the pink button is admin-only.
         [].slice.call(document.querySelectorAll(".btn-share")).forEach(function (b) { b.style.display = isAdmin ? "" : "none"; });
         document.getElementById("side-tables").classList.toggle("show-gears", isAdmin);
+        // Every action behind Select is admin-only, so a reviewer given the toggle would get a
+        // mode whose every button is a no-op. Leaving it also drops any ticks made before the
+        // role arrived — the rail is regularly built before this query answers.
+        var selBtn = document.getElementById("side-select-toggle");
+        if (selBtn) selBtn.style.display = isAdmin ? "" : "none";
+        if (!isAdmin) setSideSelMode(false);
         applyBuiltinAccess();
       });
   }
@@ -5435,6 +5491,201 @@
       });
     });
   }
+  // ---- Ticking several tables in the rail, and acting on the lot -----------------
+  // Tidying 219 migrated tables through a ⋯ menu is 219 menus. The grid has had ticked rows
+  // and a bar of actions since delete-selected; this is the same idea one level up — tick the
+  // tables, then archive, restore or move the whole set in one press.
+  //
+  // Deleting is deliberately NOT one of them. A table's delete takes every record with it and
+  // has no undo, which is exactly why the single one is behind a typed sum; eight of those in
+  // one press is the only thing this rail could do that nobody could walk back. It stays on
+  // the ⋯ menu, chosen table by table.
+  var sideSelMode = false;
+  var sideSel = {};
+  // A selection has to outlive a re-render — archiving five tables reloads the rail and the
+  // ticks on the other fifteen must still be there — but it must not outlive the tables
+  // themselves. The five just archived are gone from customTables (with Archived switched
+  // off), and an id left behind is one the bar keeps counting and the next press writes to
+  // nothing. Pure, and it copies rather than edits: the page holds this map.
+  function sideSelPrune(sel, list) {
+    var live = {}, out = {};
+    (list || []).forEach(function (t) { if (t && t.id) live[t.id] = 1; });
+    Object.keys(sel || {}).forEach(function (id) { if (live[id] && sel[id]) out[id] = true; });
+    return out;
+  }
+  function sideSelTables() {
+    return (customTables || []).filter(function (t) { return !!sideSel[t.id]; });
+  }
+  // Which of Archive and Restore the bar offers, and what each would touch. A mixed selection
+  // gets both, and each acts only on the half it applies to, so neither is a button that
+  // writes nothing and reads as a failed press.
+  function sideSelSummary(list) {
+    var live = 0, arch = 0;
+    (list || []).forEach(function (t) { if (isArchived(t)) arch++; else live++; });
+    return { n: live + arch, live: live, archived: arch };
+  }
+  function sideSelBarText(sum) {
+    var n = (sum && sum.n) || 0;
+    return n + (n === 1 ? " table selected" : " tables selected");
+  }
+  // Everywhere this SET could go: the union of where each table could go on its own, built
+  // from the single-table helper rather than beside it, so the bar and a ⋯ menu can never
+  // offer different lists. A workspace they are all already in is not offered.
+  function workspaceMoveTargetsMany(list, existing) {
+    var seen = {}, out = [];
+    (list || []).forEach(function (t) {
+      workspaceMoveTargets(t, existing).forEach(function (w) {
+        if (seen[w]) return;
+        seen[w] = 1; out.push(w);
+      });
+    });
+    return out.sort(wsCompare);
+  }
+  // One table asks exactly what the ⋯ menu asks — a second copy of that wording is a second
+  // thing to keep in step, and the one that goes stale is the one that stops mentioning the
+  // QR codes. Several names them, because "Archive 12 tables?" with no list is a press
+  // nobody can check before making it.
+  function archiveManyConfirmText(list) {
+    var n = (list || []).length;
+    if (n === 1) return archiveConfirmText(list[0]);
+    return "Archive " + n + " tables?\n\n" +
+      "· Nothing is deleted. Every record, field and saved view stays as it is.\n" +
+      "· They leave the sidebar, Home and the Ctrl-K search, and move under Archived at the foot of the sidebar.\n" +
+      "· Their public form links and any printed QR codes keep working — archiving hides a table, it does not close the form.\n\n" +
+      "You can put them back at any time from Archived.\n\n" +
+      (list || []).map(function (t) { return "· " + (t && t.name ? t.name : "(unnamed)"); }).join("\n");
+  }
+  // The config differs per table, so there is no single .in() write here: it is one update
+  // each, run one after another rather than 200 at once — a rail-wide archive firing 200
+  // parallel requests is how the gateway's rate limit turns a tidy-up into a half-archived
+  // list. One reload at the end, not one per table.
+  //
+  // A table already in the state being asked for is skipped rather than rewritten: pressing
+  // Archive on a mixed selection must not stamp a fresh archived_at on tables nobody touched.
+  function setTablesArchived(list, on) {
+    if (!isAdmin) return Promise.resolve();
+    var todo = (list || []).filter(function (t) { return t && isArchived(t) !== on; });
+    if (!todo.length) return Promise.resolve();
+    // Restoring puts tables back exactly as they were, so it is not put behind a confirm —
+    // the single restore does not ask either.
+    if (on && !window.confirm(archiveManyConfirmText(todo))) return Promise.resolve();
+    var now = new Date().toISOString(), failed = [], done = [], step = Promise.resolve();
+    todo.forEach(function (t) {
+      step = step.then(function () {
+        var cfg = archivedConfig(t.config, on, now, myUserId);
+        return db.from("app_tables").update({ config: cfg }).eq("id", t.id).then(function (r) {
+          // One table failing must not stop the rest — but it must not pass unmentioned
+          // either: 18 of 20 archived in silence leaves somebody believing the rail is tidy.
+          if (r && r.error) { failed.push(t.name || t.id); if (window.console) console.error(r.error); return; }
+          t.config = cfg; done.push(t);
+        });
+      });
+    });
+    return step.then(function () {
+      var openId = currentCustom && currentCustom.table ? currentCustom.table.id : null;
+      var open = openId && done.some(function (t) { return t.id === openId; });
+      // Archiving the table on screen while archived tables are hidden leaves you on a page
+      // that is no longer in the rail — the same step back to Home the single archive makes.
+      var leaving = on && !showArchived && open;
+      if (leaving) currentCustom = null;
+      return loadCustomTables().then(function () {
+        if (leaving) showView("home");
+        else if (open) {
+          var nt = (customTables || []).filter(function (x) { return x.id === openId; })[0];
+          if (nt) openCustomTable(nt);
+        }
+        if (failed.length) {
+          window.alert("Could not " + (on ? "archive" : "restore") + " " + failed.length +
+            (failed.length === 1 ? " table" : " tables") + ":\n\n" + failed.join("\n") +
+            "\n\nEverything else went through.");
+        }
+      });
+    });
+  }
+  // The workspace is one column with one value, so unlike the config this IS a single write.
+  // Chunked only because .in() with a whole rail ticked is a URL and a URL has a length — the
+  // same reason deleting a selection of records chunks at 100.
+  //
+  // An empty name is refused rather than written: a table whose workspace is "" reads as
+  // having none and drops into OLD.
+  function moveTablesToWorkspace(list, ws) {
+    if (!isAdmin || !ws) return Promise.resolve();
+    var todo = (list || []).filter(function (t) { return t && tableWorkspace(t) !== ws; });
+    if (!todo.length) return Promise.resolve();
+    var ids = todo.map(function (t) { return t.id; }), chunks = [];
+    for (var i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100));
+    var bad = null, step = Promise.resolve();
+    chunks.forEach(function (c) {
+      step = step.then(function () {
+        if (bad) return;
+        return db.from("app_tables").update({ workspace: ws }).in("id", c).then(function (r) {
+          if (r && r.error) bad = r.error;
+        });
+      });
+    });
+    return step.then(function () {
+      if (bad) {
+        // the likeliest cause is the column not being there yet, exactly as the single move
+        // says — a silent no-op looks like the app ignoring the press
+        window.alert("Could not move the tables.\n\nIf workspaces have not been switched on yet, run workspaces/01-add-workspace.sql on the database first.");
+        if (window.console) console.error(bad);
+      }
+      // Re-read either way. A failure part-way through means an earlier chunk already wrote,
+      // so the page's own copy is the half-applied one and the database is the truth.
+      if (!bad && currentCustom && currentCustom.table &&
+          todo.some(function (t) { return t.id === currentCustom.table.id; })) {
+        currentCustom.table.workspace = ws;
+      }
+      return loadCustomTables();
+    });
+  }
+  function toggleSideSel(t) {
+    if (!t) return;
+    if (sideSel[t.id]) delete sideSel[t.id]; else sideSel[t.id] = true;
+    paintSideSel();
+  }
+  // Repaints the ticks and the bar without touching the database — which is the whole point of
+  // holding select mode as a class rather than as a render.
+  function paintSideSel() {
+    [].slice.call(document.querySelectorAll("#side-tables .side-item[data-custom]")).forEach(function (el) {
+      var on = !!sideSel[el.getAttribute("data-custom")];
+      el.classList.toggle("side-picked", on);
+      // Dragging a row into a workspace and ticking it are the same press, so while you are
+      // ticking, rows do not lift. Re-set on every paint, so leaving select mode gives the
+      // drag back to rows that were drawn during it.
+      el.draggable = !sideSelMode;
+      var box = el.querySelector(".side-chk");
+      if (box) box.textContent = on ? "✓" : "";
+    });
+    var bar = document.getElementById("side-selbar"); if (!bar) return;
+    var sum = sideSelSummary(sideSelTables());
+    bar.classList.toggle("on", sideSelMode && sum.n > 0);
+    document.getElementById("ssel-n").textContent = sideSelBarText(sum);
+    var a = document.getElementById("ssel-archive"), r = document.getElementById("ssel-restore");
+    // A mixed selection names the count on each button, so it is clear before the press that
+    // Archive is not about to touch the three that are already archived.
+    a.style.display = sum.live ? "" : "none";
+    a.textContent = sum.live === sum.n ? "Archive" : "Archive " + sum.live;
+    r.style.display = sum.archived ? "" : "none";
+    r.textContent = sum.archived === sum.n ? "Restore" : "Restore " + sum.archived;
+  }
+  function setSideSelMode(on) {
+    sideSelMode = !!on && isAdmin;
+    var nav = document.getElementById("side-tables");
+    if (nav) nav.classList.toggle("selecting", sideSelMode);
+    if (!sideSelMode) sideSel = {};
+    var btn = document.getElementById("side-select-toggle");
+    if (btn) { btn.textContent = sideSelMode ? "Done" : "Select"; btn.classList.toggle("on", sideSelMode); }
+    paintSideSel();
+  }
+  function promptNewWorkspaceMany(list) {
+    if (!list || !list.length) return;
+    var name = resolveWorkspaceName(
+      window.prompt("Name the workspace to move " + list.length +
+        (list.length === 1 ? " table" : " tables") + " into:", ""),
+      workspaceNames(browsableTables()));
+    if (name) moveTablesToWorkspace(list, name);
+  }
   // ---- Shared custom-field semantics (every table, current + future) ----
   // A dropdown choice flagged {other:true} opens a free-text box on the public form; that answer is
   // stored next to the choice under "<fieldId>__other". A "dob" field stores a date but reads as an age.
@@ -6178,6 +6429,8 @@
       var hiddenCount = (res.data || []).filter(function (t) {
         return !t.builtin_key && isArchived(t);
       }).length;
+      // Ticks survive the rebuild; ticks on tables that have just left the list do not.
+      sideSel = sideSelPrune(sideSel, customTables);
       var slot = document.getElementById("custom-tables-slot");
       // The built-in lines join the custom ones in the slot so one sort orders them all.
       // They are re-parented, never rebuilt — #ja-caret and #ja-kids hang off these very
@@ -6190,11 +6443,17 @@
         b.className = "side-item" + (isArchived(t) ? " is-archived" : "");
         b.setAttribute("data-custom", t.id);
         b.title = isArchived(t) ? t.name + " — archived" : t.name;
-        b.innerHTML = tmarkHtml(t.id, t.name, t.config) + '<span class="side-label">' + esc(t.name) + '</span>' +
+        // The tick box is always built and hidden by CSS, so entering select mode is a class
+        // flip on the rail rather than a rebuild of a list that can hold 270 entries.
+        b.innerHTML = '<span class="side-chk" aria-hidden="true"></span>' +
+          tmarkHtml(t.id, t.name, t.config) + '<span class="side-label">' + esc(t.name) + '</span>' +
           (isArchived(t) ? '<span class="side-arch-tag">archived</span>' : "") +
           '<span class="side-gear" title="Options">⋯</span>';
-        b.addEventListener("click", function () { openCustomTable(t); });
-        b.draggable = true;
+        b.addEventListener("click", function () {
+          if (sideSelMode) { toggleSideSel(t); return; }
+          openCustomTable(t);
+        });
+        b.draggable = !sideSelMode;
         wireWsDragSource(b, t);
         return b;
       }
@@ -6277,6 +6536,7 @@
           archSlot.appendChild(tog);
         }
       }
+      paintSideSel();
       ensureDefaultView();
     });
   }
@@ -13161,6 +13421,31 @@
     } else if (act === "delete" && ctx.table) {
       openDeleteTable(ctx.table.id, ctx.table.name);
     }
+  });
+
+  // ---- The Select toggle and the bar it opens ----
+  document.getElementById("side-select-toggle").addEventListener("click", function (e) {
+    e.stopPropagation();
+    setSideSelMode(!sideSelMode);
+  });
+  document.getElementById("ssel-clear").addEventListener("click", function () { setSideSelMode(false); });
+  document.getElementById("ssel-archive").addEventListener("click", function () {
+    setTablesArchived(sideSelTables().filter(function (t) { return !isArchived(t); }), true);
+  });
+  document.getElementById("ssel-restore").addEventListener("click", function () {
+    setTablesArchived(sideSelTables().filter(function (t) { return isArchived(t); }), false);
+  });
+  document.getElementById("ssel-move").addEventListener("click", function (e) {
+    e.stopPropagation();
+    var list = sideSelTables();
+    if (!list.length) return;
+    var items = [{ head: true, label: sideSelBarText(sideSelSummary(list)) }];
+    workspaceMoveTargetsMany(list, workspaceNames(browsableTables())).forEach(function (w) {
+      items.push({ label: wsMoveLabel(w), on: function () { moveTablesToWorkspace(list, w); } });
+    });
+    items.push({ sep: true });
+    items.push({ label: "New workspace…", hint: "name it", on: function () { promptNewWorkspaceMany(list); } });
+    openAtMenu(this, items);
   });
 
   // ---- Auto-hiding sidebar toggle ----
