@@ -2256,17 +2256,17 @@
           <div class="bld-two" id="bld-invite-row" style="display:none;">
             <textarea id="bld-invite" rows="10" dir="auto" placeholder="كيف حالك {Full name}؟"></textarea>
           </div>
-          <!-- Who the form is for. A form belongs to ONE country, recorded on the table, so
-               nothing has to ask the public which country they are in. Shared with
-               franchisees is the exception and it is a FAMILY, not a flag: a parent form
-               that asks the country in front of the questions, plus one sub-form per
-               country, each with its own link and no country question — the link already
-               says which country it is. -->
-          <div class="fp-label" id="bld-scope-lab" style="margin: 16px 0 6px;">Which country is this form for? <span style="color:var(--muted);font-weight:400;">— stamped on every answer it collects, so the country tabs and a reviewer limited to one country both work without a question on the form.</span></div>
+          <!-- Which countries a form covers. ONE country and nothing is asked: the country
+               is a property of the form and the trigger stamps every answer with it. TWO OR
+               MORE and the form asks, because the one link is now used in both places and
+               only the answer can say which. Either way it stays ONE table — the countries
+               are listed underneath it in the sidebar, the way Job Applications lists them.
+               This replaces "shared with franchisees", which made a parent form plus one
+               table per country and split the records five ways. -->
+          <div class="fp-label" id="bld-scope-lab" style="margin: 16px 0 6px;">Which countries is this form for? <span style="color:var(--muted);font-weight:400;">— tick one and every answer is stamped with it without asking. Tick more and the form asks, so a single link works for all of them.</span></div>
           <div class="bld-scope" id="bld-scope">
-            <select id="bld-country"></select>
-            <label class="u-chk" id="bld-franchise-lab"><input type="checkbox" id="bld-franchise"> Shared with franchisees — every country</label>
-            <div class="bld-scope-note" id="bld-franchise-note" style="display:none;"></div>
+            <div id="bld-countries"></div>
+            <div class="bld-scope-note" id="bld-scope-note" style="display:none;"></div>
           </div>
           <div class="fp-label" id="bld-q-lab" style="margin: 16px 0 6px;">Questions</div>
           <div class="bld-fields" id="bld-fields"></div>
@@ -4001,6 +4001,17 @@
     var c = COUNTRY_LIST.filter(function (x) { return x.code === code; })[0];
     return c ? c.name_en : code;
   }
+  // What a country question offers. `options.only` is the list a multi-country form was
+  // built with — offering all four when the form covers two is how a Jordan-and-Iraq form
+  // ends up with a Syria record nobody can explain. No `only` means every country on file,
+  // which is what a country question added by hand still means.
+  function countryChoiceNames(f) {
+    var only = f && f.options && f.options.only;
+    var src = (only && only.length)
+      ? only.map(function (c) { return COUNTRY_LIST.filter(function (x) { return x.code === c; })[0]; }).filter(Boolean)
+      : COUNTRY_LIST;
+    return src.map(function (c) { return c.name_en; });
+  }
 
   function calcAge(dob) {
     if (!dob) return null;
@@ -4445,7 +4456,7 @@
     else if (f.type === "time") inner = edTime(id, v);
     else if (f.type === "number") inner = edNum(id, v);
     else if (f.type === "phone") inner = edPhone(id, v);
-    else if (f.type === "country") inner = edSelect(id, v, [""].concat(COUNTRY_LIST.map(function (c) { return c.name_en; })));
+    else if (f.type === "country") inner = edSelect(id, v, [""].concat(countryChoiceNames(f)));
     else if (f.type === "branch") {
       var brOpts = branchDropdownOptions(allBranches, branchListKeys(f)).map(function (o) { return o.en; });
       if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
@@ -5280,7 +5291,14 @@
     var c = t && t.config && t.config.country;
     return c ? canonicalCountry(c) : null;
   }
-  function isFranchiseParent(t) { return !!(t && t.config && t.config.franchise && t.config.franchise.shared); }
+  // The countries a table covers, as the builder means it. `config.countries` is the array
+  // written since one table started covering several; `config.country` is the single-country
+  // form every table written before that carries, and the trigger still reads.
+  function tableCountries(t) {
+    var cfg = (t && t.config) || {};
+    if (Array.isArray(cfg.countries)) return cfg.countries.slice();
+    return cfg.country ? [cfg.country] : [];
+  }
   // The public /f/ page serves a form only while its is_active column is true. That column is
   // separate from archiving (which deliberately keeps the link working) and until now the app
   // never read or set it, so a form switched off in the database looked live to staff and dead
@@ -6213,11 +6231,10 @@
     setActiveSide(document.querySelector('.side-item[data-custom="' + t.id + '"]'));
     markOpened(t.id);
     document.getElementById("custom-title").innerHTML = esc(t.name) + (t.name_ar ? ' <span class="bn-ar">· ' + esc(t.name_ar) + "</span>" : "") +
-      // Which country this form is for, where it is for one. Worth saying on the header
-      // rather than only in the editor: a franchise family has one form per country under
-      // near-identical names, and the header is what tells you which one is open.
-      (tableCountry(t) ? ' <span class="ws-tag">' + esc(countryLabel(tableCountry(t))) + "</span>" : "") +
-      (isFranchiseParent(t) ? ' <span class="ws-tag">All countries</span>' : "") +
+      // Which countries this form is for. Worth saying on the header rather than only in
+      // the editor: it decides whether the form asks the person filling it in, and a table
+      // covering two reads no differently from one covering one until you look.
+      tableCountries(t).map(function (c) { return ' <span class="ws-tag">' + esc(countryLabel(c)) + "</span>"; }).join("") +
       // an archived table opens and reads exactly like a live one, which is the point and
       // also the trap — say which one you are looking at
       (isArchived(t) ? ' <span class="ws-tag">Archived</span>' : "");
@@ -11007,6 +11024,7 @@
   var builderMode = "create";   // "create" | "edit"
   var editingTableId = null;
   var editingFieldIds = [];      // field ids that existed when the editor opened
+  var editingCountryFieldId = null; // the Country question a multi-country form carries, if it has one
   var editingTableConfig = null;  // the config it opened with, so a save merges instead of replacing
   // The editor is one widget with two homes: the builder modal (creating a table) and a
   // Form tab (editing one). The whole body is MOVED between them rather than copied — that
@@ -11253,8 +11271,7 @@
       intro: document.getElementById("bld-intro").value,
       introAr: document.getElementById("bld-intro-ar").value,
       purpose: builderPurpose,
-      country: (document.getElementById("bld-country") || {}).value || "",
-      franchise: !!(document.getElementById("bld-franchise") || {}).checked,
+      countries: builderScope().countries,
       fields: rows.map(function (r) {
         // a draft has no field ids yet, so a condition is remembered by row position
         var cs = r.querySelector(".fcond"), ci = null;
@@ -11287,8 +11304,7 @@
   function resetBuilder() {
     document.getElementById("bld-name").value = ""; document.getElementById("bld-name-ar").value = "";
     setIntroInputs(null);
-    var fcb = document.getElementById("bld-franchise"); if (fcb) fcb.checked = false;
-    fillBuilderCountry(null);
+    fillBuilderCountries([]);
     bldHost().innerHTML = ""; document.getElementById("bld-msg").textContent = "";
     document.getElementById("bld-stages").innerHTML = "";
     document.getElementById("bld-actions").innerHTML = "";
@@ -11338,19 +11354,12 @@
     if (isCreate) { bldAlertFields = []; var ah = document.getElementById("bld-alerts"); if (ah) ah.innerHTML = ""; }
     var del = document.getElementById("bld-delete"); if (del) del.style.display = (mode === "edit") ? "inline-block" : "none";
     var fdel = document.getElementById("fform-delete"); if (fdel) fdel.style.display = (mode === "edit") ? "inline-block" : "none";
-    // Which country the form is for is a question about a custom form, so the two
+    // Which countries the form is for is a question about a custom form, so the two
     // hand-coded ones are not asked it — they are one country's board already, and Job
     // Applications carries a country per applicant rather than per form.
     ["bld-scope-lab", "bld-scope"].forEach(function (id) {
       var el = document.getElementById(id); if (el) el.style.display = isBuiltin ? "none" : "";
     });
-    // "Shared with franchisees" CREATES forms — a parent and one per country — so it is
-    // offered only while creating. Ticking it on an existing table would either do nothing
-    // or silently make four more tables out of a Save button, and both are worse than not
-    // offering it: duplicate the form per country instead.
-    var flab = document.getElementById("bld-franchise-lab"); if (flab) flab.style.display = isCreate ? "" : "none";
-    var fcb = document.getElementById("bld-franchise"); if (fcb && !isCreate) fcb.checked = false;
-    if (!isCreate) syncFranchiseNote();
   }
   // The two hand-coded forms, described the way every other form is described: in page
   // order, with the label, the Arabic label and the type each question actually has. Listed
@@ -11482,7 +11491,7 @@
   function openBuiltinEdit(formKey, msgEl) {
     var msg = msgEl || document.getElementById("bld-msg");
     builtinEditKey = formKey;
-    editingTableId = BUILTIN_PLACEHOLDER[formKey]; editingFieldIds = []; editingTableConfig = null;
+    editingTableId = BUILTIN_PLACEHOLDER[formKey]; editingFieldIds = []; editingCountryFieldId = null; editingTableConfig = null;
     setBuilderChrome("builtin", builtinName(formKey));
     document.getElementById("bld-builtin-note").innerHTML = "";
     document.getElementById("bld-name").value = builtinName(formKey);
@@ -11513,43 +11522,54 @@
       requestAnimationFrame(growAllBld);
     }).catch(function () { msg.textContent = ""; });
   }
-  // ---- Which country a form is for -------------------------------------------------
+  // ---- Which countries a form is for -----------------------------------------------
   // Until now the app asked the PUBLIC which country they were in — a Country question was
   // appended to every new form and back-filled onto all 260 existing ones. 260 forms asked
   // it and 4 records ever answered it, because the person filling in a Jordanian shop's
   // handover sheet has no reason to state the country and no reason to think they should.
-  // The country is a property of the FORM, not of the answer, so it lives on the table and
-  // is stamped on every submission it collects.
+  //
+  // So a form covering ONE country does not ask: the country is a property of the form, it
+  // lives on the table and the trigger stamps every submission with it. A form covering
+  // SEVERAL does ask, because the same link is used in each of them and nothing else on the
+  // record can say which one it came from. Both are ONE table, with the countries listed
+  // underneath it in the sidebar — never a table per country, which is what the old
+  // "shared with franchisees" tick built and what this replaces.
   function builderScope() {
-    var cb = document.getElementById("bld-franchise");
-    var sel = document.getElementById("bld-country");
-    return { shared: !!(cb && cb.checked && builderMode === "create"), country: (sel && sel.value) || null };
+    var host = document.getElementById("bld-countries");
+    if (!host) return { countries: [] };
+    return { countries: [].slice.call(host.querySelectorAll(".bld-co:checked")).map(function (b) { return b.value; }) };
   }
+  // Derived, never typed. `config.country` is what the database trigger's last step and the
+  // country-scoped access check already read, and it can only mean something when there is
+  // exactly one country — with two it would have to pick one and be wrong half the time.
+  // Keeping it in step here is what lets both of those carry on unchanged.
+  function scopeCountry(codes) { return (codes || []).length === 1 ? codes[0] : null; }
+  // Whether the form has to ask. The threshold is the whole feature: one country is stamped
+  // silently, two or more can only be told apart by an answer.
+  function scopeAsks(codes) { return (codes || []).length > 1; }
   // Built from the countries on file, so adding one in the Countries manager is enough —
-  // there is no second list here to keep in step. "Not set" stays on the list because 226
-  // imported tables have no country and must not silently acquire one on the next save of
-  // an unrelated question.
-  function fillBuilderCountry(code) {
-    var sel = document.getElementById("bld-country"); if (!sel) return;
-    sel.innerHTML = '<option value="">Not set</option>' + COUNTRY_LIST.map(function (c) {
-      return '<option value="' + esc(c.code) + '">' + esc(c.name_en) + "</option>";
+  // there is no second list here to keep in step. Nothing ticked is a real answer, and the
+  // one the 226 imported tables give: they have no country and must not silently acquire
+  // one on the next save of an unrelated question.
+  function fillBuilderCountries(codes) {
+    var host = document.getElementById("bld-countries"); if (!host) return;
+    var on = codes || [];
+    host.innerHTML = COUNTRY_LIST.map(function (c) {
+      return '<label class="u-co"><input type="checkbox" class="bld-co" value="' + esc(c.code) + '"' +
+        (on.indexOf(c.code) > -1 ? " checked" : "") + "> " + esc(c.name_en) + "</label>";
     }).join("");
-    sel.value = code || "";
-    syncFranchiseNote();
+    syncScopeNote();
   }
-  // Says out loud how many forms the tick is about to create, and names them. A checkbox
-  // that quietly makes five tables is the kind of surprise this note exists to prevent.
-  function syncFranchiseNote() {
-    var cb = document.getElementById("bld-franchise"), sel = document.getElementById("bld-country"),
-        note = document.getElementById("bld-franchise-note");
-    var on = !!(cb && cb.checked);
-    if (sel) sel.disabled = on;
-    if (!note) return;
-    if (!on) { note.style.display = "none"; note.textContent = ""; return; }
-    var names = COUNTRY_LIST.map(function (c) { return c.name_en; });
-    note.textContent = "Creates " + (names.length + 1) + " forms: one that asks the country before the questions — the link to send to everyone — and one each for " +
-      names.join(", ") + ", every one with its own link and no country question, because the link already says which country it is. " +
-      "A country added later needs its own form; the ones made now are not touched.";
+  // Says out loud what the ticks mean. One country and several behave differently on the
+  // public form, and the difference is invisible until somebody has already filled it in.
+  function syncScopeNote() {
+    var note = document.getElementById("bld-scope-note"); if (!note) return;
+    var codes = builderScope().countries;
+    var names = codes.map(function (c) { return countryLabel(c); });
+    if (!codes.length) note.textContent = "No country. Answers are not stamped with one, and no country list appears under the table.";
+    else if (codes.length === 1) note.textContent = "Every answer is stamped " + names[0] + ". The form does not ask.";
+    else note.textContent = "The form asks which country, offering " + names.join(" and ") +
+      " — one link for all of them. In review they are listed under the table, the way Job Applications lists them.";
     note.style.display = "block";
   }
   // ---- What are you making? ------------------------------------------------------
@@ -11581,7 +11601,7 @@
     useBuilderHost();               // claim the editor back from any Form tab it is sitting in
     formEditFor = null;             // and make that tab reload it rather than show an empty box
     builtinEditKey = null;
-    editingTableId = null; editingFieldIds = []; editingTableConfig = null;
+    editingTableId = null; editingFieldIds = []; editingCountryFieldId = null; editingTableConfig = null;
     builder.classList.add("picking");
     var host = document.getElementById("bld-purpose-list");
     host.innerHTML = TABLE_PURPOSES.map(function (p) {
@@ -11608,8 +11628,7 @@
       document.getElementById("bld-name").value = d.name || "";
       document.getElementById("bld-name-ar").value = d.nameAr || "";
       setIntroInputs({ en: d.intro, ar: d.introAr });
-      var fcb = document.getElementById("bld-franchise"); if (fcb) fcb.checked = !!d.franchise;
-      fillBuilderCountry(d.country || null);
+      fillBuilderCountries(d.countries || []);
       bldHost().innerHTML = "";
       (d.fields && d.fields.length ? d.fields : [null]).forEach(function (f) { addBuilderField(f); });
       resolveCondPending();
@@ -11684,7 +11703,7 @@
     if (!table) return;
     var msg = msgEl || document.getElementById("bld-msg");
     builtinEditKey = null;
-    editingTableId = table.id; editingFieldIds = [];
+    editingTableId = table.id; editingFieldIds = []; editingCountryFieldId = null;
     editingTableConfig = table.config || {};
     setBuilderChrome("edit");
     builder.classList.remove("picking");
@@ -11693,7 +11712,7 @@
     document.getElementById("bld-name").value = table.name || "";
     document.getElementById("bld-name-ar").value = table.name_ar || "";
     setIntroInputs(table.config && table.config.intro);
-    fillBuilderCountry((table.config && table.config.country) || null);
+    fillBuilderCountries(tableCountries(table));
     bldHost().innerHTML = "";
     document.getElementById("bld-stages").innerHTML = "";
     ((table.config && table.config.statuses) || []).forEach(function (st) { addStageRow(st); });
@@ -11705,6 +11724,14 @@
     return db.from("app_fields").select("*").eq("table_id", table.id).order("position", { ascending: true }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
+      // The Country question a multi-country form carries is NOT one of the designed
+      // questions: it exists because of the country ticks and is rewritten from them on
+      // save. Shown as an ordinary row, somebody could untick every country and still leave
+      // the question standing, asking about a country nothing then records. Held back by id
+      // so the save can update or delete the very same row.
+      var cq = countryQuestionOf(fields);
+      editingCountryFieldId = cq ? cq.id : null;
+      if (cq) fields = fields.filter(function (f) { return f.id !== cq.id; });
       // An alert points at a question by id, so its pickers can only be built once the
       // questions are known — which is why the rows are filled in here and not with the
       // stages and actions above.
@@ -11733,7 +11760,7 @@
   builder.addEventListener("click", function (e) { if (e.target === this) closeBuilder(); });
   builder.addEventListener("input", saveDraft);
   builder.addEventListener("change", saveDraft);
-  document.getElementById("bld-franchise").addEventListener("change", syncFranchiseNote);
+  document.getElementById("bld-countries").addEventListener("change", syncScopeNote);
   document.getElementById("bld-add-field").addEventListener("click", function () { addBuilderField(); saveDraft(); });
   document.getElementById("bld-add-stage").addEventListener("click", function () { addStageRow(); });
   document.getElementById("bld-add-action").addEventListener("click", function () { addActionRow(); });
@@ -11938,23 +11965,22 @@
     if (!fields.length && builderMode !== "builtin") { msg.set("Add at least one question.", "err"); return; }
     if (builderMode === "edit" || builderMode === "builtin") { saveTableEdit(name, nameAr, fields, msg); return; }
     var scope = builderScope();
-    // A form shared with franchisees is a family of forms, not a flag on one; and a form
-    // that is not shared belongs to exactly one country, which is asked for here rather
-    // than asked of every person who fills the form in.
-    if (scope.shared) { createFranchiseFamily(name, nameAr, fields, msg); return; }
-    if (!scope.country) { msg.set("Pick which country this form is for — or tick “Shared with franchisees” if it is for all of them.", "err"); return; }
+    // One table whatever the answer. One country and it is recorded on the table; several
+    // and the form asks, which costs the questions one place and buys a single link.
+    if (!scope.countries.length) { msg.set("Tick which countries this form is for — one if it is only used in one place, or several to have the form ask.", "err"); return; }
     var slug = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
     msg.set("Creating…");
-    // NOT DONE ANY MORE, ON PURPOSE: a Country question is no longer appended to every new
-    // form. The country is recorded on the table (config.country) and stamped on each
-    // submission by the country trigger, because 260 forms asked the public which country
-    // they were in and 4 records ever answered.
+    // NOT DONE ANY MORE, ON PURPOSE: a Country question is no longer appended to EVERY new
+    // form. It is added only when the form covers more than one country, because then it is
+    // the only thing that can say which — 260 forms asked the public and 4 records answered.
+    var asks = scopeAsks(scope.countries);
     var pc = purposeConfig(builderPurpose);
     db.from("app_tables").insert({ slug: slug, name: name, name_ar: nameAr || null, kind: pc.kind,
-      config: builderConfig({ country: scope.country, scorecard: pc.scorecard || null }) }).select().single().then(function (tRes) {
+      config: builderConfig({ countries: scope.countries, country: scopeCountry(scope.countries), scorecard: pc.scorecard || null }) }).select().single().then(function (tRes) {
       if (tRes.error) throw tRes.error;
       var tid = tRes.data.id;
-      return db.from("app_fields").insert(fieldRowsFor(tid, fields, 0)).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields, 0); })
+      var rows = (asks ? [countryQuestionRow(tid, scope.countries)] : []).concat(fieldRowsFor(tid, fields, asks ? 1 : 0));
+      return db.from("app_fields").insert(rows).then(function (fRes) { if (fRes.error) throw fRes.error; return writePendingConds(tid, fields, asks ? 1 : 0); })
         .then(function () { return pc.scorecard ? addScoreField(tid) : null; })
         .then(function () { return tRes.data; });
     }).then(function (t) {
@@ -11995,78 +12021,33 @@
     return cfg;
   }
   // One place that turns the builder's rows into app_fields rows. `offset` shifts every
-  // position, which is what the parent form needs when its Country question takes place 0.
+  // position, which is what a form covering several countries needs when its Country
+  // question takes place 0.
   function fieldRowsFor(tid, fields, offset) {
     return (fields || []).map(function (f) {
       return { table_id: tid, position: f.position + (offset || 0), label: f.label, label_ar: f.label_ar,
                type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if, scoring: f.scoring || null };
     });
   }
-  // ---- Shared with franchisees: a family of forms -----------------------------------
-  // One parent form that asks the country in front of the questions — the link to send to
-  // everybody — and one sub-form per country that does not ask, because its own link
-  // already says which country it is. Every form has the same questions, so the answers
-  // line up whichever link somebody used.
+  // ---- The question a multi-country form asks ---------------------------------------
+  // Only forms covering two or more countries carry one, and it is theirs alone: FIRST,
+  // because it decides how the rest of the form reads, and REQUIRED, because it is the only
+  // thing that can say which country a record belongs to once one link serves both.
   //
-  // Written parent first and then the countries ONE AT A TIME. Fired together, four
-  // inserts sharing a slug prefix are four ways to collide, and a country that fails would
-  // take the others down with it. What did get created is reported by name, because
-  // "could not create the form" after three of five exist sends somebody looking for
-  // nothing.
-  function createFranchiseFamily(name, nameAr, fields, msg) {
-    var countries = COUNTRY_LIST.slice();
-    if (!countries.length) { msg.set("There are no countries on file yet — add one under Users → Countries first.", "err"); return; }
-    var base = slugify(name), made = [], parentRow = null;
-    var rnd = function () { return Math.random().toString(36).slice(2, 6); };
-    msg.set("Creating the all-countries form…");
-    db.from("app_tables").insert({ slug: base + "-" + rnd(), name: name, name_ar: nameAr || null,
-        config: builderConfig({ franchise: { shared: true } }) }).select().single()
-      .then(function (tRes) {
-        if (tRes.error) throw tRes.error;
-        parentRow = tRes.data;
-        // Required, because this is the one form where the country cannot be worked out
-        // from the link — and an unanswered country here is a record nobody can file.
-        var rows = [{ table_id: parentRow.id, position: 0, label: "Country", label_ar: "الدولة",
-                      type: "country", required: true, internal: false, options: null, show_if: null }]
-                   .concat(fieldRowsFor(parentRow.id, fields, 1));
-        return db.from("app_fields").insert(rows).then(function (fRes) {
-          if (fRes.error) throw fRes.error;
-          return writePendingConds(parentRow.id, fields, 1);
-        });
-      })
-      .then(function () {
-        made.push(name + " — every country");
-        return countries.reduce(function (chain, c) {
-          return chain.then(function () {
-            msg.set("Creating the " + c.name_en + " form…");
-            return db.from("app_tables").insert({ slug: base + "-" + c.code + "-" + rnd(),
-                name: name + " (" + c.name_en + ")",
-                name_ar: nameAr ? (nameAr + " (" + (c.name_ar || c.name_en) + ")") : null,
-                config: builderConfig({ country: c.code, franchise: { of: parentRow.id } }) }).select().single()
-              .then(function (r) {
-                if (r.error) throw r.error;
-                return db.from("app_fields").insert(fieldRowsFor(r.data.id, fields, 0))
-                  .then(function (fr) { if (fr.error) throw fr.error; return writePendingConds(r.data.id, fields, 0); })
-                  .then(function () { made.push(name + " (" + c.name_en + ")"); });
-              });
-          });
-        }, Promise.resolve(null));
-      })
-      .then(function () {
-        clearDraft(); closeBuilder(); loadCustomTables();
-        setTimeout(function () {
-          openCustomTable(parentRow);
-          window.prompt("Created " + made.length + " forms: " + made.join(", ") +
-            ". This is the all-countries link — each country's own link is on that country's own Form tab:", publicFormLink(parentRow.slug));
-        }, 400);
-      })
-      .catch(function (err) {
-        msg.set(made.length
-          ? "Stopped after creating: " + made.join(", ") + ". The rest were not created — make them by duplicating one of these from its ⋯ menu."
-          : "Could not create the form. Please try again.", "err");
-        if (made.length) loadCustomTables();
-        if (window.console) console.error(err);
-      });
+  // `options.only` is what keeps it from being the 195-country list the `country` type
+  // normally shows. Answers are stored as the English name, which is what the database's
+  // canonical_country() already resolves — so the country trigger needs no change at all.
+  var COUNTRY_Q_LABEL = "Country";
+  var COUNTRY_Q_LABEL_AR = "الدولة";
+  function countryQuestionRow(tid, codes) {
+    return { table_id: tid, position: 0, label: COUNTRY_Q_LABEL, label_ar: COUNTRY_Q_LABEL_AR,
+             type: "country", required: true, internal: false,
+             options: { only: (codes || []).slice() }, show_if: null, scoring: null };
+  }
+  // The country question this table already has, if any. Matched on type rather than label,
+  // because the label is editable and a renamed question is still the one that answers.
+  function countryQuestionOf(fields) {
+    return (fields || []).filter(function (f) { return f.type === "country" && f.options && f.options.only; })[0] || null;
   }
   // "Ask only if <a question added in this same save>" — the question it points at has no
   // id until its row is written, so those conditions are finished off here, matched by
@@ -12102,6 +12083,7 @@
     // of them every time somebody edited a question, silently, and an alert rule with the
     // numbers in it would have been the next thing to go.
     var prevCfg = editingTableConfig || {};
+    var editCountries = [];
     if (builderMode === "builtin") {
       var hidden = [];
       [].slice.call(document.querySelectorAll("#bld-builtin-note .bl-cb")).forEach(function (cb) { if (!cb.checked) hidden.push(cb.getAttribute("data-col")); });
@@ -12123,26 +12105,47 @@
       // A rule that cannot fire, or a number nobody can be reached on, is worth stopping
       // for: the whole point of an alert is that somebody hears about it.
       if (alertProblems.length) { msg.set(alertProblems[0], "err"); return; }
-      // The country the form is for is editable here, and CLEARABLE: "Not set" is a real
-      // answer for the 226 imported tables, so it writes null rather than being skipped —
-      // otherwise a country picked by mistake could never be taken off again.
+      // The countries the form is for are editable here, and CLEARABLE: none ticked is a
+      // real answer for the 226 imported tables, so it writes an empty list rather than
+      // being skipped — otherwise a country ticked by mistake could never be taken off.
+      // `country` is written alongside and derived, never typed, so the database trigger
+      // and the country-scoped access check keep reading the one key they always read.
+      editCountries = builderScope().countries;
       tableUpdate.config = Object.assign({}, prevCfg, {
         statuses: serializeStages(), actions: serializeActions(),
         layers: serializeLayers(), intro: serializeIntro(), alerts: alerts,
-        country: builderScope().country || null,
+        countries: editCountries, country: scopeCountry(editCountries),
       });
     }
     var ops = [db.from("app_tables").update(tableUpdate).eq("id", tid)];
+    // A form that asks the country keeps that question at position 0, so every designed
+    // question sits one place further down. The offset has to be applied to the WRITE and
+    // not to the builder's rows, because a condition still points at a row by its index.
+    var asksNow = builderMode !== "builtin" && scopeAsks(editCountries);
+    var off = asksNow ? 1 : 0;
     fields.forEach(function (f) {
-      if (f.id) ops.push(db.from("app_fields").update({ position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null }).eq("id", f.id));
-      else toInsert.push({ table_id: tid, position: f.position, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null });
+      var pos = f.position + off;
+      if (f.id) ops.push(db.from("app_fields").update({ position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null });
     });
+    // Reconcile the country question with the ticks: added when a second country makes it
+    // the only way to tell records apart, updated when the list changes, and deleted when
+    // the form drops back to one country and the answer would only repeat what the table
+    // already says. Deleted rather than hidden — a question left standing on a one-country
+    // form is one more thing for the public to get wrong.
+    if (builderMode !== "builtin") {
+      if (asksNow && !editingCountryFieldId) toInsert.push(countryQuestionRow(tid, editCountries));
+      else if (asksNow) ops.push(db.from("app_fields").update({ position: 0, options: { only: editCountries.slice() }, required: true }).eq("id", editingCountryFieldId));
+      else if (editingCountryFieldId) toDelete.push(editingCountryFieldId);
+    }
     if (toInsert.length) ops.push(db.from("app_fields").insert(toInsert));
     if (toDelete.length) ops.push(db.from("app_fields").delete().in("id", toDelete));
     Promise.all(ops).then(function (results) {
       var bad = results.filter(function (r) { return r && r.error; })[0];
       if (bad) { msg.set("Could not save changes. Please try again.", "err"); if (window.console) console.error(bad.error); return; }
-      return writePendingConds(tid, fields).then(function () { return results; });
+      // Same offset the rows were written with: a condition is matched by POSITION, so a
+      // form that asks the country must look one place further down for both ends of it.
+      return writePendingConds(tid, fields, off).then(function () { return results; });
     }).then(function (results) {
       if (!results) return;
       var wasBuiltin = builderMode === "builtin", bk = builtinEditKey;
