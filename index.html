@@ -4001,12 +4001,20 @@
       })
       .catch(function () { return jaFacets; });
   }
+  // Each tab is its own query, because the scope is far bigger than the page. This used to
+  // load the newest JA_PAGE rows of the scope whatever their status and let the three tabs
+  // filter that one slice, which works only while a scope fits in a page. On 2026-08-30 the
+  // 2026 scope held 11,042 applications and all 500 of the newest were still `new`: the 46
+  // approved people sat at positions 729-3811 and the 8 rejected at 2668-5114, so Approved
+  // showed "showing 0 of 46" — the count read from the database and correct, the list read
+  // from the page and empty — and which of them appeared drifted as new applications came in.
+  // Asking the database for the section is the only thing that can reach them.
   function loadApps() {
     var listEl = document.getElementById("ja-list");
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     jaRenderCap = JA_RENDER_STEP;
     jaServerSearch = false;
-    var q = jaScoped(db.from("job_applications").select("*"))
+    var q = jaScoped(db.from("job_applications").select("*")).eq("status", section)
       .order("created_at", { ascending: false }).limit(JA_PAGE);
     return Promise.all([q, loadFacets()]).then(function (out) {
       var res = out[0];
@@ -4033,7 +4041,9 @@
     var num = safe.replace(/^#/, "");
     var ors = "full_name.ilike.%" + safe + "%,phone.ilike.%" + safe + "%,living_area.ilike.%" + safe + "%";
     if (/^\d+$/.test(num)) ors += ",seq.eq." + num;
-    var q = jaScoped(db.from("job_applications").select("*"))
+    // Scoped to the open tab like loadApps is: a search run from Approved that came back with
+    // New rows would be thrown away again by filterApps and read as "no such applicant".
+    var q = jaScoped(db.from("job_applications").select("*")).eq("status", section)
       .or(ors)
       .order("created_at", { ascending: false }).limit(JA_PAGE);
     return q.then(function (res) {
@@ -4805,14 +4815,28 @@
       if (res.error) { smsg.textContent = "Could not save. Please try again."; return; }
       appRef.status = "approved"; appRef.interview_at = iso; appRef.message_sent = false;
       closeSched();
-      renderApps();
+      loadFacets().then(renderApps);   // New is one shorter and Approved one longer
     });
   });
+  // Changing tab is a load, not a re-render: the rows for the tab being opened are not in the
+  // page, and on a scope of any size they never were. A search already typed is carried over
+  // and re-run inside the new tab rather than dropped, which is what the box still shows.
+  function setSection(s) {
+    if (!s) return;
+    section = s;
+    var term = ((document.getElementById("ja-search") || {}).value || "").trim();
+    if (term.length >= 2) searchApps(term);
+    else loadApps();
+  }
   function setStatus(a, status) {
     db.from("job_applications").update({ status: status }).eq("id", a.id).then(function (res) {
       if (res.error) { alert("Could not update. Please try again."); return; }
       a.status = status;
-      renderApps();
+      // The tab numbers are database counts, so a person moving between tabs has to be
+      // counted there too. Left stale, the tab they left keeps its old number while its list
+      // is one row shorter, and the board reads "showing 45 of 46" — the same disagreement
+      // between the count and the list as the bug above, from the other end.
+      loadFacets().then(renderApps);
     });
   }
   function reject(a) { setStatus(a, "rejected"); }
@@ -4840,7 +4864,9 @@
     return "https://wa.me/" + num + "?text=" + encodeURIComponent(interviewMessage(a.full_name, dateText, timeText));
   }
   function markSent(ids) {
-    db.from("job_applications").update({ message_sent: true }).in("id", ids).then(function () { renderApps(); });
+    // "Send to all unsent (N)" counts in the database as well, so N has to be re-read or the
+    // bar keeps offering the people who were just messaged.
+    db.from("job_applications").update({ message_sent: true }).in("id", ids).then(function () { loadFacets().then(renderApps); });
   }
   function sendWhatsApp(a) {
     if (!waEligible(a)) {
@@ -4873,7 +4899,7 @@
       db.from("job_applications").delete().eq("id", a.id).then(function (res) {
         if (res.error) { alert("Could not delete."); return; }
         allApps = allApps.filter(function (x) { return x.id !== a.id; });
-        renderApps();
+        loadFacets().then(renderApps);   // one fewer in this tab's database count too
       });
     };
     if (a.photo_path) storageDelete(a.photo_path).then(removeRow, removeRow);
@@ -4885,7 +4911,10 @@
   // database so records outside the loaded page are still findable.
   document.getElementById("ja-search").addEventListener("input", debounce(function () {
     var term = (document.getElementById("ja-search").value || "").trim();
-    var fullyLoaded = !jaServerSearch && allApps.length >= (jaFacets.total || 0);
+    // Against the count for THIS tab, not the whole scope: the page now holds one section,
+    // so measuring it against every status meant a fully loaded Approved (46 of 46) still
+    // read as partial and every keystroke went to the database for nothing.
+    var fullyLoaded = !jaServerSearch && allApps.length >= (sectionCounts()[section] || 0);
     if (!term) { if (jaServerSearch) loadApps(); else renderApps(); return; }
     if (fullyLoaded) { renderApps(); return; }
     if (term.length < 2) return;   // don't hit the database on one character
@@ -4921,10 +4950,9 @@
   document.getElementById("ja-tabs").addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("button") : null;
     if (!b) return;
-    section = b.getAttribute("data-s");
     var btns = this.querySelectorAll("button");
     for (var i = 0; i < btns.length; i++) btns[i].classList.toggle("active", btns[i] === b);
-    renderApps();
+    setSection(b.getAttribute("data-s"));
   });
 
   // ---- Job Applications now uses the shared standard filter (built in loadApps / showView) ----
