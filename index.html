@@ -1629,6 +1629,37 @@
      things to hide is a list that goes stale the next time a row is added. */
   .picking .modal > *:not(#bld-purpose):not(.modal-close) { display: none; }
 
+  /* The answers of a choice question: one line each, so an answer is a box rather than a
+     word inside a syntax. The price and the N/A tick are the two parts that only mean
+     anything on a scorecard, so only a scorecard shows them; the answer itself is shown
+     on every table, because "add |other to a choice" was just as undiscoverable there. */
+  .bld-answers { display: none; margin-top: 8px; }
+  .bld-field.has-answers .bld-answers { display: block; }
+  .bld-answers .ans-head { color: var(--muted); font-size: var(--fs-2); margin-bottom: 6px; }
+  .bld-answers .ans-head-pts { display: none; }
+  .scored-build .bld-answers .ans-head-pts { display: inline; }
+  .bld-answer { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .bld-answer input.ans-en, .bld-answer input.ans-ar { flex: 1; min-width: 80px; min-height: 34px;
+    padding: 6px 8px; border-radius: 8px; border: 1px solid var(--field-border);
+    background: var(--field-bg); color: var(--text); font-size: var(--fs-3); box-sizing: border-box; }
+  .bld-answer input.ans-pts { width: 62px; min-height: 34px; padding: 6px 8px; display: none;
+    border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg);
+    color: var(--text); font-size: var(--fs-3); box-sizing: border-box; }
+  .bld-answer .ans-flag { display: flex; align-items: center; gap: 4px; flex: 0 0 auto;
+    color: var(--muted); font-size: var(--fs-2); cursor: pointer; white-space: nowrap; }
+  .bld-answer .ans-flag input { width: auto; height: auto; min-height: 0; }
+  .bld-answer .ans-na-lbl { display: none; }
+  .scored-build .bld-answer input.ans-pts { display: block; }
+  .scored-build .bld-answer .ans-na-lbl { display: flex; }
+  .bld-answer .ans-rm { flex: 0 0 auto; background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: var(--fs-3); padding: 4px 6px; line-height: 1; }
+  .bld-answer .ans-rm:hover { color: var(--danger); }
+  .bld-answers .ans-add { background: none; border: 1px dashed var(--line); border-radius: 8px;
+    color: var(--silver); cursor: pointer; font-size: var(--fs-3); padding: 6px 12px; }
+  @media (max-width: 560px) {
+    .bld-answer { flex-wrap: wrap; }
+    .bld-answer input.ans-en, .bld-answer input.ans-ar { min-width: 120px; }
+  }
   /* Scorecard only: the price of a question, and the running total under the list. */
   .bld-field .r3 { display: none; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px;
                    padding-top: 8px; border-top: 1px dashed var(--line); }
@@ -5786,6 +5817,10 @@
   // get them out of step, and the symptom is a form asking for Iraq's shops on a table
   // nobody ever ticked Iraq on.
   function typeUsesOpts(v) { return v === "dropdown" || v === "multi_select" || v === "link"; }
+  // Of those, the ones whose "options" are ANSWERS a person picks from. They get the answers
+  // editor — a line per answer — instead of the free-text box, which stays for the link field
+  // because its options are a URL and a button label, not a list of answers.
+  function typeUsesAnswers(v) { return v === "dropdown" || v === "multi_select"; }
   function optsPlaceholder(v) {
     if (v === "link") return "URL | Button text (English) | نص الزر (عربي), e.g. https://airtable.com/… | Apply now | قدّم الآن";
     return "Options, one per line (or comma-separated): English|عربي, add |other to a choice to open a free-text box";
@@ -12117,6 +12152,178 @@
   // Which of the points boxes make sense for this question's type. A priced choice list
   // prices its choices in the Options box, so it shows its worked-out maximum instead of
   // a points box; everything else needs a number typed.
+  // ---- The answers editor -------------------------------------------------------------
+  // A choice question's answers, one line each: the answer, its Arabic, what it is worth, and
+  // the two flags. They used to be one free-text box holding "Spotless|ممتاز|pts:3" — a syntax
+  // the placeholder never mentioned, so the only way to price an answer was to be told how.
+  // The stored shape is untouched ({en, ar, points, na, other}); this is where it is typed.
+  //
+  // The lines are the truth, not a mirror of the box: rowAnswers reads the DOM, so an answer
+  // with a comma in it stays one answer. Nothing round-trips through the comma-separated
+  // string any more, which is what made "Clean, tidy and stocked" impossible to type.
+  function addAnswerRow(row, o) {
+    o = o || {};
+    var line = document.createElement("div");
+    line.className = "bld-answer";
+    line.innerHTML =
+      '<input class="ans-en" placeholder="Answer (English)">' +
+      '<input class="ans-ar" dir="rtl" placeholder="الإجابة (عربي)">' +
+      '<input class="ans-pts" type="number" step="0.5" placeholder="pts" title="Points this answer earns">' +
+      '<label class="ans-flag ans-na-lbl" title="Does not apply here — picking this takes the question out of the total, rather than scoring zero"><input type="checkbox" class="ans-na"> N/A</label>' +
+      '<label class="ans-flag" title="Picking this opens a free-text box"><input type="checkbox" class="ans-other"> Other</label>' +
+      '<button type="button" class="ans-rm" title="Remove this answer">✕</button>';
+    setAnswerLine(line, o);
+    [".ans-en", ".ans-ar", ".ans-pts", ".ans-na", ".ans-other"].forEach(function (s) {
+      var el = line.querySelector(s);
+      el.addEventListener("input", function () { answersChanged(row); });
+      el.addEventListener("change", function () { answersChanged(row); });
+    });
+    // A list pasted into the answer box becomes the lines it describes, so importing thirty
+    // answers is still one paste rather than thirty clicks on Add answer.
+    line.querySelector(".ans-en").addEventListener("paste", function (e) {
+      var cd = e.clipboardData || window.clipboardData;
+      var txt = cd ? cd.getData("text") : "";
+      if (!/[\r\n]/.test(txt)) return;              // a single answer pastes as itself
+      var list = pastedAnswers(txt);
+      if (!list.length) return;
+      e.preventDefault();
+      setAnswerLine(line, list[0]);
+      var at = line;
+      for (var i = 1; i < list.length; i++) {
+        var next = addAnswerRow(row, list[i]);
+        at.parentNode.insertBefore(next, at.nextSibling);
+        at = next;
+      }
+      answersChanged(row);
+    });
+    line.querySelector(".ans-rm").addEventListener("click", function () {
+      line.remove();
+      // Never leave a question with no way to add the next answer back.
+      if (!row.querySelectorAll(".bld-answer").length) addAnswerRow(row, {});
+      answersChanged(row);
+    });
+    row.querySelector(".ans-list").appendChild(line);
+    return line;
+  }
+  function setAnswerLine(line, o) {
+    o = o || {};
+    line.querySelector(".ans-en").value = o.en || "";
+    line.querySelector(".ans-ar").value = o.ar || "";
+    line.querySelector(".ans-pts").value = typeof o.points === "number" && !isNaN(o.points) ? o.points : "";
+    line.querySelector(".ans-na").checked = !!o.na;
+    line.querySelector(".ans-other").checked = !!o.other;
+  }
+  // A question always ends in an empty line once its last answer has a name, so there is
+  // somewhere to type the next one without reaching for a button. Deliberately NOT done when
+  // a saved question is opened: three answers should look like three, not four.
+  function ensureTrailingAnswer(row) {
+    var lines = row.querySelectorAll(".bld-answer");
+    var last = lines[lines.length - 1];
+    if (last && last.querySelector(".ans-en").value.trim()) addAnswerRow(row, {});
+  }
+  function answersChanged(row) {
+    ensureTrailingAnswer(row);
+    bldScoreVisibility(row);
+    refreshBuilderTotal();
+    saveDraft();
+  }
+  function renderAnswers(row, list) {
+    var host = row.querySelector(".ans-list");
+    host.innerHTML = "";
+    // An empty list still gets one line: a question with nowhere to type its first answer
+    // reads as a question that cannot have any.
+    (list && list.length ? list : [{}]).forEach(function (o) { addAnswerRow(row, o); });
+  }
+  // The answers of one row, in the shape the save and the database use. A line with no
+  // English name is not an answer — it is the empty line waiting at the bottom.
+  function rowAnswers(row) {
+    return [].slice.call(row.querySelectorAll(".bld-answer")).map(function (line) {
+      var en = line.querySelector(".ans-en").value.trim();
+      if (!en) return null;
+      var o = { en: en, ar: line.querySelector(".ans-ar").value.trim() };
+      var p = parseFloat(line.querySelector(".ans-pts").value);
+      if (!isNaN(p)) o.points = p;
+      if (line.querySelector(".ans-na").checked) o.na = true;
+      if (line.querySelector(".ans-other").checked) o.other = true;
+      return o;
+    }).filter(Boolean);
+  }
+  // What the DRAFT keeps, which is not the same list. An answer whose English name has not
+  // been typed yet is not an answer — rowAnswers is right to drop it — but it is work, and a
+  // draft that dropped it would swallow half a line on a refresh.
+  function rowDraftAnswers(row) {
+    if (!typeUsesAnswers(row.querySelector(".ftype").value)) return null;
+    return [].slice.call(row.querySelectorAll(".bld-answer")).map(function (line) {
+      var o = { en: line.querySelector(".ans-en").value.trim(), ar: line.querySelector(".ans-ar").value.trim() };
+      var p = parseFloat(line.querySelector(".ans-pts").value);
+      if (!isNaN(p)) o.points = p;
+      if (line.querySelector(".ans-na").checked) o.na = true;
+      if (line.querySelector(".ans-other").checked) o.other = true;
+      return o;
+    }).filter(function (o) { return o.en || o.ar || typeof o.points === "number"; });
+  }
+  // The `options` one row hands the save, or the reason it cannot. Lifted out of the save
+  // itself so that what reaches the database is testable without driving a whole table
+  // through it — and so the four types that mean four different things by "options" are
+  // side by side rather than spread down a hundred-line loop.
+  function rowOptionsForSave(row, label) {
+    var type = row.querySelector(".ftype").value;
+    if (typeUsesAnswers(type)) {
+      var list = rowAnswers(row);
+      if (!list.length) return { error: "Choice questions need at least one answer." };
+      return { options: list };
+    }
+    if (type === "link") {
+      // A LINKED RECORD comes first, and the ordering is the fix. This branch used to
+      // demand a URL out of a box that was empty for all 200 of them, fail the check and
+      // abandon the save of the whole table, with a message about a URL for a question that
+      // has nothing to do with URLs. The metadata was put on the row when the editor opened;
+      // it goes back exactly as it came, because nothing in this editor can meaningfully
+      // change which table a link points at.
+      //
+      // Read only while the question is still a link: switch its type to Short text and the
+      // attribute is ignored, so `links_to_table` does not outlive the link.
+      var lrec = row.getAttribute("data-linkrec");
+      if (lrec) {
+        try { return { options: JSON.parse(lrec) }; }
+        catch (e) { return { error: "Could not read the linked-record settings for “" + (label || "") + "”." }; }
+      }
+      // A link BUTTON stores its URL and button text in options: "url | text | text_ar".
+      var kv = row.querySelector(".opts").value.trim().split("|");
+      var url = (kv[0] || "").trim();
+      if (!/^https?:\/\//i.test(url)) return { error: "A link field needs a URL starting with http:// or https://" };
+      return { options: { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" } };
+    }
+    if (type === "branch") {
+      // The shops a branch question offers are the shops of the countries THIS FORM covers —
+      // the country groups ticked at the top, never a second list typed here. A form covering
+      // two offers both until its country question is answered, and that country's shops
+      // after; a form covering one offers only that one's, and never asks. Either way the
+      // grouping is `branches.list_key`, the country group kept in the Countries manager — no
+      // shop is ever sorted by reading a country out of its name.
+      //
+      // With NO country ticked there is nothing to derive from, and the question KEEPS the
+      // list it already has. Three live tables depend on this — Customer Complaints, Shop
+      // Audit and Shop Spot Check (QC) all ask for Lebanon's shops as well as Jordan's and
+      // none of them has a country ticked yet — so deriving "jo" here would take Lebanon's
+      // shops off three working forms on the next unrelated save, and say nothing.
+      return { options: { list: branchScopeList(builderScope().countries, row.querySelector(".opts").value) } };
+    }
+    return { options: null };
+  }
+  // Which editor this question's type calls for, and the free-text box hidden when it is the
+  // answers editor's turn. The box stays in the row either way: a branch question keeps its
+  // stored list in it, and reads it back on save.
+  function syncRowOptsUi(row) {
+    var v = row.querySelector(".ftype").value;
+    var ans = typeUsesAnswers(v);
+    row.classList.toggle("has-answers", ans);
+    var o = row.querySelector(".opts");
+    o.style.display = (typeUsesOpts(v) && !ans) ? "" : "none";
+    o.placeholder = optsPlaceholder(v);
+    bldGrow(o);
+    if (ans && !row.querySelectorAll(".bld-answer").length) renderAnswers(row, []);
+  }
   function bldScoreVisibility(row) {
     var type = row.querySelector(".ftype").value;
     var choices = type === "dropdown" || type === "multi_select";
@@ -12125,7 +12332,7 @@
     var num = type === "number";
     row.querySelector(".fscop").style.display = num ? "" : "none";
     row.querySelector(".fscval").style.display = num && row.querySelector(".fscop").value ? "" : "none";
-    row.querySelector(".r3 .pl").textContent = choices ? "Priced per choice in Options" : "Points";
+    row.querySelector(".r3 .pl").textContent = choices ? "Priced per answer above" : "Points";
     var max = questionMaxPoints(rowFieldShape(row));
     row.querySelector(".qmax").textContent = max ? "max " + max : "";
   }
@@ -12133,8 +12340,7 @@
   // use, so the total on screen is computed from exactly what will be stored.
   function rowFieldShape(row) {
     var type = row.querySelector(".ftype").value;
-    var options = (type === "dropdown" || type === "multi_select")
-      ? parseChoiceList(row.querySelector(".opts").value) : null;
+    var options = typeUsesAnswers(type) ? rowAnswers(row) : null;
     return { type: type, options: options, scoring: rowScoring(row) };
   }
   // The scoring rule for one row, or null when this question is not priced. Reading it
@@ -12143,8 +12349,8 @@
   function rowScoring(row) {
     var type = row.querySelector(".ftype").value;
     var section = row.querySelector(".fsec").value.trim();
-    if (type === "dropdown" || type === "multi_select") {
-      var list = parseChoiceList(row.querySelector(".opts").value);
+    if (typeUsesAnswers(type)) {
+      var list = rowAnswers(row);
       var priced = list.some(function (o) { return typeof o.points === "number"; });
       if (!priced) return null;
       var sc = { rule: "choices" };
@@ -12189,6 +12395,11 @@
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
       afterFieldSelectHtml() + condSelectHtml() +
       '<button type="button" class="rm">Remove</button></div>' +
+      '<div class="bld-answers">' +
+        '<div class="ans-head">Answers people can pick from' +
+          '<span class="ans-head-pts"> — and what each one is worth</span></div>' +
+        '<div class="ans-list"></div>' +
+        '<button type="button" class="ans-add">+ Add answer</button></div>' +
       '<div class="r3">' +
         '<span class="pl">Points</span><input class="fpts" type="number" min="0" step="0.5" placeholder="0">' +
         '<select class="fscearn"><option value="">for answering</option><option value="Yes">for Yes</option><option value="No">for No</option></select>' +
@@ -12206,9 +12417,13 @@
       row.querySelector(".lab-ar").value = data.labelAr || "";
       var sel = row.querySelector(".ftype"); if (data.type) sel.value = data.type;
       var optsInp = row.querySelector(".opts");
-      optsInp.style.display = typeUsesOpts(sel.value) ? "" : "none";
-      optsInp.placeholder = optsPlaceholder(sel.value);
       optsInp.value = data.opts || "";
+      // The saved options themselves when we have them, and only the typed string as a
+      // fallback: a draft written before the answers editor existed has nothing else, and
+      // the importer's own text still parses the way it always did.
+      if (typeUsesAnswers(sel.value)) {
+        renderAnswers(row, Array.isArray(data.answers) ? data.answers : parseChoiceList(data.opts));
+      }
       // A linked record's options were set by the importer and name a table by id. They are
       // carried on the row so the save can put them back untouched, and the box is made
       // read-only because the text in it is a description, not a value anyone can retype.
@@ -12239,14 +12454,20 @@
       if (data.scVal != null && data.scVal !== "") row.querySelector(".fscval").value = data.scVal;
       if (data.scSec) row.querySelector(".fsec").value = data.scSec;
     }
+    syncRowOptsUi(row);
     bldScoreVisibility(row);
+    row.querySelector(".ans-add").addEventListener("click", function () {
+      var line = addAnswerRow(row, {});
+      line.querySelector(".ans-en").focus();
+      refreshBuilderTotal(); saveDraft();
+    });
     [".fpts", ".fscearn", ".fscop", ".fscval", ".fsec"].forEach(function (s) {
       var el = row.querySelector(s);
       el.addEventListener("input", function () { bldScoreVisibility(row); refreshBuilderTotal(); saveDraft(); });
       el.addEventListener("change", function () { bldScoreVisibility(row); refreshBuilderTotal(); saveDraft(); });
     });
     row.querySelector(".opts").addEventListener("input", function () { bldScoreVisibility(row); refreshBuilderTotal(); });
-    row.querySelector(".ftype").addEventListener("change", function () { var o = row.querySelector(".opts"); o.style.display = typeUsesOpts(this.value) ? "" : "none"; o.placeholder = optsPlaceholder(this.value); bldGrow(o); bldScoreVisibility(row); refreshBuilderTotal(); });
+    row.querySelector(".ftype").addEventListener("change", function () { syncRowOptsUi(row); bldScoreVisibility(row); refreshBuilderTotal(); });
     var condSel = row.querySelector(".fcond");
     condSel.addEventListener("mousedown", function () { refreshCondSelect(row); });
     condSel.addEventListener("change", function () { syncCondRow(row); saveDraft(); });
@@ -12293,6 +12514,7 @@
         return {
           label: r.querySelector(".lab").value, labelAr: r.querySelector(".lab-ar").value,
           type: r.querySelector(".ftype").value, opts: r.querySelector(".opts").value,
+          answers: rowDraftAnswers(r),
           required: r.querySelector(".freq").checked, internal: r.querySelector(".fint").checked,
           condIdx: ci, condVal: ci == null ? "" : r.querySelector(".fcondv").value,
           pts: r.querySelector(".fpts").value, scEarn: r.querySelector(".fscearn").value,
@@ -12305,7 +12527,10 @@
   function draftHasContent(d) {
     if (!d) return false;
     if ((d.name || "").trim() || (d.nameAr || "").trim() || (d.intro || "").trim() || (d.introAr || "").trim()) return true;
-    return (d.fields || []).some(function (f) { return (f.label || "").trim() || (f.labelAr || "").trim() || (f.opts || "").trim(); });
+    return (d.fields || []).some(function (f) {
+      return (f.label || "").trim() || (f.labelAr || "").trim() || (f.opts || "").trim() ||
+             (f.answers || []).length;
+    });
   }
   function saveDraft() {
     if (builderMode !== "create") return; // drafts are only for brand-new tables
@@ -12535,7 +12760,7 @@
     }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
-      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
+      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
       resolveCondPending();
       requestAnimationFrame(growAllBld);
     }).catch(function () { msg.textContent = ""; });
@@ -12676,21 +12901,33 @@
   // slots is how "other" ends up meaning "priced at 3" the day somebody adds a price.
   // Tokens: "other" opens a free-text box, "na" takes the question out of the score total,
   // "pts:3" prices the choice.
-  function parseChoiceList(raw) {
-    return String(raw || "").split(/[\r\n,]+/).map(function (p) {
-      var kv = p.split("|");
-      var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
-      for (var i = 2; i < kv.length; i++) {
-        var tok = (kv[i] || "").trim().toLowerCase();
-        if (tok === "other") o.other = true;
-        else if (tok === "na") o.na = true;
-        else if (tok.indexOf("pts:") === 0) {
-          var n = parseFloat(tok.slice(4));
-          if (!isNaN(n)) o.points = n;      // a price that is not a number is no price at all
-        }
+  // ONE answer, out of "English|عربي|na|other|pts:3". Split out of parseChoiceList because a
+  // pasted list is separated by newlines only: a comma belongs to the answer that contains it
+  // ("Clean, tidy and stocked" is one answer, not two), and only the whole-box parse below
+  // still treats a comma as a separator, for the text somebody typed there years ago.
+  function parseChoice(part) {
+    var kv = String(part).split("|");
+    var o = { en: (kv[0] || "").trim(), ar: (kv[1] || "").trim() };
+    for (var i = 2; i < kv.length; i++) {
+      var tok = (kv[i] || "").trim().toLowerCase();
+      if (tok === "other") o.other = true;
+      else if (tok === "na") o.na = true;
+      else if (tok.indexOf("pts:") === 0) {
+        var n = parseFloat(tok.slice(4));
+        if (!isNaN(n)) o.points = n;      // a price that is not a number is no price at all
       }
-      return o;
-    }).filter(function (o) { return o.en; });
+    }
+    return o;
+  }
+  function parseChoiceList(raw) {
+    return String(raw || "").split(/[\r\n,]+/).map(parseChoice)
+      .filter(function (o) { return o.en; });
+  }
+  // A list pasted into an answer box. One answer per LINE, so the commas inside an answer
+  // survive the paste exactly as they survive being typed.
+  function pastedAnswers(txt) {
+    return String(txt || "").split(/[\r\n]+/).map(parseChoice)
+      .filter(function (o) { return o.en; });
   }
   function optsToString(options) {
     if (!options) return "";
@@ -12761,7 +12998,7 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), showIf: f.show_if, scoring: f.scoring });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), showIf: f.show_if, scoring: f.scoring });
       });
       resolveCondPending();
       if (presetType) {
@@ -12921,48 +13158,9 @@
       var lab = rows[i].querySelector(".lab").value.trim();
       if (!lab) { msg.set("Every question needs an English label.", "err"); return; }
       var type = rows[i].querySelector(".ftype").value;
-      var options = null;
-      if (type === "dropdown" || type === "multi_select") {
-        var raw = rows[i].querySelector(".opts").value.trim();
-        if (!raw) { msg.set("Choice questions need options.", "err"); return; }
-        options = parseChoiceList(raw);
-      } else if (type === "link") {
-        // A LINKED RECORD comes first, and the ordering is the fix. This branch used to
-        // demand a URL out of a box that was empty for all 200 of them, fail the check and
-        // `return` — abandoning the save of the whole table, with a message about a URL for
-        // a question that has nothing to do with URLs. The metadata was put on the row when
-        // the editor opened; it goes back exactly as it came, because nothing in this editor
-        // can meaningfully change which table a link points at.
-        //
-        // Read only while the question is still a link: switch its type to Short text and
-        // the attribute is ignored, so `links_to_table` does not outlive the link.
-        var lrec = rows[i].getAttribute("data-linkrec");
-        if (lrec) {
-          try { options = JSON.parse(lrec); }
-          catch (e) { msg.set("Could not read the linked-record settings for “" + lab + "”.", "err"); return; }
-        } else {
-          // A link BUTTON stores its URL and button text in options: "url | text | text_ar".
-          var lraw = rows[i].querySelector(".opts").value.trim();
-          var kv = lraw.split("|");
-          var url = (kv[0] || "").trim();
-          if (!/^https?:\/\//i.test(url)) { msg.set("A link field needs a URL starting with http:// or https://", "err"); return; }
-          options = { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" };
-        }
-      } else if (type === "branch") {
-        // The shops a branch question offers are the shops of the countries THIS FORM
-        // covers — the country groups ticked at the top, never a second list typed here.
-        // A form covering two offers both until its country question is answered, and that
-        // country's shops after; a form covering one offers only that one's, and never asks.
-        // Either way the grouping is `branches.list_key`, which is the country group kept in
-        // the Countries manager — no shop is ever sorted by reading a country out of its name.
-        //
-        // With NO country ticked there is nothing to derive from, and the question KEEPS the
-        // list it already has. Three live tables depend on this — Customer Complaints, Shop
-        // Audit and Shop Spot Check (QC) all ask for Lebanon's shops as well as Jordan's and
-        // none of them has a country ticked yet — so deriving "jo" here would take Lebanon's
-        // shops off three working forms on the next unrelated save, and say nothing.
-        options = { list: branchScopeList(builderScope().countries, rows[i].querySelector(".opts").value) };
-      }
+      var got = rowOptionsForSave(rows[i], lab);
+      if (got.error) { msg.set(got.error, "err"); return; }
+      var options = got.options;
       var afterSel = rows[i].querySelector(".fafter");
       // "ask only if" points at another row. If that row is already a saved field the
       // condition can be written straight away; if it is new too, its id does not exist

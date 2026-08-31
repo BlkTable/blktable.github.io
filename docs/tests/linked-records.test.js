@@ -82,11 +82,19 @@ t('a linked record with no name still says something rather than nothing', () =>
 // ---- the save path, read out of the page as source ----
 // A helper nobody calls is a feature nobody has, and the failure here is silent-ish: the
 // save just refuses with a confusing message.
+// rowOptionsForSave is the seam the save reads a row's options through: it moved out of the
+// save loop when choice questions got the answers editor, and it is where the ordering below
+// has to hold.
+function linkBranch() {
+  const at = JS.indexOf('if (type === "link") {');
+  assert.ok(at > -1, 'the link branch of the save has moved');
+  const end = JS.indexOf('if (type === "branch") {', at);
+  assert.ok(end > at, 'the branch case no longer follows the link case');
+  return JS.slice(at, end);
+}
 t('the save keeps the linked-record metadata instead of parsing the box for a URL', () => {
   assert.ok(/data-linkrec/.test(JS), 'the row never carries the metadata to save time');
-  const at = JS.indexOf('} else if (type === "link") {');
-  assert.ok(at > -1, 'the link branch of the save has moved');
-  const branch = JS.slice(at, JS.indexOf('} else if (type === "branch") {', at));
+  const branch = linkBranch();
   assert.ok(/linkrec/.test(branch), 'the link branch does not check for linked-record metadata');
   // and the URL rule must sit AFTER that check, or it still rejects the save first
   assert.ok(branch.indexOf('linkrec') < branch.indexOf('needs a URL'),
@@ -94,10 +102,9 @@ t('the save keeps the linked-record metadata instead of parsing the box for a UR
 });
 t('the metadata is only kept while the question is still a link', () => {
   // Changing the type to Short text and saving must not leave links_to_table behind.
-  const at = JS.indexOf('} else if (type === "link") {');
-  const branch = JS.slice(at, JS.indexOf('} else if (type === "branch") {', at));
-  assert.ok(/type === "link"/.test(JS.slice(0, at + 40)), 'the branch is no longer gated on the type');
+  const branch = linkBranch();
   assert.ok(branch.length > 0);
+  assert.ok(/^if \(type === "link"\)/.test(branch.trim()), 'the branch is no longer gated on the type');
 });
 t('the editor seeds the row from the field, so an existing link survives being opened', () => {
   assert.ok(/linkRec:/.test(JS), 'openBuilderEdit does not pass the linked-record options through');
