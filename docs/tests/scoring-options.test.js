@@ -22,7 +22,11 @@ function load(file, names) {
   return ctx.API;
 }
 
-const { parseChoiceList, optsToString } = load('index.html', ['parseChoiceList', 'optsToString', 'linkRecordOptions']);
+// parseChoice is one answer out of "English|عربي|pts:3"; parseChoiceList is the whole box,
+// which still splits on commas as well as newlines for the text people typed there before
+// the answers editor existed.
+const { parseChoiceList, optsToString } =
+  load('index.html', ['parseChoice', 'parseChoiceList', 'optsToString', 'linkRecordOptions']);
 
 let n = 0;
 const t = (name, fn) => { try { fn(); n++; } catch (e) { console.log('FAIL: ' + name + ' -> ' + e.message); process.exitCode = 1; } };

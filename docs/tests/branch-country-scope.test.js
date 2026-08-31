@@ -73,8 +73,10 @@ t('a branch question no longer has a list typed into it', () => {
   assert.ok(!/Branch lists/.test(p), 'the Options box still explains a branch list to type');
 });
 t('the scope is written from the countries ticked on the table', () => {
-  const s = grab(SRC, 'runBuilderSave');
-  assert.ok(/options = \{ list: branchScopeList\(builderScope\(\)\.countries,/.test(s),
+  // rowOptionsForSave is the seam the save reads a row's options through — the branch case
+  // moved there with the rest when choice questions got the answers editor.
+  const s = grab(SRC, 'rowOptionsForSave');
+  assert.ok(/list: branchScopeList\(builderScope\(\)\.countries,/.test(s),
     'a branch question is not scoped from the country ticks');
 });
 t('ticked countries are what the question is scoped to', () => {
@@ -102,8 +104,8 @@ t('and only a question with no list at all falls back to Jordan', () => {
 t('the save reads the list off the row, so it has something to keep', () => {
   // The Options box is hidden for a branch question now but still holds its value. Reading
   // builderScope() alone is what would have lost it.
-  const s = grab(SRC, 'runBuilderSave');
-  assert.ok(/branchScopeList\(builderScope\(\)\.countries, rows\[i\]\.querySelector\("\.opts"\)\.value\)/.test(s),
+  const s = grab(SRC, 'rowOptionsForSave');
+  assert.ok(/branchScopeList\(builderScope\(\)\.countries, row\.querySelector\("\.opts"\)\.value\)/.test(s),
     'the existing branch list is not passed in, so nothing can be kept');
 });
 
