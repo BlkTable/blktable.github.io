@@ -51,6 +51,14 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><style>${style}</
 ${fns}
 ${levels}
 var COUNTRY_LIST = [{ code: 'jo', name_en: 'Jordan' }, { code: 'lebanon', name_en: 'Lebanon' }];
+// The branch list the picker groups by country. Real names, so a change to the grouping
+// shows up as the wrong heading rather than as nothing at all.
+var allBranches = [
+  { name: 'Khalda', list_key: 'jo' },
+  { name: 'Muqabalein', list_key: 'jo' },
+  { name: 'Muqabalein 5B', list_key: 'jo' },
+  { name: 'Sweileh', list_key: 'jo' }
+];
 var ITEMS = [
   { key: 'a', name: 'Job Applications' },
   { key: 'b', name: 'Handover Sheet', alt: 'كشف التسليم' },
@@ -146,6 +154,86 @@ var host2 = document.createElement('div'); document.body.appendChild(host2);
 accessPicker(host2, { items: [], noun: 'people', empty: 'No reviewer accounts yet.' });
 ok('an empty list says what to do about it', host2.querySelector('.ap-empty').textContent === 'No reviewer accounts yet.',
    host2.querySelector('.ap-empty').textContent);
+
+// ---- the branch limit, and the staff-fields limit ----
+// A branch account is the whole point of this control: it must appear ONLY on a table
+// that actually asks a branch question, because the read policy only limits those.
+var host3 = document.createElement('div'); document.body.appendChild(host3);
+var BR_ITEMS = [
+  { key: 'ms', name: 'Mystery Shopper' },      // asks a branch question
+  { key: 'cc', name: 'Customer Complaints' },  // asks a branch question
+  { key: 'nb', name: 'Contact Us' }            // does NOT
+];
+var BR_LIST = ['Khalda', 'Muqabalein', 'Muqabalein 5B', 'Sweileh'];
+var P3 = accessPicker(host3, {
+  items: BR_ITEMS,
+  initial: [{ key: 'cc', can_edit: true, can_manage: false, countries: [], branches: ['Khalda'], fieldsInternal: true }],
+  noun: 'tables', scope: true, fieldLimit: true,
+  branchesFor: function (it) { return it.key === 'nb' ? [] : BR_LIST; }
+});
+function row3(k) { return host3.querySelector('.ap-row[data-key="' + k + '"]'); }
+function val3(k) { return P3.value().filter(function (v) { return v.key === k; })[0]; }
+function keys3() { return [].slice.call(host3.querySelectorAll('.ap-row')).map(function (r) { return r.getAttribute('data-key'); }); }
+function pick3(k, level) { var s = row3(k).querySelector('.ap-level'); s.value = level; s.dispatchEvent(new Event('change', { bubbles: true })); }
+function tickBranch(k, name) {
+  var b = row3(k).querySelector('.ap-br-box[value="' + name + '"]');
+  b.checked = !b.checked; b.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+ok('a table with no branch question offers no branch limit', !row3('nb').querySelector('.ap-br'));
+ok('a table that asks one does offer it', !!row3('ms').querySelector('.ap-br'));
+ok('the branch limit is hidden until the table is granted', !shown(row3('ms').querySelector('.ap-br')));
+ok('a stored branch is read back and shown', shown(row3('cc').querySelector('.ap-br')) &&
+   row3('cc').querySelector('.ap-br-box[value="Khalda"]').checked === true);
+ok('one branch is named in the summary', /Khalda/.test(row3('cc').querySelector('.ap-br-sum').textContent),
+   row3('cc').querySelector('.ap-br-sum').textContent);
+ok('a stored staff-fields limit is read back', row3('cc').querySelector('.ap-fl').checked === true);
+ok('and it is written back out', val3('cc').fieldsInternal === true);
+
+// grant a new table and limit it to two shops
+tick(row3('ms').querySelector('.ap-box'));
+ok('a freshly granted row starts on every branch',
+   /Every branch/.test(row3('ms').querySelector('.ap-br-sum').textContent),
+   row3('ms').querySelector('.ap-br-sum').textContent);
+ok('and writes no branch limit at all', val3('ms').branches.length === 0);
+tickBranch('ms', 'Muqabalein');
+tickBranch('ms', 'Muqabalein 5B');
+ok('two shops are counted, not listed one by one',
+   /2 branches/.test(row3('ms').querySelector('.ap-br-sum').textContent),
+   row3('ms').querySelector('.ap-br-sum').textContent);
+ok('and both are written back', val3('ms').branches.sort().join('|') === 'Muqabalein|Muqabalein 5B',
+   val3('ms').branches.join('|'));
+
+// the staff-fields limit only means anything with edit rights
+ok('staff-fields is hidden on a view-only row', !shown(row3('ms').querySelector('.ap-fields')));
+pick3("ms", "edit");
+ok('and appears once the row can edit', shown(row3('ms').querySelector('.ap-fields')));
+tick(row3('ms').querySelector('.ap-fl'));
+ok('ticking it is written back', val3('ms').fieldsInternal === true);
+// dropping back to view must not leave a limit set that can never apply
+pick3("ms", "view");
+ok('dropping back to view clears the staff-fields limit', val3('ms').fieldsInternal === false);
+ok('and the box is unticked too', row3('ms').querySelector('.ap-fl').checked === false);
+
+// the branch list has its own search, separate from the picker's table search
+var pop = row3('ms').querySelector('.ap-br-pop');
+row3('ms').querySelector('.ap-br-open').click();
+ok('Change opens the branch list', pop.classList.contains('open'));
+var bq = pop.querySelector('.ap-br-q');
+bq.value = 'muq'; bq.dispatchEvent(new Event('input', { bubbles: true }));
+var visible = [].slice.call(pop.querySelectorAll('.ap-br-list label')).filter(shown).length;
+ok('searching inside the branch list narrows it', visible === 2, 'visible=' + visible);
+ok('and does not touch the table list above it', keys3().length === 3, keys3().join(','));
+bq.value = ''; bq.dispatchEvent(new Event('input', { bubbles: true }));
+ok('clearing the branch search brings them all back',
+   [].slice.call(pop.querySelectorAll('.ap-br-list label')).filter(shown).length === 4);
+
+// un-granting a row must not leave its branch limit behind to be re-saved later
+tick(row3('cc').querySelector('.ap-box'));
+tick(row3('cc').querySelector('.ap-box'));
+ok('re-granting a row starts clean, with no branch carried over',
+   val3('cc').branches.length === 0 && val3('cc').fieldsInternal === false,
+   JSON.stringify(val3('cc')));
 
 out.push('RESULT ' + pass + ' passed, ' + fail + ' failed');
 document.getElementById('out').textContent = out.join('\\n');

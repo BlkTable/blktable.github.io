@@ -6,7 +6,7 @@ function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matc
 function grab(js,name){const at=js.search(new RegExp('\\bfunction\\s+'+name+'\\s*\\('));if(at===-1)throw new Error('no fn '+name);const open=js.indexOf('{',at);let d=0;for(let i=open;i<js.length;i++){if(js[i]==='{')d++;else if(js[i]==='}'){d--;if(!d)return js.slice(at,i+1);}}throw new Error('unbalanced '+name);}
 function grabVar(js,name){const m=js.match(new RegExp('\\n  var '+name+' = [\\s\\S]*?;(?=\\r?\\n)'));if(!m)throw new Error('no var '+name);return m[0];}
 function load(names,vars){const js=scripts('index.html');const body=(vars||[]).map(v=>grabVar(js,v)).join('\n')+'\n'+names.map(n=>grab(js,n)).join('\n');const ctx={console};vm.createContext(ctx);new vm.Script('(function(){'+body+'\nthis.API={'+names.concat(vars||[]).join(',')+'};}).call(this)').runInContext(ctx);return ctx.API;}
-const API = load(['rebuildCountryIndex','canonicalCountry','recordBranch','branchListCountry','branchCountry','branchListKeys','recordCountry','scopeFromCountries','countriesFromScope','scopeLabel','countryFacets','countryLabel'], ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','BRANCH_RE','allBranches']);
+const API = load(['rebuildCountryIndex','canonicalCountry','recordBranch','branchListCountry','branchCountry','branchListKeys','recordCountry','scopeFromCountries','countriesFromScope','branchesFromScope','fieldsInternalFromScope','scopeFrom','scopeLabel','countryFacets','countryLabel'], ['DEFAULT_COUNTRIES','COUNTRY_LIST','COUNTRY_INDEX','BRANCH_RE','allBranches']);
 API.rebuildCountryIndex();
 // Objects/arrays built inside the vm sandbox use its own Array/Object intrinsics, so a raw
 // deepStrictEqual against a host-realm literal fails on prototype identity. asWritten normalizes
@@ -107,6 +107,32 @@ t('countriesFromScope back-compat: legacy {phone_prefix} maps to a country', () 
 t('scopeLabel summarises', () => {
   assert.strictEqual(API.scopeLabel(null), '');
   assert.strictEqual(API.scopeLabel({country:['jo','iraq']}), 'Jordan, Iraq');
+});
+t('scopeLabel names one branch, counts several, and flags the field limit', () => {
+  assert.strictEqual(API.scopeLabel({branch:['Khalda']}), 'Khalda');
+  assert.strictEqual(API.scopeLabel({branch:['Muqabalein','Muqabalein 5B']}), '2 branches');
+  assert.strictEqual(API.scopeLabel({branch:['Khalda'],fields:'internal'}), 'Khalda, staff fields only');
+  assert.strictEqual(API.scopeLabel({country:['jo'],branch:['Khalda']}), 'Jordan, Khalda');
+});
+t('branchesFromScope only trusts an array', () => {
+  assert.deepStrictEqual(asWritten(API.branchesFromScope({branch:['Khalda']})), ['Khalda']);
+  assert.deepStrictEqual(asWritten(API.branchesFromScope(null)), []);
+  assert.deepStrictEqual(asWritten(API.branchesFromScope({})), []);
+  // a malformed scope must not be read as a branch list
+  assert.deepStrictEqual(asWritten(API.branchesFromScope({branch:'Khalda'})), []);
+});
+t('fieldsInternalFromScope is exact, not truthy', () => {
+  assert.strictEqual(API.fieldsInternalFromScope({fields:'internal'}), true);
+  assert.strictEqual(API.fieldsInternalFromScope({fields:'all'}), false);
+  assert.strictEqual(API.fieldsInternalFromScope(null), false);
+});
+t('scopeFrom builds all three limits, and NULL when there is no limit at all', () => {
+  // an unrestricted grant must store a clean null, not {}, or every row looks scoped
+  assert.strictEqual(API.scopeFrom({countries:[],branches:[],fieldsInternal:false}), null);
+  assert.deepStrictEqual(asWritten(API.scopeFrom({countries:[],branches:['Khalda'],fieldsInternal:false})),
+    {branch:['Khalda']});
+  assert.deepStrictEqual(asWritten(API.scopeFrom({countries:['jo'],branches:['Khalda'],fieldsInternal:true})),
+    {country:['jo'],branch:['Khalda'],fields:'internal'});
 });
 t('countryFacets counts by resolved country, blanks under __none', () => {
   const fields=[{id:'q',label:'Country',type:'country'}];

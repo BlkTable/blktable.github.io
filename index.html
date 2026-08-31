@@ -1678,6 +1678,8 @@
   .ap-acts { display: flex; gap: 10px; flex: 0 0 auto; }
   .ap-acts .linkbtn { padding: 0; font-size: var(--fs-2); }
   .ap-list { display: flex; flex-direction: column; max-height: 240px; overflow-y: auto; padding: 6px; }
+  /* set while a branch list is open — see the click handler in accessPicker */
+  .ap-list.br-open { max-height: 460px; }
   .ap-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; row-gap: 4px; padding: 6px 6px; border-radius: 8px; }
   .ap-row + .ap-row { border-top: 1px solid rgba(var(--wash),0.05); }
   .ap-row.on { background: rgba(214,218,222,0.06); }
@@ -1694,6 +1696,22 @@
   .ap-scope { display: none; flex-basis: 100%; padding: 2px 0 2px 27px; }
   .ap-row.on .ap-scope { display: block; }
   .ap-scope-lbl { color: var(--muted); font-size: var(--fs-1); margin-right: 6px; }
+  /* Branch limit. 43 shops will not fit as tick boxes on every row, so the row shows
+     what is set and opens the list only when asked. */
+  .ap-br { margin-top: 4px; }
+  .ap-br-sum { color: var(--muted); font-size: var(--fs-1); }
+  .ap-br-sum b { color: var(--text); font-weight: 600; }
+  .ap-br-open { margin-left: 6px; }
+  .ap-br-pop { display: none; margin-top: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field-bg); max-width: 520px; }
+  .ap-br-pop.open { display: block; }
+  .ap-br-q { width: 100%; height: 30px; margin-bottom: 6px; }
+  .ap-br-list { max-height: 150px; overflow-y: auto; }
+  .ap-br-cty { color: var(--muted); font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 2px; }
+  .ap-br-list label { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: var(--fs-2); }
+  .ap-br-list label input { width: auto; height: auto; }
+  .ap-br-none { color: var(--muted); font-size: var(--fs-1); padding: 6px 0; }
+  .ap-fields { display: none; flex-basis: 100%; padding: 2px 0 2px 27px; }
+  .ap-row.on.can-edit .ap-fields { display: block; }
   .ap-empty { color: var(--muted); font-size: var(--fs-3); padding: 14px 8px; text-align: center; }
   /* ---- The user modal ------------------------------------------------------------ */
   .u-sect { color: var(--silver); font-size: var(--fs-2); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
@@ -3462,7 +3480,13 @@
     opts = opts || {};
     var items = opts.items || [], noun = opts.noun || "items", sel = {};
     (opts.initial || []).forEach(function (a) {
-      sel[a.key] = { level: accessLevelOf(a), countries: (a.countries || []).slice(), prev: a };
+      sel[a.key] = {
+        level: accessLevelOf(a),
+        countries: (a.countries || []).slice(),
+        branches: (a.branches || []).slice(),
+        fieldsInternal: !!a.fieldsInternal,
+        prev: a
+      };
     });
     var q = "";
     host.className = "u-tables";
@@ -3477,17 +3501,74 @@
     var search = host.querySelector(".ap-search"), list = host.querySelector(".ap-list");
     var countEl = host.querySelector(".ap-count"), allBtn = host.querySelector(".ap-all"), clearBtn = host.querySelector(".ap-clear");
     function selCount() { return Object.keys(sel).length; }
-    function scopeHtml(key) {
+    // Which shops this row may be limited to. Empty means the row asks no branch
+    // question, so there is nothing to limit and the control is not drawn at all —
+    // the same rule the database applies (see submission_branch_ok).
+    function branchesFor(it) {
+      return (opts.branchesFor ? (opts.branchesFor(it) || []) : []);
+    }
+    function branchSummary(key, list) {
+      var picked = (sel[key] && sel[key].branches) || [];
+      if (!picked.length) return "<b>Every branch</b>";
+      if (picked.length === 1) return "<b>" + esc(picked[0]) + "</b>";
+      if (picked.length === list.length) return "<b>Every branch</b>";
+      return "<b>" + picked.length + " branches</b> · " + esc(picked.slice(0, 2).join(", ")) +
+        (picked.length > 2 ? " +" + (picked.length - 2) + " more" : "");
+    }
+    // A branch already ticked is listed even if it is now closed or is not in the
+    // offered list any more — otherwise opening this panel would silently drop it.
+    function branchOptionsHtml(key, list) {
+      var picked = (sel[key] && sel[key].branches) || [];
+      var names = list.slice();
+      picked.forEach(function (n) { if (names.indexOf(n) === -1) names.push(n); });
+      var byCty = {};
+      names.forEach(function (n) {
+        var b = (allBranches || []).filter(function (x) { return x.name === n; })[0];
+        var k = (b && b.list_key) || "other";
+        (byCty[k] = byCty[k] || []).push(n);
+      });
+      return Object.keys(byCty).map(function (k) {
+        var c = COUNTRY_LIST.filter(function (x) { return x.code === k; })[0];
+        return '<div class="ap-br-cty">' + esc(c ? c.name_en : k) + "</div>" +
+          byCty[k].map(function (n) {
+            return '<label><input type="checkbox" class="ap-br-box" value="' + esc(n) + '"' +
+              (picked.indexOf(n) > -1 ? " checked" : "") + "> " + esc(n) + "</label>";
+          }).join("");
+      }).join("");
+    }
+    function scopeHtml(it) {
       if (!opts.scope) return "";
-      return '<div class="ap-scope"><span class="ap-scope-lbl">Limit to:</span>' +
+      var key = it.key, list = branchesFor(it);
+      var html = '<div class="ap-scope"><span class="ap-scope-lbl">Limit to:</span>' +
         COUNTRY_LIST.map(function (c) {
           var on = sel[key] && sel[key].countries.indexOf(c.code) > -1;
           return '<label class="u-co"><input type="checkbox" class="ap-co" value="' + esc(c.code) + '"' + (on ? " checked" : "") + "> " + esc(c.name_en) + "</label>";
-        }).join("") + '<span class="ap-scope-lbl">none ticked = every country</span></div>';
+        }).join("") + '<span class="ap-scope-lbl">none ticked = every country</span>';
+      if (list.length) {
+        html += '<div class="ap-br">' +
+          '<span class="ap-br-sum">Branches: ' + branchSummary(key, list) + "</span>" +
+          '<button type="button" class="linkbtn ap-br-open">Change</button>' +
+          '<div class="ap-br-pop">' +
+            '<input class="ap-br-q" type="search" placeholder="Search branches…" autocomplete="off">' +
+            '<div class="ap-br-list">' + branchOptionsHtml(key, list) + "</div>" +
+            '<div class="ap-scope-lbl">none ticked = every branch</div>' +
+          "</div></div>";
+      }
+      return html + "</div>";
+    }
+    // Only meaningful with Can edit. Written to the scope as fields:"internal" and
+    // enforced by a database trigger, not by hiding inputs.
+    function fieldsHtml(it) {
+      if (!opts.fieldLimit) return "";
+      var s = sel[it.key];
+      return '<div class="ap-fields"><label class="u-co" title="They may fill in the staff follow-up fields but cannot change the answers the customer typed into the public link.">' +
+        '<input type="checkbox" class="ap-fl"' + (s && s.fieldsInternal ? " checked" : "") + "> " +
+        "may only edit the staff fields, not the customer's answers</label></div>";
     }
     function rowHtml(it) {
       var s = sel[it.key];
-      return '<div class="ap-row' + (s ? " on" : "") + '" data-key="' + esc(it.key) + '">' +
+      var canEdit = s && (s.level === "edit" || s.level === "manage");
+      return '<div class="ap-row' + (s ? " on" : "") + (canEdit ? " can-edit" : "") + '" data-key="' + esc(it.key) + '">' +
         '<label class="ap-pick"><input type="checkbox" class="ap-box"' + (s ? " checked" : "") + ">" +
           '<span class="ap-txt"><span class="ap-name">' + esc(it.name || "") + "</span>" +
           (it.sub ? '<span class="ap-sub">' + esc(it.sub) + "</span>" : "") + "</span></label>" +
@@ -3495,7 +3576,12 @@
           AP_LEVELS.map(function (l) {
             return '<option value="' + l.v + '" title="' + esc(l.hint) + '"' + (s && s.level === l.v ? " selected" : "") + ">" + esc(l.label) + "</option>";
           }).join("") + "</select>" +
-        scopeHtml(it.key) + "</div>";
+        scopeHtml(it) + fieldsHtml(it) + "</div>";
+    }
+    function repaintBranchSummary(row, key) {
+      var it = items.filter(function (x) { return x.key === key; })[0];
+      var sum = row.querySelector(".ap-br-sum");
+      if (it && sum) sum.innerHTML = "Branches: " + branchSummary(key, branchesFor(it));
     }
     function paintMeta() {
       var n = selCount();
@@ -3520,25 +3606,94 @@
       if (!row) return;
       var key = row.getAttribute("data-key"), lv = row.querySelector(".ap-level");
       if (e.target.classList.contains("ap-box")) {
-        if (e.target.checked) sel[key] = { level: lv.value || "view", countries: [], prev: null };
+        if (e.target.checked) sel[key] = { level: lv.value || "view", countries: [], branches: [], fieldsInternal: false, prev: null };
         else delete sel[key];
         row.classList.toggle("on", !!sel[key]);
         lv.disabled = !sel[key];
         if (!sel[key]) {
           lv.value = "view";
+          row.classList.remove("can-edit");
           row.querySelectorAll(".ap-co").forEach(function (b) { b.checked = false; });
+          row.querySelectorAll(".ap-br-box").forEach(function (b) { b.checked = false; });
+          var fl = row.querySelector(".ap-fl"); if (fl) fl.checked = false;
+          repaintBranchSummary(row, key);
         }
         paintMeta();
       } else if (e.target.classList.contains("ap-level")) {
         if (sel[key]) sel[key].level = e.target.value;
+        var nowEdit = e.target.value === "edit" || e.target.value === "manage";
+        row.classList.toggle("can-edit", !!sel[key] && nowEdit);
+        // "staff fields only" means nothing without edit rights, so it is not left
+        // silently set on a row that has just been dropped back to view.
+        if (!nowEdit && sel[key]) {
+          sel[key].fieldsInternal = false;
+          var f2 = row.querySelector(".ap-fl"); if (f2) f2.checked = false;
+        }
       } else if (e.target.classList.contains("ap-co")) {
         if (sel[key]) sel[key].countries = [].slice.call(row.querySelectorAll(".ap-co:checked")).map(function (b) { return b.value; });
+      } else if (e.target.classList.contains("ap-br-box")) {
+        if (sel[key]) {
+          sel[key].branches = [].slice.call(row.querySelectorAll(".ap-br-box:checked")).map(function (b) { return b.value; });
+          repaintBranchSummary(row, key);
+        }
+      } else if (e.target.classList.contains("ap-fl")) {
+        if (sel[key]) sel[key].fieldsInternal = !!e.target.checked;
       }
       if (opts.onChange) opts.onChange(selCount());
     });
+    // Open/close the branch list, and filter inside it. Both live on the row rather than
+    // in the picker's own search, which filters TABLES.
+    list.addEventListener("click", function (e) {
+      if (!e.target.classList || !e.target.classList.contains("ap-br-open")) return;
+      var pop = e.target.parentNode.querySelector(".ap-br-pop");
+      if (!pop) return;
+      var opening = !pop.classList.contains("open");
+      // Only one branch list open at a time. Two of them inside a 240px scroller is a
+      // window inside a window, and nothing is readable.
+      [].slice.call(list.querySelectorAll(".ap-br-pop.open")).forEach(function (p) {
+        p.classList.remove("open");
+        var b = p.parentNode.querySelector(".ap-br-open"); if (b) b.textContent = "Change";
+      });
+      if (opening) {
+        pop.classList.add("open");
+        e.target.textContent = "Done";
+        var qi = pop.querySelector(".ap-br-q"); if (qi) qi.focus();
+      }
+      // The row is taller than the list is allowed to be, so the list is given room
+      // while a branch panel is open rather than scrolling inside a scroller.
+      list.classList.toggle("br-open", !!list.querySelector(".ap-br-pop.open"));
+    });
+    list.addEventListener("input", function (e) {
+      if (!e.target.classList || !e.target.classList.contains("ap-br-q")) return;
+      var needle = String(e.target.value || "").trim().toLowerCase();
+      var box = e.target.parentNode.querySelector(".ap-br-list");
+      if (!box) return;
+      var anyShown = false;
+      [].slice.call(box.querySelectorAll("label")).forEach(function (l) {
+        var hit = !needle || l.textContent.toLowerCase().indexOf(needle) > -1;
+        l.style.display = hit ? "" : "none";
+        if (hit) anyShown = true;
+      });
+      // A country heading with nothing under it any more is noise.
+      [].slice.call(box.querySelectorAll(".ap-br-cty")).forEach(function (h) {
+        var vis = false, n = h.nextSibling;
+        while (n && !(n.classList && n.classList.contains("ap-br-cty"))) {
+          if (n.style && n.style.display !== "none") vis = true;
+          n = n.nextSibling;
+        }
+        h.style.display = vis ? "" : "none";
+      });
+      var none = box.parentNode.querySelector(".ap-br-none");
+      if (!anyShown && !none) {
+        none = document.createElement("div");
+        none.className = "ap-br-none";
+        none.textContent = "No branch matches that.";
+        box.parentNode.insertBefore(none, box.nextSibling);
+      } else if (anyShown && none) { none.parentNode.removeChild(none); }
+    });
     search.addEventListener("input", function () { q = this.value; render(); });
     allBtn.addEventListener("click", function () {
-      pickerRows(items, sel, q).forEach(function (i) { if (!sel[i.key]) sel[i.key] = { level: "view", countries: [], prev: null }; });
+      pickerRows(items, sel, q).forEach(function (i) { if (!sel[i.key]) sel[i.key] = { level: "view", countries: [], branches: [], fieldsInternal: false, prev: null }; });
       render();
       if (opts.onChange) opts.onChange(selCount());
     });
@@ -3553,7 +3708,12 @@
       value: function () {
         return Object.keys(sel).map(function (k) {
           var s = sel[k], g = accessGrantFor(s.level, s.prev);
-          return { key: k, can_edit: g.can_edit, can_manage: g.can_manage, countries: s.countries.slice() };
+          return {
+            key: k, can_edit: g.can_edit, can_manage: g.can_manage,
+            countries: s.countries.slice(),
+            branches: (s.branches || []).slice(),
+            fieldsInternal: !!s.fieldsInternal && !!g.can_edit
+          };
         });
       }
     };
@@ -13041,6 +13201,30 @@
   // Per-reviewer country restriction. Enforced in the DB (RLS) via table_access.scope.
   // Every table is scopable; the tick boxes only record the grant, the RLS is the real gate.
   // The boxes themselves are drawn by the access picker, under the row they belong to.
+  // Which tables ask a branch question. Only those can be limited to a branch — the same
+  // rule the read policy applies, so the panel cannot offer a limit the database ignores.
+  // Filled when the Users panel opens; empty means "offer nothing", never "offer all".
+  var branchFieldTables = {};
+  function tableAsksBranch(key) { return !!branchFieldTables[key]; }
+  function openBranchNames() {
+    return (allBranches || []).filter(branchOpen).map(function (b) { return b.name; });
+  }
+  // scope carries three independent limits. Build it from all three, and return null
+  // when none is set so an unrestricted grant stores a clean NULL rather than "{}".
+  function scopeFrom(v) {
+    var out = {};
+    var cs = (v.countries || []).map(canonicalCountry).filter(Boolean);
+    if (cs.length) out.country = cs;
+    if ((v.branches || []).length) out.branch = v.branches.slice();
+    if (v.fieldsInternal) out.fields = "internal";
+    return Object.keys(out).length ? out : null;
+  }
+  function branchesFromScope(scope) {
+    return (scope && Array.isArray(scope.branch)) ? scope.branch.slice() : [];
+  }
+  function fieldsInternalFromScope(scope) {
+    return !!(scope && scope.fields === "internal");
+  }
   function scopeFromCountries(arr) {
     var xs = (arr || []).map(canonicalCountry).filter(Boolean);
     return xs.length ? { country: xs } : null;
@@ -13052,7 +13236,11 @@
     return [];
   }
   function scopeLabel(scope) {
-    return countriesFromScope(scope).map(countryLabel).join(", ");
+    var bits = countriesFromScope(scope).map(countryLabel);
+    var br = branchesFromScope(scope);
+    if (br.length) bits.push(br.length === 1 ? br[0] : br.length + " branches");
+    if (fieldsInternalFromScope(scope)) bits.push("staff fields only");
+    return bits.join(", ");
   }
   function invokeErr(res) { return (res && res.data && res.data.error) || (res && res.error && (res.error.message || res.error)) || null; }
   function errText(err) { return (err && err.message) ? err.message : (typeof err === "string" ? err : ""); }
@@ -13065,14 +13253,22 @@
   function renderUserTables(accessList) {
     var all = [{ key: "job_applications", name: builtinName("job_applications") }, { key: "casting", name: builtinName("casting") }]
       .concat(customTables.map(function (t) { return { key: t.id, name: t.name, alt: t.name_ar }; }));
+    var branchNames = openBranchNames();
     uPicker = accessPicker(document.getElementById("u-tables"), {
       items: all,
       initial: (accessList || []).map(function (a) {
-        return { key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage, countries: countriesFromScope(a.scope) };
+        return {
+          key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage,
+          countries: countriesFromScope(a.scope),
+          branches: branchesFromScope(a.scope),
+          fieldsInternal: fieldsInternalFromScope(a.scope)
+        };
       }),
       noun: "tables",
       placeholder: "Search tables…",
       scope: true,
+      fieldLimit: true,
+      branchesFor: function (it) { return tableAsksBranch(it.key) ? branchNames : []; },
       empty: "No tables yet."
     });
   }
@@ -13263,9 +13459,14 @@
     listEl.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Loading…</div>';
     Promise.all([
       db.from("profiles").select("id,email,role,created_at,full_name,avatar_path,can_create_tables").order("created_at", { ascending: true }),
-      db.from("table_access").select("user_id,table_key,can_edit,can_manage,scope")
+      db.from("table_access").select("user_id,table_key,can_edit,can_manage,scope"),
+      // Which tables ask a branch question. Read once here rather than per row: the
+      // branch limit is only offered where the database would actually apply it.
+      db.from("app_fields").select("table_id").eq("type", "branch")
     ]).then(function (r) {
       var profs = (r[0] && r[0].data) || [], acc = (r[1] && r[1].data) || [];
+      branchFieldTables = {};
+      ((r[2] && r[2].data) || []).forEach(function (f) { if (f && f.table_id) branchFieldTables[f.table_id] = true; });
       var byUser = {}; acc.forEach(function (a) { (byUser[a.user_id] = byUser[a.user_id] || []).push({ table_key: a.table_key, can_edit: a.can_edit, can_manage: a.can_manage, scope: a.scope }); });
       if (!profs.length) { listEl.innerHTML = ""; emptyEl.style.display = "block"; return; }
       emptyEl.style.display = "none"; listEl.innerHTML = "";
@@ -13405,7 +13606,7 @@
     var access = [];
     if (role !== "admin") {
       (uPicker ? uPicker.value() : []).forEach(function (v) {
-        access.push({ table_key: v.key, can_edit: v.can_edit, can_manage: v.can_manage, scope: scopeFromCountries(v.countries) });
+        access.push({ table_key: v.key, can_edit: v.can_edit, can_manage: v.can_manage, scope: scopeFrom(v) });
       });
       if (!access.length) {
         msg.textContent = "Pick at least one table for this reviewer.";
