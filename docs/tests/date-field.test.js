@@ -180,9 +180,15 @@ function dateBlock(file, end) {
   return js.slice(a, b);
 }
 t('the public form carries the same date block as the dashboard, character for character', () => {
-  const app = dateBlock('index.html', END_APP);
+  // Line endings are not code. The two files carry different mixes of LF and CRLF depending
+  // on how git checked them out — on the deployed copies index.html comes down with CRLF on
+  // 15,043 lines and f/index.html on 2,322 — so comparing the raw text reports a drift that
+  // is nothing but carriage returns. Stripped before comparing, which leaves every character
+  // that actually is code.
+  const strip = s => s.replace(/\r/g, '');
+  const app = strip(dateBlock('index.html', END_APP));
   // in the public form the block is followed by the parent-link formatter
-  const form = dateBlock('f/index.html', '  // What this link\'s record says');
+  const form = strip(dateBlock('f/index.html', '  // What this link\'s record says'));
   assert.strictEqual(form, app);
 });
 
