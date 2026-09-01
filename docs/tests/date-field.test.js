@@ -198,10 +198,13 @@ t('the public form carries the same date block as the dashboard, character for c
 // click into and type. A time box may still do it -- a clock has no year to jump to.
 const appSrc = fs.readFileSync('index.html', 'utf8');
 const formSrc = fs.readFileSync('f/index.html', 'utf8');
-t('only a time box asks the browser to open a picker of its own', () => {
+t('nothing asks the browser to open a picker of its own any more', () => {
+  // A date box stopped depending on showPicker() first; the time box followed, and is
+  // asserted in full by time-field.test.js. Kept here too because this is the fault the
+  // whole date change exists to remove, and it should fail loudly wherever it comes back.
   [['index.html', appSrc], ['f/index.html', formSrc]].forEach(([name, src]) => {
     const calls = [...src.matchAll(/\.showPicker\(\)/g)].length;
-    assert.strictEqual(calls, 1, name + ' makes ' + calls + ' showPicker() calls; only the time box should');
+    assert.strictEqual(calls, 0, name + ' still makes ' + calls + ' showPicker() call(s)');
   });
 });
 t('every date box in the dashboard is built through dateFieldHtml', () => {

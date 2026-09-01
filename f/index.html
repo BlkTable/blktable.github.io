@@ -112,6 +112,15 @@
   .cal-day:disabled { opacity: 0.3; cursor: default; }
   .cal-day.today { border-color: var(--silver); }
   .cal-day.on { background: var(--accent); color: #fff; font-weight: 700; }
+  /* the time list: the same popup shell as the calendar, with a scrolling list inside it */
+  .cal.tml { width: 190px; }
+  input.tm-in { padding-right: 40px; }
+  input.tm-in::-webkit-calendar-picker-indicator { display: none; -webkit-appearance: none; }
+  .tml-list { max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+  .tml-opt { height: 34px; flex: 0 0 auto; border-radius: 8px; border: 1px solid transparent;
+    background: transparent; color: var(--text); cursor: pointer; font-size: 0.85rem;
+    text-align: left; padding: 0 10px; }
+  .tml-opt.on { background: var(--accent); color: #fff; font-weight: 700; }
   .cal-foot { display: flex; gap: 6px; margin-top: 8px; }
   .cal-foot button { flex: 1 1 0; height: 32px; border-radius: 8px; border: 1px solid var(--line);
     background: transparent; color: var(--text); cursor: pointer; font-size: 0.82rem; }
@@ -1135,8 +1144,12 @@
   }
   // The words under the box follow the value however it got there — picked, typed, pasted,
   // or put back by a saved draft.
+  // Guarded on the class and not just the wrapper, because a time box lives in the same kind
+  // of wrapper and shares the same readout line: without this, syncing a date box would empty
+  // a time box's words, and the other way round.
   function dtSync(input) {
-    var w = input && input.closest ? input.closest(".dt-wrap") : null;
+    if (!input || !input.classList || !input.classList.contains("dt-in")) return;
+    var w = input.closest ? input.closest(".dt-wrap") : null;
     if (!w) return;
     var r = w.querySelector(".dt-read");
     if (r) r.textContent = fmtDateLong(input.value);
@@ -1275,13 +1288,6 @@
       var inp = dtInputOf(btn);
       if (!inp) return;
       if (calNow && calFor === inp) closeCalendar(); else openCalendar(inp);
-      return;
-    }
-    // A time box still opens the browser's own picker: a clock has no year to jump to, so
-    // there is nothing here that would improve on it.
-    var el = e.target;
-    if (el && el.classList && el.classList.contains("ed-picker") && el.showPicker) {
-      try { el.showPicker(); } catch (err) {}
     }
   });
   document.addEventListener("mousedown", function (e) {
@@ -1305,6 +1311,181 @@
     if (el.type === "date" || el.type === "datetime-local") return;
     var iso = parseTypedDate(el.value);
     if (iso) { el.value = iso; dtSync(el); }
+  }, true);
+
+  // ---- The time box, and the list it opens ----
+  // The same story as the date box, and the same fix. A time field was a native
+  // <input type="time"> with a click handler calling showPicker() — the browser's own clock,
+  // opened on any click. Where showPicker() does not exist, and it does not in some of the
+  // browsers people here actually use, it failed silently inside a try/catch and the field
+  // opened nothing at all. Opening on any click also meant the box could not be clicked into
+  // to type the minutes.
+  //
+  // A clock has no year to jump to, so there is no calendar to draw and nothing here is a
+  // copy of one. What a time needs instead is a list: every quarter of an hour, written the
+  // way it is spoken, and a box at the top for anything off the quarter.
+  function timeParts(hhmm) {
+    var m = /^(\d{1,2}):(\d{2})/.exec(String(hhmm == null ? "" : hhmm).trim());
+    if (!m) return null;
+    var h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return { h: h, m: mi };
+  }
+  // What a person is allowed to type. A shift is spoken as "nine" and typed in a hurry, so
+  // anything that can only mean one time is taken: 9, 930, 9:30, 9.30, 9:30 pm.
+  function parseTypedTime(s) {
+    var t = String(s == null ? "" : s).trim().toLowerCase();
+    if (!t) return null;
+    var ampm = "", h, mi, m;
+    var ap = /\s*([ap])\.?m\.?$/.exec(t);
+    if (ap) { ampm = ap[1]; t = t.slice(0, ap.index).trim(); }
+    if ((m = /^(\d{1,2})[:.](\d{2})$/.exec(t))) { h = +m[1]; mi = +m[2]; }
+    else if ((m = /^(\d{1,2})$/.exec(t))) { h = +m[1]; mi = 0; }
+    else if ((m = /^(\d{3,4})$/.exec(t))) { h = +m[1].slice(0, m[1].length - 2); mi = +m[1].slice(-2); }
+    else return null;
+    if (ampm) {
+      // 12 AM is midnight and 12 PM is noon — the two everybody gets wrong. An hour past 12
+      // with am or pm after it cannot mean anything, so it is refused rather than guessed at.
+      if (h > 12 || h < 1) return null;
+      h = ampm === "a" ? (h === 12 ? 0 : h) : (h === 12 ? 12 : h + 12);
+    }
+    if (h > 23 || mi > 59) return null;
+    return pad2(h) + ":" + pad2(mi);
+  }
+  // The readout. The box itself shows a 12-hour clock on one machine and a 24-hour one on the
+  // next, because that follows the browser's locale and nothing can be done about it from
+  // here. This is written by the page, so it reads the same everywhere — and it matches the
+  // way a date-time is already written elsewhere in the app.
+  function fmtTimeLong(hhmm) {
+    var p = timeParts(hhmm);
+    if (!p) return "";
+    var h12 = (p.h % 12) === 0 ? 12 : (p.h % 12);
+    return h12 + ":" + pad2(p.m) + " " + (p.h >= 12 ? "PM" : "AM");
+  }
+  // Every step of the day, for the list. Quarter hours: fine enough for a shift or an
+  // interview, short enough to scroll, and anything between them can still be typed.
+  function timeOptions(step) {
+    var out = [], t;
+    for (t = 0; t < 24 * 60; t += step) out.push(pad2(Math.floor(t / 60)) + ":" + pad2(t % 60));
+    return out;
+  }
+
+  var CLOCK_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>';
+  // The same wrapper and the same button the date box uses, so the two read as one control.
+  // The input is still a native <input type="time"> carrying the id and the HH:MM value, so
+  // everything that reads .value or restores a draft into it is untouched.
+  function timeFieldHtml(id, value, cls, attrs) {
+    var v = value == null ? "" : String(value);
+    return '<div class="dt-wrap">' +
+      '<input type="time" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' tm-in" value="' + esc(v) + '"' + (attrs || "") + ">" +
+      '<button type="button" class="dt-btn tm-btn" tabindex="-1" title="Open the time list" aria-label="Open the time list">' + CLOCK_ICON + "</button>" +
+      '<div class="dt-read">' + esc(fmtTimeLong(v)) + "</div></div>";
+  }
+  function tmInputOf(el) {
+    var w = el && el.closest ? el.closest(".dt-wrap") : null;
+    return w ? w.querySelector(".tm-in") : null;
+  }
+  // Guarded on the class for the same reason dtSync is: the two share a wrapper and a
+  // readout line, so each must refuse to write the other's.
+  function tmSync(input) {
+    if (!input || !input.classList || !input.classList.contains("tm-in")) return;
+    var w = input.closest ? input.closest(".dt-wrap") : null;
+    if (!w) return;
+    var r = w.querySelector(".dt-read");
+    if (r) r.textContent = fmtTimeLong(input.value);
+  }
+  // Registered as calNow, the same slot the calendar uses, so one popup is open at a time and
+  // Escape and clicking away already close this one too.
+  function openTimeList(input) {
+    closeCalendar();
+    if (!input || input.disabled || input.readOnly) return;
+    var p = timeParts(input.value);
+    var cur = p ? pad2(p.h) + ":" + pad2(p.m) : "";
+    var box = document.createElement("div");
+    box.className = "cal tml";
+    box.setAttribute("role", "dialog");
+    box.innerHTML =
+      '<input type="text" class="cal-type" placeholder="Type a time: 9:30 pm" aria-label="Type a time">' +
+      '<div class="tml-list">' + timeOptions(15).map(function (v) {
+        return '<button type="button" class="tml-opt' + (v === cur ? " on" : "") + '" data-t="' + v + '">' + fmtTimeLong(v) + "</button>";
+      }).join("") + "</div>" +
+      '<div class="cal-foot"><button type="button" class="tml-now">Now</button>' +
+      '<button type="button" class="tml-clear">Clear</button></div>';
+
+    // Picking a time says so out loud, for the same reason the calendar does: autosave, the
+    // conditional questions and the saved draft all listen for input and change.
+    function apply(v) {
+      input.value = v || "";
+      try { input.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
+      try { input.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {}
+      tmSync(input);
+      closeCalendar();
+      try { input.focus(); } catch (e) {}
+    }
+    box.addEventListener("click", function (e) {
+      var el = e.target && e.target.closest ? e.target.closest("button") : null;
+      if (!el) return;
+      e.preventDefault();
+      if (el.classList.contains("tml-opt")) return apply(el.getAttribute("data-t"));
+      if (el.classList.contains("tml-clear")) return apply("");
+      if (el.classList.contains("tml-now")) {
+        var n = new Date();
+        return apply(pad2(n.getHours()) + ":" + pad2(n.getMinutes()));
+      }
+    });
+    box.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { closeCalendar(); try { input.focus(); } catch (err) {} return; }
+      if (e.key === "Enter" && e.target.classList.contains("cal-type")) {
+        e.preventDefault();
+        var v = parseTypedTime(e.target.value);
+        if (v) return apply(v);
+        e.target.classList.add("bad");
+        return;
+      }
+      var step = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+      if (step == null || !e.target.classList.contains("tml-opt")) return;
+      e.preventDefault();
+      var all = [].slice.call(box.querySelectorAll(".tml-opt"));
+      var next = all[all.indexOf(e.target) + step];
+      if (next) next.focus();
+    });
+    box.addEventListener("input", function (e) {
+      if (e.target.classList.contains("cal-type")) e.target.classList.remove("bad");
+    });
+
+    document.body.appendChild(box);
+    calNow = box; calFor = input;
+    var r = input.getBoundingClientRect();
+    var top = r.bottom + 6;
+    if (top + box.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - box.offsetHeight - 6);
+    box.style.top = top + "px";
+    box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + "px";
+    // the time already chosen, brought into view rather than left to be scrolled for
+    var on = box.querySelector(".tml-opt.on");
+    if (on) box.querySelector(".tml-list").scrollTop = Math.max(0, on.offsetTop - 64);
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest(".tm-btn") : null;
+    if (!btn) return;
+    e.preventDefault();
+    var inp = tmInputOf(btn);
+    if (!inp) return;
+    if (calNow && calFor === inp) closeCalendar(); else openTimeList(inp);
+  });
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("tm-in")) tmSync(e.target);
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("tm-in")) tmSync(e.target);
+  });
+  // Where <input type="time"> is not supported the browser hands back a plain text box, and
+  // then what was typed has to be turned into a time here, or what gets saved is the words.
+  document.addEventListener("blur", function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.classList.contains("tm-in") || el.type === "time") return;
+    var v = parseTypedTime(el.value);
+    if (v) { el.value = v; tmSync(el); }
   }, true);
 
   // What this link's record says: only the fields the table's config.parent.show names,
@@ -1625,7 +1806,16 @@
     } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "time") {
       var isDate = f.type === "date" || f.type === "dob";
       var inp;
-      if (isDate) {
+      if (f.type === "time") {
+        // The same time box the dashboard draws, from the same function — and the reason it
+        // is not a bare <input type="time"> any more is that clicking one opened nothing at
+        // all on any browser without showPicker().
+        var tHolder = document.createElement("div");
+        tHolder.innerHTML = timeFieldHtml(id, "", "");
+        var tWrap = tHolder.firstChild;
+        inp = tWrap.querySelector(".tm-in");
+        wrap.appendChild(tWrap);
+      } else if (isDate) {
         // Built from the same dateFieldHtml the dashboard uses, so a date is picked exactly
         // the same way on both sides of the form — and so there is a way in that does not
         // depend on the browser having a picker of its own to open.
@@ -1637,15 +1827,13 @@
         wrap.appendChild(dtWrap);
       } else {
         inp = document.createElement("input");
-        inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (f.type === "time" ? "time" : "text"));
+        inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : "text");
         inp.id = id; wrap.appendChild(inp);
-        // A clock has no year to jump to, so the browser's own time picker is still the best
-        // thing to open here. Marked for the same delegated handler the dashboard uses,
-        // rather than given a second listener that would have to be kept in step with it.
-        if (f.type === "time") inp.className = "ed-picker";
       }
+      // dtSync and tmSync each do nothing unless the box is one of theirs, so a restored
+      // draft brings the readout back with it whichever kind of field this is.
       controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; },
-                      setDraft: function (v) { inp.value = v; dtSync(inp); } });
+                      setDraft: function (v) { inp.value = v; dtSync(inp); tmSync(inp); } });
     } else if (f.type === "multi_select") {
       // Airtable's multi-select: tick as many as apply. The answer is stored comma-
       // joined, exactly the way Airtable stores it, so old and new records read alike.
