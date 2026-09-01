@@ -75,6 +75,46 @@
   input[type="date"], input[type="time"] { cursor: pointer; -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
   input[type="date"]::-webkit-calendar-picker-indicator,
   input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.85); opacity: 0.85; cursor: pointer; }
+  /* ---- date box + the calendar it opens ---- */
+  /* The browser's own icon goes, because it opens the browser's own calendar and that is
+     the one being replaced. It also was not there at all on some phones, which is how a
+     date field came to be a box that opened nothing. The button below is always there. */
+  input.dt-in::-webkit-calendar-picker-indicator { display: none; -webkit-appearance: none; }
+  .dt-wrap { position: relative; }
+  input.dt-in { padding-right: 40px; }
+  .dt-btn { position: absolute; top: 0; right: 0; height: 48px; width: 38px; display: flex;
+    align-items: center; justify-content: center; background: none; border: 0; padding: 0;
+    color: var(--muted); cursor: pointer; }
+  .dt-btn:hover { color: var(--text); }
+  .dt-read { font-size: 0.78rem; color: var(--muted); margin-top: 5px; }
+  .dt-read:empty { display: none; }
+  .cal { position: fixed; z-index: 3000; width: 292px; padding: 10px; border-radius: 12px;
+    background: var(--card); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,0.5); }
+  .cal input, .cal select, .cal button { font-family: inherit; }
+  /* named as input.cal-type so it outranks the page-wide "every input is 48px tall" rule */
+  input.cal-type { width: 100%; height: 34px; padding: 0 8px; margin-bottom: 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--field-bg); color: var(--text);
+    font-size: 0.85rem; outline: none; box-sizing: border-box; }
+  .cal-type.bad { border-color: var(--danger); }
+  .cal-top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .cal-nav { width: 30px; height: 32px; flex: 0 0 auto; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); cursor: pointer; font-size: 16px; line-height: 1; padding: 0; }
+  .cal-top select { flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 6px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--field-bg); color: var(--text); font-size: 0.82rem;
+    appearance: auto; -webkit-appearance: auto; background-image: none; }
+  /* the month name is the long one; the year never needs more than four digits */
+  .cal-top .cal-m { flex: 1.7 1 auto; }
+  .cal-top .cal-y { flex: 1 1 auto; }
+  .cal-wd, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-wd span { text-align: center; font-size: 0.68rem; color: var(--muted); padding: 2px 0; }
+  .cal-day { height: 34px; border-radius: 8px; border: 1px solid transparent; background: transparent;
+    color: var(--text); cursor: pointer; font-size: 0.85rem; padding: 0; }
+  .cal-day:disabled { opacity: 0.3; cursor: default; }
+  .cal-day.today { border-color: var(--silver); }
+  .cal-day.on { background: var(--accent); color: #fff; font-weight: 700; }
+  .cal-foot { display: flex; gap: 6px; margin-top: 8px; }
+  .cal-foot button { flex: 1 1 0; height: 32px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); cursor: pointer; font-size: 0.82rem; }
   select { appearance: none; -webkit-appearance: none; cursor: pointer;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
     background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
@@ -992,6 +1032,281 @@
     box.style.display = "block";
   }
 
+  // ---- The date box, and the calendar behind it ----
+  // One calendar for every date in the app, and the same one the public form draws.
+  //
+  // What a date field is made of has not changed: it is still a native <input type="date">
+  // carrying the id and the value, so everything that reads .value, restores a draft into
+  // it, marks it invalid or listens for its change goes on working untouched. What changed
+  // is the way in. It used to be showPicker() — the browser's own calendar, opened on any
+  // click — and that had three faults. showPicker() does not exist in every browser people
+  // here actually use, and where it is missing the field was a box that opened nothing and
+  // had no icon left to press either, because the icon had been styled away. Opening on any
+  // click meant the box could not be clicked into to type. And the browser's own calendar
+  // cannot jump a year, so a date of birth was reached one month arrow at a time.
+  //
+  // The calendar below is drawn by the page instead: it opens from a button that is always
+  // there whatever the browser, it leaves the box free to type in, it jumps straight to a
+  // month and a year, and it takes a date typed as dd/mm/yyyy.
+  function pad2(n) {
+    return (n < 10 ? "0" : "") + n;
+  }
+  function isoOf(y, m, d) {
+    return y + "-" + pad2(m) + "-" + pad2(d);
+  }
+  function todayIso() {
+    var n = new Date();
+    return isoOf(n.getFullYear(), n.getMonth() + 1, n.getDate());
+  }
+  // The three numbers of a date, or nothing at all. A date JavaScript had to roll over is
+  // not a date: new Date(2026, 1, 31) is the 3rd of March, and quietly treating the 31st of
+  // February as the 3rd is how a wrong day ends up on somebody's shift.
+  function dateParts(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso == null ? "" : iso).trim());
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    var dt = new Date(y, mo - 1, d);
+    if (isNaN(dt.getTime()) || dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return { y: y, m: mo, d: d };
+  }
+  // The date in words. The locale is named rather than left to the browser on purpose: with
+  // a bare toLocaleDateString() the same record reads 9/1/2026 on one laptop and 01/09/2026
+  // on the next, and neither person can tell which of the two is the 1st of September.
+  function fmtDateLong(iso, longWeekday) {
+    var p = dateParts(iso);
+    if (!p) return "";
+    return new Date(p.y, p.m - 1, p.d).toLocaleDateString("en-GB",
+      { weekday: longWeekday ? "long" : "short", day: "numeric", month: "long", year: "numeric" });
+  }
+  // What a person is allowed to type. Day first, because that is how a date is written
+  // here; year first is taken too, because that is the order the box itself shows on some
+  // machines and what it shows has to be typeable back into it.
+  function parseTypedDate(s) {
+    var t = String(s == null ? "" : s).trim();
+    if (!t) return null;
+    var iso, m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/.exec(t);
+    if (m) {
+      iso = isoOf(+m[1], +m[2], +m[3]);
+      return dateParts(iso) ? iso : null;
+    }
+    m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2}|\d{4})$/.exec(t);
+    if (!m) return null;
+    // Two digits have to be read as some century. What gets typed into these boxes is a
+    // birthday or something close to now, so the split is the usual one: 26 is 2026, 75 is
+    // 1975.
+    var y = +m[3];
+    if (y < 100) y += y < 50 ? 2000 : 1900;
+    iso = isoOf(y, +m[2], +m[1]);
+    return dateParts(iso) ? iso : null;
+  }
+  // The month as the calendar draws it: blanks until the 1st reaches its own weekday, then
+  // the days. Monday first, which is how a week is read here.
+  function calGrid(y, m) {
+    var lead = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+    var days = new Date(y, m, 0).getDate();
+    var cells = [], i;
+    for (i = 0; i < lead; i++) cells.push(null);
+    for (i = 1; i <= days; i++) cells.push(i);
+    return cells;
+  }
+  // Both ends inclusive: "on or before the 12th" has to include the 12th. ISO dates compare
+  // as text, which is the whole reason the value is kept in that shape.
+  function inRange(iso, min, max) {
+    if (min && iso < min) return false;
+    if (max && iso > max) return false;
+    return true;
+  }
+
+  var CAL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+    '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>';
+  // The markup. The native input still carries the id and the value; the button beside it
+  // opens the calendar; the line underneath says the date in words, so that 09/01 cannot be
+  // read as the wrong month.
+  function dateFieldHtml(id, value, cls, attrs) {
+    var v = value == null ? "" : String(value);
+    return '<div class="dt-wrap">' +
+      '<input type="date" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dt-in" value="' + esc(v) + '"' + (attrs || "") + ">" +
+      '<button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">' + CAL_ICON + "</button>" +
+      '<div class="dt-read">' + esc(fmtDateLong(v)) + "</div></div>";
+  }
+  function dtInputOf(el) {
+    var w = el && el.closest ? el.closest(".dt-wrap") : null;
+    return w ? w.querySelector(".dt-in") : null;
+  }
+  // The words under the box follow the value however it got there — picked, typed, pasted,
+  // or put back by a saved draft.
+  function dtSync(input) {
+    var w = input && input.closest ? input.closest(".dt-wrap") : null;
+    if (!w) return;
+    var r = w.querySelector(".dt-read");
+    if (r) r.textContent = fmtDateLong(input.value);
+  }
+
+  var calNow = null, calFor = null;
+  function closeCalendar() {
+    if (calNow && calNow.parentNode) calNow.parentNode.removeChild(calNow);
+    calNow = null; calFor = null;
+  }
+  var CAL_MONTHS = ["January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"];
+  function openCalendar(input) {
+    closeCalendar();
+    if (!input || input.disabled || input.readOnly) return;
+    // A date-time field keeps its time; only the day is picked here.
+    var isDT = input.type === "datetime-local";
+    var min = (input.getAttribute("min") || "").slice(0, 10);
+    var max = (input.getAttribute("max") || "").slice(0, 10);
+    var picked = dateParts(input.value);
+    var view = picked || dateParts(todayIso());
+    var yLo = min ? +min.slice(0, 4) : Math.min(1920, view.y);
+    var yHi = max ? +max.slice(0, 4) : Math.max(new Date().getFullYear() + 10, view.y);
+    if (yHi < yLo) yHi = yLo;
+    var box = document.createElement("div");
+    box.className = "cal";
+    box.setAttribute("role", "dialog");
+
+    function draw() {
+      var i, mo = "", yo = "";
+      for (i = 0; i < 12; i++) mo += '<option value="' + (i + 1) + '"' + (view.m === i + 1 ? " selected" : "") + ">" + CAL_MONTHS[i] + "</option>";
+      for (i = yHi; i >= yLo; i--) yo += '<option value="' + i + '"' + (view.y === i ? " selected" : "") + ">" + i + "</option>";
+      var wd = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(function (d) { return "<span>" + d + "</span>"; }).join("");
+      var today = todayIso();
+      var sel = picked ? isoOf(picked.y, picked.m, picked.d) : "";
+      var days = calGrid(view.y, view.m).map(function (d) {
+        if (d == null) return "<span></span>";
+        var iso = isoOf(view.y, view.m, d);
+        return '<button type="button" class="cal-day' + (iso === sel ? " on" : "") + (iso === today ? " today" : "") +
+          '" data-iso="' + iso + '"' + (inRange(iso, min, max) ? "" : " disabled") + ">" + d + "</button>";
+      }).join("");
+      box.innerHTML =
+        '<input type="text" class="cal-type" placeholder="Type a date: dd/mm/yyyy" aria-label="Type a date">' +
+        '<div class="cal-top"><button type="button" class="cal-nav" data-step="-1" aria-label="Previous month">&#8249;</button>' +
+        '<select class="cal-m" aria-label="Month">' + mo + "</select>" +
+        '<select class="cal-y" aria-label="Year">' + yo + "</select>" +
+        '<button type="button" class="cal-nav" data-step="1" aria-label="Next month">&#8250;</button></div>' +
+        '<div class="cal-wd">' + wd + "</div>" +
+        '<div class="cal-days">' + days + "</div>" +
+        '<div class="cal-foot"><button type="button" class="cal-today">Today</button>' +
+        '<button type="button" class="cal-clear">Clear</button></div>';
+    }
+    // Picking a day writes the value the way the field already stored it, then says so out
+    // loud: the input and change events are what autosave, the conditional questions and
+    // the draft all listen for, so a date picked here has to look exactly like one typed.
+    function apply(iso) {
+      if (isDT) {
+        var t = ((input.value || "").split("T")[1] || "09:00").slice(0, 5);
+        input.value = iso ? iso + "T" + t : "";
+      } else {
+        input.value = iso || "";
+      }
+      try { input.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
+      try { input.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {}
+      dtSync(input);
+      closeCalendar();
+      try { input.focus(); } catch (e) {}
+    }
+    box.addEventListener("click", function (e) {
+      var el = e.target && e.target.closest ? e.target.closest("button") : null;
+      if (!el) return;
+      e.preventDefault();
+      if (el.classList.contains("cal-day")) return apply(el.getAttribute("data-iso"));
+      if (el.classList.contains("cal-clear")) return apply("");
+      if (el.classList.contains("cal-today")) {
+        // Offered even where it is out of range, so it is worth checking before it is taken.
+        if (inRange(todayIso(), min, max)) apply(todayIso());
+        return;
+      }
+      if (el.classList.contains("cal-nav")) {
+        view.m += +el.getAttribute("data-step");
+        if (view.m < 1) { view.m = 12; view.y--; }
+        if (view.m > 12) { view.m = 1; view.y++; }
+        if (view.y < yLo) view.y = yLo;
+        if (view.y > yHi) view.y = yHi;
+        draw();
+      }
+    });
+    box.addEventListener("change", function (e) {
+      if (e.target.classList.contains("cal-m")) { view.m = +e.target.value; draw(); }
+      else if (e.target.classList.contains("cal-y")) { view.y = +e.target.value; draw(); }
+    });
+    box.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { closeCalendar(); try { input.focus(); } catch (err) {} return; }
+      if (e.key === "Enter" && e.target.classList.contains("cal-type")) {
+        e.preventDefault();
+        var iso = parseTypedDate(e.target.value);
+        if (iso && inRange(iso, min, max)) return apply(iso);
+        e.target.classList.add("bad");
+        return;
+      }
+      // Walking the month with the arrow keys, a week at a time up and down.
+      var step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+      if (step == null || !e.target.classList.contains("cal-day")) return;
+      e.preventDefault();
+      var all = [].slice.call(box.querySelectorAll(".cal-day"));
+      var next = all[all.indexOf(e.target) + step];
+      if (next) next.focus();
+    });
+    box.addEventListener("input", function (e) {
+      if (e.target.classList.contains("cal-type")) e.target.classList.remove("bad");
+    });
+
+    draw();
+    document.body.appendChild(box);
+    calNow = box; calFor = input;
+    // Under the field where there is room for it, above it where there is not.
+    var r = input.getBoundingClientRect();
+    var top = r.bottom + 6;
+    if (top + box.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - box.offsetHeight - 6);
+    box.style.top = top + "px";
+    box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + "px";
+    // Focused only where there is a mouse: on a phone, focusing a day would throw the
+    // on-screen keyboard over the calendar that was just opened.
+    if (window.matchMedia && window.matchMedia("(hover: hover)").matches) {
+      var day = box.querySelector(".cal-day.on") || box.querySelector(".cal-day.today") || box.querySelector(".cal-day:not(:disabled)");
+      if (day) try { day.focus(); } catch (e) {}
+    }
+  }
+  // Delegated once, at the document, so every panel that ever renders a date box is covered
+  // — the record panel, New record, the filter, and anything added later.
+  document.addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest(".dt-btn") : null;
+    if (btn) {
+      e.preventDefault();
+      var inp = dtInputOf(btn);
+      if (!inp) return;
+      if (calNow && calFor === inp) closeCalendar(); else openCalendar(inp);
+      return;
+    }
+    // A time box still opens the browser's own picker: a clock has no year to jump to, so
+    // there is nothing here that would improve on it.
+    var el = e.target;
+    if (el && el.classList && el.classList.contains("ed-picker") && el.showPicker) {
+      try { el.showPicker(); } catch (err) {}
+    }
+  });
+  document.addEventListener("mousedown", function (e) {
+    if (!calNow || calNow.contains(e.target)) return;
+    if (e.target && e.target.closest && e.target.closest(".dt-btn")) return;   // the button toggles it itself
+    closeCalendar();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeCalendar(); });
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("dt-in")) dtSync(e.target);
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("dt-in")) dtSync(e.target);
+  });
+  // Where <input type="date"> is not supported at all the browser hands back a plain text
+  // box. Then what was typed has to be turned into a date here, or what gets saved is the
+  // words rather than the day.
+  document.addEventListener("blur", function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.classList.contains("dt-in")) return;
+    if (el.type === "date" || el.type === "datetime-local") return;
+    var iso = parseTypedDate(el.value);
+    if (iso) { el.value = iso; dtSync(el); }
+  }, true);
+
   // What this link's record says: only the fields the table's config.parent.show names,
   // which is all the server will hand out. A date is shown the way a person reads one.
   function fmtParentValue(row) {
@@ -1309,14 +1624,28 @@
                       setDraft: function (v) { ta.value = v; autoGrow(ta); } });
     } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "time") {
       var isDate = f.type === "date" || f.type === "dob";
-      var isPicked = isDate || f.type === "time";
-      var inp = document.createElement("input");
-      inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (isDate ? "date" : (f.type === "time" ? "time" : "text")));
-      inp.id = id; wrap.appendChild(inp);
-      if (isPicked) inp.addEventListener("click", function () { if (this.showPicker) { try { this.showPicker(); } catch (e) {} } });
-      if (f.type === "dob") inp.max = new Date().toISOString().slice(0, 10);   // a birth date can't be in the future
+      var inp;
+      if (isDate) {
+        // Built from the same dateFieldHtml the dashboard uses, so a date is picked exactly
+        // the same way on both sides of the form — and so there is a way in that does not
+        // depend on the browser having a picker of its own to open.
+        var holder = document.createElement("div");
+        holder.innerHTML = dateFieldHtml(id, "", "");
+        var dtWrap = holder.firstChild;
+        inp = dtWrap.querySelector(".dt-in");
+        if (f.type === "dob") inp.max = todayIso();   // a birth date can't be in the future
+        wrap.appendChild(dtWrap);
+      } else {
+        inp = document.createElement("input");
+        inp.type = f.type === "number" ? "number" : (f.type === "email" ? "email" : (f.type === "time" ? "time" : "text"));
+        inp.id = id; wrap.appendChild(inp);
+        // A clock has no year to jump to, so the browser's own time picker is still the best
+        // thing to open here. Marked for the same delegated handler the dashboard uses,
+        // rather than given a second listener that would have to be kept in step with it.
+        if (f.type === "time") inp.className = "ed-picker";
+      }
       controls.push({ f: f, el: inp, validate: function () { return !f.required || inp.value.trim() !== ""; }, value: function () { return inp.value.trim() || null; },
-                      setDraft: function (v) { inp.value = v; } });
+                      setDraft: function (v) { inp.value = v; dtSync(inp); } });
     } else if (f.type === "multi_select") {
       // Airtable's multi-select: tick as many as apply. The answer is stored comma-
       // joined, exactly the way Airtable stores it, so old and new records read alike.
