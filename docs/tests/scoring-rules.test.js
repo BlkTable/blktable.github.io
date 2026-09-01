@@ -462,4 +462,59 @@ t('leaving a score out of the editor values means the stored one is kept, not cl
   assert.strictEqual(Object.keys(ED.edValues(flds)).length, 0);
 });
 
+// ---- an answer may contain a comma ----------------------------------------------------
+// A dropdown holds ONE answer, and that answer is allowed a comma in it: "Clean, Neat or
+// Organized" and "Yes, and they are good / نعم، موجود و قوي" are single choices on Shop
+// Audit, and 21 stored answers across its 16 audits are one or the other. Splitting the
+// stored value on commas and reading the first piece looks for a choice called "Clean" and
+// prices the question at nothing. score_submission() in SQL never did this — it matches the
+// whole answer — so this was also the two engines disagreeing about the same record.
+const comma = { id: 'q', type: 'dropdown', scoring: { rule: 'choices' },
+                options: [{ en: 'Clean, Neat or Organized', points: 1 },
+                          { en: 'Dirty, Messy or Unorganized', points: 0 }] };
+t('a single answer containing a comma earns its points', () => {
+  assert.strictEqual(questionEarned(comma, { q: 'Clean, Neat or Organized' }), 1);
+});
+t('and the wrong one containing a comma earns nothing', () => {
+  assert.strictEqual(questionEarned(comma, { q: 'Dirty, Messy or Unorganized' }), 0);
+});
+// A multi-select is the case commas are FOR: several answers, joined. That must not change.
+const multi = { id: 'm', type: 'multi_select', scoring: { rule: 'choices' },
+                options: [{ en: 'Clean', points: 1 }, { en: 'Organized', points: 1 }, { en: 'Dirty' }] };
+t('a multi-select still reads its comma as a separator', () => {
+  assert.strictEqual(questionEarned(multi, { m: 'Clean, Organized' }), 2);
+});
+
+// ---- "all of these, or nothing" --------------------------------------------------------
+// Airtable expressed five of Shop Audit's questions as a formula over the whole answer
+// string: Clean AND Organized, Hopper is clean AND No Dust. `choices` cannot say that — it
+// adds each ticked answer up on its own, so half the tokens would earn half the point, which
+// on a checklist of two is a shop scoring for being clean and disorganised.
+const allOf = { id: 'a', type: 'multi_select', scoring: { rule: 'all_of', points: 1 },
+                options: [{ en: 'Clean', points: 1 }, { en: 'Organized', points: 1 },
+                          { en: 'Dirty' }, { en: 'Messy' }] };
+t('all_of earns its points only when every priced answer is ticked', () => {
+  assert.strictEqual(questionEarned(allOf, { a: 'Clean, Organized' }), 1);
+});
+t('all_of earns nothing for half of them', () => {
+  assert.strictEqual(questionEarned(allOf, { a: 'Clean' }), 0);
+});
+t('all_of earns nothing for none of them', () => {
+  assert.strictEqual(questionEarned(allOf, { a: 'Dirty, Messy' }), 0);
+});
+t('all_of earns nothing when the question was not answered', () => {
+  assert.strictEqual(questionEarned(allOf, {}), 0);
+});
+t('an unpriced answer alongside the priced ones does not block the point', () => {
+  assert.strictEqual(questionEarned(allOf, { a: 'Clean, Organized, Messy' }), 1);
+});
+t('all_of is worth what the question is priced at, not the sum of its answers', () => {
+  assert.strictEqual(questionMaxPoints(allOf), 1);
+});
+t('an all_of question with nothing priced can never earn', () => {
+  const none = { id: 'a', type: 'multi_select', scoring: { rule: 'all_of', points: 1 },
+                 options: [{ en: 'Clean' }, { en: 'Dirty' }] };
+  assert.strictEqual(questionEarned(none, { a: 'Clean' }), 0);
+});
+
 if (!process.exitCode) console.log(n + ' passed');

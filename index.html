@@ -6351,13 +6351,29 @@
       if (!txt) return 0;
       var by = {};
       (Array.isArray(f.options) ? f.options : []).forEach(function (o) { if (o && o.en) by[o.en] = o; });
-      var parts = txt.split(/\s*,\s*/);
       if (f.type === "multi_select") {
-        return parts.reduce(function (a, p) { return a + choicePoints(by[p]); }, 0);
+        return txt.split(/\s*,\s*/).reduce(function (a, p) { return a + choicePoints(by[p]); }, 0);
       }
-      return choicePoints(by[parts[0]]);
+      // One answer, comma and all. A dropdown holds a single choice and that choice may
+      // contain a comma -- "Clean, Neat or Organized" is one answer on Shop Audit, not two --
+      // so the whole value is looked up. Splitting it here priced 21 real answers at nothing
+      // and disagreed with score_submission(), which has always matched the whole string.
+      return choicePoints(by[txt]);
     }
     var max = questionMaxPoints(f);
+    // "all of these, or nothing": every priced answer has to be ticked. A checklist question
+    // that adds its answers up independently pays a shop for being clean and disorganised,
+    // which is what `choices` would do here. Answers left unpriced are not part of the test,
+    // so ticking a fault alongside the two good ones does not take the point away -- only
+    // failing to tick one of the priced ones does.
+    if (sc.rule === "all_of") {
+      var want = (Array.isArray(f.options) ? f.options : []).filter(function (o) {
+        return o && choicePoints(o) > 0;
+      }).map(function (o) { return o.en; });
+      if (!want.length || !txt) return 0;
+      var ticked = txt.split(/\s*,\s*/);
+      return want.every(function (w) { return ticked.indexOf(w) !== -1; }) ? max : 0;
+    }
     if (sc.rule === "equals") {
       return (sc.earn || []).some(function (w) {
         return String(w).toLowerCase() === txt.toLowerCase();
