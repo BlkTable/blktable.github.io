@@ -12271,7 +12271,10 @@
     if (typeUsesAnswers(type)) {
       var list = rowAnswers(row);
       if (!list.length) return { error: "Choice questions need at least one answer." };
-      return { options: list };
+      // Through mergeKept like every other type, though a list is the one shape that comes back
+      // unchanged: it is the answers and nothing else. Routed here anyway so that "what a row
+      // hands the database" is decided in one place rather than in a branch that forgot to ask.
+      return { options: mergeKept(row, list) };
     }
     if (type === "link") {
       // A LINKED RECORD comes first, and the ordering is the fix. This branch used to
@@ -12292,7 +12295,7 @@
       var kv = row.querySelector(".opts").value.trim().split("|");
       var url = (kv[0] || "").trim();
       if (!/^https?:\/\//i.test(url)) return { error: "A link field needs a URL starting with http:// or https://" };
-      return { options: { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" } };
+      return { options: mergeKept(row, { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" }) };
     }
     if (type === "branch") {
       // The shops a branch question offers are the shops of the countries THIS FORM covers —
@@ -12307,9 +12310,12 @@
       // Audit and Shop Spot Check (QC) all ask for Lebanon's shops as well as Jordan's and
       // none of them has a country ticked yet — so deriving "jo" here would take Lebanon's
       // shops off three working forms on the next unrelated save, and say nothing.
-      return { options: { list: branchScopeList(builderScope().countries, row.querySelector(".opts").value) } };
+      return { options: mergeKept(row, { list: branchScopeList(builderScope().countries, row.querySelector(".opts").value) }) };
     }
-    return { options: null };
+    // Every other type means nothing by "options" — which is why this used to return null over
+    // whatever was in there. A scoring rule lives on exactly these types (a "<Question> Score"
+    // column is a short_text or a number), so this line is the one that lost them.
+    return { options: mergeKept(row, null) };
   }
   // Which editor this question's type calls for, and the free-text box hidden when it is the
   // answers editor's turn. The box stays in the row either way: a branch question keeps its
@@ -12427,6 +12433,9 @@
       // A linked record's options were set by the importer and name a table by id. They are
       // carried on the row so the save can put them back untouched, and the box is made
       // read-only because the text in it is a description, not a value anyone can retype.
+      // Whatever else was in this field's options and is none of the editor's business —
+      // a scoring rule above all. Carried on the row so the save can put it back.
+      if (data.keepOpts) row.setAttribute("data-keepopts", JSON.stringify(data.keepOpts));
       if (data.linkRec) {
         row.setAttribute("data-linkrec", JSON.stringify(data.linkRec));
         optsInp.readOnly = true;
@@ -12760,7 +12769,7 @@
     }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
-      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
+      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), keepOpts: keptOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
       resolveCondPending();
       requestAnimationFrame(growAllBld);
     }).catch(function () { msg.textContent = ""; });
@@ -12896,6 +12905,49 @@
     if (!options || typeof options !== "object" || Array.isArray(options)) return null;
     return options.links_to_table ? options : null;
   }
+  // What of a field's stored options is NOT this editor's to rewrite. `options` is a shared
+  // box: the editor writes a link button's URL, a branch question's shop list and a country
+  // scope into it, and everything else in there was put there by something the editor has
+  // never heard of — a scoring rule read by compute_scores(), the pairing the record view
+  // prices a question by, an importer's own metadata. The save rebuilds the object from the
+  // boxes on screen and writes every field on the table, touched or not, so a key it does not
+  // own is a key deleted by a save of an unrelated question. On 2026-08-31 that erased all 68
+  // of Shop Audit's scoring rules and the next audit submitted scored 0 out of 68.
+  //
+  // A linked record is deliberately not kept here — linkRecordOptions already carries that one
+  // to the row and back, and the same fact in two places is free to disagree. Answers are an
+  // array, and an array holds nothing but answers.
+  function keptOptions(options) {
+    // the keys the editor writes for itself, and is therefore free to replace
+    var mine = ["url", "text", "text_ar", "list", "only", "links_to_table", "links_to_name"];
+    if (!options || typeof options !== "object" || Array.isArray(options)) return null;
+    var keep = null;
+    Object.keys(options).forEach(function (k) {
+      if (mine.indexOf(k) !== -1) return;
+      if (!keep) keep = {};       // nothing to keep stays null: {} would read as "set"
+      keep[k] = options[k];
+    });
+    return keep;
+  }
+  // The same thing off one builder row. Put there when the editor opened, the way a linked
+  // record's metadata is, because the field row itself is long gone by the time the save runs.
+  function rowKeptOptions(row) {
+    var raw = row.getAttribute("data-keepopts");
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+  // What this row hands the database: the options the editor built, over the ones it does not
+  // own. Answers are the exception and are handed back untouched — a priced choice list is a
+  // bare array in every reader (`Array.isArray(f.options) ? f.options : []`), so it is the one
+  // shape that cannot carry anything alongside it.
+  function mergeKept(row, options) {
+    var keep = rowKeptOptions(row);
+    if (!keep) return options;
+    if (Array.isArray(options)) return options;
+    if (options == null) return keep;
+    Object.keys(options).forEach(function (k) { keep[k] = options[k]; });
+    return keep;
+  }
   // The Options box, read back into choices. The first two slots are English and Arabic;
   // everything after them is a token rather than a position, because three flags in fixed
   // slots is how "other" ends up meaning "priced at 3" the day somebody adds a price.
@@ -12998,7 +13050,7 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), showIf: f.show_if, scoring: f.scoring });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), keepOpts: keptOptions(f.options), showIf: f.show_if, scoring: f.scoring });
       });
       resolveCondPending();
       if (presetType) {
