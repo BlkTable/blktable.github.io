@@ -11272,6 +11272,15 @@
     var pickedIds = (currentCustom && currentCustom.table && currentCustom.table.config
                      && currentCustom.table.config.detail_fields) || null;
     var curated = !!(pickedIds && pickedIds.length) && !detailShowAll;
+    // The table's follow-up questions: the staff-only ones it nominated with branch_edit.
+    //
+    // Deliberately NOT branchFillableIds(), which falls back to every staff-only question
+    // when a table nominates none. That fallback is right for a write limit and wrong here:
+    // Shop Audit and Shop Spot Check (QC) carry 88 staff-only questions each and Mystery
+    // Shopper 65, all unnominated, so a fallback would open those records on ~90 empty rows.
+    // A table opts in by nominating, and nominating is one tick in the question editor.
+    var followUpIds = {};
+    (fields || []).forEach(function (f) { if (f.internal && f.branch_edit) followUpIds[f.id] = true; });
     // forEdit keeps conditional questions in the page (hidden) so the editor can reveal
     // one the moment the answer it waits on changes
     function showsOn(f, d, forEdit) {
@@ -11293,7 +11302,20 @@
       // question that was never asked — the same reason a retired question stays hidden.
       // If it does hold an answer it still shows: the answer is history and must be visible.
       if (!forEdit && !condMet(f, d) && (d[f.id] == null || d[f.id] === "")) return false;
-      return !f.internal || (d[f.id] != null && d[f.id] !== "");
+      // A public question always shows. A staff-only one shows once it holds an answer —
+      // that is what keeps a record from listing every retired import column it never used.
+      //
+      // But a staff-only question is the staff's to fill, and it therefore arrives EMPTY,
+      // every time: the customer never saw it. Drawing only answered ones meant a complaint
+      // submitted an hour ago opened on the customer's side (read-only to the shop, which is
+      // the point) and no follow-up at all — no "did you call them", no "how was it
+      // resolved". The work the record exists for was unreachable, on every new record.
+      //
+      // So an empty staff-only question is drawn when it is one the table nominated as
+      // follow-up, and only in the editable view: a read-only viewer cannot fill it, and ten
+      // rows of "—" tell them nothing the answered ones do not.
+      if (f.internal && (d[f.id] == null || d[f.id] === "")) return !!(forEdit && followUpIds[f.id]);
+      return true;
     }
     function detailOrder(list) {
       if (!curated) return list;
