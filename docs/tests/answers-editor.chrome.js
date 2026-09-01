@@ -43,6 +43,8 @@ function grab(name) {
 const NAMES = ['esc', 'choicePoints', 'questionMaxPoints', 'builderTotalPoints', 'scoringToInputs',
   'bldHost', 'bldGrow', 'wireBldGrow', 'typeUsesOpts', 'typeUsesAnswers', 'optsPlaceholder',
   'parseChoice', 'parseChoiceList', 'pastedAnswers', 'optsToString', 'linkRecordOptions',
+  // rowOptionsForSave hands back the options this editor does not own (options-kept.chrome.js)
+  'keptOptions', 'rowKeptOptions', 'mergeKept',
   'condSelectHtml', 'refreshCondSelect', 'syncCondRow', 'afterFieldSelectHtml',
   'bldScoreVisibility', 'rowFieldShape', 'rowScoring', 'refreshBuilderTotal',
   'addAnswerRow', 'setAnswerLine', 'ensureTrailingAnswer', 'answersChanged',
