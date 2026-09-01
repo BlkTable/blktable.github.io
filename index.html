@@ -918,6 +918,15 @@
   .m-field .k:has(.k-req) { color: var(--text); font-weight: 600; }
   .m-field .v { font-size: var(--fs-4); margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
+  /* A question a branch login may read but not fill. It has to read as an answer on file and
+     not as an input somebody could try to type into, so it carries no box and no border —
+     the "locked" tag is what says why, and the row sits at the height of a filled-in one so
+     the panel does not shift when a shop's five questions appear among the rest. */
+  .m-field.locked .k .k-lock { margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+    background: rgba(var(--wash),0.08); color: var(--muted); font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.03em; text-transform: uppercase; vertical-align: 1px; }
+  .m-field.locked .ed-locked { font-size: var(--fs-4); color: var(--silver); margin-top: 6px;
+    min-height: 20px; white-space: pre-wrap; word-break: break-word; }
   /* ---- record panel: label above, value below, choices as pills ---- */
   .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: var(--fs-3); font-weight: 600;
     background: rgba(var(--wash),0.08); color: var(--text); max-width: 100%; overflow: hidden;
@@ -2903,6 +2912,7 @@
   var editKeys = {}; // table_key -> true when this user may edit that table's records
   var manageKeys = {}; // table_key -> true when this user is a form manager (drive the review chain)
   var accessKeys = {}; // table_key -> true when this user can see that table
+  var fieldLimitKeys = {}; // table_key -> true when this user may fill only the branch-fillable questions
   var cardServerPrefs = {};   // table_id -> {cover,fit,fields,labels} loaded from user_card_prefs at login
   var stars = {};      // table_key -> true when starred by this user
   var homeView = "cards";
@@ -2924,6 +2934,47 @@
   // Manager is a superset of editor, so a manager never needs the "edit" box ticked too.
   function canEdit(key) { return isAdmin || !!editKeys[key] || !!manageKeys[key]; }
   function canManage(key) { return isAdmin || !!manageKeys[key]; }
+  // A rung below editor, and the only one that is per-question rather than per-table: a
+  // branch login carries scope.fields = "internal", which says they may fill in the shop's
+  // follow-up on a record but may not touch the answers the customer typed into the public
+  // link. They also cannot add a record — creating one means writing the customer's side.
+  function isFieldLimited(key) { return !isAdmin && !!fieldLimitKeys[key]; }
+  // Which questions such a user may fill. A table nominates them by ticking "branch-fillable"
+  // in the question editor; a table that nominates none falls back to every staff-only
+  // question, which is what a field-limited user could always change and is what the tables
+  // that predate the flag (Mystery Shopper, Shop Audit) still expect.
+  //
+  // `internal` is required either way. Ticking branch-fillable on a question the customer
+  // answers would hand the shop the customer's own words, which is the thing this exists to
+  // prevent — so the flag alone is not enough, here or in the database trigger.
+  function branchFillableIds(fields) {
+    var all = fields || [];
+    var nominated = all.filter(function (f) { return f.internal && f.branch_edit; });
+    var src = nominated.length ? nominated : all.filter(function (f) { return f.internal; });
+    var out = {}; src.forEach(function (f) { out[f.id] = true; });
+    return out;
+  }
+  // A question shown to a field-limited user that they may not fill: the answer, read-only.
+  //
+  // Deliberately NOT a disabled input. edValues() reads every answer back out of the DOM by
+  // id="ed-<field id>" and saveCustom() re-trims and reformats whatever it finds, so a
+  // disabled phone would round-trip through the phone formatter and a disabled number
+  // through .trim(), land in `data` as a different JSON value, and the trigger would refuse
+  // the whole save — the shop could not file its follow-up at all. With no input element the
+  // key is skipped and the stored value survives byte for byte. Same reasoning as the
+  // scorer fields in edValues.
+  //
+  // The text is customCellText, the same rule the grid cell uses, so a locked answer and its
+  // cell can never read differently.
+  function lockedAnswerHtml(f, d) {
+    d = d || {};
+    var v = d[f.id];
+    var txt = Array.isArray(v) ? v.join(", ") : customCellText(f, d);
+    if (txt == null || txt === "") txt = "—";
+    return '<div class="m-field' + (f.type === "long_text" ? " full" : "") + ' locked">' +
+      '<div class="k">' + esc(f.label) + '<span class="k-lock" title="Only a manager can change this">locked</span></div>' +
+      '<div class="ed-locked">' + esc(txt) + "</div></div>";
+  }
   function showApp(session) {
     loginWrap.style.display = "none";
     app.style.display = "flex";
@@ -3032,9 +3083,9 @@
       return;
     }
     jaBtn.style.display = "none"; castBtn.style.display = "none";
-    db.from("table_access").select("table_key, can_edit, can_manage").then(function (res) {
-      accessKeys = {}; editKeys = {}; manageKeys = {};
-      (res.data || []).forEach(function (r) { accessKeys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; if (r.can_manage) manageKeys[r.table_key] = true; });
+    db.from("table_access").select("table_key, can_edit, can_manage, scope").then(function (res) {
+      accessKeys = {}; editKeys = {}; manageKeys = {}; fieldLimitKeys = {};
+      (res.data || []).forEach(function (r) { accessKeys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; if (r.can_manage) manageKeys[r.table_key] = true; if (r.scope && r.scope.fields === "internal") fieldLimitKeys[r.table_key] = true; });
       if (accessKeys["job_applications"]) jaBtn.style.display = "flex";
       if (accessKeys["casting"]) castBtn.style.display = "flex";
       renderHome(); renderStarred();
@@ -5228,8 +5279,13 @@
       // of `cur` means saveCustom keeps the stored value untouched, and the database
       // recomputes it from the answer anyway.
       if (isScorerField(f)) return;
-      if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
+      // The DOM is the authority on what this panel is editing, phone included. edPhoneReg is
+      // keyed by element id and never cleared, so its closure outlives the panel that made it
+      // and still holds that panel's detached input. Reading it without checking the element
+      // is present would write the PREVIOUS record's number into this one — which is exactly
+      // what a locked phone row (no input at all) would trigger.
       var el = document.getElementById("ed-" + f.id); if (!el) return;
+      if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
       out[f.id] = (f.type === "multi_select" || f.type === "record_multi") ? edChecksValue(el) : (el.value || "").trim();
     });
     return out;
@@ -7380,7 +7436,10 @@
     document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
     // Adding a record by hand is an edit, so it follows can_edit rather than admin — the same
     // permission that lets someone change an answer already on file.
-    document.getElementById("custom-new").style.display = canEdit(t.id) ? "" : "none";
+    // Not offered to a field-limited user: creating a record means writing the customer's
+    // side of it, which is the one thing their scope says they may not do. create_record()
+    // refuses them too — this only keeps a button off the screen that would always fail.
+    document.getElementById("custom-new").style.display = (canEdit(t.id) && !isFieldLimited(t.id)) ? "" : "none";
     // Payroll is money leaving the business, so it follows can_manage rather than can_edit.
     document.getElementById("custom-payroll").style.display =
       (payrollHost(t) && canManage(t.id)) ? "inline-flex" : "none";
@@ -11317,13 +11376,20 @@
     // a conditional question is built either way and hidden when it does not apply — unless
     // it already holds an answer, which is history and stays on screen (edFieldRowHtml)
     var mayEditHere = canEdit(currentCustom.table.id);
+    // A branch login sees the whole record — the customer's complaint is what they have to
+    // act on — but may only type into the questions their table nominated. Everything else
+    // is drawn read-only rather than left as an input the database would refuse on save.
+    var limited = isFieldLimited(currentCustom.table.id);
+    var fillable = limited ? branchFillableIds(fields) : null;
     var grid = detailOrder(fields).map(function (f) {
       if (!showsOn(f, d, true)) return "";      // a retired question this record never answered
+      var locked = limited && !fillable[f.id];
       // an upload question keeps its files, and its add/remove tiles, under itself
       if (isFileField(f)) {
-        var tiles = photoSectionHtml(fields, d, null, { only: f.id, edit: mayEditHere });
+        var tiles = photoSectionHtml(fields, d, null, { only: f.id, edit: mayEditHere && !locked });
         return tiles ? '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>" : "";
       }
+      if (locked) return lockedAnswerHtml(f, d);
       return edFieldRowHtml(f, d, { scored: qsMap[f.id], fields: fields });
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
@@ -12714,6 +12780,12 @@
       '<textarea class="opts" rows="1" dir="auto" placeholder="Options — one per line (or comma-separated): English|عربي — add |other to a choice to open a free-text box" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
+      // Only meaningful on a staff-only question, and the checkbox says so by being disabled
+      // until staff-only is ticked: nominating a question the customer answers would hand a
+      // branch login the customer's own words. branchFillableIds() and the database trigger
+      // both require internal as well, so this is the third lock rather than the only one.
+      '<label class="req-lbl" title="A branch login may fill this in. Tick it on the follow-up questions a shop is meant to answer; a table that nominates none lets them fill any staff-only question.">' +
+      '<input type="checkbox" class="fbr" disabled style="width:auto;height:auto;"> branch-fillable</label>' +
       afterFieldSelectHtml() + condSelectHtml() +
       '<button type="button" class="rm">Remove</button></div>' +
       '<div class="bld-answers">' +
@@ -12755,9 +12827,19 @@
       }
       row.querySelector(".freq").checked = data.required !== false;
       row.querySelector(".fint").checked = !!data.internal;
+      row.querySelector(".fbr").checked = !!data.branch_edit;
       // resolved once every row exists — the question this one depends on may be below it
       if (data.showIf || data.condIdx != null) row.setAttribute("data-cond-pending", JSON.stringify(data.showIf || { idx: data.condIdx, equals: data.condVal }));
     }
+    // branch-fillable rides on staff-only. Untick staff-only and the nomination goes with it,
+    // rather than sitting checked-but-disabled and reappearing the next time it is ticked —
+    // what is on screen has to be what the save writes.
+    (function () {
+      var fint = row.querySelector(".fint"), fbr = row.querySelector(".fbr");
+      function sync() { fbr.disabled = !fint.checked; if (!fint.checked) fbr.checked = false; }
+      fint.addEventListener("change", sync);
+      sync();
+    })();
     if (data && data.scoring) {
       var si = scoringToInputs(data.scoring);
       row.querySelector(".fpts").value = si.points;
@@ -12837,6 +12919,7 @@
           type: r.querySelector(".ftype").value, opts: r.querySelector(".opts").value,
           answers: rowDraftAnswers(r),
           required: r.querySelector(".freq").checked, internal: r.querySelector(".fint").checked,
+          branch_edit: r.querySelector(".fbr").checked,
           condIdx: ci, condVal: ci == null ? "" : r.querySelector(".fcondv").value,
           pts: r.querySelector(".fpts").value, scEarn: r.querySelector(".fscearn").value,
           scOp: r.querySelector(".fscop").value, scVal: r.querySelector(".fscval").value,
@@ -13081,7 +13164,7 @@
     }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
-      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
+      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, branch_edit: f.branch_edit, linkRec: linkRecordOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
       resolveCondPending();
       requestAnimationFrame(growAllBld);
     }).catch(function () { msg.textContent = ""; });
@@ -13319,7 +13402,7 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), showIf: f.show_if, scoring: f.scoring });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, branch_edit: f.branch_edit, linkRec: linkRecordOptions(f.options), showIf: f.show_if, scoring: f.scoring });
       });
       resolveCondPending();
       if (presetType) {
@@ -13497,7 +13580,7 @@
           if (ctrlId) { showIf = { field: ctrlId, equals: equals }; condOnIdx = null; }
         }
       }
-      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: type === "link" ? false : rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, scoring: rowScoring(rows[i]), condOnIdx: condOnIdx, condEquals: equals });
+      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: type === "link" ? false : rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, branch_edit: rows[i].querySelector(".fbr").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, scoring: rowScoring(rows[i]), condOnIdx: condOnIdx, condEquals: equals });
     }
     // A built-in form's rows are EXTRA questions on top of hand-coded ones, so having none
     // is normal — BLK Casting has none today. Only a table needs at least one question.
@@ -13566,7 +13649,7 @@
   function fieldRowsFor(tid, fields, offset) {
     return (fields || []).map(function (f) {
       return { table_id: tid, position: f.position + (offset || 0), label: f.label, label_ar: f.label_ar,
-               type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if, scoring: f.scoring || null };
+               type: f.type, required: f.required, internal: f.internal, branch_edit: !!f.branch_edit, options: f.options, show_if: f.show_if, scoring: f.scoring || null };
     });
   }
   // ---- The question a multi-country form asks ---------------------------------------
@@ -13666,8 +13749,8 @@
     var off = asksNow ? 1 : 0;
     fields.forEach(function (f) {
       var pos = f.position + off;
-      if (f.id) ops.push(db.from("app_fields").update({ position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null }).eq("id", f.id));
-      else toInsert.push({ table_id: tid, position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null });
+      if (f.id) ops.push(db.from("app_fields").update({ position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, branch_edit: !!f.branch_edit, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, branch_edit: !!f.branch_edit, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null });
     });
     // Reconcile the country question with the ticks: added when a second country makes it
     // the only way to tell records apart, updated when the list changes, and deleted when

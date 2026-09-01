@@ -207,7 +207,11 @@ t('the editable record panel renders every upload question with its own files', 
   // sit under the question they answer — opts.only scopes them — and `edit` still has to
   // ride along, or an editor is back to seeing no upload at all beyond the header image,
   // which is the bug this assertion was written for in the first place.
-  assert.ok(/photoSectionHtml\(fields, d, null, \{ only: f\.id, edit: mayEditHere \}\)/.test(APP_SRC),
+  //
+  // `mayEditHere` may now be narrowed per question (a branch login gets it only on the
+  // questions its table nominated as branch-fillable), so the assertion is that it is still
+  // what the gate is built from — not that it is the whole gate.
+  assert.ok(/photoSectionHtml\(fields, d, null, \{ only: f\.id, edit: mayEditHere[^}]*\}\)/.test(APP_SRC),
     'the edit grid must render each upload question scoped and editable');
   assert.ok(/var mayEditHere = canEdit\(currentCustom\.table\.id\)/.test(APP_SRC),
     'and mayEditHere must be the table permission, not a constant');
