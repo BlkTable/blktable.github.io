@@ -805,6 +805,48 @@
   /* the same red the public form uses to point at the answer that is missing. .ed-checks is
      here too because a multi-select is a box of checkboxes, not an .ed-in. */
   .ed-in.invalid, .ed-checks.invalid { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
+  /* ---- date box + the calendar it opens ---- */
+  .dt-wrap { position: relative; }
+  /* the id selector on the two schedule boxes would otherwise win and put their text under
+     the calendar button */
+  .dt-in, #sched-dt.dt-in, #dec-when.dt-in { padding-right: 34px; }
+  /* The browser's own icon is hidden because it opens the browser's own calendar, and that
+     is the one being replaced. The button below is always there, on every browser. */
+  input.dt-in::-webkit-calendar-picker-indicator { display: none; -webkit-appearance: none; }
+  .dt-btn { position: absolute; top: 4px; right: 0; height: calc(100% - 4px); width: 32px;
+    display: flex; align-items: center; justify-content: center; background: none; border: 0;
+    padding: 0; color: var(--muted); cursor: pointer; border-radius: 0 8px 8px 0; }
+  .dt-btn:hover { color: var(--text); background: rgba(var(--wash),0.06); }
+  .dt-read { font-size: var(--fs-2); color: var(--muted); margin-top: 3px; }
+  .dt-read:empty { display: none; }
+  .cal { position: fixed; z-index: 3000; width: 264px; padding: 10px; border-radius: 12px;
+    background: var(--card); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0,0,0,0.45); }
+  .cal-type { width: 100%; height: 30px; padding: 0 8px; margin-bottom: 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--field-bg); color: var(--text);
+    font-family: inherit; font-size: var(--fs-3); outline: none; box-sizing: border-box; }
+  .cal-type.bad { border-color: var(--danger); }
+  .cal-top { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .cal-nav { width: 28px; height: 30px; flex: 0 0 auto; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); cursor: pointer; font-size: 15px; line-height: 1; }
+  .cal-nav:hover { background: rgba(var(--wash),0.08); }
+  .cal-top select { flex: 1 1 auto; min-width: 0; height: 30px; padding: 0 6px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--field-bg); color: var(--text);
+    font-family: inherit; font-size: var(--fs-3); }
+  /* the month name is the long one; the year never needs more than four digits */
+  .cal-top .cal-m { flex: 1.7 1 auto; }
+  .cal-top .cal-y { flex: 1 1 auto; }
+  .cal-wd, .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-wd span { text-align: center; font-size: var(--fs-2); color: var(--muted); padding: 2px 0; }
+  .cal-day { height: 30px; border-radius: 8px; border: 1px solid transparent; background: transparent;
+    color: var(--text); cursor: pointer; font-family: inherit; font-size: var(--fs-3); padding: 0; }
+  .cal-day:hover:not(:disabled) { background: rgba(var(--wash),0.10); }
+  .cal-day:disabled { opacity: 0.3; cursor: default; }
+  .cal-day.today { border-color: var(--silver); }
+  .cal-day.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .cal-foot { display: flex; gap: 6px; margin-top: 8px; }
+  .cal-foot button { flex: 1 1 0; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); cursor: pointer; font-family: inherit; font-size: var(--fs-3); }
+  .cal-foot button:hover { background: rgba(var(--wash),0.08); }
   .m-editbtn { margin: 0 0 14px auto; display: block; }
   .ed-status { font-size: var(--fs-3); margin-left: 6px; }
   .phone-row { display: flex; gap: 8px; align-items: stretch; margin-top: 4px; }
@@ -876,6 +918,15 @@
   .m-field .k:has(.k-req) { color: var(--text); font-weight: 600; }
   .m-field .v { font-size: var(--fs-4); margin-top: 2px; word-break: break-word; }
   .m-field.full { grid-column: 1 / -1; }
+  /* A question a branch login may read but not fill. It has to read as an answer on file and
+     not as an input somebody could try to type into, so it carries no box and no border —
+     the "locked" tag is what says why, and the row sits at the height of a filled-in one so
+     the panel does not shift when a shop's five questions appear among the rest. */
+  .m-field.locked .k .k-lock { margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+    background: rgba(var(--wash),0.08); color: var(--muted); font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.03em; text-transform: uppercase; vertical-align: 1px; }
+  .m-field.locked .ed-locked { font-size: var(--fs-4); color: var(--silver); margin-top: 6px;
+    min-height: 20px; white-space: pre-wrap; word-break: break-word; }
   /* ---- record panel: label above, value below, choices as pills ---- */
   .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: var(--fs-3); font-weight: 600;
     background: rgba(var(--wash),0.08); color: var(--text); max-width: 100%; overflow: hidden;
@@ -2413,7 +2464,10 @@
         <div class="m-name" id="sched-name">—</div>
         <div class="m-sub" id="sched-note">Schedule the interview, then send the WhatsApp invite.</div>
         <label class="sched-label">Interview date &amp; time</label>
-        <input type="datetime-local" id="sched-dt">
+        <div class="dt-wrap"><input type="datetime-local" id="sched-dt" class="dt-in">
+          <button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+          </button><div class="dt-read"></div></div>
         <div class="m-actions" style="margin-top:16px;">
           <button class="btn-wa" id="sched-send">Approve &amp; schedule</button>
         </div>
@@ -2430,7 +2484,10 @@
         <div class="m-sub" id="dec-note">—</div>
         <div id="dec-when-wrap">
           <label class="sched-label" id="dec-when-lab">Date &amp; time</label>
-          <input type="datetime-local" id="dec-when">
+          <div class="dt-wrap"><input type="datetime-local" id="dec-when" class="dt-in">
+            <button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+            </button><div class="dt-read"></div></div>
         </div>
         <div class="m-actions" style="margin-top:16px;">
           <button class="btn-wa" id="dec-go">Approve</button>
@@ -2855,6 +2912,7 @@
   var editKeys = {}; // table_key -> true when this user may edit that table's records
   var manageKeys = {}; // table_key -> true when this user is a form manager (drive the review chain)
   var accessKeys = {}; // table_key -> true when this user can see that table
+  var fieldLimitKeys = {}; // table_key -> true when this user may fill only the branch-fillable questions
   var cardServerPrefs = {};   // table_id -> {cover,fit,fields,labels} loaded from user_card_prefs at login
   var stars = {};      // table_key -> true when starred by this user
   var homeView = "cards";
@@ -2876,6 +2934,47 @@
   // Manager is a superset of editor, so a manager never needs the "edit" box ticked too.
   function canEdit(key) { return isAdmin || !!editKeys[key] || !!manageKeys[key]; }
   function canManage(key) { return isAdmin || !!manageKeys[key]; }
+  // A rung below editor, and the only one that is per-question rather than per-table: a
+  // branch login carries scope.fields = "internal", which says they may fill in the shop's
+  // follow-up on a record but may not touch the answers the customer typed into the public
+  // link. They also cannot add a record — creating one means writing the customer's side.
+  function isFieldLimited(key) { return !isAdmin && !!fieldLimitKeys[key]; }
+  // Which questions such a user may fill. A table nominates them by ticking "branch-fillable"
+  // in the question editor; a table that nominates none falls back to every staff-only
+  // question, which is what a field-limited user could always change and is what the tables
+  // that predate the flag (Mystery Shopper, Shop Audit) still expect.
+  //
+  // `internal` is required either way. Ticking branch-fillable on a question the customer
+  // answers would hand the shop the customer's own words, which is the thing this exists to
+  // prevent — so the flag alone is not enough, here or in the database trigger.
+  function branchFillableIds(fields) {
+    var all = fields || [];
+    var nominated = all.filter(function (f) { return f.internal && f.branch_edit; });
+    var src = nominated.length ? nominated : all.filter(function (f) { return f.internal; });
+    var out = {}; src.forEach(function (f) { out[f.id] = true; });
+    return out;
+  }
+  // A question shown to a field-limited user that they may not fill: the answer, read-only.
+  //
+  // Deliberately NOT a disabled input. edValues() reads every answer back out of the DOM by
+  // id="ed-<field id>" and saveCustom() re-trims and reformats whatever it finds, so a
+  // disabled phone would round-trip through the phone formatter and a disabled number
+  // through .trim(), land in `data` as a different JSON value, and the trigger would refuse
+  // the whole save — the shop could not file its follow-up at all. With no input element the
+  // key is skipped and the stored value survives byte for byte. Same reasoning as the
+  // scorer fields in edValues.
+  //
+  // The text is customCellText, the same rule the grid cell uses, so a locked answer and its
+  // cell can never read differently.
+  function lockedAnswerHtml(f, d) {
+    d = d || {};
+    var v = d[f.id];
+    var txt = Array.isArray(v) ? v.join(", ") : customCellText(f, d);
+    if (txt == null || txt === "") txt = "—";
+    return '<div class="m-field' + (f.type === "long_text" ? " full" : "") + ' locked">' +
+      '<div class="k">' + esc(f.label) + '<span class="k-lock" title="Only a manager can change this">locked</span></div>' +
+      '<div class="ed-locked">' + esc(txt) + "</div></div>";
+  }
   function showApp(session) {
     loginWrap.style.display = "none";
     app.style.display = "flex";
@@ -2984,9 +3083,9 @@
       return;
     }
     jaBtn.style.display = "none"; castBtn.style.display = "none";
-    db.from("table_access").select("table_key, can_edit, can_manage").then(function (res) {
-      accessKeys = {}; editKeys = {}; manageKeys = {};
-      (res.data || []).forEach(function (r) { accessKeys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; if (r.can_manage) manageKeys[r.table_key] = true; });
+    db.from("table_access").select("table_key, can_edit, can_manage, scope").then(function (res) {
+      accessKeys = {}; editKeys = {}; manageKeys = {}; fieldLimitKeys = {};
+      (res.data || []).forEach(function (r) { accessKeys[r.table_key] = true; if (r.can_edit) editKeys[r.table_key] = true; if (r.can_manage) manageKeys[r.table_key] = true; if (r.scope && r.scope.fields === "internal") fieldLimitKeys[r.table_key] = true; });
       if (accessKeys["job_applications"]) jaBtn.style.display = "flex";
       if (accessKeys["casting"]) castBtn.style.display = "flex";
       renderHome(); renderStarred();
@@ -4760,20 +4859,285 @@
   function fieldHtml(k, v) {
     return '<div class="m-field"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || "—") + "</div></div>";
   }
+  // ---- The date box, and the calendar behind it ----
+  // One calendar for every date in the app, and the same one the public form draws.
+  //
+  // What a date field is made of has not changed: it is still a native <input type="date">
+  // carrying the id and the value, so everything that reads .value, restores a draft into
+  // it, marks it invalid or listens for its change goes on working untouched. What changed
+  // is the way in. It used to be showPicker() — the browser's own calendar, opened on any
+  // click — and that had three faults. showPicker() does not exist in every browser people
+  // here actually use, and where it is missing the field was a box that opened nothing and
+  // had no icon left to press either, because the icon had been styled away. Opening on any
+  // click meant the box could not be clicked into to type. And the browser's own calendar
+  // cannot jump a year, so a date of birth was reached one month arrow at a time.
+  //
+  // The calendar below is drawn by the page instead: it opens from a button that is always
+  // there whatever the browser, it leaves the box free to type in, it jumps straight to a
+  // month and a year, and it takes a date typed as dd/mm/yyyy.
+  function pad2(n) {
+    return (n < 10 ? "0" : "") + n;
+  }
+  function isoOf(y, m, d) {
+    return y + "-" + pad2(m) + "-" + pad2(d);
+  }
+  function todayIso() {
+    var n = new Date();
+    return isoOf(n.getFullYear(), n.getMonth() + 1, n.getDate());
+  }
+  // The three numbers of a date, or nothing at all. A date JavaScript had to roll over is
+  // not a date: new Date(2026, 1, 31) is the 3rd of March, and quietly treating the 31st of
+  // February as the 3rd is how a wrong day ends up on somebody's shift.
+  function dateParts(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso == null ? "" : iso).trim());
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    var dt = new Date(y, mo - 1, d);
+    if (isNaN(dt.getTime()) || dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return { y: y, m: mo, d: d };
+  }
+  // The date in words. The locale is named rather than left to the browser on purpose: with
+  // a bare toLocaleDateString() the same record reads 9/1/2026 on one laptop and 01/09/2026
+  // on the next, and neither person can tell which of the two is the 1st of September.
+  function fmtDateLong(iso, longWeekday) {
+    var p = dateParts(iso);
+    if (!p) return "";
+    return new Date(p.y, p.m - 1, p.d).toLocaleDateString("en-GB",
+      { weekday: longWeekday ? "long" : "short", day: "numeric", month: "long", year: "numeric" });
+  }
+  // What a person is allowed to type. Day first, because that is how a date is written
+  // here; year first is taken too, because that is the order the box itself shows on some
+  // machines and what it shows has to be typeable back into it.
+  function parseTypedDate(s) {
+    var t = String(s == null ? "" : s).trim();
+    if (!t) return null;
+    var iso, m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/.exec(t);
+    if (m) {
+      iso = isoOf(+m[1], +m[2], +m[3]);
+      return dateParts(iso) ? iso : null;
+    }
+    m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2}|\d{4})$/.exec(t);
+    if (!m) return null;
+    // Two digits have to be read as some century. What gets typed into these boxes is a
+    // birthday or something close to now, so the split is the usual one: 26 is 2026, 75 is
+    // 1975.
+    var y = +m[3];
+    if (y < 100) y += y < 50 ? 2000 : 1900;
+    iso = isoOf(y, +m[2], +m[1]);
+    return dateParts(iso) ? iso : null;
+  }
+  // The month as the calendar draws it: blanks until the 1st reaches its own weekday, then
+  // the days. Monday first, which is how a week is read here.
+  function calGrid(y, m) {
+    var lead = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+    var days = new Date(y, m, 0).getDate();
+    var cells = [], i;
+    for (i = 0; i < lead; i++) cells.push(null);
+    for (i = 1; i <= days; i++) cells.push(i);
+    return cells;
+  }
+  // Both ends inclusive: "on or before the 12th" has to include the 12th. ISO dates compare
+  // as text, which is the whole reason the value is kept in that shape.
+  function inRange(iso, min, max) {
+    if (min && iso < min) return false;
+    if (max && iso > max) return false;
+    return true;
+  }
+
+  var CAL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+    '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>';
+  // The markup. The native input still carries the id and the value; the button beside it
+  // opens the calendar; the line underneath says the date in words, so that 09/01 cannot be
+  // read as the wrong month.
+  function dateFieldHtml(id, value, cls, attrs) {
+    var v = value == null ? "" : String(value);
+    return '<div class="dt-wrap">' +
+      '<input type="date" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dt-in" value="' + esc(v) + '"' + (attrs || "") + ">" +
+      '<button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">' + CAL_ICON + "</button>" +
+      '<div class="dt-read">' + esc(fmtDateLong(v)) + "</div></div>";
+  }
+  function dtInputOf(el) {
+    var w = el && el.closest ? el.closest(".dt-wrap") : null;
+    return w ? w.querySelector(".dt-in") : null;
+  }
+  // The words under the box follow the value however it got there — picked, typed, pasted,
+  // or put back by a saved draft.
+  function dtSync(input) {
+    var w = input && input.closest ? input.closest(".dt-wrap") : null;
+    if (!w) return;
+    var r = w.querySelector(".dt-read");
+    if (r) r.textContent = fmtDateLong(input.value);
+  }
+
+  var calNow = null, calFor = null;
+  function closeCalendar() {
+    if (calNow && calNow.parentNode) calNow.parentNode.removeChild(calNow);
+    calNow = null; calFor = null;
+  }
+  var CAL_MONTHS = ["January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"];
+  function openCalendar(input) {
+    closeCalendar();
+    if (!input || input.disabled || input.readOnly) return;
+    // A date-time field keeps its time; only the day is picked here.
+    var isDT = input.type === "datetime-local";
+    var min = (input.getAttribute("min") || "").slice(0, 10);
+    var max = (input.getAttribute("max") || "").slice(0, 10);
+    var picked = dateParts(input.value);
+    var view = picked || dateParts(todayIso());
+    var yLo = min ? +min.slice(0, 4) : Math.min(1920, view.y);
+    var yHi = max ? +max.slice(0, 4) : Math.max(new Date().getFullYear() + 10, view.y);
+    if (yHi < yLo) yHi = yLo;
+    var box = document.createElement("div");
+    box.className = "cal";
+    box.setAttribute("role", "dialog");
+
+    function draw() {
+      var i, mo = "", yo = "";
+      for (i = 0; i < 12; i++) mo += '<option value="' + (i + 1) + '"' + (view.m === i + 1 ? " selected" : "") + ">" + CAL_MONTHS[i] + "</option>";
+      for (i = yHi; i >= yLo; i--) yo += '<option value="' + i + '"' + (view.y === i ? " selected" : "") + ">" + i + "</option>";
+      var wd = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(function (d) { return "<span>" + d + "</span>"; }).join("");
+      var today = todayIso();
+      var sel = picked ? isoOf(picked.y, picked.m, picked.d) : "";
+      var days = calGrid(view.y, view.m).map(function (d) {
+        if (d == null) return "<span></span>";
+        var iso = isoOf(view.y, view.m, d);
+        return '<button type="button" class="cal-day' + (iso === sel ? " on" : "") + (iso === today ? " today" : "") +
+          '" data-iso="' + iso + '"' + (inRange(iso, min, max) ? "" : " disabled") + ">" + d + "</button>";
+      }).join("");
+      box.innerHTML =
+        '<input type="text" class="cal-type" placeholder="Type a date: dd/mm/yyyy" aria-label="Type a date">' +
+        '<div class="cal-top"><button type="button" class="cal-nav" data-step="-1" aria-label="Previous month">&#8249;</button>' +
+        '<select class="cal-m" aria-label="Month">' + mo + "</select>" +
+        '<select class="cal-y" aria-label="Year">' + yo + "</select>" +
+        '<button type="button" class="cal-nav" data-step="1" aria-label="Next month">&#8250;</button></div>' +
+        '<div class="cal-wd">' + wd + "</div>" +
+        '<div class="cal-days">' + days + "</div>" +
+        '<div class="cal-foot"><button type="button" class="cal-today">Today</button>' +
+        '<button type="button" class="cal-clear">Clear</button></div>';
+    }
+    // Picking a day writes the value the way the field already stored it, then says so out
+    // loud: the input and change events are what autosave, the conditional questions and
+    // the draft all listen for, so a date picked here has to look exactly like one typed.
+    function apply(iso) {
+      if (isDT) {
+        var t = ((input.value || "").split("T")[1] || "09:00").slice(0, 5);
+        input.value = iso ? iso + "T" + t : "";
+      } else {
+        input.value = iso || "";
+      }
+      try { input.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
+      try { input.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {}
+      dtSync(input);
+      closeCalendar();
+      try { input.focus(); } catch (e) {}
+    }
+    box.addEventListener("click", function (e) {
+      var el = e.target && e.target.closest ? e.target.closest("button") : null;
+      if (!el) return;
+      e.preventDefault();
+      if (el.classList.contains("cal-day")) return apply(el.getAttribute("data-iso"));
+      if (el.classList.contains("cal-clear")) return apply("");
+      if (el.classList.contains("cal-today")) {
+        // Offered even where it is out of range, so it is worth checking before it is taken.
+        if (inRange(todayIso(), min, max)) apply(todayIso());
+        return;
+      }
+      if (el.classList.contains("cal-nav")) {
+        view.m += +el.getAttribute("data-step");
+        if (view.m < 1) { view.m = 12; view.y--; }
+        if (view.m > 12) { view.m = 1; view.y++; }
+        if (view.y < yLo) view.y = yLo;
+        if (view.y > yHi) view.y = yHi;
+        draw();
+      }
+    });
+    box.addEventListener("change", function (e) {
+      if (e.target.classList.contains("cal-m")) { view.m = +e.target.value; draw(); }
+      else if (e.target.classList.contains("cal-y")) { view.y = +e.target.value; draw(); }
+    });
+    box.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { closeCalendar(); try { input.focus(); } catch (err) {} return; }
+      if (e.key === "Enter" && e.target.classList.contains("cal-type")) {
+        e.preventDefault();
+        var iso = parseTypedDate(e.target.value);
+        if (iso && inRange(iso, min, max)) return apply(iso);
+        e.target.classList.add("bad");
+        return;
+      }
+      // Walking the month with the arrow keys, a week at a time up and down.
+      var step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+      if (step == null || !e.target.classList.contains("cal-day")) return;
+      e.preventDefault();
+      var all = [].slice.call(box.querySelectorAll(".cal-day"));
+      var next = all[all.indexOf(e.target) + step];
+      if (next) next.focus();
+    });
+    box.addEventListener("input", function (e) {
+      if (e.target.classList.contains("cal-type")) e.target.classList.remove("bad");
+    });
+
+    draw();
+    document.body.appendChild(box);
+    calNow = box; calFor = input;
+    // Under the field where there is room for it, above it where there is not.
+    var r = input.getBoundingClientRect();
+    var top = r.bottom + 6;
+    if (top + box.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - box.offsetHeight - 6);
+    box.style.top = top + "px";
+    box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + "px";
+    // Focused only where there is a mouse: on a phone, focusing a day would throw the
+    // on-screen keyboard over the calendar that was just opened.
+    if (window.matchMedia && window.matchMedia("(hover: hover)").matches) {
+      var day = box.querySelector(".cal-day.on") || box.querySelector(".cal-day.today") || box.querySelector(".cal-day:not(:disabled)");
+      if (day) try { day.focus(); } catch (e) {}
+    }
+  }
+  // Delegated once, at the document, so every panel that ever renders a date box is covered
+  // — the record panel, New record, the filter, and anything added later.
+  document.addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest(".dt-btn") : null;
+    if (btn) {
+      e.preventDefault();
+      var inp = dtInputOf(btn);
+      if (!inp) return;
+      if (calNow && calFor === inp) closeCalendar(); else openCalendar(inp);
+      return;
+    }
+    // A time box still opens the browser's own picker: a clock has no year to jump to, so
+    // there is nothing here that would improve on it.
+    var el = e.target;
+    if (el && el.classList && el.classList.contains("ed-picker") && el.showPicker) {
+      try { el.showPicker(); } catch (err) {}
+    }
+  });
+  document.addEventListener("mousedown", function (e) {
+    if (!calNow || calNow.contains(e.target)) return;
+    if (e.target && e.target.closest && e.target.closest(".dt-btn")) return;   // the button toggles it itself
+    closeCalendar();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeCalendar(); });
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("dt-in")) dtSync(e.target);
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("dt-in")) dtSync(e.target);
+  });
+  // Where <input type="date"> is not supported at all the browser hands back a plain text
+  // box. Then what was typed has to be turned into a date here, or what gets saved is the
+  // words rather than the day.
+  document.addEventListener("blur", function (e) {
+    var el = e.target;
+    if (!el || !el.classList || !el.classList.contains("dt-in")) return;
+    if (el.type === "date" || el.type === "datetime-local") return;
+    var iso = parseTypedDate(el.value);
+    if (iso) { el.value = iso; dtSync(el); }
+  }, true);
+
   // ---- Shared inline-edit builders (used by the three detail modals) ----
   function edText(id, value, multiline) { var v = value == null ? "" : value; return multiline ? '<textarea id="' + id + '" class="ed-in">' + esc(v) + "</textarea>" : '<input id="' + id + '" class="ed-in" value="' + esc(v) + '">'; }
-  // A native date/time box shows only a small icon on desktop, so clicking the field reads as
-  // a text input that will not type. Opening the picker on click is what the public form
-  // already does; the dashboard was the half that did not.
-  function edDate(id, value) { return '<input type="date" id="' + id + '" class="ed-in ed-picker" value="' + esc(value == null ? "" : value) + '">'; }
+  function edDate(id, value) { return dateFieldHtml(id, value, "ed-in"); }
   function edTime(id, value) { return '<input type="time" id="' + id + '" class="ed-in ed-picker" value="' + esc(value == null ? "" : value) + '">'; }
-  // Delegated once, at the document, so it covers every panel that ever renders one of these
-  // — the record panel, New record, and anything added later.
-  document.addEventListener("click", function (e) {
-    var el = e.target;
-    if (!el || !el.classList || !el.classList.contains("ed-picker")) return;
-    if (el.showPicker) { try { el.showPicker(); } catch (err) {} }
-  });
   function edNum(id, value) { return '<input type="number" id="' + id + '" class="ed-in" value="' + esc(value == null ? "" : value) + '">'; }
   // Multi-select editor: Airtable lets several choices be picked, so a single <select>
   // cannot represent the answer. Any recorded value that is no longer an offered choice
@@ -4915,8 +5279,13 @@
       // of `cur` means saveCustom keeps the stored value untouched, and the database
       // recomputes it from the answer anyway.
       if (isScorerField(f)) return;
-      if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
+      // The DOM is the authority on what this panel is editing, phone included. edPhoneReg is
+      // keyed by element id and never cleared, so its closure outlives the panel that made it
+      // and still holds that panel's detached input. Reading it without checking the element
+      // is present would write the PREVIOUS record's number into this one — which is exactly
+      // what a locked phone row (no input at all) would trigger.
       var el = document.getElementById("ed-" + f.id); if (!el) return;
+      if (f.type === "phone" && edPhoneReg["ed-" + f.id]) { out[f.id] = edPhoneReg["ed-" + f.id](); return; }
       out[f.id] = (f.type === "multi_select" || f.type === "record_multi") ? edChecksValue(el) : (el.value || "").trim();
     });
     return out;
@@ -5205,6 +5574,7 @@
     schedApp = a;
     document.getElementById("sched-name").textContent = a.full_name;
     document.getElementById("sched-dt").value = "";
+    dtSync(document.getElementById("sched-dt"));   // emptied in code, so nothing fires on its own
     document.getElementById("sched-msg").textContent = "";
     document.getElementById("sched-note").textContent = waEligible(a)
       ? "Schedule the interview, then send the WhatsApp invite."
@@ -7082,7 +7452,10 @@
     document.getElementById("custom-share").style.display = isAdmin ? "" : "none";
     // Adding a record by hand is an edit, so it follows can_edit rather than admin — the same
     // permission that lets someone change an answer already on file.
-    document.getElementById("custom-new").style.display = canEdit(t.id) ? "" : "none";
+    // Not offered to a field-limited user: creating a record means writing the customer's
+    // side of it, which is the one thing their scope says they may not do. create_record()
+    // refuses them too — this only keeps a button off the screen that would always fail.
+    document.getElementById("custom-new").style.display = (canEdit(t.id) && !isFieldLimited(t.id)) ? "" : "none";
     // Payroll is money leaving the business, so it follows can_manage rather than can_edit.
     document.getElementById("custom-payroll").style.display =
       (payrollHost(t) && canManage(t.id)) ? "inline-flex" : "none";
@@ -7409,6 +7782,7 @@
     document.getElementById("dec-name").textContent = decisionTitle(s, fields);
     document.getElementById("dec-when-lab").textContent = cfg.when_label;
     document.getElementById("dec-when").value = "";
+    dtSync(document.getElementById("dec-when"));   // emptied in code, so nothing fires on its own
     document.getElementById("dec-msg").textContent = "";
     document.getElementById("dec-go").textContent = cfg.approve;
     document.getElementById("dec-note").textContent = cfg.message
@@ -8111,7 +8485,10 @@
     if (!m) return s;
     var day = new Date(+m[1], +m[2] - 1, +m[3]);
     if (isNaN(day.getTime())) return s;
-    var out = day.toLocaleDateString();
+    // The locale is named rather than left to the browser: without it the same record reads
+    // 9/1/2026 on one laptop and 01/09/2026 on the next, and neither person can tell which
+    // one is the 1st of September.
+    var out = day.toLocaleDateString("en-GB");
     if (m[4] == null) return out;
     var h = +m[4], h12 = (h % 12) === 0 ? 12 : (h % 12);
     return out + " " + h12 + ":" + m[5] + " " + (h >= 12 ? "PM" : "AM");
@@ -10218,7 +10595,10 @@
       }).join("") + "</select>";
     }
     if (kind === "number") return '<input class="fc-input" type="number" inputmode="numeric" placeholder="Value" value="' + esc(c.val == null ? "" : c.val) + '">';
-    if (kind === "date") return '<input class="fc-input" type="date" value="' + esc(c.val == null ? "" : c.val) + '">';
+    // Read back by `.fc-val .fc-input`, which still finds it inside the wrapper the calendar
+    // needs. This box had no way in at all before: it never carried the class the old picker
+    // handler looked for, so clicking it did nothing.
+    if (kind === "date") return dateFieldHtml("", c.val, "fc-input");
     return '<input class="fc-input" type="text" placeholder="Value" value="' + esc(c.val == null ? "" : c.val) + '">';
   }
   function renderConds(fv) {
@@ -11012,13 +11392,20 @@
     // a conditional question is built either way and hidden when it does not apply — unless
     // it already holds an answer, which is history and stays on screen (edFieldRowHtml)
     var mayEditHere = canEdit(currentCustom.table.id);
+    // A branch login sees the whole record — the customer's complaint is what they have to
+    // act on — but may only type into the questions their table nominated. Everything else
+    // is drawn read-only rather than left as an input the database would refuse on save.
+    var limited = isFieldLimited(currentCustom.table.id);
+    var fillable = limited ? branchFillableIds(fields) : null;
     var grid = detailOrder(fields).map(function (f) {
       if (!showsOn(f, d, true)) return "";      // a retired question this record never answered
+      var locked = limited && !fillable[f.id];
       // an upload question keeps its files, and its add/remove tiles, under itself
       if (isFileField(f)) {
-        var tiles = photoSectionHtml(fields, d, null, { only: f.id, edit: mayEditHere });
+        var tiles = photoSectionHtml(fields, d, null, { only: f.id, edit: mayEditHere && !locked });
         return tiles ? '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>" : "";
       }
+      if (locked) return lockedAnswerHtml(f, d);
       return edFieldRowHtml(f, d, { scored: qsMap[f.id], fields: fields });
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
@@ -12415,6 +12802,12 @@
       '<textarea class="opts" rows="1" dir="auto" placeholder="Options — one per line (or comma-separated): English|عربي — add |other to a choice to open a free-text box" style="display:none;"></textarea>' +
       '<label class="req-lbl"><input type="checkbox" class="freq" checked style="width:auto;height:auto;"> required</label>' +
       '<label class="req-lbl"><input type="checkbox" class="fint" style="width:auto;height:auto;"> staff-only</label>' +
+      // Only meaningful on a staff-only question, and the checkbox says so by being disabled
+      // until staff-only is ticked: nominating a question the customer answers would hand a
+      // branch login the customer's own words. branchFillableIds() and the database trigger
+      // both require internal as well, so this is the third lock rather than the only one.
+      '<label class="req-lbl" title="A branch login may fill this in. Tick it on the follow-up questions a shop is meant to answer; a table that nominates none lets them fill any staff-only question.">' +
+      '<input type="checkbox" class="fbr" disabled style="width:auto;height:auto;"> branch-fillable</label>' +
       afterFieldSelectHtml() + condSelectHtml() +
       '<button type="button" class="rm">Remove</button></div>' +
       '<div class="bld-answers">' +
@@ -12459,9 +12852,19 @@
       }
       row.querySelector(".freq").checked = data.required !== false;
       row.querySelector(".fint").checked = !!data.internal;
+      row.querySelector(".fbr").checked = !!data.branch_edit;
       // resolved once every row exists — the question this one depends on may be below it
       if (data.showIf || data.condIdx != null) row.setAttribute("data-cond-pending", JSON.stringify(data.showIf || { idx: data.condIdx, equals: data.condVal }));
     }
+    // branch-fillable rides on staff-only. Untick staff-only and the nomination goes with it,
+    // rather than sitting checked-but-disabled and reappearing the next time it is ticked —
+    // what is on screen has to be what the save writes.
+    (function () {
+      var fint = row.querySelector(".fint"), fbr = row.querySelector(".fbr");
+      function sync() { fbr.disabled = !fint.checked; if (!fint.checked) fbr.checked = false; }
+      fint.addEventListener("change", sync);
+      sync();
+    })();
     if (data && data.scoring) {
       var si = scoringToInputs(data.scoring);
       row.querySelector(".fpts").value = si.points;
@@ -12541,6 +12944,7 @@
           type: r.querySelector(".ftype").value, opts: r.querySelector(".opts").value,
           answers: rowDraftAnswers(r),
           required: r.querySelector(".freq").checked, internal: r.querySelector(".fint").checked,
+          branch_edit: r.querySelector(".fbr").checked,
           condIdx: ci, condVal: ci == null ? "" : r.querySelector(".fcondv").value,
           pts: r.querySelector(".fpts").value, scEarn: r.querySelector(".fscearn").value,
           scOp: r.querySelector(".fscop").value, scVal: r.querySelector(".fscval").value,
@@ -12785,7 +13189,7 @@
     }).then(function (res) {
       msg.textContent = "";
       var fields = (res && res.data) || [];
-      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), keepOpts: keptOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
+      fields.forEach(function (f) { editingFieldIds.push(f.id); addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, branch_edit: f.branch_edit, linkRec: linkRecordOptions(f.options), keepOpts: keptOptions(f.options), afterField: f.after_field, showIf: f.show_if, scoring: f.scoring }); });
       resolveCondPending();
       requestAnimationFrame(growAllBld);
     }).catch(function () { msg.textContent = ""; });
@@ -13066,7 +13470,7 @@
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
         editingFieldIds.push(f.id);
-        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, linkRec: linkRecordOptions(f.options), keepOpts: keptOptions(f.options), showIf: f.show_if, scoring: f.scoring });
+        addBuilderField({ id: f.id, label: f.label, labelAr: f.label_ar, type: f.type, opts: optsToString(f.options), answers: Array.isArray(f.options) ? f.options : null, required: f.required, internal: f.internal, branch_edit: f.branch_edit, linkRec: linkRecordOptions(f.options), keepOpts: keptOptions(f.options), showIf: f.show_if, scoring: f.scoring });
       });
       resolveCondPending();
       if (presetType) {
@@ -13244,7 +13648,7 @@
           if (ctrlId) { showIf = { field: ctrlId, equals: equals }; condOnIdx = null; }
         }
       }
-      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: type === "link" ? false : rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, scoring: rowScoring(rows[i]), condOnIdx: condOnIdx, condEquals: equals });
+      fields.push({ id: rows[i].getAttribute("data-field-id") || null, position: i, label: lab, label_ar: rows[i].querySelector(".lab-ar").value.trim() || null, type: type, required: type === "link" ? false : rows[i].querySelector(".freq").checked, internal: rows[i].querySelector(".fint").checked, branch_edit: rows[i].querySelector(".fbr").checked, options: options, after_field: (afterSel && afterSel.value) || null, show_if: showIf, scoring: rowScoring(rows[i]), condOnIdx: condOnIdx, condEquals: equals });
     }
     // A built-in form's rows are EXTRA questions on top of hand-coded ones, so having none
     // is normal — BLK Casting has none today. Only a table needs at least one question.
@@ -13313,7 +13717,7 @@
   function fieldRowsFor(tid, fields, offset) {
     return (fields || []).map(function (f) {
       return { table_id: tid, position: f.position + (offset || 0), label: f.label, label_ar: f.label_ar,
-               type: f.type, required: f.required, internal: f.internal, options: f.options, show_if: f.show_if, scoring: f.scoring || null };
+               type: f.type, required: f.required, internal: f.internal, branch_edit: !!f.branch_edit, options: f.options, show_if: f.show_if, scoring: f.scoring || null };
     });
   }
   // ---- The question a multi-country form asks ---------------------------------------
@@ -13413,8 +13817,8 @@
     var off = asksNow ? 1 : 0;
     fields.forEach(function (f) {
       var pos = f.position + off;
-      if (f.id) ops.push(db.from("app_fields").update({ position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null }).eq("id", f.id));
-      else toInsert.push({ table_id: tid, position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null });
+      if (f.id) ops.push(db.from("app_fields").update({ position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, branch_edit: !!f.branch_edit, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null }).eq("id", f.id));
+      else toInsert.push({ table_id: tid, position: pos, label: f.label, label_ar: f.label_ar, type: f.type, required: f.required, internal: f.internal, branch_edit: !!f.branch_edit, options: f.options, after_field: f.after_field, show_if: f.show_if, scoring: f.scoring || null });
     });
     // Reconcile the country question with the ticks: added when a second country makes it
     // the only way to tell records apart, updated when the list changes, and deleted when
