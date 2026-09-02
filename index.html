@@ -7303,6 +7303,9 @@
         b.innerHTML = '<span class="side-chk" aria-hidden="true"></span>' +
           tmarkHtml(t.id, t.name, t.config) + '<span class="side-label">' + esc(t.name) + '</span>' +
           (isArchived(t) ? '<span class="side-arch-tag">archived</span>' : "") +
+          // A table ticked for more than one country says so before you open it, the same
+          // way the Job Applications line does.
+          (tableCountries(t).length > 1 ? '<span class="side-caret">' + (customKidsOpen ? "▾" : "▸") + "</span>" : "") +
           '<span class="side-gear" title="Options">⋯</span>';
         b.addEventListener("click", function () {
           if (sideSelMode) { toggleSideSel(t); return; }
@@ -7576,13 +7579,59 @@
   // a table can have 32 shops, so the rail read as a wall of names under every table you
   // pressed, and the standard Filter does the same job for any field. `currentCustom.branch`
   // itself stays — a saved view can still be locked to one branch.
+  // Which countries belong under a table, from TWO sources on purpose:
+  //
+  //   * the countries the table covers — the builder's ticks, `config.countries`. A form
+  //     for Jordan and Lebanon lists both from the day it is made, so the rail is there
+  //     before the second country has a single record. Reading only the records is why
+  //     Customer Complaints (1,327 Jordanian rows, no Lebanese ones yet) showed nothing
+  //     under a table ticked for two.
+  //   * the countries its records actually fall in — the facets. A country that has since
+  //     been un-ticked must not take its rows off the rail with it.
+  //
+  // Ordered by the countries table, so the rail does not reshuffle itself as records
+  // arrive; rows with no country at all come last, and only when there are some.
+  function scopeCountryCodes(t) {
+    var facets = customFacets.countries || {};
+    var seen = {};
+    tableCountries(t).forEach(function (c) { if (c) seen[c] = true; });
+    Object.keys(facets).forEach(function (c) { if (c !== "__none") seen[c] = true; });
+    var out = [];
+    COUNTRY_LIST.forEach(function (c) { if (seen[c.code]) { out.push(c.code); delete seen[c.code]; } });
+    Object.keys(seen).sort().forEach(function (c) { out.push(c); });   // a code no longer on file
+    if (facets.__none) out.push("__none");
+    return out;
+  }
+  // The flag for a country on file. Derived from its dial code rather than kept in a
+  // second list: `countries.dial` is +962 and the phone picker already knows 962 is the
+  // Jordanian flag. A country with no dial simply reads as its name.
+  function countryFlag(code) {
+    var c = COUNTRY_LIST.filter(function (x) { return x.code === code; })[0];
+    var d = (c && c.dial) ? String(c.dial).replace(/[^0-9]/g, "") : "";
+    var m = d ? COUNTRIES.filter(function (x) { return x.dial === d; })[0] : null;
+    return m ? m.flag : null;
+  }
+  // A caret on a table's sidebar line, and only when something hangs under it. The Job
+  // Applications line has carried one since the beginning; a custom table's line carried
+  // nothing, so a fold nobody could see reads exactly like no countries at all.
+  function paintSideCaret(item, has, open) {
+    if (!item) return;
+    var caret = item.querySelector(".side-caret");
+    if (!has) { if (caret && caret.parentNode) caret.parentNode.removeChild(caret); return; }
+    if (!caret) {
+      caret = document.createElement("span");
+      caret.className = "side-caret";
+      item.insertBefore(caret, item.querySelector(".side-gear") || null);
+    }
+    caret.textContent = open ? "▾" : "▸";
+  }
   function renderCustomScope() {
     var kids = document.getElementById("custom-kids");
     if (!kids || !currentCustom || !currentCustom.table) return;
     // The view rail belongs to whichever table is open, so it is always visible;
     // the country list stays behind the caret.
     var co = customFacets.countries || {};
-    var codes = Object.keys(co).sort(function (a, b) { return co[b] - co[a]; });
+    var codes = scopeCountryCodes(currentCustom.table);
     var countryMeaningful = codes.filter(function (c) { return c !== "__none"; }).length > 1;
     var countryHtml = "";
     if (countryMeaningful) {
@@ -7593,7 +7642,8 @@
         (customFacets.all_total || 0) + "</span></button>" +
         codes.map(function (c) {
           return '<button class="side-kid' + (currentCustom.country === c ? " active" : "") +
-            '" data-c="' + esc(c) + '"><span>' + esc(clabel(c)) + '</span><span class="kid-n">' + co[c] + "</span></button>";
+            '" data-c="' + esc(c) + '">' + flagImg(countryFlag(c)) + "<span>" + esc(clabel(c)) +
+            '</span><span class="kid-n">' + (co[c] || 0) + "</span></button>";
         }).join("");
     }
     var item = document.querySelector('.side-item[data-custom="' + currentCustom.table.id + '"]');
@@ -7604,9 +7654,13 @@
     // to be kept open by the "Create new…" line; empty and still shown, it reads as a gap
     // under the table you just pressed.
     kids.style.display = kids.innerHTML ? "flex" : "none";
+    paintSideCaret(item, !!countryHtml, customKidsOpen);
   }
-  var customKidsOpen = false;
-  try { customKidsOpen = localStorage.getItem("blk_custom_kids") === "1"; } catch (e) {}
+  // Open by default. Ticking a second country is the whole point of the rail, and a rail
+  // that starts folded is a rail people report as missing — so it is shown until somebody
+  // folds it, rather than hidden until somebody finds it.
+  var customKidsOpen = true;
+  try { customKidsOpen = localStorage.getItem("blk_custom_kids") !== "0"; } catch (e) {}
 
   // ---- Saved views -----------------------------------------------------------
   // A view remembers everything about how you were looking at a table: its type,
@@ -12354,19 +12408,30 @@
     document.getElementById("custom-search").value = "";
     loadCustomSubs();
   });
-  // pressing a custom table's own sidebar line reveals its countries
+  // Pressing the line of the table you are already looking at folds its countries away,
+  // and pressing it again brings them back.
+  //
+  // The line's OWN click handler (openCustomTable) runs before this delegated one, so by
+  // the time this runs `currentCustom` is ALREADY the table just pressed — which turned
+  // every press into a toggle and left the "a different table" branch unreachable. Opening
+  // a table folded its countries away every other time, which is what "it shows nothing"
+  // looked like. So catch which table was open BEFORE the press, in the capture phase,
+  // and fold only when the press was on that one.
+  var sideOpenBefore = null;
+  document.getElementById("side-tables").addEventListener("click", function () {
+    sideOpenBefore = (currentCustom && currentCustom.table) ? currentCustom.table.id : null;
+  }, true);
   document.getElementById("side-tables").addEventListener("click", function (e) {
     var item = e.target && e.target.closest ? e.target.closest(".side-item[data-custom]") : null;
     if (!item || (e.target.closest && e.target.closest(".side-gear"))) return;
-    if (currentCustom && currentCustom.table.id === item.getAttribute("data-custom")) {
-      customKidsOpen = !customKidsOpen;
-      try { localStorage.setItem("blk_custom_kids", customKidsOpen ? "1" : "0"); } catch (err) {}
-      // only the country half folds away — the view rail belongs to the open table
-      var cy = document.querySelector("#custom-kids .side-kid-countries");
-      if (cy) cy.style.display = customKidsOpen ? "" : "none";
-    } else {
-      customKidsOpen = true;   // opening a different table shows its countries
-    }
+    if (sideOpenBefore !== item.getAttribute("data-custom")) return;   // opening it, not folding it
+    customKidsOpen = !customKidsOpen;
+    try { localStorage.setItem("blk_custom_kids", customKidsOpen ? "1" : "0"); } catch (err) {}
+    // only the country half folds away — the view rail belongs to the open table
+    var cy = document.querySelector("#custom-kids .side-kid-countries");
+    if (cy) cy.style.display = customKidsOpen ? "" : "none";
+    var caret = item.querySelector(".side-caret");
+    if (caret) caret.textContent = customKidsOpen ? "▾" : "▸";
   });
   // ---- QR codes for public form links (with centered BLK logo) ----
   var qrLogo = new Image(); var qrLogoReady = false;
