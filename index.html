@@ -541,7 +541,7 @@
      overflow:hidden, which clipped a menu opening below it into nothing. Fixed escapes
      the card; placeRecMenu() sets left/top from the button and closeAllRecMenus() runs
      on scroll, since a fixed menu does not travel with the list. */
-  .rec-actions { position: fixed; left: 0; top: 0; z-index: 120; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
+  .rec-actions { position: fixed; left: 0; top: 0; z-index: 120; margin: 0; padding: 5px; list-style: none; min-width: 132px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; overflow-y: auto; overscroll-behavior: contain; }
   .rec-menu.open .rec-actions { display: block; }
   .rec-actions li { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: var(--fs-3); color: var(--text); font-weight: 500; }
   .rec-actions li:hover { background: rgba(var(--wash),0.06); }
@@ -1590,7 +1590,7 @@
   /* per-form ⋯ menu (sidebar) */
   #form-menu { position: fixed; z-index: 300; min-width: 190px; margin: 0; padding: 6px; list-style: none;
     background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;
-     display: none; }
+     display: none; overflow-y: auto; overscroll-behavior: contain; }
   #form-menu.open { display: block; }
   #form-menu li { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: var(--fs-3); color: var(--text); }
   #form-menu li:hover { background: rgba(var(--wash),0.07); }
@@ -3210,6 +3210,78 @@
   function wsMoveLabel(w) {
     return w === WS_MAIN ? "Move to the top level" : "Move to " + w;
   }
+
+  // ---- The list scrolls while you drag ------------------------------------
+  // A browser scrolls nothing for you during an HTML5 drag. So a list taller than its box
+  // cannot be dragged from one end to the other: you reach the edge of the screen still
+  // holding the row and everything stops. Both drags in the app hit it — a question in a
+  // form with sixty questions, and a table in a rail with two hundred — and the answer is
+  // the same for both, so it is wired ONCE here, on the document, rather than onto each
+  // draggable. The next drag someone adds gets it without knowing this exists.
+  //
+  // While a drag is live, whatever scrollable box the pointer is over creeps when the
+  // pointer comes within DRAG_EDGE of its top or bottom edge, faster the nearer the edge.
+  // Over something that does not scroll — the sidebar's fold headings, the gap beside a
+  // grid — the page itself is what moves.
+  var DRAG_EDGE = 64, DRAG_MAX = 18, DRAG_QUIET = 500, DRAG_TICK = 16;
+  var dragScroll = { x: 0, y: 0, at: 0, timer: 0 };
+  // The nearest box under the pointer that has somewhere to scroll to, falling back to the
+  // page. Walking up from elementFromPoint rather than from the dragged row, because the
+  // pointer is regularly over a different list from the one the row came out of.
+  function scrollableAt(x, y) {
+    var el = document.elementFromPoint(x, y);
+    while (el) {
+      // body and the root are in the walk, not skipped over to a scrollingElement guess:
+      // this page sets overflow-x: hidden on both, which makes BODY the page's scroller
+      // and leaves document.scrollingElement measuring nothing.
+      var root = el === document.body || el === document.documentElement;
+      var oy = getComputedStyle(el).overflowY;
+      if ((root || oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 1) return el;
+      el = el.parentElement;
+    }
+    var se = document.scrollingElement || document.documentElement;
+    return se.scrollHeight > se.clientHeight + 1 ? se : null;
+  }
+  // A timer rather than requestAnimationFrame: rAF is the better citizen, but it does not
+  // tick in the headless browser the tests drive, and an auto-scroll nothing can test is
+  // how this shipped broken in the first place. It only ever runs during a drag.
+  function dragScrollStep() {
+    dragScroll.timer = 0;
+    // A drag that leaves the window stops sending dragover and may never send dragend
+    // either — without this the list would scroll to its end and stay there.
+    if (Date.now() - dragScroll.at > DRAG_QUIET) return;
+    var box = scrollableAt(dragScroll.x, dragScroll.y);
+    if (box) {
+      var page = box === document.scrollingElement || box === document.documentElement;
+      var top = page ? 0 : box.getBoundingClientRect().top;
+      var bottom = page ? window.innerHeight : box.getBoundingClientRect().bottom;
+      var into = 0;
+      if (dragScroll.y - top < DRAG_EDGE) into = -(DRAG_EDGE - (dragScroll.y - top));
+      else if (bottom - dragScroll.y < DRAG_EDGE) into = DRAG_EDGE - (bottom - dragScroll.y);
+      if (into) {
+        var step = Math.max(1, Math.round(DRAG_MAX * Math.min(1, Math.abs(into) / DRAG_EDGE)));
+        box.scrollTop += into < 0 ? -step : step;
+      }
+    }
+    dragScroll.timer = setTimeout(dragScrollStep, DRAG_TICK);
+  }
+  function dragScrollStop() {
+    if (dragScroll.timer) clearTimeout(dragScroll.timer);
+    dragScroll.timer = 0;
+    dragScroll.at = 0;
+  }
+  function wireDragScroll() {
+    // Capture, and no dragover of our own to cancel: this only watches. dragover is the
+    // one event that arrives throughout a drag whatever started it, so it doubles as the
+    // "a drag is happening" signal and there is no flag to keep in step with anything.
+    document.addEventListener("dragover", function (e) {
+      dragScroll.x = e.clientX; dragScroll.y = e.clientY; dragScroll.at = Date.now();
+      if (!dragScroll.timer) dragScroll.timer = setTimeout(dragScrollStep, DRAG_TICK);
+    }, true);
+    document.addEventListener("dragend", dragScrollStop, true);
+    document.addEventListener("drop", dragScrollStop, true);
+  }
+  wireDragScroll();
 
   // ---- Dragging a table into a workspace ----------------------------------
   // Either ⋯ menu can move a table anywhere, but reorganising 210 migrated tables through
@@ -5799,19 +5871,46 @@
   // page moves underneath it — capture, because the list scrolls, not the window.
   window.addEventListener("scroll", closeAllRecMenus, true);
   window.addEventListener("resize", closeAllRecMenus);
-  // Anchor the open menu to its button, flipping above when the card is near the bottom
-  // of the screen — which is exactly where the last row of cards always is.
+  // ---- Where a floating menu lands ------------------------------------------
+  // Every ⋯ in the app is position:fixed, which is what lets it escape the overflow:hidden
+  // card or the scrolling rail it was opened from — and also what makes anything below the
+  // fold unreachable, because a fixed menu does not scroll with anything. The row a menu is
+  // opened on is very often the LAST one in a list, which is the row hard against the
+  // bottom of the window, so this is the ordinary case and not the edge case.
+  //
+  // Open downwards when it fits, flip above the button when it does not, and when it fits
+  // neither way — a form's menu carries a line per workspace and is regularly taller than
+  // the window on its own — give it the roomier side and let the menu scroll itself.
+  // Callers must have made the menu visible first: a hidden element measures zero.
+  function placeMenuInView(anchor, el, align) {
+    var pad = 8, gap = 6, least = 160;
+    el.style.maxHeight = "";                       // measure at its natural height
+    var r = anchor.getBoundingClientRect(), vh = window.innerHeight, vw = window.innerWidth;
+    var w = el.offsetWidth, h = el.offsetHeight, top;
+    var below = vh - r.bottom - gap - pad, above = r.top - gap - pad;
+    if (h <= below) top = r.bottom + gap;
+    else if (h <= above) top = r.top - gap - h;
+    else if (Math.max(below, above) >= least) {
+      el.style.maxHeight = Math.max(below, above) + "px";
+      top = below >= above ? r.bottom + gap : pad;
+    } else {                                       // no room either side: fill the window
+      el.style.maxHeight = (vh - pad * 2) + "px";
+      top = pad;
+    }
+    h = el.offsetHeight;
+    if (top + h > vh - pad) top = vh - pad - h;
+    if (top < pad) top = pad;
+    var left = align === "right" ? r.right - w : r.left;
+    if (left + w > vw - pad) left = vw - pad - w;
+    if (left < pad) left = pad;
+    el.style.top = Math.round(top) + "px";
+    el.style.left = Math.round(left) + "px";
+  }
+  // Anchor the open menu to its button, right edge under the button.
   function placeRecMenu(menu) {
     var btn = menu.querySelector(".rec-kebab"), ul = menu.querySelector(".rec-actions");
     if (!btn || !ul) return;
-    var r = btn.getBoundingClientRect(), h = ul.offsetHeight, w = ul.offsetWidth, pad = 8;
-    var top = r.bottom + 4;
-    if (top + h > window.innerHeight - pad) top = r.top - 4 - h;          // flip up
-    if (top < pad) top = Math.max(pad, window.innerHeight - h - pad);      // taller than the screen: pin it
-    var left = r.right - w;                                               // right edge under the button
-    if (left + w > window.innerWidth - pad) left = window.innerWidth - w - pad;
-    ul.style.top = Math.round(top) + "px";
-    ul.style.left = Math.round(Math.max(pad, left)) + "px";
+    placeMenuInView(btn, ul, "right");
   }
   // mayDelete: pass canManage(<table key>) — admins and that table's managers get Delete.
   function recMenuHtml(actions, mayDelete) {
@@ -14579,10 +14678,11 @@
       items.push('<li data-a="link">Copy public link</li>');
     } else { return; }
     menu.innerHTML = items.join("");
-    var r = anchor.getBoundingClientRect();
-    menu.style.left = Math.min(r.left, window.innerWidth - 210) + "px";
-    menu.style.top = (r.bottom + 6) + "px";
+    // Shown first, then placed: placeMenuInView measures the menu, and a display:none
+    // element measures zero — which is how this menu used to be dropped straight off the
+    // bottom of the window, unreachable, whenever it was opened on the last form in the rail.
     menu.classList.add("open");
+    placeMenuInView(anchor, menu);
   }
   function closeFormMenu() {
     var m = document.getElementById("form-menu");
