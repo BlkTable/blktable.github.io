@@ -345,8 +345,13 @@ t('both editors repaint on every answer, and once before anything is touched', (
   assert.ok(/applyConds\(\);\s*\n\s*applyNrScores\(\);/.test(APP), 'so does the create panel');
 });
 t('the create panel only wires scoring when the table actually scores', () => {
-  assert.ok(/var nrScored = !!scoreRollup\(t\) && Object\.keys\(nrMap\)\.length > 0/.test(APP),
-    'a table with no roll-up must not grow a score box');
+  // Either engine counts. An imported scorecard has a roll-up rule and scorer columns; a
+  // builder-made one has priced questions and neither, and was left out when it was only
+  // the roll-up being asked about. A table with none of it still grows no score box.
+  assert.ok(/var nrScored = \(!!scoreRollup\(t\) && Object\.keys\(nrMap\)\.length > 0\) \|\|/.test(APP),
+    'an imported scorecard is still recognised by its roll-up');
+  assert.ok(/t\.config && t\.config\.scorecard\)[\s\S]{0,80}f\.scoring/.test(APP),
+    'a builder-made scorecard must wire it too, or a new Shop Audit scores in silence');
 });
 t('the create panel does not offer a computed score as a question', () => {
   // It filtered on type alone, so creating a QC inspection opened with seventy
@@ -362,9 +367,15 @@ t('a computed score is refused by every path that could show or save it', () => 
   assert.ok(/!isScorerField\(f\)/.test(APP), 'and the create panel does not ask for one');
 });
 t('an unanswered question carries a hidden chip in an editor, a visible one in review', () => {
-  // 68 grey "n/a" marks on a blank inspection is a wall; on a finished record the same mark
-  // says the question was never asked, which is worth reading.
-  assert.ok(/chipEditor: open \+ \(cls === "na" \? ' style="display:none"' : ""\) \+ body/.test(APP));
+  // 68 marks on a blank inspection is a wall -- grey "n/a" ones on an imported scorecard,
+  // red ones on a rules scorecard, where a blank answer really has lost the point. On a
+  // finished record both are worth reading, so only the editors hold the mark back, and
+  // they key off "unanswered" rather than off the grey, which is what lets one rule cover
+  // both engines.
+  assert.ok(/var editorCls = \(!answered \|\| cls === "na"\) \? "na" : cls;/.test(APP),
+    'the editor holds back an unanswered question whichever engine priced it');
+  assert.ok(/chipEditor: chipOf\(editorCls, editorCls === "na"\)/.test(APP));
+  assert.ok(/chip: chipOf\(cls, false\)/.test(APP), 'review keeps the honest colour');
   assert.ok(/sm \? sm\.chipEditor : ""/.test(APP), 'the editor row must use the hiding variant');
   assert.ok(/\(sm \? sm\.chip : ""\)/.test(APP), 'and the review grid the plain one');
 });

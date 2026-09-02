@@ -60,7 +60,7 @@ window.onerror = function (m, s, l) {
 };
 ${fns}
 var edPhoneReg = {};
-function scoreRowMeta() { return null; }
+function scoreMetaOf() { return null; }   // the row painter, not under test here
 function recordOptsFor() { return {}; }
 function edChecksKeyed() { return ''; }
 function branchDropdownOptions() { return []; }
