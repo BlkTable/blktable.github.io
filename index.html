@@ -1084,17 +1084,26 @@
   .q-scored.outside { opacity: 0.62; }
   /* ---- the colour on the answer itself, where the answer is ----
      A scored question wears its result in place, in the grid and in the editor, rather than
-     being reprinted in a report underneath. The band is on the leading edge so it survives
-     RTL, and the tint is faint on purpose: 68 saturated rows would be unreadable, and the
-     chip beside the label is what carries the number. */
+     being reprinted in a report underneath. The whole answer is boxed in rather than banded
+     down one edge: asked for on 2026-09-01, because a 3px bar at the start of the row reads
+     as a margin rule and does not enclose the thing it is judging -- what you are looking
+     for is "which answers went wrong", and a closed box is what the eye picks out of 68 of
+     them. Logical properties throughout, so it survives RTL.
+
+     The tint stays faint on purpose: 68 saturated rows would be unreadable, the border is
+     what carries the verdict, and the chip beside the label carries the number. Every
+     scored row -- grey ones included -- gets the same transparent box, so the rows still
+     line up with each other whatever each one scored. */
   .m-field.sc-plus, .m-field.sc-part, .m-field.sc-zero, .m-field.sc-neg, .m-field.sc-na {
-    border-inline-start: 3px solid transparent; padding-inline-start: 9px; border-radius: 3px;
+    border: 1.5px solid transparent; border-radius: 8px; padding: 8px 10px;
   }
-  .m-field.sc-plus { border-inline-start-color: #2fbf6b; background: rgba(47, 191, 107, 0.055); }
-  .m-field.sc-part { border-inline-start-color: #eab308; background: rgba(234, 179, 8, 0.06); }
-  .m-field.sc-zero { border-inline-start-color: #ff6b6b; background: rgba(255, 107, 107, 0.06); }
-  .m-field.sc-neg  { border-inline-start-color: #8c2f2f; background: rgba(140, 47, 47, 0.13); }
-  .m-field.sc-na   { border-inline-start-color: var(--line); }
+  .m-field.sc-plus { border-color: #2fbf6b; background: rgba(47, 191, 107, 0.055); }
+  .m-field.sc-part { border-color: #eab308; background: rgba(234, 179, 8, 0.06); }
+  .m-field.sc-zero { border-color: #ff6b6b; background: rgba(255, 107, 107, 0.06); }
+  .m-field.sc-neg  { border-color: #8c2f2f; background: rgba(140, 47, 47, 0.13); }
+  /* Grey stays deliberately outside the traffic light: a question the form never asked is
+     not a failure, and a red box round it would read as one. */
+  .m-field.sc-na   { border-color: var(--line); }
   .m-field .k .qp { margin-inline-start: 7px; padding: 1px 7px; font-size: var(--fs-1);
     font-weight: 800; border-radius: 6px; vertical-align: middle; }
   /* The running total while somebody is still filling the form in. */
@@ -5361,11 +5370,13 @@
     var gated = !!(f.show_if && f.show_if.field);
     var hide = gated && !condMet(f, d) && (v == null || v === "");
     // The scoring colour rides along on the row it belongs to. opts.scored is the scorer
-    // field for this question when the table scores it, and it is passed in rather than
-    // looked up here so that one row can be repainted on its own as the answer changes.
-    var sm = opts.scored ? scoreRowMeta(opts.scored, opts.answers || d) : null;
+    // field for this question when an imported scorecard scores it, and it is passed in
+    // rather than looked up here so that one row can be repainted on its own as the answer
+    // changes. A builder-made scorecard has no scorer field and prices the question itself,
+    // which is why the question goes in too.
+    var sm = scoreMetaOf(f, opts.scored, opts.answers || d);
     return edRow(label, inner, f.type === "long_text", gated ? "cond-" + f.id : null, hide, mustAnswer,
-                 sm ? sm.chipEditor : "", sm ? "sc-" + sm.cls : "");
+                 sm ? sm.chipEditor : "", sm ? "sc-" + sm.editorCls : "");
   }
 
   // Phone editor with the full country/flag picker
@@ -11132,7 +11143,29 @@
     return cls === "na" ? "n/a" : pts < 0 ? "−" + Math.abs(pts) : pts > 0 ? "+" + pts : "0";
   }
   // Everything one scored question needs to paint itself: the colour, the points, and the
-  // chip. Returns null when the question is not scored, so callers can ask about any field.
+  // chip. Both engines end here, so the shape is identical whichever priced the answer and
+  // no panel has to branch on which one ran.
+  function scoreMetaPack(cls, pts, maxP, answered) {
+    var title = esc(scoreChipTitle(cls, pts, maxP));
+    var chipOf = function (c, hide) {
+      return '<span class="qp ' + c + '" title="' + title + '"' +
+        (hide ? ' style="display:none"' : "") + ">" + scoreChipLabel(c, pts) + "</span>";
+    };
+    // In an editor a question nobody has answered yet carries no colour and no chip. A new
+    // inspection would otherwise open as sixty-eight marks: grey "n/a" ones on an imported
+    // scorecard, and red ones on a rules scorecard, because there a blank answer really has
+    // lost the point -- "asked and missed" stays in the total. Reviewing a finished record is
+    // the opposite case and keeps the honest colour, so that the row and the breakdown panel
+    // summarising it never disagree; only the editors hold it back.
+    var editorCls = (!answered || cls === "na") ? "na" : cls;
+    return {
+      cls: cls, editorCls: editorCls, pts: pts, maxP: maxP, answered: answered,
+      chip: chipOf(cls, false),
+      chipEditor: chipOf(editorCls, editorCls === "na"),
+    };
+  }
+  // An imported scorecard's question: the points arrive in a scorer column beside it.
+  // Returns null when the question has no such column, so callers can ask about any field.
   // `answers` is a plain id -> value object, which is what both the stored record and the
   // half-filled editor look like -- that is what lets review and filling-in share this.
   function scoreRowMeta(sf, answers) {
@@ -11141,37 +11174,54 @@
     var answered = v != null && String(v) !== "";
     var maxP = scorerMaxPoints(sf);
     var pts = scoreRulePoints(sf.options.score, v);
-    var cls = scoreClassOf(pts, maxP, answered);
-    var open = '<span class="qp ' + cls + '" title="' + esc(scoreChipTitle(cls, pts, maxP)) + '"';
-    var body = ">" + scoreChipLabel(cls, pts) + "</span>";
-    return {
-      cls: cls, pts: pts, maxP: maxP, answered: answered,
-      chip: open + body,
-      // In an editor an unanswered question shows no chip at all: a new inspection would
-      // otherwise open as sixty-eight grey "n/a" marks, which is a wall rather than
-      // information. Reviewing a finished record is the opposite case -- there, "n/a" says
-      // the question was never asked, which is worth knowing -- so only the editors hide it.
-      chipEditor: open + (cls === "na" ? ' style="display:none"' : "") + body,
-    };
+    return scoreMetaPack(scoreClassOf(pts, maxP, answered), pts, maxP, answered);
+  }
+  // A builder-made scorecard's question: it prices itself, and there is no column to read.
+  // The arithmetic is the breakdown panel's own -- questionApplies / questionEarned -- so a
+  // row cannot contradict the total it is counted in, and a question this record never asked
+  // reads grey here exactly as a null scorer column does above.
+  //
+  // This is what Shop Audit's 68 questions had been missing since they moved to the rules
+  // engine: the colour had only ever been taught to look for a scorer column, so a scorecard
+  // with none rendered every answer plain.
+  function scoreRuleMeta(f, answers) {
+    if (!f || !f.scoring) return null;
+    var a = answers || {};
+    var v = a[f.id];
+    var answered = v != null && String(v) !== "";
+    var maxP = questionMaxPoints(f);
+    var applies = questionApplies(f, a);
+    var pts = applies ? questionEarned(f, a) : 0;
+    var cls = !applies ? "na" : pts < 0 ? "neg" : pts >= maxP ? "plus" : pts > 0 ? "part" : "zero";
+    return scoreMetaPack(cls, pts, maxP, answered);
+  }
+  // One question, whichever engine prices it -- this is what the panels call. A scorer column
+  // wins where a question somehow carries both, because on an imported record the column is
+  // what the database stored and the colour must not contradict it.
+  function scoreMetaOf(f, sf, answers) {
+    return scoreRowMeta(sf, answers) || scoreRuleMeta(f, answers);
   }
   // Repaint every scored row of an open editor from the answers as they stand. Shared by the
   // record panel and the New record panel so the two cannot drift; both hand it the same
   // shape, which is all edValues() already returns.
+  // Walks the fields rather than the scorer map, because a builder-made scorecard has no
+  // scorer fields to walk: the question carries its own price. scoreMetaOf answers for
+  // either engine, so a row repaints the same way whichever priced it.
   function paintScoreRows(table, fields, map, answers, liveBoxId) {
-    Object.keys(map || {}).forEach(function (qid) {
-      var host = document.getElementById("ed-" + qid);
+    (fields || []).forEach(function (f) {
+      var m = scoreMetaOf(f, (map || {})[f.id], answers);
+      if (!m) return;
+      var host = document.getElementById("ed-" + f.id);
       var row = (host && host.closest) ? host.closest(".m-field") : null;
       if (!row) return;
-      var m = scoreRowMeta(map[qid], answers);
-      if (!m) return;
       ["sc-plus", "sc-part", "sc-zero", "sc-neg", "sc-na"].forEach(function (c) { row.classList.remove(c); });
-      row.classList.add("sc-" + m.cls);
+      row.classList.add("sc-" + m.editorCls);
       var chip = row.querySelector(".k .qp");
       if (chip) {
-        chip.className = "qp " + m.cls;
-        chip.textContent = scoreChipLabel(m.cls, m.pts);
-        chip.title = scoreChipTitle(m.cls, m.pts, m.maxP);
-        chip.style.display = m.cls === "na" ? "none" : "";
+        chip.className = "qp " + m.editorCls;
+        chip.textContent = scoreChipLabel(m.editorCls, m.pts);
+        chip.title = scoreChipTitle(m.editorCls, m.pts, m.maxP);
+        chip.style.display = m.editorCls === "na" ? "none" : "";
       }
     });
     var box = liveBoxId ? document.getElementById(liveBoxId) : null;
@@ -11186,6 +11236,13 @@
   // The running total while a record is being filled in or corrected: the same roll-up the
   // database will apply, over the answers as they stand right now.
   function scoreLiveTotal(table, fields, answers) {
+    // A builder-made scorecard has no roll-up rule to read: the questions are the roll-up.
+    // scorecardTotals is the same arithmetic score_submission() will store, so the running
+    // figure and the saved one agree.
+    if (table && table.config && table.config.scorecard) {
+      var tot = scorecardTotals(fields, answers);
+      return tot.possible ? tot : null;
+    }
     var roll = scoreRollup(table);
     if (!roll) return null;
     var map = questionScorerMap(table, fields), earned = 0;
@@ -11393,7 +11450,7 @@
           grid += '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>";
           return;
         }
-        var sm = scoreRowMeta(qsMap[f.id], d);
+        var sm = scoreMetaOf(f, qsMap[f.id], d);
         grid += '<div class="m-field' + (f.type === "long_text" ? " full" : "") +
           (sm ? " sc-" + sm.cls : "") + '"><div class="k">' +
           esc(f.label) + (sm ? sm.chip : "") + '</div><div class="v">' + cellValueHtml(f, d, s) + "</div></div>";
@@ -11981,7 +12038,10 @@
     // goes: the chip on a question turns green or red the moment the answer is chosen, and
     // the running total at the top is the figure the record will be saved with.
     var nrMap = questionScorerMap(t, fields);
-    var nrScored = !!scoreRollup(t) && Object.keys(nrMap).length > 0;
+    // Either engine makes this panel a scored one: an imported scorecard has a roll-up rule
+    // and scorer columns, a builder-made one has priced questions and neither.
+    var nrScored = (!!scoreRollup(t) && Object.keys(nrMap).length > 0) ||
+      (!!(t.config && t.config.scorecard) && asked.some(function (f) { return f && f.scoring; }));
     var grid = asked.map(function (f) {
       return edFieldRowHtml(f, {}, { photo: "input", stars: true, scored: nrMap[f.id], answers: {}, fields: fields });
     }).join("");
