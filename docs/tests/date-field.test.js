@@ -180,9 +180,15 @@ function dateBlock(file, end) {
   return js.slice(a, b);
 }
 t('the public form carries the same date block as the dashboard, character for character', () => {
-  const app = dateBlock('index.html', END_APP);
+  // Line endings are not code. The two files carry different mixes of LF and CRLF depending
+  // on how git checked them out — on the deployed copies index.html comes down with CRLF on
+  // 15,043 lines and f/index.html on 2,322 — so comparing the raw text reports a drift that
+  // is nothing but carriage returns. Stripped before comparing, which leaves every character
+  // that actually is code.
+  const strip = s => s.replace(/\r/g, '');
+  const app = strip(dateBlock('index.html', END_APP));
   // in the public form the block is followed by the parent-link formatter
-  const form = dateBlock('f/index.html', '  // What this link\'s record says');
+  const form = strip(dateBlock('f/index.html', '  // What this link\'s record says'));
   assert.strictEqual(form, app);
 });
 
@@ -192,10 +198,13 @@ t('the public form carries the same date block as the dashboard, character for c
 // click into and type. A time box may still do it -- a clock has no year to jump to.
 const appSrc = fs.readFileSync('index.html', 'utf8');
 const formSrc = fs.readFileSync('f/index.html', 'utf8');
-t('only a time box asks the browser to open a picker of its own', () => {
+t('nothing asks the browser to open a picker of its own any more', () => {
+  // A date box stopped depending on showPicker() first; the time box followed, and is
+  // asserted in full by time-field.test.js. Kept here too because this is the fault the
+  // whole date change exists to remove, and it should fail loudly wherever it comes back.
   [['index.html', appSrc], ['f/index.html', formSrc]].forEach(([name, src]) => {
     const calls = [...src.matchAll(/\.showPicker\(\)/g)].length;
-    assert.strictEqual(calls, 1, name + ' makes ' + calls + ' showPicker() calls; only the time box should');
+    assert.strictEqual(calls, 0, name + ' still makes ' + calls + ' showPicker() call(s)');
   });
 });
 t('every date box in the dashboard is built through dateFieldHtml', () => {
