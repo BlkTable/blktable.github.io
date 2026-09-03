@@ -1078,6 +1078,52 @@
     if (isNaN(dt.getTime()) || dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
     return { y: y, m: mo, d: d };
   }
+
+  // A date box is regularly handed a stored TIMESTAMP rather than a date. Some 13,000 answers
+  // in questions typed `date` are full timestamps that came in from Airtable -- "Date / Time"
+  // on Shop Audit and QC, "Date & Time" on Mystery Shopper, "Pickup Time" on Delivery Orders.
+  // An <input type="date"> refuses one outright and reports value === "", while the caption
+  // underneath still read correctly because it is drawn from the stored string. So the panel
+  // looked right with an empty input behind it, edValues() read "", and saveCustom deleted the
+  // key -- opening a QC record and saving it threw the answer away, the date with the time.
+  //
+  // Read by character, never with new Date() on the whole string. The `Z` these rows carry is
+  // mislabelled: Mystery Shopper has 93% of its stored hours between 05:00 and 20:00 as
+  // written and only 66% once shifted to Amman, so the wall clock in the string is the local
+  // time somebody typed. Parsing it as an instant would move 13,000 records by three hours,
+  // and the late-evening and small-hours ones onto the wrong day entirely.
+  function dayPartOf(v) {
+    var m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v == null ? "" : v).trim());
+    return m ? m[1] : "";
+  }
+  // What to write back. `shown` is what the box holds now, `kept` what was stored. The same
+  // day means the clock was never in question, so the original goes back untouched. A
+  // different day means the old time belonged to a different moment, and carrying it over
+  // would invent a time nobody chose.
+  function keptStampOf(shown, kept) {
+    var s = String(shown == null ? "" : shown).trim();
+    if (!s) return "";
+    var k = String(kept == null ? "" : kept).trim();
+    // Answered by day for a date box and to the minute for a date-and-time one. Either way
+    // the question is the same: is what the box shows still the stored value, only trimmed
+    // to what the element would accept? Then the stored value goes back untouched, so a
+    // save cannot quietly rewrite 13,000 imported timestamps into a different shape.
+    if (k && k !== s && (dayPartOf(k) === s || dtmLocalOf(k) === s)) return k;
+    return s;
+  }
+  // The clock half, however the value was written: with a Z, without one, or with a space
+  // where the T should be. Read by character, for the reason dayPartOf is -- see above.
+  function timePartOf(v) {
+    var m = /^\d{4}-\d{2}-\d{2}[T ](\d{2}:\d{2})/.exec(String(v == null ? "" : v).trim());
+    return m ? m[1] : "";
+  }
+  // What an <input type="datetime-local"> will hold. A bare date gets nothing back:
+  // inventing 00:00 would put a time on an answer that never had one, and the box would
+  // then read "12:00 AM" as though somebody had chosen midnight.
+  function dtmLocalOf(v) {
+    var d = dayPartOf(v), t = timePartOf(v);
+    return d && t ? d + "T" + t : "";
+  }
   // The date in words. The locale is named rather than left to the browser on purpose: with
   // a bare toLocaleDateString() the same record reads 9/1/2026 on one laptop and 01/09/2026
   // on the next, and neither person can tell which of the two is the 1st of September.
@@ -1133,8 +1179,12 @@
   // read as the wrong month.
   function dateFieldHtml(id, value, cls, attrs) {
     var v = value == null ? "" : String(value);
+    // The element gets the day, which is all it will accept; the stored value rides along in
+    // data-kept so reading the field back can return it unchanged.
+    var day = dayPartOf(v);
+    var kept = (day && v.trim() !== day) ? ' data-kept="' + esc(v) + '"' : "";
     return '<div class="dt-wrap">' +
-      '<input type="date" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dt-in" value="' + esc(v) + '"' + (attrs || "") + ">" +
+      '<input type="date" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dt-in" value="' + esc(day) + '"' + kept + (attrs || "") + ">" +
       '<button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">' + CAL_ICON + "</button>" +
       '<div class="dt-read">' + esc(fmtDateLong(v)) + "</div></div>";
   }
@@ -1169,7 +1219,11 @@
     var isDT = input.type === "datetime-local";
     var min = (input.getAttribute("min") || "").slice(0, 10);
     var max = (input.getAttribute("max") || "").slice(0, 10);
-    var picked = dateParts(input.value);
+    // A date-and-time box holding a BARE DATE renders empty, because a datetime-local
+    // cannot hold one -- so without falling back to the kept value the calendar opened on
+    // today rather than on the day the answer already had.
+    var picked = dateParts(input.value) ||
+      dateParts(input.getAttribute ? input.getAttribute("data-kept") : "");
     var view = picked || dateParts(todayIso());
     var yLo = min ? +min.slice(0, 4) : Math.min(1920, view.y);
     var yHi = max ? +max.slice(0, 4) : Math.max(new Date().getFullYear() + 10, view.y);
@@ -1207,7 +1261,7 @@
     // the draft all listen for, so a date picked here has to look exactly like one typed.
     function apply(iso) {
       if (isDT) {
-        var t = ((input.value || "").split("T")[1] || "09:00").slice(0, 5);
+        var t = timePartOf(input.value) || "09:00";
         input.value = iso ? iso + "T" + t : "";
       } else {
         input.value = iso || "";
@@ -1215,6 +1269,12 @@
       try { input.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
       try { input.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {}
       dtSync(input);
+      dtmSync(input);
+      // A date-and-time box is one control in two steps: the day is only half an answer, so
+      // picking it hands straight on to the time list rather than closing on an 09:00
+      // nobody chose. Clearing is the exception -- there is no time to pick for an answer
+      // that no longer exists.
+      if (isDT && iso) { openTimeList(input); return; }
       closeCalendar();
       try { input.focus(); } catch (e) {}
     }
@@ -1285,7 +1345,9 @@
     var btn = e.target && e.target.closest ? e.target.closest(".dt-btn") : null;
     if (btn) {
       e.preventDefault();
-      var inp = dtInputOf(btn);
+      // The same button opens a date box and a date-and-time box; which one it belongs to
+      // is whichever input is in the wrapper with it.
+      var inp = dtInputOf(btn) || dtmInputOf(btn);
       if (!inp) return;
       if (calNow && calFor === inp) closeCalendar(); else openCalendar(inp);
     }
@@ -1364,6 +1426,15 @@
   }
   // Every step of the day, for the list. Quarter hours: fine enough for a shift or an
   // interview, short enough to scroll, and anything between them can still be typed.
+  // The option nearest a time that is not on the step, so the list can open where the
+  // answer is even when no option is exactly it. Rounds to the nearest quarter and clamps
+  // to the last option of the day, so 23:58 lands on 23:45 rather than off the end.
+  function nearestOptIn(box, hhmm) {
+    var p = timeParts(hhmm);
+    if (!p) return null;
+    var mins = Math.min(23 * 60 + 45, Math.round((p.h * 60 + p.m) / 15) * 15);
+    return box.querySelector('.tml-opt[data-t="' + pad2(Math.floor(mins / 60)) + ":" + pad2(mins % 60) + '"]');
+  }
   function timeOptions(step) {
     var out = [], t;
     for (t = 0; t < 24 * 60; t += step) out.push(pad2(Math.floor(t / 60)) + ":" + pad2(t % 60));
@@ -1400,7 +1471,10 @@
   function openTimeList(input) {
     closeCalendar();
     if (!input || input.disabled || input.readOnly) return;
-    var p = timeParts(input.value);
+    // On a date-and-time box the value carries a day in front of the clock, which timeParts
+    // will not read, so the chosen option would never be highlighted or scrolled to.
+    var isDT = input.type === "datetime-local";
+    var p = timeParts(isDT ? timePartOf(input.value) : input.value);
     var cur = p ? pad2(p.h) + ":" + pad2(p.m) : "";
     var box = document.createElement("div");
     box.className = "cal tml";
@@ -1416,10 +1490,18 @@
     // Picking a time says so out loud, for the same reason the calendar does: autosave, the
     // conditional questions and the saved draft all listen for input and change.
     function apply(v) {
-      input.value = v || "";
+      if (isDT) {
+        // Keep the day that was just picked. Clearing clears the whole answer, because half
+        // a date-and-time is not an answer either.
+        var day = dayPartOf(input.value);
+        input.value = v && day ? day + "T" + v : "";
+      } else {
+        input.value = v || "";
+      }
       try { input.dispatchEvent(new Event("input", { bubbles: true })); } catch (e) {}
       try { input.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {}
       tmSync(input);
+      dtmSync(input);
       closeCalendar();
       try { input.focus(); } catch (e) {}
     }
@@ -1461,9 +1543,12 @@
     if (top + box.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - box.offsetHeight - 6);
     box.style.top = top + "px";
     box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - box.offsetWidth - 8)) + "px";
-    // the time already chosen, brought into view rather than left to be scrolled for
-    var on = box.querySelector(".tml-opt.on");
-    if (on) box.querySelector(".tml-list").scrollTop = Math.max(0, on.offsetTop - 64);
+    // The time already chosen, brought into view rather than left to be scrolled for. An
+    // imported time is almost never on a quarter hour (11:37, 15:47, 02:45), so an exact
+    // match cannot be relied on to exist: without the nearest-quarter fallback the list
+    // opened at 12:00 AM with the whole day between you and the answer.
+    var at = box.querySelector(".tml-opt.on") || nearestOptIn(box, cur);
+    if (at) box.querySelector(".tml-list").scrollTop = Math.max(0, at.offsetTop - 64);
   }
   document.addEventListener("click", function (e) {
     var btn = e.target && e.target.closest ? e.target.closest(".tm-btn") : null;
@@ -1487,6 +1572,77 @@
     var v = parseTypedTime(el.value);
     if (v) { el.value = v; tmSync(el); }
   }, true);
+  // ---- The date-and-time box: the same two popups, one after the other ----
+  //
+  // The questions that actually want a time are typed `date` -- "Date / Time" on Shop Audit
+  // and QC, "Date & Time" on Mystery Shopper, "Pickup Time" on Delivery Orders -- and a
+  // calendar has no clock in it, so there was no way in. Asked for as one control rather
+  // than two questions: press the calendar button, pick the day, and it takes you to the
+  // time. The two boxes the app already had -- Interview date & time on the job application,
+  // and the decision modal's -- closed after the day and left the time to the browser's own
+  // segments, which is the thing that opened nothing on half the devices here.
+  //
+  // Still a native <input type="datetime-local"> carrying the field's id and its value, for
+  // the same load-bearing reason the other two boxes are: edValues() reads
+  // getElementById("ed-"+f.id).value, drafts write into it and validation marks it. Its own
+  // class, dtm-in, is what lets the three syncs tell each other apart -- they share a
+  // wrapper and a readout line, and each must refuse to write another's.
+  function dtmFieldHtml(id, value, cls, attrs) {
+    var v = value == null ? "" : String(value);
+    var shown = dtmLocalOf(v);
+    // Kept whenever the element cannot show the stored value byte for byte -- and that
+    // includes a BARE DATE, which a datetime-local cannot hold at all: Shop Audit's
+    // "Date / Time" is 36 of those and Delivery Orders' PickupTimeUTC is 1,030. Without
+    // keeping it the box renders empty and a save deletes the answer.
+    var kept = (v.trim() && v.trim() !== shown) ? ' data-kept="' + esc(v) + '"' : "";
+    return '<div class="dt-wrap">' +
+      '<input type="datetime-local" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dtm-in" value="' + esc(shown) + '"' + kept + (attrs || "") + ">" +
+      '<button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">' + CAL_ICON + "</button>" +
+      '<div class="dt-read">' + esc(dtmReadout(v)) + "</div></div>";
+  }
+  // The words underneath. A date-and-time answer is two facts and the line says both, for
+  // the same reason the date box spells its date out: the element's own segment order
+  // follows the browser's locale and cannot be set from here.
+  function dtmReadout(v) {
+    var d = fmtDateLong(v), t = timePartOf(v);
+    if (!d) return "";
+    return t ? d + " · " + fmtTimeLong(t) : d;
+  }
+  function dtmInputOf(el) {
+    var w = el && el.closest ? el.closest(".dt-wrap") : null;
+    return w ? w.querySelector(".dtm-in") : null;
+  }
+  // What a save should write for a date-and-time box.
+  //
+  // A box nobody has touched gives back exactly what was stored, even where the element
+  // could not show it: a bare date has no time for a datetime-local to hold, so it renders
+  // empty -- and an empty box is also what clearing looks like. Hence the flag: it is set
+  // by the delegated input and change listeners, which every way of changing this box goes
+  // through, the two popups included since both dispatch with bubbles.
+  function dtmValueOf(el) {
+    if (!el) return "";
+    var kept = el.getAttribute ? (el.getAttribute("data-kept") || "") : "";
+    var touched = el.getAttribute ? el.getAttribute("data-touched") : null;
+    if (!touched && kept) return kept;
+    return keptStampOf(el.value, kept);
+  }
+  function dtmTouch(el) {
+    if (el && el.setAttribute) el.setAttribute("data-touched", "1");
+  }
+  // Guarded on its own class, like dtSync and tmSync, because all three share a wrapper.
+  function dtmSync(input) {
+    if (!input || !input.classList || !input.classList.contains("dtm-in")) return;
+    var w = input.closest ? input.closest(".dt-wrap") : null;
+    if (!w) return;
+    var r = w.querySelector(".dt-read");
+    if (r) r.textContent = dtmReadout(input.value);
+  }
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("dtm-in")) { dtmTouch(e.target); dtmSync(e.target); }
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target && e.target.classList && e.target.classList.contains("dtm-in")) { dtmTouch(e.target); dtmSync(e.target); }
+  });
 
   // What this link's record says: only the fields the table's config.parent.show names,
   // which is all the server will hand out. A date is shown the way a person reads one.
@@ -1803,10 +1959,19 @@
       var ta = document.createElement("textarea"); ta.id = id; ta.rows = 1; growTextarea(ta, f.type === "short_text"); wrap.appendChild(ta);
       controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; },
                       setDraft: function (v) { ta.value = v; autoGrow(ta); } });
-    } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "time") {
+    } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "time" || f.type === "datetime") {
       var isDate = f.type === "date" || f.type === "dob";
       var inp;
-      if (f.type === "time") {
+      if (f.type === "datetime") {
+        // One control in two steps, the same one the dashboard draws: the calendar button
+        // opens the day, and picking it hands straight on to the time list. A question that
+        // wants both was typed `date` before this existed, and a calendar has no clock in it.
+        var mHolder = document.createElement("div");
+        mHolder.innerHTML = dtmFieldHtml(id, "", "");
+        var mWrap = mHolder.firstChild;
+        inp = mWrap.querySelector(".dtm-in");
+        wrap.appendChild(mWrap);
+      } else if (f.type === "time") {
         // The same time box the dashboard draws, from the same function — and the reason it
         // is not a bare <input type="time"> any more is that clicking one opened nothing at
         // all on any browser without showPicker().
