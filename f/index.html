@@ -1078,6 +1078,35 @@
     if (isNaN(dt.getTime()) || dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
     return { y: y, m: mo, d: d };
   }
+
+  // A date box is regularly handed a stored TIMESTAMP rather than a date. Some 13,000 answers
+  // in questions typed `date` are full timestamps that came in from Airtable -- "Date / Time"
+  // on Shop Audit and QC, "Date & Time" on Mystery Shopper, "Pickup Time" on Delivery Orders.
+  // An <input type="date"> refuses one outright and reports value === "", while the caption
+  // underneath still read correctly because it is drawn from the stored string. So the panel
+  // looked right with an empty input behind it, edValues() read "", and saveCustom deleted the
+  // key -- opening a QC record and saving it threw the answer away, the date with the time.
+  //
+  // Read by character, never with new Date() on the whole string. The `Z` these rows carry is
+  // mislabelled: Mystery Shopper has 93% of its stored hours between 05:00 and 20:00 as
+  // written and only 66% once shifted to Amman, so the wall clock in the string is the local
+  // time somebody typed. Parsing it as an instant would move 13,000 records by three hours,
+  // and the late-evening and small-hours ones onto the wrong day entirely.
+  function dayPartOf(v) {
+    var m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v == null ? "" : v).trim());
+    return m ? m[1] : "";
+  }
+  // What to write back. `shown` is what the box holds now, `kept` what was stored. The same
+  // day means the clock was never in question, so the original goes back untouched. A
+  // different day means the old time belonged to a different moment, and carrying it over
+  // would invent a time nobody chose.
+  function keptStampOf(shown, kept) {
+    var s = String(shown == null ? "" : shown).trim();
+    if (!s) return "";
+    var k = String(kept == null ? "" : kept).trim();
+    if (k && k !== s && dayPartOf(k) === s) return k;
+    return s;
+  }
   // The date in words. The locale is named rather than left to the browser on purpose: with
   // a bare toLocaleDateString() the same record reads 9/1/2026 on one laptop and 01/09/2026
   // on the next, and neither person can tell which of the two is the 1st of September.
@@ -1133,8 +1162,12 @@
   // read as the wrong month.
   function dateFieldHtml(id, value, cls, attrs) {
     var v = value == null ? "" : String(value);
+    // The element gets the day, which is all it will accept; the stored value rides along in
+    // data-kept so reading the field back can return it unchanged.
+    var day = dayPartOf(v);
+    var kept = (day && v.trim() !== day) ? ' data-kept="' + esc(v) + '"' : "";
     return '<div class="dt-wrap">' +
-      '<input type="date" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dt-in" value="' + esc(v) + '"' + (attrs || "") + ">" +
+      '<input type="date" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dt-in" value="' + esc(day) + '"' + kept + (attrs || "") + ">" +
       '<button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">' + CAL_ICON + "</button>" +
       '<div class="dt-read">' + esc(fmtDateLong(v)) + "</div></div>";
   }
