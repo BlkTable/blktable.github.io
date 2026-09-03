@@ -73,8 +73,14 @@ both('a bare hour with pm', A => assert.strictEqual(A.parseTypedTime('7pm'), '19
 both('12 am is midnight', A => assert.strictEqual(A.parseTypedTime('12:00 am'), '00:00'));
 both('12 pm is noon', A => assert.strictEqual(A.parseTypedTime('12:00 pm'), '12:00'));
 both('a bare 12 am is midnight', A => assert.strictEqual(A.parseTypedTime('12am'), '00:00'));
-// 13:00 pm cannot mean anything.
+// 13:00 pm cannot mean anything. Worth knowing why this one case does not prove the guard
+// is there: the range check at the end of parseTypedTime refuses it on its own, because pm
+// turns 13 into 25 and 25 is past 23. The two below are the ones only the guard catches.
+// Without it '13:30 am' reads as half past one in the afternoon and '0:30 am' as half past
+// midnight, and nobody typed either.
 both('an afternoon hour with pm on it is refused', A => assert.strictEqual(A.parseTypedTime('13:00 pm'), null));
+both('an afternoon hour with am on it is refused', A => assert.strictEqual(A.parseTypedTime('13:30 am'), null));
+both('a zeroth hour with am on it is refused', A => assert.strictEqual(A.parseTypedTime('0:30 am'), null));
 both('a 24th hour is refused', A => assert.strictEqual(A.parseTypedTime('24:00'), null));
 both('a 60th minute is refused', A => assert.strictEqual(A.parseTypedTime('9:60'), null));
 both('words are refused', A => assert.strictEqual(A.parseTypedTime('half nine'), null));
