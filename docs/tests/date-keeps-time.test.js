@@ -41,7 +41,7 @@ function load(file, names) {
 // Supplied here rather than lifted, which is honest: nothing about escaping is on test.
 const NL = String.fromCharCode(10);
 const ESC = "function esc(s) { return (s == null ? \"\" : String(s)).replace(/[&<>\"']/g, function (c) { return { \"&\": \"&amp;\", \"<\": \"&lt;\", \">\": \"&gt;\", '\"': \"&quot;\", \"'\": \"&#39;\" }[c]; }); }";
-const NAMES = ['pad2', 'dateParts', 'fmtDateLong', 'dayPartOf', 'keptStampOf', 'dateFieldHtml'];
+const NAMES = ['pad2', 'dateParts', 'fmtDateLong', 'dayPartOf', 'timePartOf', 'dtmLocalOf', 'keptStampOf', 'dateFieldHtml'];
 const DASH = load('index.html', NAMES);
 const FORM = load('f/index.html', NAMES);
 
