@@ -1219,7 +1219,11 @@
     var isDT = input.type === "datetime-local";
     var min = (input.getAttribute("min") || "").slice(0, 10);
     var max = (input.getAttribute("max") || "").slice(0, 10);
-    var picked = dateParts(input.value);
+    // A date-and-time box holding a BARE DATE renders empty, because a datetime-local
+    // cannot hold one -- so without falling back to the kept value the calendar opened on
+    // today rather than on the day the answer already had.
+    var picked = dateParts(input.value) ||
+      dateParts(input.getAttribute ? input.getAttribute("data-kept") : "");
     var view = picked || dateParts(todayIso());
     var yLo = min ? +min.slice(0, 4) : Math.min(1920, view.y);
     var yHi = max ? +max.slice(0, 4) : Math.max(new Date().getFullYear() + 10, view.y);
@@ -1586,7 +1590,11 @@
   function dtmFieldHtml(id, value, cls, attrs) {
     var v = value == null ? "" : String(value);
     var shown = dtmLocalOf(v);
-    var kept = (shown && v.trim() !== shown) ? ' data-kept="' + esc(v) + '"' : "";
+    // Kept whenever the element cannot show the stored value byte for byte -- and that
+    // includes a BARE DATE, which a datetime-local cannot hold at all: Shop Audit's
+    // "Date / Time" is 36 of those and Delivery Orders' PickupTimeUTC is 1,030. Without
+    // keeping it the box renders empty and a save deletes the answer.
+    var kept = (v.trim() && v.trim() !== shown) ? ' data-kept="' + esc(v) + '"' : "";
     return '<div class="dt-wrap">' +
       '<input type="datetime-local" ' + (id ? 'id="' + id + '" ' : "") + 'class="' + cls + ' dtm-in" value="' + esc(shown) + '"' + kept + (attrs || "") + ">" +
       '<button type="button" class="dt-btn" tabindex="-1" title="Open the calendar" aria-label="Open the calendar">' + CAL_ICON + "</button>" +
@@ -1604,6 +1612,23 @@
     var w = el && el.closest ? el.closest(".dt-wrap") : null;
     return w ? w.querySelector(".dtm-in") : null;
   }
+  // What a save should write for a date-and-time box.
+  //
+  // A box nobody has touched gives back exactly what was stored, even where the element
+  // could not show it: a bare date has no time for a datetime-local to hold, so it renders
+  // empty -- and an empty box is also what clearing looks like. Hence the flag: it is set
+  // by the delegated input and change listeners, which every way of changing this box goes
+  // through, the two popups included since both dispatch with bubbles.
+  function dtmValueOf(el) {
+    if (!el) return "";
+    var kept = el.getAttribute ? (el.getAttribute("data-kept") || "") : "";
+    var touched = el.getAttribute ? el.getAttribute("data-touched") : null;
+    if (!touched && kept) return kept;
+    return keptStampOf(el.value, kept);
+  }
+  function dtmTouch(el) {
+    if (el && el.setAttribute) el.setAttribute("data-touched", "1");
+  }
   // Guarded on its own class, like dtSync and tmSync, because all three share a wrapper.
   function dtmSync(input) {
     if (!input || !input.classList || !input.classList.contains("dtm-in")) return;
@@ -1613,10 +1638,10 @@
     if (r) r.textContent = dtmReadout(input.value);
   }
   document.addEventListener("input", function (e) {
-    if (e.target && e.target.classList && e.target.classList.contains("dtm-in")) dtmSync(e.target);
+    if (e.target && e.target.classList && e.target.classList.contains("dtm-in")) { dtmTouch(e.target); dtmSync(e.target); }
   });
   document.addEventListener("change", function (e) {
-    if (e.target && e.target.classList && e.target.classList.contains("dtm-in")) dtmSync(e.target);
+    if (e.target && e.target.classList && e.target.classList.contains("dtm-in")) { dtmTouch(e.target); dtmSync(e.target); }
   });
 
   // What this link's record says: only the fields the table's config.parent.show names,

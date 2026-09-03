@@ -146,6 +146,32 @@ document.querySelector('.cal.tml .tml-clear').click();
 ok('clearing the time clears the whole answer, because half of one is not an answer', inp.value === '', JSON.stringify(inp.value));
 ok('and the readout goes quiet', readout() === '', JSON.stringify(readout()));
 
+// ---- a BARE DATE in a date-and-time box: Shop Audit's 36, Delivery Orders' 1,030 ----
+// A datetime-local cannot hold a date with no time, so the box renders empty -- and empty
+// is what clearing looks like too. Without the kept value and the touched flag a save here
+// deletes the answer, which is the bug the previous commit exists to stop.
+document.getElementById('host').innerHTML = edDateTime('ed-bare', '2026-08-26');
+var bare = document.getElementById('ed-bare');
+ok('a bare date leaves the element empty, because it cannot hold one', bare.value === '', JSON.stringify(bare.value));
+ok('but the stored date is kept beside it', bare.getAttribute('data-kept') === '2026-08-26', bare.getAttribute('data-kept'));
+ok('and the readout still says the date', bare.closest('.dt-wrap').querySelector('.dt-read').textContent === 'Wed, 26 August 2026', bare.closest('.dt-wrap').querySelector('.dt-read').textContent);
+ok('SO AN UNTOUCHED SAVE KEEPS IT rather than deleting it', dtmValueOf(bare) === '2026-08-26', JSON.stringify(dtmValueOf(bare)));
+// and once somebody actually answers it, what they chose wins
+bare.closest('.dt-wrap').querySelector('.dt-btn').click();
+ok('its calendar opens on the day it already had, not on today',
+  (document.querySelector('.cal-day.on') || {}).textContent &&
+  document.querySelector('.cal-day.on').textContent.trim() === '26',
+  (document.querySelector('.cal-day.on') || {}).textContent);
+hit('.cal-day.on');                                   // the 26th -> the time list
+hit('.tml-opt[data-t="14:30"]');
+ok('answering a bare-date question writes the whole date and time', bare.value === '2026-08-26T14:30', JSON.stringify(bare.value));
+ok('and the save writes that, not the bare date it started as', dtmValueOf(bare) === '2026-08-26T14:30', JSON.stringify(dtmValueOf(bare)));
+// clearing it on purpose still clears it
+bare.closest('.dt-wrap').querySelector('.dt-btn').click();
+hit('.cal-day.on');
+hit('.cal.tml .tml-clear');
+ok('clearing a touched box really clears it', dtmValueOf(bare) === '', JSON.stringify(dtmValueOf(bare)));
+
 // ---- a question that was never answered ----
 document.getElementById('host').innerHTML = edDateTime('ed-new', '');
 var fresh = document.getElementById('ed-new');
