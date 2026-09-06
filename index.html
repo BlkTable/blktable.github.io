@@ -7463,7 +7463,14 @@
     // A rule that sends by branch is set in SQL, not here — but it must survive a save
     // made from this editor, so it is carried on the row rather than dropped.
     if (send && send.to && send.to.by_branch) row.setAttribute("data-by-branch", JSON.stringify(send.to.by_branch));
-    auto.checked = !!(send && send.template);
+    // Ticked whenever the rule already has somewhere to send. This used to read
+    // send.template — the WhatsApp approved-template name, which a Slack rule never has — so
+    // every saved Slack alert rendered with the box UNticked and its settings hidden, and
+    // serializeAlerts then wrote the rule back with no channel and no send. Customer
+    // Complaints lost its channel that way to an unrelated settings save on 2026-09-01 and
+    // queued nothing for five days. serializeAlerts only ever writes a send while this box is
+    // ticked, so `!!send` is its exact inverse and every channel round-trips.
+    auto.checked = !!send;
     function syncAuto() { box.style.display = auto.checked ? "" : "none"; }
     syncAuto(); auto.addEventListener("change", syncAuto);
     var everyChk = row.querySelector(".al-every");
