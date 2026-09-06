@@ -278,7 +278,21 @@
 <script>
   var SUPABASE_URL = "https://db.blktable.blk.jo";
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg0NzExNjYwLCJleHAiOjIxMDAwNzE2NjB9.jve2CB0Dt8dESno2dgVHu5kcLnmCE-fISi0TYT_prwc";
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // A public page speaks for the public — including to whoever is signed into BLKTable in the
+  // same browser. It sits on the same origin as the app, so supabase-js finds the staff session
+  // the app left in localStorage and sends that person's token in place of the anon key. The
+  // public-form policies are granted to the anon role and to no other, so the form's own row
+  // then comes back empty for any staff member without access to that table and the page says
+  // "Form not found" — on 2026-09-06 that was all 43 non-admin accounts on one form, while the
+  // very same link opened normally for everybody who was logged out.
+  //
+  // Not persisting also keeps this page from refreshing, and rewriting, the session the app owns.
+  function publicClient(url, key) {
+    return window.supabase.createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+  }
+  var db = publicClient(SUPABASE_URL, SUPABASE_KEY);
 
   // ---- Photo storage: Supabase Storage now, Cloudflare R2 after cutover ----
   // Flip STORAGE_MODE to "r2" at cutover (with SUPABASE_URL/KEY above). Uploads
