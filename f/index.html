@@ -1002,6 +1002,39 @@
     }
     return vis;
   }
+  // ---- A question that hands the person on ---------------------------------------
+  // A link question carrying a URL and revealed by a condition is not decoration: it is
+  // where this answer gets dealt with, and this form has nothing more of its own to
+  // collect. So while one is on screen the Submit button goes away and the link is the
+  // only way on. Contact Us is the case: "Job Application" showed the link to the
+  // application form and left Submit sitting under it, so 39 people pressed Submit
+  // instead of the link and filed a name and a topic against no application, believing
+  // they had applied.
+  //
+  // Only a CONDITIONAL link with a URL counts, which is what keeps this table-agnostic
+  // and safe for every form that already exists:
+  //   * a link shown to everybody is a footnote (read the policy, see the menu) and the
+  //     form still has its own questions to collect, so it keeps its button;
+  //   * the 196 link fields the Airtable import left behind were record links and carry
+  //     no URL at all, so no imported form loses its button either.
+  // options.keep_submit = true is the escape hatch for a form that means to reveal a link
+  // AND still take an answer; it is set on the field in the database, since the builder
+  // only offers URL and button text.
+  function handoffCtl(ctls, vis) {
+    var found = null;
+    (ctls || []).forEach(function (c) {
+      if (found || !c || !c.f || c.f.type !== "link") return;
+      var o = c.f.options || {};
+      if (!o.url || o.keep_submit) return;
+      var cond = c.f.show_if;
+      if (!cond || !cond.field) return;
+      // Before the first applyConditions there is no map yet, and a form must not flash a
+      // Submit button that is about to be taken away.
+      if (vis && vis[c.f.id] === false) return;
+      found = c;
+    });
+    return found;
+  }
   function applyConditions() {
     visible = computeVisible();
     controls.forEach(function (c) {
@@ -1010,6 +1043,13 @@
       c.wrap.style.display = on ? "" : "none";
       if (!on) markCtl(c, false);   // a hidden question is never the one to fix
     });
+    // The link replaces the button rather than sitting beside it.
+    var hand = handoffCtl(controls, visible);
+    var sbtn = document.getElementById("submit-btn");
+    if (sbtn) sbtn.style.display = hand ? "none" : "";
+    // and no leftover "please fill in the highlighted fields" under a form that is done
+    var smsg = document.getElementById("form-msg");
+    if (smsg && hand) smsg.textContent = "";
   }
   function ctlVisible(c) { return visible[c.f.id] !== false; }
   // An answer changed: re-decide which questions are asked, and repaint what they scored.
@@ -2430,6 +2470,14 @@
     var msg = document.getElementById("form-msg"); var btn = document.getElementById("submit-btn"); msg.textContent = "";
     var firstBad = null;
     applyConditions();   // decide once, then validate and submit against the same answer
+    // Nothing to file: this answer is dealt with on another form and the link to it is on
+    // screen. Checked here as well as painted, because the button is not the only way in —
+    // a keypress, a stale click on a button mid-hide, a page driven by script.
+    var hand = handoffCtl(controls, visible);
+    if (hand) {
+      if (hand.el && hand.el.scrollIntoView) hand.el.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     controls.forEach(function (c) {
       if (!ctlVisible(c)) { markCtl(c, false); return; }   // not asked = nothing to require
       var ok = c.validate(); markCtl(c, !ok); if (!ok && !firstBad) firstBad = c;
