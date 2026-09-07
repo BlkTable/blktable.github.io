@@ -247,7 +247,41 @@
 <script>
   var SUPABASE_URL = "https://db.blktable.blk.jo";
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg0NzExNjYwLCJleHAiOjIxMDAwNzE2NjB9.jve2CB0Dt8dESno2dgVHu5kcLnmCE-fISi0TYT_prwc";
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // ---- Measurement: the device's own timezone -------------------------------------------
+  // Recorded, never acted on. The question it exists to answer is how often the device's
+  // country would have guessed the customer's country right, and the only honest way to
+  // answer that is against the branch they actually picked — so the zone is filed beside it
+  // and nothing here reads it back. Both this block and the header come out again once the
+  // number is in.
+  //
+  // Read as a NAME, never as an offset. Amman and Beirut are both +03:00 from April to
+  // October, so for nine months of the year the offset cannot tell apart the two countries
+  // this is trying to tell apart. Read back through Intl rather than trusted raw, because
+  // ICU renames some zones — Istanbul answers under Europe, not Asia. Whatever comes back is
+  // stored as it arrived and mapped to no country here: the mapping is the guess under test,
+  // and a page that applied it would be measuring the guess against itself.
+  function deviceZone() {
+    try {
+      var z = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (typeof z !== "string") return null;
+      z = z.trim();
+      // The value leaves the browser and is written into a jsonb column, so this is where it
+      // stops being arbitrary text. Refused rather than trimmed to fit: a truncated zone
+      // looks like a real one and is not.
+      return /^[A-Za-z0-9_+\/-]{1,64}$/.test(z) ? z : null;
+    } catch (e) { return null; }
+  }
+  // A header, not an argument, deliberately. Every public form submits through one RPC with a
+  // fixed signature, and an extra key against a function that is not expecting it is a dead
+  // submit button on all of them. Kong forwards unknown request headers upstream untouched —
+  // the rest-v1 route's request-transformer only adds Authorization, it removes nothing — and
+  // reflects them in the CORS preflight, so this reaches `request.headers` with no gateway
+  // change. A browser that will not say sends no header at all and submits as it always did.
+  function tzHeaders() {
+    var z = deviceZone();
+    return z ? { "x-blk-tz": z } : {};
+  }
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { global: { headers: tzHeaders() } });
 
   // ---- File storage: Supabase Storage now, Cloudflare R2 after cutover ----
   // Flip STORAGE_MODE to "r2" at cutover (with SUPABASE_URL/KEY above). Uploads
