@@ -136,6 +136,8 @@ new vm.Script(
   '(function(){\n' +
   grab(js, 'waDigits', 'index.html') + '\n' +
   grab(js, 'parseContactLines', 'index.html') + '\n' +
+  grab(js, 'parseEmailLines', 'index.html') + '\n' +
+  grab(js, 'alertMessageSpecs', 'index.html') + '\n' +
   grab(js, 'serializeAlerts', 'index.html') + '\n' +
   '\nthis.API={ serializeAlerts, parseContactLines };}).call(this)'
 ).runInContext(ctx);

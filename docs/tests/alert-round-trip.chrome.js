@@ -42,7 +42,8 @@ function grab(name) {
   }
   throw new Error('unbalanced function ' + name);
 }
-const NAMES = ['esc', 'waDigits', 'bldFieldOptionsHtml', 'parseContactLines', 'contactLinesText',
+const NAMES = ['esc', 'waDigits', 'bldFieldOptionsHtml', 'parseContactLines', 'parseEmailLines',
+  'alertMessageSpecs', 'contactLinesText',
   'renumberAlertParams', 'addAlertParamRow', 'addAlertRow', 'serializeAlerts'];
 const fns = NAMES.map(grab).join('\n');
 const langs = (js.match(/var WA_LANGS = \[.*\];/) || [])[0];
@@ -139,18 +140,71 @@ ok('a manual-only alert still has no send', !(manual.rules[0] || {}).send,
 ok('and it keeps its Notify-button message',
    (manual.rules[0] || {}).template === 'Ring the shop', JSON.stringify(manual.rules[0]));
 
-// ---- two rules in one table, one of each ----
+// ---- the same guarantee for email ----
+// An email rule has no slack_channel and no approved template, so under the old sniff it
+// would have hydrated as WhatsApp — the channel dropdown reading "WhatsApp", the address
+// list and the subject nowhere on screen, and the next save writing it back as a WhatsApp
+// rule with no template and no numbers. That is the Complaints failure exactly, so it is
+// worth its own test rather than trusting that reading the channel key first covers it.
+var EMAIL = {
+  id: 'A4-mail', when: 'always', label: 'Complaints', channel: 'email',
+  contacts: [], template: null,
+  send: {
+    to_emails: ['ops@blk.jo', 'qc@blk.jo'],
+    subject: 'A new complaint arrived',
+    params: [
+      { field: 'f-name', label: 'Customer Name - اسم العميل' },
+      { text: 'There is a complaint' },
+      { field: '__record_link', label: 'Record link' }
+    ]
+  }
+};
+var mail = roundTrip(EMAIL);
+same('a saved email alert reports no problems', mail.problems, []);
+var e = mail.rules[0] || {};
+ok('it is STILL an email rule after a save', e.channel === 'email', JSON.stringify(e));
+ok('it still has somewhere to send', !!e.send, JSON.stringify(e));
+same('every recipient survives', e.send && e.send.to_emails, EMAIL.send.to_emails);
+same('the subject survives', e.send && e.send.subject, 'A new complaint arrived');
+same('every message line survives, text and labels alike',
+  e.send && e.send.params, EMAIL.send.params);
+ok('no WhatsApp template is invented for it', !(e.send && e.send.template), JSON.stringify(e.send));
+ok('no Slack channel is invented for it', !(e.send && e.send.slack_channel), JSON.stringify(e.send));
+
+// An email rule saved with no subject must come back with no subject, not with the empty
+// string — the trigger coalesces a NULL through to the alert's name, and "" is not NULL.
+var noSubj = roundTrip({ id: 'A5-mail', when: 'always', label: 'Complaints', channel: 'email',
+  send: { to_emails: ['ops@blk.jo'], subject: null, params: [{ text: 'hi' }] } });
+same('a subjectless email alert reports no problems', noSubj.problems, []);
+same('and its subject is still null rather than ""',
+  (noSubj.rules[0] || {}).send.subject, null);
+
+// ---- a WhatsApp rule written before the channel key existed still reads as WhatsApp ----
+// The live tables hold rules saved before the key was introduced. initChannel reads
+// data.channel first now, and for these there is none — the sniff behind it has to answer.
+var LEGACY = { id: 'A6-old', field: 'f-status', equals: ['Rejected'], label: 'Old QC',
+  send: { template: 'qc_v1', lang: 'en', to: { numbers: [{ name: 'Ahmad', phone: '+962791234567' }] },
+          params: [{ field: 'f-branch' }] } };
+var legacy = roundTrip(LEGACY);
+same('a pre-channel WhatsApp alert reports no problems', legacy.problems, []);
+ok('it is still WhatsApp and keeps its template',
+   !(legacy.rules[0] || {}).channel && legacy.rules[0].send.template === 'qc_v1',
+   JSON.stringify(legacy.rules[0]));
+
+// ---- three rules in one table, one of each ----
 // The editor renders every rule into the same host; a Slack rule must not be flattened by
-// a WhatsApp one sitting above it.
+// a WhatsApp one sitting above it, nor an email one by either.
 document.getElementById('bld-alerts').innerHTML = '';
-addAlertRow(WA); addAlertRow(SLACK);
+addAlertRow(WA); addAlertRow(SLACK); addAlertRow(EMAIL);
 var both = [], pair = serializeAlerts(both);
 same('a mixed table reports no problems', both, []);
-ok('both rules survive together', pair.length === 2, JSON.stringify(pair));
+ok('all three rules survive together', pair.length === 3, JSON.stringify(pair));
 ok('the WhatsApp one is still WhatsApp', pair[0] && !pair[0].channel && !!pair[0].send,
    JSON.stringify(pair[0]));
 ok('the Slack one is still Slack', pair[1] && pair[1].channel === 'slack' &&
    pair[1].send && pair[1].send.slack_channel === 'C0BT4B4C2V7', JSON.stringify(pair[1]));
+ok('the email one is still email', pair[2] && pair[2].channel === 'email' &&
+   pair[2].send && pair[2].send.to_emails.length === 2, JSON.stringify(pair[2]));
 } catch (e) {
   fail++;
   out.push('FAIL the page threw -> ' + (e && e.message) + '\\n' + (e && e.stack));

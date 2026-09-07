@@ -7380,6 +7380,43 @@
       return (c.name ? c.name + ", " : "") + (c.phone || "");
     }).join("\n");
   }
+  // Email recipients, read as forgivingly as the phone box reads numbers. The placeholder
+  // asks for one per line and nobody does that — what arrives is whatever the mail client
+  // put on the clipboard, which is comma separated and often carries the display name. So
+  // split on the three separators, unwrap a "Name <addr>", and hand back everything that is
+  // not an address rather than dropping it: SMTP would otherwise report it an hour later in
+  // a last_error nobody is reading. Case-insensitively unique, keeping the first spelling.
+  function parseEmailLines(text) {
+    var list = [], bad = [], seen = {};
+    String(text || "").split(/[\r\n,;]+/).forEach(function (part) {
+      var t = part.trim();
+      if (!t) return;
+      var m = t.match(/<([^>]*)>\s*$/);
+      var addr = (m ? m[1] : t).trim();
+      if (!/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(addr)) { bad.push(t); return; }
+      var key = addr.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = 1;
+      list.push(addr);
+    });
+    return { list: list, bad: bad };
+  }
+  // The message lines of a rule, with the label of each question alongside it. Slack and
+  // email both build their whole message out of these and both want the name of the
+  // question in front of the answer. WhatsApp reads the same rows but must not have the
+  // labels — its params fill an approved template's {{1}}, {{2}} by position — so it keeps
+  // its own unlabelled read rather than sharing this one.
+  function alertMessageSpecs(r) {
+    return [].slice.call(r.querySelectorAll(".al-params .al-p")).map(function (pr) {
+      var sel = pr.querySelector(".ap-field"), v = sel.value;
+      if (v === "__text") {
+        var t = pr.querySelector(".ap-text").value.trim();
+        return t ? { text: t } : null;
+      }
+      var lbl = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : v;
+      return v ? { field: v, label: lbl } : null;
+    }).filter(Boolean);
+  }
   function renumberAlertParams(box) {
     [].slice.call(box.querySelectorAll(".al-p .ap-n")).forEach(function (n, i) { n.textContent = "{{" + (i + 1) + "}}"; });
   }
@@ -7407,7 +7444,10 @@
     var langOpts = WA_LANGS.map(function (l) {
       return '<option value="' + l[0] + '"' + ((send && send.lang) === l[0] ? " selected" : "") + ">" + esc(l[1]) + "</option>";
     }).join("");
-    var initChannel = (send && send.slack_channel != null) ? "slack" : "whatsapp";
+    // What channel a saved rule was. serializeAlerts has written `channel` on the rule
+    // since Slack arrived, so read that first; the sniff behind it is for the WhatsApp
+    // rules written before the key existed, which carry no channel at all.
+    var initChannel = data.channel || ((send && send.slack_channel != null) ? "slack" : "whatsapp");
     row.innerHTML =
       '<div class="al-row">' +
         '<select class="al-field">' + bldFieldOptionsHtml(data.field) + "</select>" +
@@ -7424,6 +7464,7 @@
           '<label>Send via <select class="al-channel">' +
             '<option value="whatsapp"' + (initChannel === "whatsapp" ? " selected" : "") + '>WhatsApp</option>' +
             '<option value="slack"' + (initChannel === "slack" ? " selected" : "") + '>Slack</option>' +
+            '<option value="email"' + (initChannel === "email" ? " selected" : "") + '>Email</option>' +
           '</select></label>' +
         '</div>' +
         '<div class="al-wa-fields">' +
@@ -7437,6 +7478,11 @@
           '<input class="al-slack-channel" placeholder="Slack channel name or ID, e.g. #alerts or C0..." style="width:100%;box-sizing:border-box;">' +
           '<p class="al-hint">The bot must be invited to the channel before it can post. /invite @BLKTable in Slack.</p>' +
           '<p class="al-hint">The lines you add below <em>are</em> the Slack message, one line each &mdash; the two boxes at the top of this alert are only used by the Notify button. Add a line of fixed text for what happened, and a Record link line so somebody can open the record.</p>' +
+        '</div>' +
+        '<div class="al-email-fields" style="display:none;">' +
+          '<textarea class="al-email-to" placeholder="Send to &mdash; one address per line: ops@blk.jo"></textarea>' +
+          '<input class="al-email-subject" placeholder="Subject &mdash; leave empty to use the name of the alert" style="width:100%;box-sizing:border-box;">' +
+          '<p class="al-hint">Sent from alerts@blk.jo. The lines you add below <em>are</em> the email, one line each &mdash; the two boxes at the top of this alert are only used by the Notify button. Add a line of fixed text for what happened, and a Record link line so somebody can open the record.</p>' +
         '</div>' +
         '<div class="al-params"></div>' +
         '<button type="button" class="linkbtn al-add-p">＋ Add a value</button>' +
@@ -7485,19 +7531,24 @@
     var channel = row.querySelector(".al-channel");
     var waFields = row.querySelector(".al-wa-fields");
     var slackFields = row.querySelector(".al-slack-fields");
+    var emailFields = row.querySelector(".al-email-fields");
     var waRecip = row.querySelector(".al-wa-recip");
     if (send && send.slack_channel) row.querySelector(".al-slack-channel").value = send.slack_channel;
+    row.querySelector(".al-email-to").value = ((send && send.to_emails) || []).join("\n");
+    row.querySelector(".al-email-subject").value = (send && send.subject) || "";
     var addP = row.querySelector(".al-add-p");
     function syncChannel() {
-      var isSlack = channel.value === "slack";
-      waFields.style.display = isSlack ? "none" : "";
+      var isSlack = channel.value === "slack", isEmail = channel.value === "email";
+      var isWa = !isSlack && !isEmail;
+      waFields.style.display = isWa ? "" : "none";
       slackFields.style.display = isSlack ? "" : "none";
-      waRecip.style.display = isSlack ? "none" : "";
+      emailFields.style.display = isEmail ? "" : "none";
+      waRecip.style.display = isWa ? "" : "none";
       // "Add a value" is WhatsApp's language: a value fills the {{1}}, {{2}} of an approved
-      // template. On Slack there is no template and these lines are the whole message, so
-      // the button says so — the old label sent people hunting for a message box that the
-      // Slack path never reads.
-      addP.textContent = isSlack ? "＋ Add a message line" : "＋ Add a value";
+      // template. On Slack and email there is no template and these lines are the whole
+      // message, so the button says so — the old label sent people hunting for a message
+      // box that neither path reads.
+      addP.textContent = isWa ? "＋ Add a value" : "＋ Add a message line";
     }
     syncChannel(); channel.addEventListener("change", syncChannel);
     row.querySelector(".al-add-p").addEventListener("click", function () { addAlertParamRow(params); });
@@ -7542,16 +7593,7 @@
           if (!slackCh) {
             problems.push("Alert " + (i + 1) + " is set to send to Slack but has no channel.");
           } else {
-            var slackSpecs = [].slice.call(r.querySelectorAll(".al-params .al-p")).map(function (pr) {
-              var v = pr.querySelector(".ap-field").value;
-              if (v === "__text") {
-                var t = pr.querySelector(".ap-text").value.trim();
-                return t ? { text: t } : null;
-              }
-              var sel = pr.querySelector(".ap-field");
-              var lbl = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : v;
-              return v ? { field: v, label: lbl } : null;
-            }).filter(Boolean);
+            var slackSpecs = alertMessageSpecs(r);
             // The message lines ARE the Slack message: the server builds the post out of
             // these and nothing else. The message box above is the manual-send text and is
             // never read on this path, so a rule with no lines posts an empty body, which
@@ -7562,6 +7604,27 @@
               out.channel = "slack";
               out.send = { slack_channel: slackCh, params: slackSpecs };
             }
+          }
+        } else if (channel === "email") {
+          // Email is Slack's shape with an address list in place of a channel: the same
+          // message lines are the whole body, and the same two ways of being unready apply.
+          var mails = parseEmailLines(r.querySelector(".al-email-to").value);
+          mails.bad.forEach(function (b) { problems.push("Alert " + (i + 1) + " (email): “" + b + "” is not an email address."); });
+          var mailSpecs = alertMessageSpecs(r);
+          if (!mails.list.length) {
+            problems.push("Alert " + (i + 1) + " is set to send by email but has nobody to send to.");
+          } else if (!mailSpecs.length) {
+            problems.push("Alert " + (i + 1) + " sends by email but has no message. Under the addresses, click “＋ Add a message line” and pick “fixed text” for what happened, or a question to include its answer. The two boxes at the top of the alert are only used by the Notify button.");
+          } else {
+            out.channel = "email";
+            // A blank subject is stored as null rather than as "", so the trigger's
+            // coalesce falls through to the alert's own name instead of sending a mail
+            // with an empty subject line.
+            out.send = {
+              to_emails: mails.list,
+              subject: r.querySelector(".al-email-subject").value.trim() || null,
+              params: mailSpecs,
+            };
           }
         } else {
           var tmpl = r.querySelector(".al-tmpl").value.trim();
