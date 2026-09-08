@@ -1095,7 +1095,7 @@
   // those native events, so typing a number coloured its question and picking from a
   // dropdown did not -- which is 63 of QC's 70 scored questions, i.e. very nearly all of
   // them. Any future control with its own callback calls this and is covered.
-  function answerChanged() { applyConditions(); paintScores(); applyBranchScope(); }
+  function answerChanged() { applyConditions(); paintScores(); applyBranchScope(); syncPrefillNote(); }
 
   function labelHtml(f) {
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
@@ -1957,6 +1957,75 @@
     }).filter(Boolean);
   }
 
+  // ---- The country the device implies ----------------------------------------------------
+  // Pre-fills the Country question so most people never answer it, while leaving it a plain
+  // changeable dropdown so anyone the guess is wrong for can fix it in one tap. The question
+  // is NOT removed: a filled-in answer is still an answer, so it stores itself the ordinary
+  // way and `applyBranchScope` narrows the shops off it with nothing new plumbed.
+  //
+  // The zone-to-country map is in `countries.timezones`, not here, for the same reason `dial`
+  // and `aliases` are on that table: adding a country, or a second zone for one, is then an
+  // admin edit rather than a deploy. Matched by NAME and never by offset — Amman and Beirut
+  // are both +03:00 from April to October, so for nine months of the year the offset cannot
+  // tell apart the two countries this exists to tell apart.
+  function zoneCountryName(zone, f) {
+    if (!zone) return null;
+    var row = COUNTRY_ROWS.filter(function (c) {
+      return (c.timezones || []).indexOf(zone) !== -1;
+    })[0];
+    if (!row || !row.name_en) return null;
+    // Only ever a country THIS question offers. Opening the Jordan-and-Lebanon complaints
+    // form in Baghdad must fill in nothing: Iraq is not on the list, so the box could not
+    // show it and the branch question could not scope to it either.
+    return countryChoiceNames(f).indexOf(row.name_en) !== -1 ? row.name_en : null;
+  }
+  // Kept separate from the DOM so the rule can be tested on its own. `current` is whatever
+  // the question already holds — a restored draft, or an answer somebody has just corrected.
+  // It always wins: putting the guess back over a correction is the one way this could
+  // destroy real work.
+  function prefillCountryName(f, current, zone) {
+    if (current) return null;
+    return zoneCountryName(zone, f);
+  }
+  // What was guessed, and the note saying so. Held here because `syncPrefillNote` has to know
+  // whether the answer on screen is still the guess or has since been changed.
+  var prefillGuess = null, prefillNoteEl = null;
+  function prefillCountry() {
+    var ctl = controls.filter(function (c) { return c.f && c.f.type === "country"; })[0];
+    if (!ctl || !ctl.setDraft) return null;
+    var name = prefillCountryName(ctl.f, ctl.value(), deviceZone());
+    if (!name) return null;
+    ctl.setDraft(name);
+    // The combobox refuses a name its list does not hold and leaves the box EMPTY rather
+    // than wrong, so a guess can silently fail to land. If it did, there is nothing to
+    // announce: a note reading "filled in from your location" over an empty box is worse
+    // than no note at all. Belt and braces with the offered-countries check above, which is
+    // what states the rule; this is what guarantees the outcome.
+    if (ctl.value() !== name) return null;
+    prefillGuess = name;
+    // A pre-filled answer gets accepted by default where an empty required one forces a
+    // decision, so the page has to say out loud that this was guessed. Without it a wrong
+    // guess stops being a visible dead end and becomes a record labelled with a country
+    // nobody actually confirmed.
+    if (ctl.wrap) {
+      prefillNoteEl = document.createElement("div");
+      prefillNoteEl.className = "hint";
+      prefillNoteEl.id = "country-guess-note";
+      prefillNoteEl.textContent = "Filled in from your location — change it if that is not right. / تم تحديدها من موقعك، عدّلها إذا كانت غير صحيحة.";
+      ctl.wrap.appendChild(prefillNoteEl);
+    }
+    return name;
+  }
+  // Once the answer is no longer the guess, the note is simply untrue. Called from
+  // answerChanged rather than from a listener because the combobox settles a choice in code
+  // and fires no DOM event — a click, arrow-Enter and blur-resolve would all miss it.
+  function syncPrefillNote() {
+    if (!prefillNoteEl) return;
+    if (currentCountryAnswer() === prefillGuess) return;
+    if (prefillNoteEl.parentNode) prefillNoteEl.parentNode.removeChild(prefillNoteEl);
+    prefillNoteEl = null;
+  }
+
   // ---- Which shops a branch question offers ---------------------------------------------
   // The question's own scope is the countries the FORM covers, written on it by the builder
   // from the country groups ticked there — never typed twice, and never worked out by reading
@@ -2455,7 +2524,14 @@
     // have to be applied once at the end: the questions a restored answer reveals, the score
     // it is worth, and the shops a restored country leaves in the branch box. Without this a
     // draft comes back with a country chosen and both countries' shops still listed.
-    if (keptAnswers) { showDraftNote(hasFileQ, 0); answerChanged(); }
+    if (keptAnswers) showDraftNote(hasFileQ, 0);
+    // AFTER the draft, never before: somebody coming back to a form in which they had
+    // already corrected the guess must not have it put back over their correction.
+    var guessedCountry = prefillCountry();
+    // Restoring answers and filling one in both fire nothing, so the consequences have to be
+    // applied once here: the questions an answer reveals, the score it is worth, and the
+    // shops the country leaves in the branch box.
+    if (keptAnswers || guessedCountry) answerChanged();
     // The files come a moment behind the answers, because IndexedDB is asynchronous. So the
     // note is written twice where there are both: once for the answers, so the page is not
     // silent while the photos are being read, and again when they arrive. Somebody who only
@@ -2714,7 +2790,7 @@
         var branchesReady = db.from("branches").select("name,name_ar,position,list_key,is_active").order("position", { ascending: true }).then(function (r) { BRANCHES = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
         // Names the country a branch list belongs to, for a question offering several of
         // them. Never blocks the form: a failure leaves the list keys as their own labels.
-        var countriesReady = db.from("countries").select("code,name_en,name_ar").then(function (r) { COUNTRY_ROWS = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
+        var countriesReady = db.from("countries").select("code,name_en,name_ar,timezones").then(function (r) { COUNTRY_ROWS = (r && !r.error && r.data) ? r.data : []; }).catch(function () { return null; });
         // The choices for a `record_multi` question. Fetched with the branches and the
         // countries rather than after the field list, because it rides the same round
         // trip — and like them it NEVER blocks the form: a database that does not have
