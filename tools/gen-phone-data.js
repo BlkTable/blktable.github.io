@@ -19,7 +19,7 @@ const SOURCES = {
 const BEGIN = "  // ---- BEGIN GENERATED phone data (tools/gen-phone-data.js) ----";
 const END = "  // ---- END GENERATED phone data ----";
 
-// Ten country names where the packages disagree with what the country question already
+// Nine country names where the packages disagree with what the country question already
 // stores, or where the zone package has no country at all. A changed name string is a
 // country question whose stored answers stop resolving, so the page's vocabulary wins and
 // this map is what makes it win. XK, AC and TA exist because libphonenumber knows a

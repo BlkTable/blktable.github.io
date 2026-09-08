@@ -106,8 +106,8 @@ no zone, meaning it can be chosen and never guessed.
 **Inlined, not fetched.** Both tables go into `index.html` and `f/index.html` as a shared
 block, byte identical, pinned by a parity test the way the date and time block is. An
 `assets/` file would be one network request the public form cannot submit without, and the
-form's whole job is to submit from a shop on bad wifi. The cost is 26.5 KB of dense text on
-each page, measured on the real packed output (16,274 bytes of dial rows and 10,228 of zone
+form's whole job is to submit from a shop on bad wifi. The cost is 27.0 KB of dense text on
+each page, measured on the real committed output (16,751 bytes of dial rows and 10,226 of zone
 pairs, as they land in the page). The public form is 171 KB today, and Fastly serves it
 gzipped.
 
