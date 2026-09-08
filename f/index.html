@@ -1985,6 +1985,12 @@
   // destroy real work.
   function prefillCountryName(f, current, zone) {
     if (current) return null;
+    // Not every country question asks where the person IS. Franchise asks which country you
+    // want to franchise IN — intent, not location — and answering that from the applicant's
+    // own clock is a wrong answer given confidently. `options.prefill: false` opts a question
+    // out, set per question in the table so the next one like it needs no code change.
+    // Opt-OUT only: absent or anything other than an explicit false still pre-fills.
+    if (f && f.options && f.options.prefill === false) return null;
     return zoneCountryName(zone, f);
   }
   // What was guessed, and the note saying so. Held here because `syncPrefillNote` has to know
