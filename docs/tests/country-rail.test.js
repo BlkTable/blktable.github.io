@@ -24,18 +24,32 @@
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 function scripts(file){const src=fs.readFileSync(file,'utf8');return[...src.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');}
 function grab(js,name){const at=js.search(new RegExp('\\bfunction\\s+'+name+'\\s*\\('));if(at===-1)throw new Error('no fn '+name);const open=js.indexOf('{',at);let d=0;for(let i=open;i<js.length;i++){if(js[i]==='{')d++;else if(js[i]==='}'){d--;if(!d)return js.slice(at,i+1);}}throw new Error('unbalanced '+name);}
-function grabVar(js,name){const m=js.match(new RegExp('var '+name+' = \\[[\\s\\S]*?\\n  \\];'));if(!m)throw new Error('no var '+name);return m[0];}
+// Handles both shapes a lifted var comes in: a multi-line array literal (DEFAULT_COUNTRIES),
+// and a single-line declaration (PHONE_ROWS is one packed string; PHONE_LIST is a
+// comma-joined multi-var line that also declares PHONE_BY_ISO, PHONE_BY_DIAL and TZ_MAP,
+// which phoneTable()/phoneByDial() close over).
+function grabVar(js,name){
+  const multi = js.match(new RegExp('var '+name+' = \\[[\\s\\S]*?\\n  \\];'));
+  if (multi) return multi[0];
+  const one = js.match(new RegExp('var '+name+' = [^\\n]*;'));
+  if (!one) throw new Error('no var '+name);
+  return one[0];
+}
 const SRC = scripts('index.html');
 
 // The country lists are the page's own, lifted as source: a test that re-typed them would
 // go on passing after the app changed its mind about what a country code is. `jo` is a
 // code, `lebanon` is a code — they are NOT ISO pairs, which is exactly the trap that makes
 // re-typing them dangerous.
+//
+// The flag beside a country is no longer read out of a four-entry COUNTRIES table (deleted
+// along with the other hardcoded phone globals); countryFlag() now derives it from the
+// generated 245-country phone table via phoneByDial(), so that table is what gets lifted here.
 const ctx = { console };
 vm.createContext(ctx);
 new vm.Script(
-  ['scopeCountryCodes', 'countryFlag', 'tableCountries'].map(grab.bind(null, SRC)).join('\n') + '\n' +
-  grabVar(SRC, 'DEFAULT_COUNTRIES') + '\n' + grabVar(SRC, 'COUNTRIES') + '\n' +
+  ['scopeCountryCodes', 'countryFlag', 'tableCountries', 'phoneTable', 'phoneByDial'].map(grab.bind(null, SRC)).join('\n') + '\n' +
+  grabVar(SRC, 'DEFAULT_COUNTRIES') + '\n' + grabVar(SRC, 'PHONE_ROWS') + '\n' + grabVar(SRC, 'PHONE_LIST') + '\n' +
   'var COUNTRY_LIST = DEFAULT_COUNTRIES.slice();\n' +
   'var customFacets = { countries: {} };\n' +
   'function setFacets(c) { customFacets = { countries: c }; }\n' +

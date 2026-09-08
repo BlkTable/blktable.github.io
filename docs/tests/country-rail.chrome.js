@@ -49,14 +49,23 @@ function grab(name) {
   }
   throw new Error('unbalanced function ' + name);
 }
+// Handles both shapes a lifted var comes in: a multi-line array literal (DEFAULT_COUNTRIES),
+// and a single-line declaration (PHONE_ROWS is one packed string; PHONE_LIST is a
+// comma-joined multi-var line that also declares PHONE_BY_ISO, PHONE_BY_DIAL and TZ_MAP,
+// which phoneTable()/phoneByDial() close over).
 function grabVar(name) {
-  const m = js.match(new RegExp('var ' + name + ' = \\[[\\s\\S]*?\\n  \\];'));
-  if (!m) throw new Error('could not find var ' + name);
-  return m[0];
+  const multi = js.match(new RegExp('var ' + name + ' = \\[[\\s\\S]*?\\n  \\];'));
+  if (multi) return multi[0];
+  const one = js.match(new RegExp('var ' + name + ' = [^\\n]*;'));
+  if (!one) throw new Error('could not find var ' + name);
+  return one[0];
 }
+// countryFlag() no longer reads a four-entry COUNTRIES table (deleted along with the other
+// hardcoded phone globals); it derives the flag from the generated 245-country phone table
+// via phoneByDial(), so phoneTable/phoneByDial and their packed data are lifted here instead.
 const fns = ['esc', 'flagImg', 'countryLabel', 'tableCountries', 'scopeCountryCodes',
-             'countryFlag', 'paintSideCaret', 'renderCustomScope'].map(grab).join('\n') +
-            '\n' + grabVar('DEFAULT_COUNTRIES') + '\n' + grabVar('COUNTRIES') + '\n';
+             'countryFlag', 'paintSideCaret', 'renderCustomScope', 'phoneTable', 'phoneByDial'].map(grab).join('\n') +
+            '\n' + grabVar('DEFAULT_COUNTRIES') + '\n' + grabVar('PHONE_ROWS') + '\n' + grabVar('PHONE_LIST') + '\n';
 
 // The real handler, not a retyped one: this is the block whose ORDER was the bug, so a test
 // that wrote its own version would prove nothing about the page.
