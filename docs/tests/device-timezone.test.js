@@ -248,6 +248,18 @@ t('nothing to guess from means nothing is filled', () => {
   assert.strictEqual(MAP.prefillCountryName(TWO, '', null), null);
   assert.strictEqual(MAP.prefillCountryName(TWO, '', 'Asia/Riyadh'), null);
 });
+t('a question that is not asking where you ARE can opt out', () => {
+  // Franchise asks "which country are you interested in Franchising IN?" — intent, not
+  // location. Pre-filling that from the applicant's own clock is a wrong answer given
+  // confidently, and it shipped that way once. `options.prefill: false` is the opt-out, set
+  // per question in the table so it works for the next such question without a code change.
+  const OPTED_OUT = { type: 'country', options: { only: ['jo', 'lebanon'], prefill: false } };
+  assert.strictEqual(MAP.prefillCountryName(OPTED_OUT, '', 'Asia/Amman'), null);
+  // and the flag is opt-OUT only: absent, true, or anything else still pre-fills
+  assert.strictEqual(MAP.prefillCountryName({ type: 'country', options: { prefill: true } }, '', 'Asia/Amman'), 'Jordan');
+  assert.strictEqual(MAP.prefillCountryName({ type: 'country', options: {} }, '', 'Asia/Amman'), 'Jordan');
+  assert.strictEqual(MAP.prefillCountryName({ type: 'country' }, '', 'Asia/Amman'), 'Jordan');
+});
 
 // ---- the pre-fill must not become a silent default ----
 t('a pre-filled answer is marked as a guess in the page', () => {
