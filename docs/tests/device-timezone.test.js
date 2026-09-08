@@ -245,6 +245,11 @@ t('a country with no zones on file does not match the row directly, but the embe
     ['zoneCountryName', 'countryChoiceNames', 'prefillCountryName', 'tzIsoOf', 'phoneRow', 'phoneTable'], {},
     ['COUNTRY_ROWS', 'COUNTRY_NAMES_ALL', 'PHONE_ROWS', 'TZ_ISO', 'PHONE_LIST'],
     'COUNTRY_ROWS = [{code:"jo",name_en:"Jordan",timezones:[]},{code:"lebanon",name_en:"Lebanon"}];');
+  // This assertion alone does not prove the empty-array guard still holds: `jo` is both the
+  // first row in COUNTRY_ROWS and the correct fallback answer for Asia/Amman, so a bug that
+  // wrongly matched the first row on empty timezones would return "Jordan" here too. The
+  // Asia/Beirut assertion below is the one that discriminates: `lebanon` is the SECOND row, so
+  // a wrong first-row match would say "Jordan" while the correct answer is "Lebanon".
   assert.strictEqual(bare.zoneCountryName('Asia/Amman', TWO), 'Jordan');
   assert.strictEqual(bare.zoneCountryName('Asia/Beirut', TWO), 'Lebanon');
 });

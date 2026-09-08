@@ -66,12 +66,29 @@ const ZONES_UNOFFERED = [
   { code: 'iraq', name_en: 'Iraq', name_ar: 'العراق', timezones: ['Asia/Amman'] },
 ];
 
-function build(countries, draftAnswers) {
+// `zone`, when given, replaces Intl before the page's own script runs, so the box believes it
+// is in a zone this machine is not actually in. Chrome on Windows ignores the TZ environment
+// variable and always reports the OS zone, measured, so this is the only way to test a zone
+// other than this machine's own -- the same technique phone-picker.chrome.js uses. Omit it (the
+// existing call sites all do) and Intl is left alone, which on this machine means Asia/Amman.
+function build(countries, draftAnswers, zone) {
+  const tz = zone ? `
+  (function () {
+    var real = Intl.DateTimeFormat;
+    function Fake() {
+      var f = real.apply(this, arguments);
+      var ro = f.resolvedOptions.bind(f);
+      f.resolvedOptions = function () { var o = ro(); o.timeZone = ${JSON.stringify(zone)}; return o; };
+      return f;
+    }
+    Fake.supportedLocalesOf = real.supportedLocalesOf;
+    Intl.DateTimeFormat = Fake;
+  })();` : '';
   const seed = draftAnswers ? `
   try { window.localStorage.setItem('blk_draft_prefill-test',
     JSON.stringify({ v: 1, at: Date.now(), a: ${JSON.stringify(draftAnswers)} })); } catch (e) {}` : `
   try { window.localStorage.removeItem('blk_draft_prefill-test'); } catch (e) {}`;
-  const stub = `<script>${seed}
+  const stub = `<script>${tz}${seed}
   window.__err = null;
   window.onerror = function (m, u, l) { window.__err = m + ' (line ' + l + ')'; };
   var TABLE = { id: 't-pf', name: 'Prefill test', name_ar: '', slug: 'prefill-test',
@@ -222,11 +239,10 @@ run(build(ZONES_SWAPPED, { 'q-country': 'Jordan' }), `
 `, 'draft beats the guess');
 
 // ---- 4. no DB row claims the zone, but the embedded map still does ----
-// This section used to prove a genuinely unrecognised zone fills in nothing. Task 6 removed
-// the possibility of testing that here: this machine's zone (Asia/Amman) is now resolvable
-// worldwide, so a DB fixture that omits it no longer leaves it unresolvable -- the embedded map
-// answers instead. What is still worth proving, and what this checks now: the fallback reaches
-// the pre-fill note and the branch scope too, not only the box, in a real browser round trip.
+// Section 6 below covers the case where nothing resolves the zone at all. This section proves
+// the other half: even with no DB row claiming this machine's own zone (Asia/Amman), the
+// embedded map still supplies Jordan, and the fallback reaches the pre-fill note and the branch
+// scope too, not only the box, in a real browser round trip.
 run(build(ZONES_UNKNOWN), `
   t('the country still fills in, from the embedded map this time', function () {
     var v = val('${C_ID}');
@@ -256,3 +272,23 @@ run(build(ZONES_UNOFFERED), `
   });
   t('and no note claims a guess was made', function () { if (note()) return 'a note over an empty box'; });
 `, 'unoffered country is not filled');
+
+// ---- 6. a zone nothing recognizes changes nothing at all ----
+// Etc/UTC is what a hardened browser reports (Firefox resistFingerprinting, Tor, Brave), and
+// the embedded 541-zone map deliberately does not name a country for it, so the DB fixture does
+// not matter here -- neither source can resolve this zone. This machine's own zone can no
+// longer stand in for "unresolvable" (see section 4's comment), so this uses the Intl override
+// in `build`'s third argument to actually put the browser in a zone nothing knows, the same way
+// phone-picker.chrome.js tests a zone other than this machine's own.
+run(build(ZONES_UNKNOWN, undefined, 'Etc/UTC'), `
+  t('the country box fills in nothing', function () {
+    var v = val('${C_ID}');
+    if (v) return 'country was pre-filled with ' + JSON.stringify(v) + ' from a zone nothing recognizes';
+  });
+  t('and both countries stay offered', function () {
+    var s = shops('${B_ID}');
+    if (!s.some(function (x) { return /7th Circle/.test(x); })) return 'Jordanian shops missing: ' + s.join(', ');
+    if (!s.some(function (x) { return /Mar Mikhael/.test(x); })) return 'Lebanese shops missing: ' + s.join(', ');
+  });
+  t('and no note is shown', function () { if (note()) return 'a note with nothing guessed'; });
+`, 'unresolvable zone changes nothing');
