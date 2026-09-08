@@ -5944,7 +5944,11 @@
       '<div class="cc-menu" id="' + id + '-menu"><input type="text" class="cc-search" id="' + id + '-search" placeholder="Search country or code…" autocomplete="off">' +
       '<ul class="cc-list" id="' + id + '-list" role="listbox"></ul><div class="cc-empty" id="' + id + '-empty" hidden>No matches</div></div>' +
       '</div>' +
-      '<input type="tel" inputmode="numeric" class="ed-in" id="' + id + '" value="' + esc(p ? p.local : raw) + '">' +
+      // Autofill fires input and change, and those are exactly the events that set
+      // data-touched. An autofilled value would then be saved over an answer nobody
+      // deliberately edited, which is the same corruption this task exists to prevent,
+      // reached through a different door.
+      '<input type="tel" inputmode="numeric" class="ed-in" id="' + id + '" value="' + esc(p ? p.local : raw) + '" autocomplete="off">' +
       "</div>";
   }
   function wireEdPhone(id) {
