@@ -157,14 +157,25 @@
   .cc-btn { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 12px; border-radius: 8px;
     border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 1rem; cursor: pointer; font-family: inherit; }
   .cc-btn:hover { border-color: var(--line-2); }
-  .cc-flag, .cc-menu li img { width: 22px; height: 15px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
+  .cc-flag, .cc-list li img { width: 22px; height: 15px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(255,255,255,0.15); background: #333; }
   .cc-caret { color: var(--muted); font-size: 0.7rem; }
-  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; margin: 0; padding: 6px; list-style: none; min-width: 190px;
-    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px; display: none; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; padding: 6px; min-width: 270px;
+    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 10px; display: none;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.45); }
   .cc-menu.open { display: block; }
-  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
-  .cc-menu li:hover { background: rgba(255,255,255,0.06); }
-  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+  /* Flipped above the button when the field is near the bottom of a long form, which on a
+     phone is where a phone question usually is. */
+  .cc-menu.up { top: auto; bottom: calc(100% + 6px); }
+  .cc-search { width: 100%; box-sizing: border-box; margin-bottom: 6px; }
+  /* Capped, because the list is 245 long. The search box is what makes that usable, and the
+     scroll is only there for people who would rather look than type. */
+  .cc-list { margin: 0; padding: 0; list-style: none; max-height: 264px; overflow-y: auto; }
+  .cc-list li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; }
+  .cc-list li:hover, .cc-list li.hi { background: rgba(255,255,255,0.06); }
+  .cc-list li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+  /* The four we actually serve, held above the other 241. */
+  .cc-list li.pin-last { border-bottom: 1px solid var(--line-2); margin-bottom: 6px; padding-bottom: 12px; }
+  .cc-empty { padding: 10px 12px; color: var(--muted); }
   .file-row { display: flex; align-items: center; gap: 12px; }
   .file-btn { padding: 11px 16px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: 0.9rem; cursor: pointer; white-space: nowrap; }
   .file-btn:hover { border-color: var(--silver); }
@@ -2384,20 +2395,90 @@
                       setDraft: function (v) { sel.value = v; } });
     } else if (f.type === "phone") {
       var row = document.createElement("div"); row.className = "phone-row";
-      row.innerHTML = '<div class="cc-picker"><button type="button" class="cc-btn"><img class="cc-flag" alt=""><span class="cc-dial">+962</span><span class="cc-caret">▾</span></button><ul class="cc-menu" role="listbox"></ul></div><input type="tel" inputmode="numeric" id="' + id + '">';
+      row.innerHTML = '<div class="cc-picker">' +
+        '<button type="button" class="cc-btn" aria-haspopup="listbox"><img class="cc-flag" alt=""><span class="cc-dial"></span><span class="cc-caret">▾</span></button>' +
+        '<div class="cc-menu"><input type="text" class="cc-search" placeholder="Search country or code… / ابحث" autocomplete="off">' +
+        '<ul class="cc-list" role="listbox"></ul><div class="cc-empty" hidden>No matches / لا نتائج</div></div>' +
+        '</div><input type="tel" inputmode="numeric" id="' + id + '">';
       wrap.appendChild(row);
       var hint = document.createElement("div"); hint.className = "hint"; hint.textContent = "We may contact you on WhatsApp."; wrap.appendChild(hint);
-      var btn = row.querySelector(".cc-btn"), menu = row.querySelector(".cc-menu"), flag = row.querySelector(".cc-flag"),
-          dial = row.querySelector(".cc-dial"), picker = row.querySelector(".cc-picker"), local = row.querySelector("input");
-      var sc = COUNTRIES[0];
-      function apply(i) { sc = COUNTRIES[i]; flag.src = flagUrl(sc.flag); dial.textContent = "+" + sc.cc; local.placeholder = sc.ph; local.maxLength = Math.max.apply(null, sc.len) + 1; }
-      COUNTRIES.forEach(function (c, i) { var li = document.createElement("li"); li.innerHTML = '<img src="' + flagUrl(c.flag) + '" alt=""> <span>' + c.name + '</span> <b>+' + c.cc + '</b>'; li.addEventListener("click", function () { apply(i); menu.classList.remove("open"); }); menu.appendChild(li); });
-      btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
-      document.addEventListener("click", function (e) { if (!picker.contains(e.target)) menu.classList.remove("open"); });
+      var btn = row.querySelector(".cc-btn"), menu = row.querySelector(".cc-menu"),
+          flag = row.querySelector(".cc-flag"), dial = row.querySelector(".cc-dial"),
+          picker = row.querySelector(".cc-picker"), local = row.querySelector("input[type=tel]"),
+          search = row.querySelector(".cc-search"), list = row.querySelector(".cc-list"),
+          empty = row.querySelector(".cc-empty");
+      var sc = phoneRow("JO"), shown = [], hi = -1, noteEl = null;
+      // The placeholder is the country's own example number, so a German picker stops showing
+      // a Jordanian shape. maxLength is the longest the country allows, plus one so a person
+      // who types one digit too many sees it rather than having it swallowed.
+      function apply(r) {
+        sc = r || phoneRow("JO");
+        flag.src = flagUrl(sc.flag); flag.alt = sc.name;
+        dial.textContent = "+" + sc.cc;
+        local.placeholder = sc.ph;
+        local.maxLength = Math.max.apply(null, sc.len) + 1;
+      }
+      function render() {
+        var q = search.value.trim().toLowerCase();
+        var m = phoneMenuRows();
+        // Unfiltered, the four we serve sit above the other 241. Filtered, there is one list:
+        // somebody who typed "ger" is not looking for Jordan.
+        shown = q ? m.pinned.concat(m.rest).filter(function (r) { return phoneMatch(r, q); })
+                  : m.pinned.concat(m.rest);
+        var pinCount = q ? 0 : m.pinned.length;
+        empty.hidden = shown.length > 0;
+        list.innerHTML = shown.map(function (r, i) {
+          return '<li role="option" data-i="' + i + '"' +
+            (i === hi ? ' class="hi"' : (pinCount && i === pinCount - 1 ? ' class="pin-last"' : '')) +
+            '><img src="' + flagUrl(r.flag) + '" alt=""> <span>' + esc(r.name) + "</span> <b>+" + r.cc + "</b></li>";
+        }).join("");
+      }
+      function openMenu() {
+        hi = -1; search.value = ""; render();
+        menu.classList.add("open");
+        // Flipped up when the field is near the bottom of the page, which on a phone is where
+        // a phone question usually is.
+        var space = window.innerHeight - btn.getBoundingClientRect().bottom;
+        menu.classList.toggle("up", space < menu.offsetHeight + 12);
+        try { search.focus(); } catch (e) {}
+      }
+      function closeMenu() { menu.classList.remove("open"); menu.classList.remove("up"); }
+      // A guess is withdrawn the moment the person makes a choice of their own, because the
+      // note under the field is then simply untrue.
+      function dropNote() { if (noteEl && noteEl.parentNode) noteEl.parentNode.removeChild(noteEl); noteEl = null; }
+      function pick(r) { apply(r); dropNote(); closeMenu(); try { local.focus(); } catch (e) {} }
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (menu.classList.contains("open")) closeMenu(); else openMenu();
+      });
+      search.addEventListener("input", function () { hi = -1; render(); });
+      search.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowDown") { e.preventDefault(); hi = Math.min(hi + 1, shown.length - 1); render(); scrollHi(); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); hi = Math.max(hi - 1, 0); render(); scrollHi(); }
+        else if (e.key === "Enter") { e.preventDefault(); if (shown[hi >= 0 ? hi : 0]) pick(shown[hi >= 0 ? hi : 0]); }
+        else if (e.key === "Escape") { e.preventDefault(); closeMenu(); }
+      });
+      function scrollHi() { var el = list.querySelector("li.hi"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" }); }
+      // mousedown, not click: a person dragging off a row should not select it, and the
+      // document-level close below fires on click.
+      list.addEventListener("mousedown", function (e) {
+        var li = e.target.closest ? e.target.closest("li") : null;
+        if (!li) return;
+        e.preventDefault();
+        pick(shown[+li.getAttribute("data-i")]);
+      });
+      document.addEventListener("click", function (e) { if (!picker.contains(e.target)) closeMenu(); });
       local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
-      apply(0);
-      controls.push({ f: f, el: local, validate: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return (!f.required && d === "") || sc.len.indexOf(d.length) !== -1; }, value: function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + sc.cc + d : null; },
-                      setDraft: function (v) { var p = splitPhone(v); if (!p) return; apply(p.i); local.value = p.local; } });
+      apply(phoneRow("JO"));
+      function digitsOf() { return local.value.replace(/\D/g, "").replace(/^0+/, ""); }
+      controls.push({ f: f, el: local, wrap: wrap,
+        validate: function () { var d = digitsOf(); return (!f.required && d === "") || phoneValidOnDial(sc, d); },
+        value: function () { var d = digitsOf(); return d ? "+" + sc.cc + d : null; },
+        setDraft: function (v) { var p = splitPhone(v); if (!p) return; apply(p.row); local.value = p.local; },
+        // The pre-fill reaches the picker through these rather than through the DOM, because
+        // settling a choice here fires no event a listener could hear.
+        ccSet: function (r, note) { apply(r); if (note) { noteEl = note; wrap.appendChild(note); } },
+        ccIso: function () { return sc.iso; } });
     } else if (f.type === "photo" || f.type === "media" || f.type === "file") {
       // One branch, not three. A media question is a photo question with a wider accept and a
       // bigger ceiling; a file question is a media question with any accept at all. Splitting

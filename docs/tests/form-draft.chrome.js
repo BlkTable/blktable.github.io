@@ -152,7 +152,10 @@ until(function () { return el('fld-name'); }, 5000).then(function (booted) {
   set('fld-ok', 'Yes');
   tick('days', ['Sat', 'Mon']);
   set('fld-tel', '71234567');
-  document.querySelectorAll('.cc-menu li')[1].click();   // Lebanon
+  // The picker now renders its list lazily, on open, and settles a choice on mousedown rather
+  // than click (so dragging off a row does not select it) — see phone-picker.chrome.js.
+  document.querySelector('.cc-btn').click();
+  document.querySelectorAll('.cc-list li')[1].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));   // Lebanon
   addPhoto();
   return pickCombo('how', 'Something else');
 }).then(function () {
