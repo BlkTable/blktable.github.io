@@ -116,11 +116,18 @@ because the patterns themselves contain `|`, `,` and `:` and would corrupt one c
 silently. Neither `~` nor `;` occurs in any pattern, name or example number. Lengths are
 base36 digits, one character each, since the largest possible length is 17. No pattern
 contains a double quote, and the 779 backslashes are escaped by emitting the table through
-`JSON.stringify`, so `\d` survives as `\d` rather than becoming `d`. A row reads:
+`JSON.stringify`, so `\d` survives as `\d` rather than becoming `d`. A row reads
+`iso~dial~lengths~example~pattern~name~primary`:
 
 ```
-JO~962~89~790123456~(?:(?:[2689]|7\d)\d|32|53)\d{6}~Jordan
+JO~962~89~790123456~(?:(?:[2689]|7\d)\d|32|53)\d{6}~Jordan~1
 ```
+
+The last field marks the primary country of a shared dial code, and it is not decoration.
+Without it, reading a stored `+1` number back resolves alphabetically and puts an Antigua flag
+on every American number, and `+44` is at the mercy of ISO ordering. `country_calling_codes`
+in the metadata already lists the primary country first (`"1":["US","AG",…]`,
+`"44":["GB","GG","IM","JE"]`), so the generator reads it from there rather than deciding.
 
 Each table is emitted as a **single-line** `var` declaration, because `grabVar` in the test
 harness matches `var NAME = [^\n]*;` and a multi-line declaration reads as missing.
