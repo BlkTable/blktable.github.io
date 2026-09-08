@@ -37,11 +37,24 @@ function grab(js, name, file) {
   if (!m) throw new Error('could not find function ' + name + ' in ' + file);
   return m[0];
 }
-function load(file, names, extra) {
+// A top-level `var NAME = ...;` the functions close over, pulled out of the page rather than
+// restated here — so the test cannot quietly use a different country list than the page does.
+// Anchored to the end of the LINE, not to a following "\n": the working tree is CRLF, so a
+// pattern ending `;\n` matches nothing here and the declaration reads as missing.
+function grabVar(js, name, file) {
+  const m = js.match(new RegExp('\\n  var ' + name + ' = [^\\n]*;'));
+  if (!m) throw new Error('could not find var ' + name + ' in ' + file);
+  return m[0];
+}
+// `setup` runs inside the closure, after the declarations, so a test can seed a page-level
+// var (the country rows normally arrive from the database) without the page exporting a
+// setter it would not otherwise have.
+function load(file, names, extra, vars, setup) {
   const js = scripts(file);
   const ctx = Object.assign({ console }, extra || {});
   vm.createContext(ctx);
-  new vm.Script('(function(){' + names.map(n => grab(js, n, file)).join('\n') +
+  new vm.Script('(function(){' + (vars || []).map(v => grabVar(js, v, file)).join('\n') + '\n' +
+    names.map(n => grab(js, n, file)).join('\n') + '\n' + (setup || '') +
     '\n this.API={' + names.join(',') + '};}).call(this)').runInContext(ctx);
   return ctx.API;
 }
@@ -145,15 +158,134 @@ t('the header rides on the client, so every form sends it and none had to change
     'the zone should be attached once at createClient, not added per call');
 });
 
-// ---- record, do not interpret ----
-t('the page maps no zone to a country', () => {
-  // A real constraint, not a vacuous absence check: the moment someone adds the obvious
-  // Asia/Amman -> jo table, the page is interpreting rather than recording, and the
-  // measurement is being compared against itself.
+// ---- the map lives in the database, not in the page ----
+t('the page names no timezone of its own', () => {
+  // Still a real constraint, and now for a second reason. The zone-to-country map moved into
+  // `countries.timezones` (migration 66) so that adding a country, or a second zone for one,
+  // is an admin edit rather than a deploy — exactly as `dial` and `aliases` already are. The
+  // moment somebody writes the obvious Asia/Amman -> jo table into the page instead, that
+  // property is gone and nobody notices until a country needs changing.
   assert.ok(!/Asia\/[A-Za-z_]+/.test(SRC),
-    'f/index.html should not name a specific timezone — it records whatever the device says');
+    'f/index.html should name no specific timezone — the map belongs to countries.timezones');
   assert.ok(!/getTimezoneOffset/.test(SRC),
     'the offset cannot tell Amman from Beirut for nine months of the year; read the name');
+});
+t('the country rows are fetched WITH their timezones', () => {
+  // The whole feature is inert if the column is not selected — and inert silently: no error,
+  // no zone, no pre-fill, on every form.
+  const sel = (SRC.match(/from\("countries"\)\s*\.select\("([^"]*)"\)/) || [])[1];
+  assert.ok(sel, 'could not find the countries select');
+  assert.ok(/\btimezones\b/.test(sel), 'countries select is missing timezones: ' + sel);
+});
+
+// ---- which country a zone implies ----
+// Seeded with the four countries as they actually are on file, so a test cannot pass against
+// a country list the app does not have.
+const ROWS = JSON.stringify([
+  { code: 'jo', name_en: 'Jordan', name_ar: 'الأردن', timezones: ['Asia/Amman'] },
+  { code: 'lebanon', name_en: 'Lebanon', name_ar: 'لبنان', timezones: ['Asia/Beirut'] },
+  { code: 'iraq', name_en: 'Iraq', name_ar: 'العراق', timezones: ['Asia/Baghdad'] },
+  { code: 'syria', name_en: 'Syria', name_ar: 'سوريا', timezones: ['Asia/Damascus'] },
+]);
+const MAP = load('f/index.html',
+  ['zoneCountryName', 'countryChoiceNames', 'prefillCountryName'],
+  {}, ['COUNTRY_ROWS', 'COUNTRY_NAMES_ALL'], 'COUNTRY_ROWS = ' + ROWS + ';');
+
+const TWO = { type: 'country', options: { only: ['jo', 'lebanon'] } };   // Customer Complaints
+const FOUR = { type: 'country', options: { only: ['jo', 'lebanon', 'iraq', 'syria'] } };
+const ANY = { type: 'country', options: {} };                             // no `only` at all
+
+t('a zone the countries table knows becomes that country', () => {
+  assert.strictEqual(MAP.zoneCountryName('Asia/Amman', TWO), 'Jordan');
+  assert.strictEqual(MAP.zoneCountryName('Asia/Beirut', TWO), 'Lebanon');
+});
+t('a country the question does not offer is NOT pre-filled', () => {
+  // Opening the two-country complaints form in Baghdad must not fill in Iraq: the box cannot
+  // show a choice that is not on its list, and the branch box could not scope to it either.
+  assert.strictEqual(MAP.zoneCountryName('Asia/Baghdad', TWO), null);
+  assert.strictEqual(MAP.zoneCountryName('Asia/Baghdad', FOUR), 'Iraq');
+});
+t('a question with no country limit still only offers real countries', () => {
+  assert.strictEqual(MAP.zoneCountryName('Asia/Amman', ANY), 'Jordan');
+});
+t('a zone that is none of ours fills nothing', () => {
+  // Asia/Riyadh shares Amman's offset exactly, which is why this must be decided by name.
+  assert.strictEqual(MAP.zoneCountryName('Asia/Riyadh', FOUR), null);
+  assert.strictEqual(MAP.zoneCountryName('Europe/Istanbul', FOUR), null);
+});
+t('a hardened browser saying UTC fills nothing', () => {
+  assert.strictEqual(MAP.zoneCountryName('UTC', FOUR), null);
+});
+t('no zone at all fills nothing', () => {
+  assert.strictEqual(MAP.zoneCountryName(null, FOUR), null);
+  assert.strictEqual(MAP.zoneCountryName('', FOUR), null);
+  assert.strictEqual(MAP.zoneCountryName(undefined, FOUR), null);
+});
+t('a country with no zones on file is never matched', () => {
+  // The column defaults to '{}', so every country starts this way and a half-configured
+  // countries table must simply not pre-fill rather than match the first row.
+  const bare = load('f/index.html',
+    ['zoneCountryName', 'countryChoiceNames', 'prefillCountryName'], {},
+    ['COUNTRY_ROWS', 'COUNTRY_NAMES_ALL'],
+    'COUNTRY_ROWS = [{code:"jo",name_en:"Jordan",timezones:[]},{code:"lebanon",name_en:"Lebanon"}];');
+  assert.strictEqual(bare.zoneCountryName('Asia/Amman', TWO), null);
+  assert.strictEqual(bare.zoneCountryName('Asia/Beirut', TWO), null);
+});
+
+// ---- what actually gets pre-filled ----
+t('an empty country question takes the guess', () => {
+  assert.strictEqual(MAP.prefillCountryName(TWO, '', 'Asia/Beirut'), 'Lebanon');
+  assert.strictEqual(MAP.prefillCountryName(TWO, null, 'Asia/Beirut'), 'Lebanon');
+});
+t('AN ANSWER ALREADY THERE ALWAYS WINS', () => {
+  // The one that would lose real work: somebody comes back to a draft in which they had
+  // already corrected the guess, and the guess must not be put back over their correction.
+  assert.strictEqual(MAP.prefillCountryName(TWO, 'Lebanon', 'Asia/Amman'), null);
+  // even when the existing answer agrees, there is nothing to fill
+  assert.strictEqual(MAP.prefillCountryName(TWO, 'Jordan', 'Asia/Amman'), null);
+});
+t('nothing to guess from means nothing is filled', () => {
+  assert.strictEqual(MAP.prefillCountryName(TWO, '', null), null);
+  assert.strictEqual(MAP.prefillCountryName(TWO, '', 'Asia/Riyadh'), null);
+});
+
+// ---- the pre-fill must not become a silent default ----
+t('a pre-filled answer is marked as a guess in the page', () => {
+  // The hazard this feature introduces: an empty required question forces a decision, a
+  // pre-filled one gets accepted by default. So the page has to say the value was guessed
+  // and can be changed, or a wrong guess becomes a silently mislabelled record.
+  assert.ok(/change it if/i.test(SRC) || /if that is not right/i.test(SRC),
+    'the pre-filled country should carry a visible "change it if wrong" note');
+});
+t('the note goes away once the answer stops being the guess', () => {
+  assert.ok(/syncPrefillNote/.test(SRC),
+    'a note still reading "filled in from your location" after a correction is a lie');
+  assert.ok(/function answerChanged\(\)[^\n]*syncPrefillNote/.test(SRC),
+    'the note should be re-checked on the same beat as the branch scope');
+});
+t('pre-filling runs AFTER the draft is restored', () => {
+  const init = (SRC.match(/function init\(table, fields\)[\s\S]*?\n  \}/) || [''])[0];
+  const draftAt = init.indexOf('restoreAnswers(');
+  const fillAt = init.indexOf('prefillCountry(');
+  assert.ok(draftAt !== -1, 'could not find the draft restore in init');
+  assert.ok(fillAt !== -1, 'could not find the pre-fill in init');
+  assert.ok(draftAt < fillAt, 'the pre-fill must come after the draft, or it overwrites it');
+});
+t('pre-filling re-scopes the branch box', () => {
+  // The reason this feature is small: a pre-filled country IS an answer, so the existing
+  // applyBranchScope path narrows the shops with no new plumbing. If answerChanged does not
+  // run, the country reads as chosen while the branch box still lists both countries.
+  //
+  // Checked by following the actual variable rather than by looking for the two names near
+  // each other — measured: "prefillCountry() … answerChanged()" within 400 characters stays
+  // true when the pre-fill is dropped OUT of the condition, so that version of this test
+  // passed while the bug was present.
+  const init = (SRC.match(/function init\(table, fields\)[\s\S]*?\n  \}/) || [''])[0];
+  const v = (init.match(/var\s+(\w+)\s*=\s*prefillCountry\(\)/) || [])[1];
+  assert.ok(v, 'the pre-fill result should be held in a variable so it can be acted on');
+  const guard = new RegExp('if\\s*\\([^)]*\\b' + v + '\\b[^)]*\\)\\s*answerChanged\\(\\)');
+  assert.ok(guard.test(init),
+    'answerChanged() must run when the pre-fill filled something in; ' + v + ' is not in its condition');
 });
 t('nothing on the submit path depends on the zone', () => {
   // The measurement must be invisible. If a submit ever reads deviceZone, a browser that
