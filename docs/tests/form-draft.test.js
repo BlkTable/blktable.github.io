@@ -296,6 +296,16 @@ t('a value with no leading plus, or none at all, is refused rather than mangled'
   assert.strictEqual(F.splitPhone(''), null);
   assert.strictEqual(F.splitPhone(null), null);
 });
+t('a number this form could not offer before now resolves to its own country', () => {
+  // This is the change, in one assertion. +44 used to return null because the picker held four
+  // countries, and a page that kept the digits anyway would have filed a British number as a
+  // Jordanian one. It is now a real offered code, so it must come back as GB with the local
+  // part intact.
+  const p = F.splitPhone('+447700900000');
+  assert.ok(p, '+44 should resolve now');
+  assert.strictEqual(p.iso, 'GB');
+  assert.strictEqual(p.local, '7700900000');
+});
 t('a round trip through the draft leaves the number identical', () => {
   // the dial codes come out of the page's own phone table, so adding a country cannot pass
   // this test by accident and cannot fail it for being newer than the test
