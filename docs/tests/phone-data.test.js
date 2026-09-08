@@ -109,6 +109,16 @@ t('every country name the page stores has a dial row', () => {
     assert.strictEqual(emitted[x], 1, x + ' appears ' + emitted[x] + ' times');
   });
 });
+t('no row is left naming itself by its own ISO code', () => {
+  // AC and TA are folded into Saint Helena's entry in the zone package and are not
+  // countries the page's own vocabulary tracks, so they cannot be checked via
+  // COUNTRY_NAMES_ALL above; this is what catches them (and the next territory like them)
+  // instead of letting a bare two-letter code through as a "name".
+  const bare = rows.filter(r => r.name === r.iso);
+  assert.deepStrictEqual(bare.map(r => r.iso), [], 'rows with no real name: ' + JSON.stringify(bare.map(r => r.iso)));
+  assert.strictEqual(byIso.AC.name, 'Ascension Island');
+  assert.strictEqual(byIso.TA.name, 'Tristan da Cunha');
+});
 
 // ---- the zone map --------------------------------------------------------------------
 const zones = {};

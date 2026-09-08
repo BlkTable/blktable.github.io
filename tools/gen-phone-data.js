@@ -8,7 +8,6 @@
 // Sources are pinned by version in the URLs below. Bumping a version is a deliberate act:
 // re-run, read the diff, and check the tests before committing.
 const fs = require("fs");
-const path = require("path");
 
 const LPN = "1.11.17";
 const CAT = "3.6.0";
@@ -20,9 +19,13 @@ const SOURCES = {
 const BEGIN = "  // ---- BEGIN GENERATED phone data (tools/gen-phone-data.js) ----";
 const END = "  // ---- END GENERATED phone data ----";
 
-// Seven country names where the packages disagree with what the country question already
-// stores. A changed name string is a country question whose stored answers stop resolving,
-// so the page's vocabulary wins and this map is what makes it win.
+// Ten country names where the packages disagree with what the country question already
+// stores, or where the zone package has no country at all. A changed name string is a
+// country question whose stored answers stop resolving, so the page's vocabulary wins and
+// this map is what makes it win. XK, AC and TA exist because libphonenumber knows a
+// dialable territory that the zone package does not carry as a country in its own right
+// (XK/Kosovo on +383; AC/Ascension Island and TA/Tristan da Cunha are folded into Saint
+// Helena's entry there), so without an override each would emit its bare ISO code as its name.
 const NAME_OVERRIDE = {
   CG: "Congo (Brazzaville)",
   CD: "Congo (Kinshasa)",
@@ -30,7 +33,9 @@ const NAME_OVERRIDE = {
   TR: "Turkey",
   US: "United States",
   VA: "Vatican City",
-  XK: "Kosovo"          // libphonenumber knows XK on +383; the zone package has no such country
+  XK: "Kosovo",         // libphonenumber knows XK on +383; the zone package has no such country
+  AC: "Ascension Island",
+  TA: "Tristan da Cunha"
 };
 
 function die(msg) { console.error("REFUSING TO WRITE: " + msg); process.exit(1); }
@@ -104,6 +109,11 @@ async function getText(url) {
     const ex = p[3];
     if (lens.indexOf(ex.length) === -1) die(p[0] + " example " + ex + " is not a valid length");
     if (!new RegExp("^(?:" + p[4] + ")$").test(ex)) die(p[0] + " example " + ex + " fails its own pattern");
+    // A name that equals its own ISO code means the zone package does not know this territory
+    // as a country (AC and TA were the two found this way) and NAME_OVERRIDE needs an entry,
+    // the same way XK did. Left unchecked, the picker would show a bare two-letter code where
+    // every other row shows a country name.
+    if (p[5] === p[0]) die(p[0] + " has no real name, only its own ISO code, add it to NAME_OVERRIDE");
   });
   if (!/JO~962~89~/.test(phoneRows)) die("Jordan is not where it should be in the table");
   if (!/Asia\/Amman~JO;/.test(tzIso + ";")) die("Asia/Amman does not map to JO");
