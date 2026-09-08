@@ -41,16 +41,27 @@ function grab(name) {
   }
   throw new Error('unbalanced function ' + name);
 }
-// The page's own COUNTRIES_ED, so the phone formatter under test is the real one.
-const countriesEd = (js.match(/\n  var COUNTRIES_ED = [\s\S]*?\n  \];/) || [])[0];
-if (!countriesEd) throw new Error('could not find COUNTRIES_ED');
+// The page's own packed phone table (COUNTRIES_ED was deleted along with the other hardcoded
+// four-country globals), so the phone formatter under test is the real one.
+function grabVar(name) {
+  const multi = js.match(new RegExp('\\n  var ' + name + ' = \\[[\\s\\S]*?\\n  \\];'));
+  if (multi) return multi[0];
+  const one = js.match(new RegExp('\\n  var ' + name + ' = [^\\n]*;'));
+  if (!one) throw new Error('could not find var ' + name);
+  return one[0];
+}
+const countriesEd = grabVar('PHONE_ROWS') + '\n' + grabVar('PHONE_LIST') + '\n' + grabVar('PHONE_PINNED');
 
+// parsePhone/edPhone/wireEdPhone now go through splitPhone/phoneTable/phoneRow/phoneMenuRows/
+// phoneMatch (the generated 245-country phone table) rather than the deleted COUNTRIES_ED, so
+// those are lifted too.
 const fns = [
   'esc', 'branchFillableIds', 'lockedAnswerHtml', 'customCellText', 'edValues', 'edRow',
   'edFieldRowHtml', 'edText', 'edSelect', 'edChecks', 'edChecksValue', 'edDate', 'edTime',
   'edNum', 'edPhone', 'wireEdPhone', 'parsePhone', 'edFlagUrl', 'choiceList', 'fieldHasOther',
   'isOtherChoice', 'otherKeyFor', 'isFileField', 'filePaths', 'fileLabel', 'ageText',
-  'condMet', 'isScorerField', 'isChoiceField'
+  'condMet', 'isScorerField', 'isChoiceField',
+  'splitPhone', 'phoneTable', 'phoneRow', 'phoneMenuRows', 'phoneMatch'
 ].map(grab).join('\n');
 
 const page = `<!doctype html><html><head><meta charset="utf-8"><style>${style}</style></head><body>

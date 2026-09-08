@@ -48,7 +48,11 @@ const ZONES_SWAPPED = [
   { code: 'jo', name_en: 'Jordan', name_ar: 'الأردن', timezones: ['Asia/Baghdad'] },
   { code: 'lebanon', name_en: 'Lebanon', name_ar: 'لبنان', timezones: ['Asia/Amman'] },
 ];
-// Nobody claims this machine's zone, so there is nothing to guess.
+// Nobody in this fixture's DATABASE claims this machine's zone (jo has Baghdad, lebanon has
+// Damascus). Before Task 6 that meant nothing to guess. Since Task 6, Asia/Amman is also a real
+// IANA zone in the embedded worldwide map, which names it Jordan -- and Jordan is a country this
+// question offers -- so the box still fills in, this time from the embedded map rather than the
+// countries table. See the section below.
 const ZONES_UNKNOWN = [
   { code: 'jo', name_en: 'Jordan', name_ar: 'الأردن', timezones: ['Asia/Baghdad'] },
   { code: 'lebanon', name_en: 'Lebanon', name_ar: 'لبنان', timezones: ['Asia/Damascus'] },
@@ -62,12 +66,29 @@ const ZONES_UNOFFERED = [
   { code: 'iraq', name_en: 'Iraq', name_ar: 'العراق', timezones: ['Asia/Amman'] },
 ];
 
-function build(countries, draftAnswers) {
+// `zone`, when given, replaces Intl before the page's own script runs, so the box believes it
+// is in a zone this machine is not actually in. Chrome on Windows ignores the TZ environment
+// variable and always reports the OS zone, measured, so this is the only way to test a zone
+// other than this machine's own -- the same technique phone-picker.chrome.js uses. Omit it (the
+// existing call sites all do) and Intl is left alone, which on this machine means Asia/Amman.
+function build(countries, draftAnswers, zone) {
+  const tz = zone ? `
+  (function () {
+    var real = Intl.DateTimeFormat;
+    function Fake() {
+      var f = real.apply(this, arguments);
+      var ro = f.resolvedOptions.bind(f);
+      f.resolvedOptions = function () { var o = ro(); o.timeZone = ${JSON.stringify(zone)}; return o; };
+      return f;
+    }
+    Fake.supportedLocalesOf = real.supportedLocalesOf;
+    Intl.DateTimeFormat = Fake;
+  })();` : '';
   const seed = draftAnswers ? `
   try { window.localStorage.setItem('blk_draft_prefill-test',
     JSON.stringify({ v: 1, at: Date.now(), a: ${JSON.stringify(draftAnswers)} })); } catch (e) {}` : `
   try { window.localStorage.removeItem('blk_draft_prefill-test'); } catch (e) {}`;
-  const stub = `<script>${seed}
+  const stub = `<script>${tz}${seed}
   window.__err = null;
   window.onerror = function (m, u, l) { window.__err = m + ' (line ' + l + ')'; };
   var TABLE = { id: 't-pf', name: 'Prefill test', name_ar: '', slug: 'prefill-test',
@@ -217,19 +238,28 @@ run(build(ZONES_SWAPPED, { 'q-country': 'Jordan' }), `
   });
 `, 'draft beats the guess');
 
-// ---- 4. an unrecognised zone changes nothing at all ----
-run(build(ZONES_UNKNOWN), `
-  t('a zone none of our countries claims fills nothing', function () {
+// ---- 4. no DB row claims the zone, but the embedded map still does ----
+// Section 6 below covers the case where nothing resolves the zone at all. This section proves
+// the other half: even with no DB row claiming the zone (Asia/Amman), the embedded map still
+// supplies Jordan, and the fallback reaches the pre-fill note and the branch scope too, not only
+// the box, in a real browser round trip. The zone is passed explicitly rather than left to the
+// machine's own clock, so the test states its own premise instead of only passing because this
+// development machine happens to be in Asia/Amman.
+run(build(ZONES_UNKNOWN, undefined, 'Asia/Amman'), `
+  t('the country still fills in, from the embedded map this time', function () {
     var v = val('${C_ID}');
-    if (v) return 'country was pre-filled with ' + JSON.stringify(v) + ' from a zone no country claims';
+    if (v !== 'Jordan') return 'country box reads ' + JSON.stringify(v) + ', expected Jordan (no DB row claims Asia/Amman here, but the embedded map does, and Jordan is offered)';
   });
-  t('and the form behaves exactly as it does today: both countries offered', function () {
+  t('and the shop list narrows to Jordan the same as any other guess', function () {
     var s = shops('${B_ID}');
+    var leaked = s.filter(function (x) { return /Mar Mikhael|Jal El Dib/.test(x); });
+    if (leaked.length) return 'Lebanese shops still offered: ' + leaked.join(', ');
     if (!s.some(function (x) { return /7th Circle/.test(x); })) return 'Jordanian shops missing: ' + s.join(', ');
-    if (!s.some(function (x) { return /Mar Mikhael/.test(x); })) return 'Lebanese shops missing: ' + s.join(', ');
   });
-  t('and no note is shown', function () { if (note()) return 'a note with nothing guessed'; });
-`, 'unknown zone changes nothing');
+  t('and the note says the answer was guessed', function () {
+    if (!note()) return 'no note next to a country the embedded map filled in';
+  });
+`, 'DB has no row for the zone, embedded map still names it');
 
 // ---- 5. a country the question does not offer is never filled in ----
 run(build(ZONES_UNOFFERED), `
@@ -244,3 +274,23 @@ run(build(ZONES_UNOFFERED), `
   });
   t('and no note claims a guess was made', function () { if (note()) return 'a note over an empty box'; });
 `, 'unoffered country is not filled');
+
+// ---- 6. a zone nothing recognizes changes nothing at all ----
+// Etc/UTC is what a hardened browser reports (Firefox resistFingerprinting, Tor, Brave), and
+// the embedded 541-zone map deliberately does not name a country for it, so the DB fixture does
+// not matter here -- neither source can resolve this zone. This machine's own zone can no
+// longer stand in for "unresolvable" (see section 4's comment), so this uses the Intl override
+// in `build`'s third argument to actually put the browser in a zone nothing knows, the same way
+// phone-picker.chrome.js tests a zone other than this machine's own.
+run(build(ZONES_UNKNOWN, undefined, 'Etc/UTC'), `
+  t('the country box fills in nothing', function () {
+    var v = val('${C_ID}');
+    if (v) return 'country was pre-filled with ' + JSON.stringify(v) + ' from a zone nothing recognizes';
+  });
+  t('and both countries stay offered', function () {
+    var s = shops('${B_ID}');
+    if (!s.some(function (x) { return /7th Circle/.test(x); })) return 'Jordanian shops missing: ' + s.join(', ');
+    if (!s.some(function (x) { return /Mar Mikhael/.test(x); })) return 'Lebanese shops missing: ' + s.join(', ');
+  });
+  t('and no note is shown', function () { if (note()) return 'a note with nothing guessed'; });
+`, 'unresolvable zone changes nothing');

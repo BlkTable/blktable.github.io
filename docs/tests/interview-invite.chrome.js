@@ -37,7 +37,12 @@ function grab(name) {
   if (!m) throw new Error('could not find function ' + name);
   return m[0];
 }
+// The non-greedy "first semicolon" form is enough for a normal single-value var, but
+// PHONE_ROWS is a packed string full of literal ';' separators, matched greedily to the end
+// of its own line instead, so the whole string literal comes along rather than a fragment of it.
 function grabVar(name) {
+  const one = js.match(new RegExp('\\n  var ' + name + ' = [^\\n]*;\\r?\\n', ''));
+  if (one) return one[0];
   const m = js.match(new RegExp('\\n  var ' + name + ' =[\\s\\S]*?;\\r?\\n', ''));
   if (!m) throw new Error('could not find var ' + name);
   return m[0];
@@ -50,22 +55,28 @@ if (!markup) throw new Error('could not find the invite box markup in index.html
 const toggle = (js.match(/\n    var showInvite = [\s\S]*?\n    \}\);/) || [])[0];
 if (!toggle) throw new Error('could not find the showInvite block in setBuilderChrome');
 
+// phoneCountry() now goes through splitPhone()/phoneTable() (the generated 245-country phone
+// table) rather than the deleted four-entry COUNTRIES global, so those two are lifted too.
+// This is the piece this file used to leave unstubbed, so phoneCountry() threw on every call.
 const fns = ['bldGrow', 'wireBldGrow', 'setInviteInput', 'serializeInviteMsg',
-  'interviewTemplate', 'interviewMessage', 'phoneCountry', 'waEligible', 'waUrlFor'].map(grab).join('\n');
+  'interviewTemplate', 'interviewMessage', 'phoneCountry', 'splitPhone', 'phoneTable',
+  'waEligible', 'waUrlFor'].map(grab).join('\n');
 
 const page = `<!doctype html><html><head><meta charset="utf-8"><style>${style}</style></head><body>
 ${markup}
 <pre id="out"></pre>
 <script>
-// The app's own list, trimmed to the one country the invite is offered for. waEligible reads
-// .dial off it and compares against WA_DIAL, so a stub with the wrong shape would make every
-// applicant ineligible and quietly pass the tests that follow.
-var COUNTRIES = [{ code: 'jo', name: 'Jordan', dial: '962' }];
+// waEligible reads phoneCountry(...).dial off the real phone table and compares it against
+// WA_DIAL, so an applicant's number has to resolve through the real splitPhone()/phoneTable()
+// lifted below rather than a hand-rolled stand-in. A fake COUNTRIES list used to sit here for
+// that, but phoneCountry() no longer reads one.
 var builtinConfig = { job_applications: {}, casting: {} };
 ${grabVar('BLK_LOCATION')}
 ${grabVar('WA_DIAL')}
 ${grabVar('DEFAULT_INTERVIEW_MSG')}
 ${grabVar('INTERVIEW_TOKENS')}
+${grabVar('PHONE_ROWS')}
+${grabVar('PHONE_LIST')}
 ${fns}
 function applyToggle(isBuiltin, builtinEditKey) {
 ${toggle}

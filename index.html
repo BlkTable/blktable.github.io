@@ -864,13 +864,23 @@
   .cc-picker { position: relative; flex: 0 0 auto; }
   .cc-btn { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); cursor: pointer; font-family: inherit; }
   .cc-btn:hover { border-color: var(--silver); }
-  .cc-flag, .cc-menu li img { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(var(--wash),0.15); background: rgba(var(--wash),0.2); }
+  .cc-flag, .cc-list li img { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(var(--wash),0.15); background: rgba(var(--wash),0.2); }
   .cc-caret { color: var(--muted); font-size: var(--fs-1); }
-  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; padding: 6px; min-width: 220px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px; display: none; }
   .cc-menu.open { display: block; }
-  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 8px; cursor: pointer; color: var(--text); font-size: var(--fs-3); }
-  .cc-menu li:hover { background: rgba(var(--wash),0.06); }
-  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+  /* Flipped above the button when the field is near the bottom of a long panel, which for a
+     record scrolled deep into a form is the common case. */
+  .cc-menu.up { top: auto; bottom: calc(100% + 6px); }
+  .cc-search { width: 100%; box-sizing: border-box; margin-bottom: 6px; }
+  /* Capped, because the list is 245 long. The search box is what makes that usable, and the
+     scroll is only there for people who would rather look than type. */
+  .cc-list { margin: 0; padding: 0; list-style: none; max-height: 240px; overflow-y: auto; }
+  .cc-list li { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 8px; cursor: pointer; color: var(--text); font-size: var(--fs-3); }
+  .cc-list li:hover, .cc-list li.hi { background: rgba(var(--wash),0.06); }
+  .cc-list li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+  /* The four we actually serve, held above the other 241. */
+  .cc-list li.pin-last { border-bottom: 1px solid var(--field-border); margin-bottom: 6px; padding-bottom: 11px; }
+  .cc-empty { padding: 9px; color: var(--muted); font-size: var(--fs-3); }
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 8px; }
   .card-when { font-size: var(--fs-2); color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: var(--fs-2); color: var(--ok); margin-top: 4px; }
@@ -1922,6 +1932,9 @@
     .cc-menu, .filter-panel {
       left: 8px; right: 8px; width: auto; max-width: calc(100vw - 16px);
     }
+    /* The list still has 245 rows to scroll through inside a panel clamped to the viewport
+       width; cap its height too or it runs off the bottom of a short phone screen. */
+    .cc-list { max-height: 45vh; }
     .filter-panel.fp-cond { width: auto; max-width: calc(100vw - 16px); }
     /* .rec-actions and .at-menu are position:fixed and get an inline left/top from JS.
        Don't set left/right here or we fight the inline placement; only cap the width so
@@ -4656,17 +4669,136 @@
     });
   }
 
-  var COUNTRIES = [
-    { dial: "962", name: "Jordan", flag: "jo" },
-    { dial: "961", name: "Lebanon", flag: "lb" },
-    { dial: "963", name: "Syria", flag: "sy" },
-    { dial: "964", name: "Iraq", flag: "iq" }
-  ];
+  // ---- BEGIN GENERATED phone data (tools/gen-phone-data.js) ----
+  // libphonenumber-js 1.11.17 and countries-and-timezones 3.6.0. Do not edit by hand:
+  // re-run tools/gen-phone-data.js instead. 245 countries, 541 zones.
+  var PHONE_ROWS = "AC~247~56~40123~(?:[01589]\\d|[46])\\d{4}~Ascension Island~1;AD~376~689~312345~(?:1|6\\d)\\d{7}|[135-9]\\d{5}~Andorra~1;AE~971~56789abc~501234567~(?:[4-7]\\d|9[0-689])\\d{7}|800\\d{2,9}|[2-4679]\\d{7}~United Arab Emirates~1;AF~93~9~701234567~[2-7]\\d{8}~Afghanistan~1;AG~1~a~2684641234~(?:268|[58]\\d\\d|900)\\d{7}~Antigua and Barbuda~;AI~1~a~2642351234~(?:264|[58]\\d\\d|900)\\d{7}~Anguilla~;AL~355~6789~672123456~(?:700\\d\\d|900)\\d{3}|8\\d{5,7}|(?:[2-5]|6\\d)\\d{7}~Albania~1;AM~374~8~77123456~(?:[1-489]\\d|55|60|77)\\d{6}~Armenia~1;AO~244~9~923123456~[29]\\d{8}~Angola~1;AR~54~ab~91123456789~(?:11|[89]\\d\\d)\\d{8}|[2368]\\d{9}~Argentina~1;AS~1~a~6847331234~(?:[58]\\d\\d|684|900)\\d{7}~American Samoa~;AT~43~456789abcd~664123456~1\\d{3,12}|2\\d{6,12}|43(?:(?:0\\d|5[02-9])\\d{3,9}|2\\d{4,5}|[3467]\\d{4}|8\\d{4,6}|9\\d{4,7})|5\\d{4,12}|8\\d{7,12}|9\\d{8,12}|(?:[367]\\d|4[0-24-9])\\d{4,11}~Austria~1;AU~61~56789ac~412345678~1(?:[0-79]\\d{7}(?:\\d(?:\\d{2})?)?|8[0-24-9]\\d{7})|[2-478]\\d{8}|1\\d{4,7}~Australia~1;AW~297~7~5601234~(?:[25-79]\\d\\d|800)\\d{4}~Aruba~1;AX~358~56789abc~412345678~2\\d{4,9}|35\\d{4,5}|(?:60\\d\\d|800)\\d{4,6}|7\\d{5,11}|(?:[14]\\d|3[0-46-9]|50)\\d{4,8}~Åland Islands~;AZ~994~9~401234567~365\\d{6}|(?:[124579]\\d|60|88)\\d{7}~Azerbaijan~1;BA~387~89~61123456~6\\d{8}|(?:[35689]\\d|49|70)\\d{6}~Bosnia and Herzegovina~1;BB~1~a~2462501234~(?:246|[58]\\d\\d|900)\\d{7}~Barbados~;BD~880~6789a~1812345678~[1-469]\\d{9}|8[0-79]\\d{7,8}|[2-79]\\d{8}|[2-9]\\d{7}|[3-9]\\d{6}|[57-9]\\d{5}~Bangladesh~1;BE~32~89~470123456~4\\d{8}|[1-9]\\d{7}~Belgium~1;BF~226~8~70123456~[025-7]\\d{7}~Burkina Faso~1;BG~359~6789c~43012345~00800\\d{7}|[2-7]\\d{6,7}|[89]\\d{6,8}|2\\d{5}~Bulgaria~1;BH~973~8~36001234~[136-9]\\d{7}~Bahrain~1;BI~257~8~79561234~(?:[267]\\d|31)\\d{6}~Burundi~1;BJ~229~8a~0195123456~(?:01\\d|[24-689])\\d{7}~Benin~1;BL~590~9~690001234~(?:590\\d|7090)\\d{5}|(?:69|80|9\\d)\\d{7}~Saint Barthélemy~;BM~1~a~4413701234~(?:441|[58]\\d\\d|900)\\d{7}~Bermuda~;BN~673~7~7123456~[2-578]\\d{6}~Brunei~1;BO~591~89~71234567~8001\\d{5}|(?:[2-467]\\d|50)\\d{6}~Bolivia~1;BQ~599~7~3181234~(?:[34]1|7\\d)\\d{5}~Caribbean Netherlands~;BR~55~89ab~11961234567~(?:[1-46-9]\\d\\d|5(?:[0-46-9]\\d|5[0-46-9]))\\d{8}|[1-9]\\d{9}|[3589]\\d{8}|[34]\\d{7}~Brazil~1;BS~1~a~2423591234~(?:242|[58]\\d\\d|900)\\d{7}~Bahamas~;BT~975~78~17123456~[17]\\d{7}|[2-8]\\d{6}~Bhutan~1;BW~267~78a~71123456~(?:0800|(?:[37]|800)\\d)\\d{6}|(?:[2-6]\\d|90)\\d{5}~Botswana~1;BY~375~6789ab~294911911~(?:[12]\\d|33|44|902)\\d{7}|8(?:0[0-79]\\d{5,7}|[1-7]\\d{9})|8(?:1[0-489]|[5-79]\\d)\\d{7}|8[1-79]\\d{6,7}|8[0-79]\\d{5}|8\\d{5}~Belarus~1;BZ~501~7b~6221234~(?:0800\\d|[2-8])\\d{6}~Belize~1;CA~1~7a~5062345678~[2-9]\\d{9}|3\\d{6}~Canada~;CC~61~6789ac~412345678~1(?:[0-79]\\d{8}(?:\\d{2})?|8[0-24-9]\\d{7})|[148]\\d{8}|1\\d{5,7}~Cocos Islands~;CD~243~789a~991234567~(?:(?:[189]|5\\d)\\d|2)\\d{7}|[1-68]\\d{6}~Congo (Kinshasa)~1;CF~236~8~70012345~(?:[27]\\d{3}|8776)\\d{4}~Central African Republic~1;CG~242~9~061234567~222\\d{6}|(?:0\\d|80)\\d{7}~Congo (Brazzaville)~1;CH~41~9c~781234567~8\\d{11}|[2-9]\\d{8}~Switzerland~1;CI~225~a~0123456789~[02]\\d{9}~Cote d'Ivoire~1;CK~682~5~71234~[2-578]\\d{4}~Cook Islands~1;CL~56~9ab~221234567~12300\\d{6}|6\\d{9,10}|[2-9]\\d{8}~Chile~1;CM~237~89~671234567~[26]\\d{8}|88\\d{6,7}~Cameroon~1;CN~86~789abc~13123456789~(?:(?:1[03-689]|2\\d)\\d\\d|6)\\d{8}|1\\d{10}|[126]\\d{6}(?:\\d(?:\\d{2})?)?|86\\d{5,6}|(?:[3-579]\\d|8[0-57-9])\\d{5,9}~China~1;CO~57~8ab~3211234567~(?:46|60\\d\\d)\\d{6}|(?:1\\d|[39])\\d{9}~Colombia~1;CR~506~8a~83123456~(?:8\\d|90)\\d{8}|(?:[24-8]\\d{3}|3005)\\d{4}~Costa Rica~1;CU~53~678a~51234567~(?:[2-7]|8\\d\\d)\\d{7}|[2-47]\\d{6}|[34]\\d{5}~Cuba~1;CV~238~7~9911234~(?:[2-59]\\d\\d|800)\\d{4}~Cabo Verde~1;CW~599~78~95181234~(?:[34]1|60|(?:7|9\\d)\\d)\\d{5}~Curaçao~1;CX~61~6789ac~412345678~1(?:[0-79]\\d{8}(?:\\d{2})?|8[0-24-9]\\d{7})|[148]\\d{8}|1\\d{5,7}~Christmas Island~;CY~357~8~96123456~(?:[279]\\d|[58]0)\\d{6}~Cyprus~1;CZ~420~9abc~601123456~(?:[2-578]\\d|60)\\d{7}|9\\d{8,11}~Czechia~1;DE~49~456789abcdef~15123456789~[2579]\\d{5,14}|49(?:[34]0|69|8\\d)\\d\\d?|49(?:37|49|60|7[089]|9\\d)\\d{1,3}|49(?:2[024-9]|3[2-689]|7[1-7])\\d{1,8}|(?:1|[368]\\d|4[0-8])\\d{3,13}|49(?:[015]\\d|2[13]|31|[46][1-8])\\d{1,9}~Germany~1;DJ~253~8~77831001~(?:2\\d|77)\\d{6}~Djibouti~1;DK~45~8~34412345~[2-9]\\d{7}~Denmark~1;DM~1~a~7672251234~(?:[58]\\d\\d|767|900)\\d{7}~Dominica~;DO~1~a~8092345678~(?:[58]\\d\\d|900)\\d{7}~Dominican Republic~;DZ~213~89~551234567~(?:[1-4]|[5-79]\\d|80)\\d{7}~Algeria~1;EC~593~89ab~991234567~1\\d{9,10}|(?:[2-7]|9\\d)\\d{7}~Ecuador~1;EE~372~78a~51234567~8\\d{9}|[4578]\\d{7}|(?:[3-8]\\d|90)\\d{5}~Estonia~1;EG~20~89a~1001234567~[189]\\d{8,9}|[24-6]\\d{8}|[135]\\d{7}~Egypt~1;EH~212~9~650123456~[5-8]\\d{8}~Western Sahara~;ER~291~7~7123456~[178]\\d{6}~Eritrea~1;ES~34~9~612345678~[5-9]\\d{8}~Spain~1;ET~251~9~911234567~(?:11|[2-579]\\d)\\d{7}~Ethiopia~1;FI~358~56789abc~412345678~[1-35689]\\d{4}|7\\d{10,11}|(?:[124-7]\\d|3[0-46-9])\\d{8}|[1-9]\\d{5,8}~Finland~1;FJ~679~7b~7012345~45\\d{5}|(?:0800\\d|[235-9])\\d{6}~Fiji~1;FK~500~5~51234~[2-7]\\d{4}~Falkland Islands~1;FM~691~7~3501234~(?:[39]\\d\\d|820)\\d{4}~Micronesia~1;FO~298~6~211234~[2-9]\\d{5}~Faroe Islands~1;FR~33~9~612345678~[1-9]\\d{8}~France~1;GA~241~78~06031234~(?:[067]\\d|11)\\d{6}|[2-7]\\d{6}~Gabon~1;GB~44~79a~7400123456~[1-357-9]\\d{9}|[18]\\d{8}|8\\d{6}~United Kingdom~1;GD~1~a~4734031234~(?:473|[58]\\d\\d|900)\\d{7}~Grenada~;GE~995~9~555123456~(?:[3-57]\\d\\d|800)\\d{6}~Georgia~1;GF~594~9~694201234~(?:[56]94\\d|7093)\\d{5}|(?:80|9\\d)\\d{7}~French Guiana~1;GG~44~79a~7781123456~(?:1481|[357-9]\\d{3})\\d{6}|8\\d{6}(?:\\d{2})?~Guernsey~;GH~233~89~231234567~(?:[235]\\d{3}|800)\\d{5}~Ghana~1;GI~350~8~57123456~(?:[25]\\d|60)\\d{6}~Gibraltar~1;GL~299~6~221234~(?:19|[2-689]\\d|70)\\d{4}~Greenland~1;GM~220~7~3012345~[2-9]\\d{6}~Gambia~1;GN~224~89~601123456~722\\d{6}|(?:3|6\\d)\\d{7}~Guinea~1;GP~590~9~690001234~(?:590\\d|7090)\\d{5}|(?:69|80|9\\d)\\d{7}~Guadeloupe~1;GQ~240~9~222123456~222\\d{6}|(?:3\\d|55|[89]0)\\d{7}~Equatorial Guinea~1;GR~30~abc~6912345678~5005000\\d{3}|8\\d{9,11}|(?:[269]\\d|70)\\d{8}~Greece~1;GT~502~8b~51234567~80\\d{6}|(?:1\\d{3}|[2-7])\\d{7}~Guatemala~1;GU~1~a~6713001234~(?:[58]\\d\\d|671|900)\\d{7}~Guam~;GW~245~79~955012345~[49]\\d{8}|4\\d{6}~Guinea-Bissau~1;GY~592~7~6091234~(?:[2-8]\\d{3}|9008)\\d{3}~Guyana~1;HK~852~56789b~51234567~8[0-46-9]\\d{6,7}|9\\d{4,7}|(?:[2-7]|9\\d{3})\\d{7}~Hong Kong~1;HN~504~8b~91234567~8\\d{10}|[237-9]\\d{7}~Honduras~1;HR~385~6789~921234567~(?:[24-69]\\d|3[0-79])\\d{7}|80\\d{5,7}|[1-79]\\d{7}|6\\d{5,6}~Croatia~1;HT~509~8~34101234~(?:[2-489]\\d|55)\\d{6}~Haiti~1;HU~36~89~201234567~[235-7]\\d{8}|[1-9]\\d{7}~Hungary~1;ID~62~789abcdefgh~812345678~00[1-9]\\d{9,14}|(?:[1-36]|8\\d{5})\\d{6}|00\\d{9}|[1-9]\\d{8,10}|[2-9]\\d{7}~Indonesia~1;IE~353~789a~850123456~(?:1\\d|[2569])\\d{6,8}|4\\d{6,9}|7\\d{8}|8\\d{8,9}~Ireland~1;IL~972~789abc~502345678~1\\d{6}(?:\\d{3,5})?|[57]\\d{8}|[1-489]\\d{7}~Israel~1;IM~44~a~7924123456~1624\\d{6}|(?:[3578]\\d|90)\\d{8}~Isle of Man~;IN~91~89abcd~8123456789~(?:000800|[2-9]\\d\\d)\\d{7}|1\\d{7,12}~India~1;IO~246~7~3801234~3\\d{6}~British Indian Ocean Territory~1;IQ~964~89a~7912345678~(?:1|7\\d\\d)\\d{7}|[2-6]\\d{7,8}~Iraq~1;IR~98~4567a~9123456789~[1-9]\\d{9}|(?:[1-8]\\d\\d|9)\\d{3,4}~Iran~1;IS~354~79~6111234~(?:38\\d|[4-9])\\d{6}~Iceland~1;IT~39~6789abc~3123456789~0\\d{5,10}|1\\d{8,10}|3(?:[0-8]\\d{7,10}|9\\d{7,8})|(?:43|55|70)\\d{8}|8\\d{5}(?:\\d{2,4})?~Italy~1;JE~44~a~7797712345~1534\\d{6}|(?:[3578]\\d|90)\\d{8}~Jersey~;JM~1~a~8762101234~(?:[58]\\d\\d|658|900)\\d{7}~Jamaica~;JO~962~89~790123456~(?:(?:[2689]|7\\d)\\d|32|53)\\d{6}~Jordan~1;JP~81~89abcdefgh~9012345678~00[1-9]\\d{6,14}|[25-9]\\d{9}|(?:00|[1-9]\\d\\d)\\d{6}~Japan~1;KE~254~789a~712123456~(?:[17]\\d\\d|900)\\d{6}|(?:2|80)0\\d{6,7}|[4-6]\\d{6,8}~Kenya~1;KG~996~9a~700123456~8\\d{9}|[235-9]\\d{8}~Kyrgyzstan~1;KH~855~89a~91234567~1\\d{9}|[1-9]\\d{7,8}~Cambodia~1;KI~686~58~72001234~(?:[37]\\d|6[0-79])\\d{6}|(?:[2-48]\\d|50)\\d{3}~Kiribati~1;KM~269~7~3212345~[3478]\\d{6}~Comoros~1;KN~1~a~8697652917~(?:[58]\\d\\d|900)\\d{7}~Saint Kitts and Nevis~;KP~850~8a~1921234567~85\\d{6}|(?:19\\d|[2-7])\\d{7}~North Korea~1;KR~82~5689abcde~1020000000~00[1-9]\\d{8,11}|(?:[12]|5\\d{3})\\d{7}|[13-6]\\d{9}|(?:[1-6]\\d|80)\\d{7}|[3-6]\\d{4,5}|(?:00|7)0\\d{8}~South Korea~1;KW~965~78~50012345~18\\d{5}|(?:[2569]\\d|41)\\d{6}~Kuwait~1;KY~1~a~3453231234~(?:345|[58]\\d\\d|900)\\d{7}~Cayman Islands~;KZ~7~ae~7710009998~(?:33622|8\\d{8})\\d{5}|[78]\\d{9}~Kazakhstan~;LA~856~89a~2023123456~[23]\\d{9}|3\\d{8}|(?:[235-8]\\d|41)\\d{6}~Laos~1;LB~961~78~71123456~[27-9]\\d{7}|[13-9]\\d{6}~Lebanon~1;LC~1~a~7582845678~(?:[58]\\d\\d|758|900)\\d{7}~Saint Lucia~;LI~423~79~660234567~[68]\\d{8}|(?:[2378]\\d|90)\\d{5}~Liechtenstein~1;LK~94~9~712345678~[1-9]\\d{8}~Sri Lanka~1;LR~231~789~770123456~(?:[245]\\d|33|77|88)\\d{7}|(?:2\\d|[4-6])\\d{6}~Liberia~1;LS~266~8~50123456~(?:[256]\\d\\d|800)\\d{5}~Lesotho~1;LT~370~8~61234567~(?:[3469]\\d|52|[78]0)\\d{6}~Lithuania~1;LU~352~456789ab~628123456~35[013-9]\\d{4,8}|6\\d{8}|35\\d{2,4}|(?:[2457-9]\\d|3[0-46-9])\\d{2,9}~Luxembourg~1;LV~371~8~21234567~(?:[268]\\d|90)\\d{6}~Latvia~1;LY~218~9~912345678~[2-9]\\d{8}~Libya~1;MA~212~9~650123456~[5-8]\\d{8}~Morocco~1;MC~377~89~612345678~(?:[3489]|6\\d)\\d{7}~Monaco~1;MD~373~8~62112345~(?:[235-7]\\d|[89]0)\\d{6}~Moldova~1;ME~382~89~67622901~(?:20|[3-79]\\d)\\d{6}|80\\d{6,7}~Montenegro~1;MF~590~9~690001234~(?:590\\d|7090)\\d{5}|(?:69|80|9\\d)\\d{7}~Saint Martin~;MG~261~9~321234567~[23]\\d{8}~Madagascar~1;MH~692~7~2351234~329\\d{4}|(?:[256]\\d|45)\\d{5}~Marshall Islands~1;MK~389~8~72345678~[2-578]\\d{7}~North Macedonia~1;ML~223~8~65012345~[24-9]\\d{7}~Mali~1;MM~95~6789a~92123456~1\\d{5,7}|95\\d{6}|(?:[4-7]|9[0-46-9])\\d{6,8}|(?:2|8\\d)\\d{5,8}~Myanmar~1;MN~976~89a~88123456~[12]\\d{7,9}|[5-9]\\d{7}~Mongolia~1;MO~853~78~66123456~0800\\d{3}|(?:28|[68]\\d)\\d{6}~Macao~1;MP~1~a~6702345678~[58]\\d{9}|(?:67|90)0\\d{7}~Northern Mariana Islands~;MQ~596~9~696201234~(?:596\\d|7091)\\d{5}|(?:69|[89]\\d)\\d{7}~Martinique~1;MR~222~8~22123456~(?:[2-4]\\d\\d|800)\\d{5}~Mauritania~1;MS~1~a~6644923456~(?:[58]\\d\\d|664|900)\\d{7}~Montserrat~;MT~356~8~96961234~3550\\d{4}|(?:[2579]\\d\\d|800)\\d{5}~Malta~1;MU~230~78a~52512345~(?:[57]|8\\d\\d)\\d{7}|[2-468]\\d{6}~Mauritius~1;MV~960~7a~7712345~(?:800|9[0-57-9]\\d)\\d{7}|[34679]\\d{6}~Maldives~1;MW~265~79~991234567~(?:[1289]\\d|31|77)\\d{7}|1\\d{6}~Malawi~1;MX~52~a~2221234567~[2-9]\\d{9}~Mexico~1;MY~60~89a~123456789~1\\d{8,9}|(?:3\\d|[4-9])\\d{7}~Malaysia~1;MZ~258~89~821234567~(?:2|8\\d)\\d{7}~Mozambique~1;NA~264~89~811234567~[68]\\d{7,8}~Namibia~1;NC~687~6~751234~(?:050|[2-57-9]\\d\\d)\\d{3}~New Caledonia~1;NE~227~8~93123456~[027-9]\\d{7}~Niger~1;NF~672~6~381234~[13]\\d{5}~Norfolk Island~1;NG~234~8abcde~8021234567~38\\d{6}|[78]\\d{9,13}|(?:20|9\\d)\\d{8}~Nigeria~1;NI~505~8~81234567~(?:1800|[25-8]\\d{3})\\d{4}~Nicaragua~1;NL~31~56789ab~612345678~(?:[124-7]\\d\\d|3(?:[02-9]\\d|1[0-8]))\\d{6}|8\\d{6,9}|9\\d{6,10}|1\\d{4,5}~Netherlands~1;NO~47~58~40612345~(?:0|[2-9]\\d{3})\\d{4}~Norway~1;NP~977~8ab~9841234567~(?:1\\d|9)\\d{9}|[1-9]\\d{7}~Nepal~1;NR~674~7~5551234~(?:444|(?:55|8\\d)\\d|666)\\d{4}~Nauru~1;NU~683~47~8884012~(?:[4-7]|888\\d)\\d{3}~Niue~1;NZ~64~56789a~211234567~[1289]\\d{9}|50\\d{5}(?:\\d{2,3})?|[27-9]\\d{7,8}|(?:[34]\\d|6[0-35-9])\\d{6}|8\\d{4,6}~New Zealand~1;OM~968~789~92123456~(?:1505|[279]\\d{3}|500)\\d{4}|800\\d{5,6}~Oman~1;PA~507~78ab~61234567~(?:00800|8\\d{3})\\d{6}|[68]\\d{7}|[1-57-9]\\d{6}~Panama~1;PE~51~89~912345678~(?:[14-8]|9\\d)\\d{7}~Peru~1;PF~689~689~87123456~4\\d{5}(?:\\d{2})?|8\\d{7,8}~French Polynesia~1;PG~675~78~70123456~(?:180|[78]\\d{3})\\d{4}|(?:[2-589]\\d|64)\\d{5}~Papua New Guinea~1;PH~63~689abcd~9051234567~(?:[2-7]|9\\d)\\d{8}|2\\d{5}|(?:1800|8)\\d{7,9}~Philippines~1;PK~92~89abc~3012345678~122\\d{6}|[24-8]\\d{10,11}|9(?:[013-9]\\d{8,10}|2(?:[01]\\d\\d|2(?:[06-8]\\d|1[01]))\\d{7})|(?:[2-8]\\d{3}|92(?:[0-7]\\d|8[1-9]))\\d{6}|[24-9]\\d{8}|[89]\\d{7}~Pakistan~1;PL~48~6789a~512345678~(?:6|8\\d\\d)\\d{7}|[1-9]\\d{6}(?:\\d{2})?|[26]\\d{5}~Poland~1;PM~508~69~551234~[45]\\d{5}|(?:708|8\\d\\d)\\d{6}~Saint Pierre and Miquelon~1;PR~1~a~7872345678~(?:[589]\\d\\d|787)\\d{7}~Puerto Rico~;PS~970~89a~599123456~[2489]2\\d{6}|(?:1\\d|5)\\d{8}~Palestine~1;PT~351~9~912345678~1693\\d{5}|(?:[26-9]\\d|30)\\d{7}~Portugal~1;PW~680~7~6201234~(?:[24-8]\\d\\d|345|900)\\d{4}~Palau~1;PY~595~6789ab~961456789~59\\d{4,6}|9\\d{5,10}|(?:[2-46-8]\\d|5[0-8])\\d{4,7}~Paraguay~1;QA~974~789b~33123456~800\\d{4}|(?:2|800)\\d{6}|(?:0080|[3-7])\\d{7}~Qatar~1;RE~262~9~692123456~709\\d{6}|(?:26|[689]\\d)\\d{7}~Réunion~1;RO~40~69~712034567~(?:[236-8]\\d|90)\\d{7}|[23]\\d{5}~Romania~1;RS~381~6789abc~601234567~38[02-9]\\d{6,9}|6\\d{7,9}|90\\d{4,8}|38\\d{5,6}|(?:7\\d\\d|800)\\d{3,9}|(?:[12]\\d|3[0-79])\\d{5,10}~Serbia~1;RU~7~ae~9123456789~8\\d{13}|[347-9]\\d{9}~Russia~1;RW~250~89~720123456~(?:06|[27]\\d\\d|[89]00)\\d{6}~Rwanda~1;SA~966~9a~512345678~92\\d{7}|(?:[15]|8\\d)\\d{8}~Saudi Arabia~1;SB~677~57~7421234~[6-9]\\d{6}|[1-6]\\d{4}~Solomon Islands~1;SC~248~7~2510123~(?:[2489]\\d|64)\\d{5}~Seychelles~1;SD~249~9~911231234~[19]\\d{8}~Sudan~1;SE~46~6789ac~701234567~(?:[26]\\d\\d|9)\\d{9}|[1-9]\\d{8}|[1-689]\\d{7}|[1-4689]\\d{6}|2\\d{5}~Sweden~1;SG~65~8ab~81234567~(?:(?:1\\d|8)\\d\\d|7000)\\d{7}|[3689]\\d{7}~Singapore~1;SH~290~45~51234~(?:[256]\\d|8)\\d{3}~Saint Helena, Ascension and Tristan da Cunha~1;SI~386~5678~31234567~[1-7]\\d{7}|8\\d{4,7}|90\\d{4,6}~Slovenia~1;SJ~47~58~41234567~0\\d{4}|(?:[489]\\d|79)\\d{6}~Svalbard and Jan Mayen~;SK~421~679~912123456~[2-689]\\d{8}|[2-59]\\d{6}|[2-5]\\d{5}~Slovakia~1;SL~232~8~25123456~(?:[237-9]\\d|66)\\d{6}~Sierra Leone~1;SM~378~8a~66661212~(?:0549|[5-7]\\d)\\d{6}~San Marino~1;SN~221~9~701234567~(?:[378]\\d|93)\\d{7}~Senegal~1;SO~252~6789~71123456~[346-9]\\d{8}|[12679]\\d{7}|[1-5]\\d{6}|[1348]\\d{5}~Somalia~1;SR~597~67~7412345~(?:[2-5]|68|[78]\\d)\\d{5}~Suriname~1;SS~211~9~977123456~[19]\\d{8}~South Sudan~1;ST~239~7~9812345~(?:22|9\\d)\\d{5}~Sao Tome and Principe~1;SV~503~78b~70123456~[267]\\d{7}|(?:80\\d|900)\\d{4}(?:\\d{4})?~El Salvador~1;SX~1~a~7215205678~7215\\d{6}|(?:[58]\\d\\d|900)\\d{7}~Sint Maarten~;SY~963~89~944567890~[1-359]\\d{8}|[1-5]\\d{7}~Syria~1;SZ~268~89~76123456~0800\\d{4}|(?:[237]\\d|900)\\d{6}~Eswatini~1;TA~290~4~8999~8\\d{3}~Tristan da Cunha~;TC~1~a~6492311234~(?:[58]\\d\\d|649|900)\\d{7}~Turks and Caicos Islands~;TD~235~8~63012345~(?:22|[689]\\d|77)\\d{6}~Chad~1;TG~228~8~90112345~[279]\\d{7}~Togo~1;TH~66~89ad~812345678~(?:001800|[2-57]|[689]\\d)\\d{7}|1\\d{7,9}~Thailand~1;TJ~992~9~917123456~[0-57-9]\\d{8}~Tajikistan~1;TK~690~4567~7290~[2-47]\\d{3,6}~Tokelau~1;TL~670~78~77212345~7\\d{7}|(?:[2-47]\\d|[89]0)\\d{5}~Timor-Leste~1;TM~993~8~66123456~(?:[1-6]\\d|71)\\d{6}~Turkmenistan~1;TN~216~8~20123456~[2-57-9]\\d{7}~Tunisia~1;TO~676~57~7715123~(?:0800|(?:[5-8]\\d\\d|999)\\d)\\d{3}|[2-8]\\d{4}~Tonga~1;TR~90~7acd~5012345678~4\\d{6}|8\\d{11,12}|(?:[2-58]\\d\\d|900)\\d{7}~Turkey~1;TT~1~a~8682911234~(?:[58]\\d\\d|900)\\d{7}~Trinidad and Tobago~;TV~688~567~901234~(?:2|7\\d\\d|90)\\d{4}~Tuvalu~1;TW~886~789ab~912345678~[2-689]\\d{8}|7\\d{9,10}|[2-8]\\d{7}|2\\d{6}~Taiwan~1;TZ~255~9~621234567~(?:[25-8]\\d|41|90)\\d{7}~Tanzania~1;UA~380~9a~501234567~[89]\\d{9}|[3-9]\\d{8}~Ukraine~1;UG~256~9~712345678~800\\d{6}|(?:[29]0|[347]\\d)\\d{7}~Uganda~1;US~1~a~2015550123~[2-9]\\d{9}|3\\d{6}~United States~1;UY~598~6789abcd~94231234~0004\\d{2,9}|[1249]\\d{7}|(?:[49]\\d|80)\\d{5}~Uruguay~1;UZ~998~9~912345678~(?:20|33|[5-9]\\d)\\d{7}~Uzbekistan~1;VA~39~6789abc~3123456789~0\\d{5,10}|3[0-8]\\d{7,10}|55\\d{8}|8\\d{5}(?:\\d{2,4})?|(?:1\\d|39)\\d{7,8}~Vatican City~;VC~1~a~7844301234~(?:[58]\\d\\d|784|900)\\d{7}~Saint Vincent and the Grenadines~;VE~58~a~4121234567~[68]00\\d{7}|(?:[24]\\d|[59]0)\\d{8}~Venezuela~1;VG~1~a~2843001234~(?:284|[58]\\d\\d|900)\\d{7}~Virgin Islands (UK)~;VI~1~a~3406421234~[58]\\d{9}|(?:34|90)0\\d{7}~Virgin Islands (US)~;VN~84~789a~912345678~[12]\\d{9}|[135-9]\\d{8}|[16]\\d{7}|[16-8]\\d{6}~Vietnam~1;VU~678~57~5912345~[57-9]\\d{6}|(?:[238]\\d|48)\\d{3}~Vanuatu~1;WF~681~69~821234~(?:40|72|8\\d{4})\\d{4}|[89]\\d{5}~Wallis and Futuna~1;WS~685~567a~7212345~(?:[2-6]|8\\d{5})\\d{4}|[78]\\d{6}|[68]\\d{5}~Samoa~1;XK~383~89abc~43201234~2\\d{7,8}|3\\d{7,11}|(?:4\\d\\d|[89]00)\\d{5}~Kosovo~1;YE~967~789~712345678~(?:1|7\\d)\\d{7}|[1-7]\\d{6}~Yemen~1;YT~262~9~639012345~7093\\d{5}|(?:80|9\\d)\\d{7}|(?:26|63)9\\d{6}~Mayotte~;ZA~27~56789a~711234567~[1-79]\\d{8}|8\\d{4,9}~South Africa~1;ZM~260~9~955123456~800\\d{6}|(?:21|63|[79]\\d)\\d{7}~Zambia~1;ZW~263~56789a~712345678~2(?:[0-57-9]\\d{6,8}|6[0-24-9]\\d{6,7})|[38]\\d{9}|[35-8]\\d{8}|[3-6]\\d{7}|[1-689]\\d{6}|[1-3569]\\d{5}|[1356]\\d{4}~Zimbabwe~1";
+  var TZ_ISO = "Africa/Abidjan~CI;Africa/Accra~GH;Africa/Addis_Ababa~ET;Africa/Algiers~DZ;Africa/Asmara~ER;Africa/Asmera~ER;Africa/Bamako~ML;Africa/Bangui~CF;Africa/Banjul~GM;Africa/Bissau~GW;Africa/Blantyre~MW;Africa/Brazzaville~CG;Africa/Bujumbura~BI;Africa/Cairo~EG;Africa/Casablanca~MA;Africa/Ceuta~ES;Africa/Conakry~GN;Africa/Dakar~SN;Africa/Dar_es_Salaam~TZ;Africa/Djibouti~DJ;Africa/Douala~CM;Africa/El_Aaiun~EH;Africa/Freetown~SL;Africa/Gaborone~BW;Africa/Harare~ZW;Africa/Johannesburg~ZA;Africa/Juba~SS;Africa/Kampala~UG;Africa/Khartoum~SD;Africa/Kigali~RW;Africa/Kinshasa~CD;Africa/Lagos~NG;Africa/Libreville~GA;Africa/Lome~TG;Africa/Luanda~AO;Africa/Lubumbashi~CD;Africa/Lusaka~ZM;Africa/Malabo~GQ;Africa/Maputo~MZ;Africa/Maseru~LS;Africa/Mbabane~SZ;Africa/Mogadishu~SO;Africa/Monrovia~LR;Africa/Nairobi~KE;Africa/Ndjamena~TD;Africa/Niamey~NE;Africa/Nouakchott~MR;Africa/Ouagadougou~BF;Africa/Porto-Novo~BJ;Africa/Sao_Tome~ST;Africa/Timbuktu~ML;Africa/Tripoli~LY;Africa/Tunis~TN;Africa/Windhoek~NA;America/Adak~US;America/Anchorage~US;America/Anguilla~AI;America/Antigua~AG;America/Araguaina~BR;America/Argentina/Buenos_Aires~AR;America/Argentina/Catamarca~AR;America/Argentina/ComodRivadavia~AR;America/Argentina/Cordoba~AR;America/Argentina/Jujuy~AR;America/Argentina/La_Rioja~AR;America/Argentina/Mendoza~AR;America/Argentina/Rio_Gallegos~AR;America/Argentina/Salta~AR;America/Argentina/San_Juan~AR;America/Argentina/San_Luis~AR;America/Argentina/Tucuman~AR;America/Argentina/Ushuaia~AR;America/Aruba~AW;America/Asuncion~PY;America/Atikokan~CA;America/Atka~US;America/Bahia~BR;America/Bahia_Banderas~MX;America/Barbados~BB;America/Belem~BR;America/Belize~BZ;America/Blanc-Sablon~CA;America/Boa_Vista~BR;America/Bogota~CO;America/Boise~US;America/Buenos_Aires~AR;America/Cambridge_Bay~CA;America/Campo_Grande~BR;America/Cancun~MX;America/Caracas~VE;America/Catamarca~AR;America/Cayenne~GF;America/Cayman~KY;America/Chicago~US;America/Chihuahua~MX;America/Ciudad_Juarez~MX;America/Coral_Harbour~CA;America/Cordoba~AR;America/Costa_Rica~CR;America/Creston~CA;America/Cuiaba~BR;America/Curacao~CW;America/Danmarkshavn~GL;America/Dawson~CA;America/Dawson_Creek~CA;America/Denver~US;America/Detroit~US;America/Dominica~DM;America/Edmonton~CA;America/Eirunepe~BR;America/El_Salvador~SV;America/Ensenada~MX;America/Fort_Nelson~CA;America/Fort_Wayne~US;America/Fortaleza~BR;America/Glace_Bay~CA;America/Godthab~GL;America/Goose_Bay~CA;America/Grand_Turk~TC;America/Grenada~GD;America/Guadeloupe~GP;America/Guatemala~GT;America/Guayaquil~EC;America/Guyana~GY;America/Halifax~CA;America/Havana~CU;America/Hermosillo~MX;America/Indiana/Indianapolis~US;America/Indiana/Knox~US;America/Indiana/Marengo~US;America/Indiana/Petersburg~US;America/Indiana/Tell_City~US;America/Indiana/Vevay~US;America/Indiana/Vincennes~US;America/Indiana/Winamac~US;America/Indianapolis~US;America/Inuvik~CA;America/Iqaluit~CA;America/Jamaica~JM;America/Jujuy~AR;America/Juneau~US;America/Kentucky/Louisville~US;America/Kentucky/Monticello~US;America/Knox_IN~US;America/Kralendijk~BQ;America/La_Paz~BO;America/Lima~PE;America/Los_Angeles~US;America/Louisville~US;America/Lower_Princes~SX;America/Maceio~BR;America/Managua~NI;America/Manaus~BR;America/Marigot~MF;America/Martinique~MQ;America/Matamoros~MX;America/Mazatlan~MX;America/Mendoza~AR;America/Menominee~US;America/Merida~MX;America/Metlakatla~US;America/Mexico_City~MX;America/Miquelon~PM;America/Moncton~CA;America/Monterrey~MX;America/Montevideo~UY;America/Montreal~CA;America/Montserrat~MS;America/Nassau~BS;America/New_York~US;America/Nipigon~CA;America/Nome~US;America/Noronha~BR;America/North_Dakota/Beulah~US;America/North_Dakota/Center~US;America/North_Dakota/New_Salem~US;America/Nuuk~GL;America/Ojinaga~MX;America/Panama~PA;America/Pangnirtung~CA;America/Paramaribo~SR;America/Phoenix~US;America/Port-au-Prince~HT;America/Port_of_Spain~TT;America/Porto_Acre~BR;America/Porto_Velho~BR;America/Puerto_Rico~PR;America/Punta_Arenas~CL;America/Rainy_River~CA;America/Rankin_Inlet~CA;America/Recife~BR;America/Regina~CA;America/Resolute~CA;America/Rio_Branco~BR;America/Rosario~AR;America/Santa_Isabel~MX;America/Santarem~BR;America/Santiago~CL;America/Santo_Domingo~DO;America/Sao_Paulo~BR;America/Scoresbysund~GL;America/Shiprock~US;America/Sitka~US;America/St_Barthelemy~BL;America/St_Johns~CA;America/St_Kitts~KN;America/St_Lucia~LC;America/St_Thomas~VI;America/St_Vincent~VC;America/Swift_Current~CA;America/Tegucigalpa~HN;America/Thule~GL;America/Thunder_Bay~CA;America/Tijuana~MX;America/Toronto~CA;America/Tortola~VG;America/Vancouver~CA;America/Virgin~VI;America/Whitehorse~CA;America/Winnipeg~CA;America/Yakutat~US;America/Yellowknife~CA;Antarctica/Casey~AQ;Antarctica/Davis~AQ;Antarctica/DumontDUrville~AQ;Antarctica/Macquarie~AU;Antarctica/Mawson~AQ;Antarctica/McMurdo~AQ;Antarctica/Palmer~AQ;Antarctica/Rothera~AQ;Antarctica/South_Pole~AQ;Antarctica/Syowa~AQ;Antarctica/Troll~AQ;Antarctica/Vostok~AQ;Arctic/Longyearbyen~SJ;Asia/Aden~YE;Asia/Almaty~KZ;Asia/Amman~JO;Asia/Anadyr~RU;Asia/Aqtau~KZ;Asia/Aqtobe~KZ;Asia/Ashgabat~TM;Asia/Ashkhabad~TM;Asia/Atyrau~KZ;Asia/Baghdad~IQ;Asia/Bahrain~BH;Asia/Baku~AZ;Asia/Bangkok~TH;Asia/Barnaul~RU;Asia/Beirut~LB;Asia/Bishkek~KG;Asia/Brunei~BN;Asia/Calcutta~IN;Asia/Chita~RU;Asia/Choibalsan~MN;Asia/Chongqing~CN;Asia/Chungking~CN;Asia/Colombo~LK;Asia/Dacca~BD;Asia/Damascus~SY;Asia/Dhaka~BD;Asia/Dili~TL;Asia/Dubai~AE;Asia/Dushanbe~TJ;Asia/Famagusta~CY;Asia/Gaza~PS;Asia/Harbin~CN;Asia/Hebron~PS;Asia/Ho_Chi_Minh~VN;Asia/Hong_Kong~HK;Asia/Hovd~MN;Asia/Irkutsk~RU;Asia/Istanbul~TR;Asia/Jakarta~ID;Asia/Jayapura~ID;Asia/Jerusalem~IL;Asia/Kabul~AF;Asia/Kamchatka~RU;Asia/Karachi~PK;Asia/Kashgar~CN;Asia/Kathmandu~NP;Asia/Katmandu~NP;Asia/Khandyga~RU;Asia/Kolkata~IN;Asia/Krasnoyarsk~RU;Asia/Kuala_Lumpur~MY;Asia/Kuching~MY;Asia/Kuwait~KW;Asia/Macao~MO;Asia/Macau~MO;Asia/Magadan~RU;Asia/Makassar~ID;Asia/Manila~PH;Asia/Muscat~OM;Asia/Nicosia~CY;Asia/Novokuznetsk~RU;Asia/Novosibirsk~RU;Asia/Omsk~RU;Asia/Oral~KZ;Asia/Phnom_Penh~KH;Asia/Pontianak~ID;Asia/Pyongyang~KP;Asia/Qatar~QA;Asia/Qostanay~KZ;Asia/Qyzylorda~KZ;Asia/Rangoon~MM;Asia/Riyadh~SA;Asia/Saigon~VN;Asia/Sakhalin~RU;Asia/Samarkand~UZ;Asia/Seoul~KR;Asia/Shanghai~CN;Asia/Singapore~SG;Asia/Srednekolymsk~RU;Asia/Taipei~TW;Asia/Tashkent~UZ;Asia/Tbilisi~GE;Asia/Tehran~IR;Asia/Tel_Aviv~IL;Asia/Thimbu~BT;Asia/Thimphu~BT;Asia/Tokyo~JP;Asia/Tomsk~RU;Asia/Ujung_Pandang~ID;Asia/Ulaanbaatar~MN;Asia/Ulan_Bator~MN;Asia/Urumqi~CN;Asia/Ust-Nera~RU;Asia/Vientiane~LA;Asia/Vladivostok~RU;Asia/Yakutsk~RU;Asia/Yangon~MM;Asia/Yekaterinburg~RU;Asia/Yerevan~AM;Atlantic/Azores~PT;Atlantic/Bermuda~BM;Atlantic/Canary~ES;Atlantic/Cape_Verde~CV;Atlantic/Faeroe~FO;Atlantic/Faroe~FO;Atlantic/Jan_Mayen~SJ;Atlantic/Madeira~PT;Atlantic/Reykjavik~IS;Atlantic/South_Georgia~GS;Atlantic/St_Helena~SH;Atlantic/Stanley~FK;Australia/ACT~AU;Australia/Adelaide~AU;Australia/Brisbane~AU;Australia/Broken_Hill~AU;Australia/Canberra~AU;Australia/Currie~AU;Australia/Darwin~AU;Australia/Eucla~AU;Australia/Hobart~AU;Australia/LHI~AU;Australia/Lindeman~AU;Australia/Lord_Howe~AU;Australia/Melbourne~AU;Australia/NSW~AU;Australia/North~AU;Australia/Perth~AU;Australia/Queensland~AU;Australia/South~AU;Australia/Sydney~AU;Australia/Tasmania~AU;Australia/Victoria~AU;Australia/West~AU;Australia/Yancowinna~AU;Brazil/Acre~BR;Brazil/DeNoronha~BR;Brazil/East~BR;Brazil/West~BR;Canada/Atlantic~CA;Canada/Central~CA;Canada/Eastern~CA;Canada/Mountain~CA;Canada/Newfoundland~CA;Canada/Pacific~CA;Canada/Saskatchewan~CA;Canada/Yukon~CA;Chile/Continental~CL;Chile/EasterIsland~CL;Cuba~CU;Egypt~EG;Eire~IE;Europe/Amsterdam~NL;Europe/Andorra~AD;Europe/Astrakhan~RU;Europe/Athens~GR;Europe/Belfast~GB;Europe/Belgrade~RS;Europe/Berlin~DE;Europe/Bratislava~SK;Europe/Brussels~BE;Europe/Bucharest~RO;Europe/Budapest~HU;Europe/Busingen~DE;Europe/Chisinau~MD;Europe/Copenhagen~DK;Europe/Dublin~IE;Europe/Gibraltar~GI;Europe/Guernsey~GG;Europe/Helsinki~FI;Europe/Isle_of_Man~IM;Europe/Istanbul~TR;Europe/Jersey~JE;Europe/Kaliningrad~RU;Europe/Kiev~UA;Europe/Kirov~RU;Europe/Kyiv~UA;Europe/Lisbon~PT;Europe/Ljubljana~SI;Europe/London~GB;Europe/Luxembourg~LU;Europe/Madrid~ES;Europe/Malta~MT;Europe/Mariehamn~AX;Europe/Minsk~BY;Europe/Monaco~MC;Europe/Moscow~RU;Europe/Nicosia~CY;Europe/Oslo~NO;Europe/Paris~FR;Europe/Podgorica~ME;Europe/Prague~CZ;Europe/Riga~LV;Europe/Rome~IT;Europe/Samara~RU;Europe/San_Marino~SM;Europe/Sarajevo~BA;Europe/Saratov~RU;Europe/Simferopol~RU;Europe/Skopje~MK;Europe/Sofia~BG;Europe/Stockholm~SE;Europe/Tallinn~EE;Europe/Tirane~AL;Europe/Tiraspol~MD;Europe/Ulyanovsk~RU;Europe/Uzhgorod~UA;Europe/Vaduz~LI;Europe/Vatican~VA;Europe/Vienna~AT;Europe/Vilnius~LT;Europe/Volgograd~RU;Europe/Warsaw~PL;Europe/Zagreb~HR;Europe/Zaporozhye~UA;Europe/Zurich~CH;GB~GB;GB-Eire~GB;Hongkong~HK;Iceland~IS;Indian/Antananarivo~MG;Indian/Chagos~IO;Indian/Christmas~CX;Indian/Cocos~CC;Indian/Comoro~KM;Indian/Kerguelen~TF;Indian/Mahe~SC;Indian/Maldives~MV;Indian/Mauritius~MU;Indian/Mayotte~YT;Indian/Reunion~RE;Iran~IR;Israel~IL;Jamaica~JM;Japan~JP;Kwajalein~MH;Libya~LY;Mexico/BajaNorte~MX;Mexico/BajaSur~MX;Mexico/General~MX;NZ~NZ;NZ-CHAT~NZ;Navajo~US;PRC~CN;Pacific/Apia~WS;Pacific/Auckland~NZ;Pacific/Bougainville~PG;Pacific/Chatham~NZ;Pacific/Chuuk~FM;Pacific/Easter~CL;Pacific/Efate~VU;Pacific/Enderbury~KI;Pacific/Fakaofo~TK;Pacific/Fiji~FJ;Pacific/Funafuti~TV;Pacific/Galapagos~EC;Pacific/Gambier~PF;Pacific/Guadalcanal~SB;Pacific/Guam~GU;Pacific/Honolulu~US;Pacific/Johnston~US;Pacific/Kanton~KI;Pacific/Kiritimati~KI;Pacific/Kosrae~FM;Pacific/Kwajalein~MH;Pacific/Majuro~MH;Pacific/Marquesas~PF;Pacific/Midway~UM;Pacific/Nauru~NR;Pacific/Niue~NU;Pacific/Norfolk~NF;Pacific/Noumea~NC;Pacific/Pago_Pago~AS;Pacific/Palau~PW;Pacific/Pitcairn~PN;Pacific/Pohnpei~FM;Pacific/Ponape~FM;Pacific/Port_Moresby~PG;Pacific/Rarotonga~CK;Pacific/Saipan~MP;Pacific/Samoa~AS;Pacific/Tahiti~PF;Pacific/Tarawa~KI;Pacific/Tongatapu~TO;Pacific/Truk~FM;Pacific/Wake~UM;Pacific/Wallis~WF;Pacific/Yap~FM;Poland~PL;Portugal~PT;ROC~TW;ROK~KR;Singapore~SG;Turkey~TR;US/Alaska~US;US/Aleutian~US;US/Arizona~US;US/Central~US;US/East-Indiana~US;US/Eastern~US;US/Hawaii~US;US/Indiana-Starke~US;US/Michigan~US;US/Mountain~US;US/Pacific~US;US/Samoa~AS;W-SU~RU";
+  // ---- END GENERATED phone data ----
+  // ---- BEGIN SHARED phone helpers (identical in index.html and f/index.html) ----
+  // The packed tables above, read into objects once. Kept packed in the page because 245
+  // objects written longhand is 60 KB of source, and because a single string is what the
+  // parity test can compare between the two pages.
+  var PHONE_LIST = null, PHONE_BY_ISO = null, PHONE_BY_DIAL = null, TZ_MAP = null;
+  // The four the traffic is in. Pinned at the top of the picker, and the fallback for a
+  // device that will not say where it is.
+  var PHONE_PINNED = ["JO", "LB", "IQ", "SY"];
+  function phoneTable() {
+    if (PHONE_LIST) return PHONE_LIST;
+    PHONE_LIST = []; PHONE_BY_ISO = {}; PHONE_BY_DIAL = {};
+    PHONE_ROWS.split(";").forEach(function (r) {
+      var p = r.split("~");
+      var row = { iso: p[0], cc: p[1], ph: p[3], pat: p[4], name: p[5], pri: p[6] === "1",
+                  flag: p[0].toLowerCase(),
+                  len: p[2].split("").map(function (ch) { return parseInt(ch, 36); }) };
+      PHONE_LIST.push(row);
+      PHONE_BY_ISO[row.iso] = row;
+      (PHONE_BY_DIAL[row.cc] = PHONE_BY_DIAL[row.cc] || []).push(row);
+    });
+    return PHONE_LIST;
+  }
+  function phoneRow(iso) { phoneTable(); return PHONE_BY_ISO[iso] || null; }
+  // The primary country of a dial code. Twelve codes are shared, +1 by 25 countries, so
+  // without this the flag beside an American number is Antigua's.
+  function phoneByDial(cc) {
+    phoneTable();
+    var rows = PHONE_BY_DIAL[String(cc == null ? "" : cc).replace(/[^0-9]/g, "")] || [];
+    for (var i = 0; i < rows.length; i++) { if (rows[i].pri) return rows[i]; }
+    return rows[0] || null;
+  }
+  function phoneMenuRows() {
+    var all = phoneTable(), pinned = [];
+    PHONE_PINNED.forEach(function (iso) { if (PHONE_BY_ISO[iso]) pinned.push(PHONE_BY_ISO[iso]); });
+    var rest = all.filter(function (r) { return PHONE_PINNED.indexOf(r.iso) === -1; })
+      .sort(function (a, b) { return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0); });
+    return { pinned: pinned, rest: rest };
+  }
+  // Matches a country by name, by ISO2 code, or by dial code with or without a leading plus,
+  // so "ger", "de", "49" and "+49" all find Germany. `q` arrives lowercased and trimmed.
+  function phoneMatch(r, q) {
+    if (!q) return true;
+    if (r.name.toLowerCase().indexOf(q) !== -1) return true;
+    if (r.iso.toLowerCase() === q) return true;
+    var d = q.charAt(0) === "+" ? q.slice(1) : q;
+    return !!d && /^[0-9]+$/.test(d) && r.cc.indexOf(d) === 0;
+  }
+  // A stored answer is one string ("+962791234567"); the row shows it as a country and a
+  // local number. Longest dial code first, so a code beginning with another's cannot be read
+  // as the wrong one, and a tie on length goes to the primary country.
+  //
+  // Returns null when the value cannot be split, and that is the point of the function: the
+  // caller must then leave the value ALONE. Guessing at Jordan here is what rewrote 600
+  // foreign numbers and 33,795 legacy local ones on save.
+  function splitPhone(v) {
+    var s = String(v == null ? "" : v).replace(/[^\d+]/g, "");
+    if (s.charAt(0) !== "+") return null;
+    var d = s.slice(1), best = null;
+    phoneTable().forEach(function (r) {
+      if (d.indexOf(r.cc) !== 0) return;
+      if (!best || r.cc.length > best.cc.length || (r.cc.length === best.cc.length && r.pri && !best.pri)) best = r;
+    });
+    if (!best) return null;
+    return { iso: best.iso, row: best, local: d.slice(best.cc.length) };
+  }
+  // Per country, not one rule for everybody: the digit count must be one the country uses AND
+  // the digits must match the country's own pattern. Length alone is no rule at all for the
+  // 29 countries whose sets span six or more values, and for Jordan it would accept
+  // 999999999.
+  function phoneValid(row, digits) {
+    if (!row || !digits) return false;
+    if (row.len.indexOf(digits.length) === -1) return false;
+    if (!row.pat) return true;
+    return new RegExp("^(?:" + row.pat + ")$").test(digits);
+  }
+  // Somebody who picked the United States and typed a Canadian number has not made a mistake
+  // worth losing a submission over: 12 dial codes are shared, so any country on the code will
+  // do. The number stores identically either way; only the flag was ever a guess.
+  function phoneValidOnDial(row, digits) {
+    if (!row) return false;
+    phoneTable();
+    var rows = PHONE_BY_DIAL[row.cc] || [row];
+    for (var i = 0; i < rows.length; i++) { if (phoneValid(rows[i], digits)) return true; }
+    return false;
+  }
+  // Stripping a leading trunk zero is correct for most countries, and is the fix for the
+  // commonest entry mistake there is (a Jordanian number typed with its 0). But Benin, Congo
+  // (Brazzaville) and Cote d'Ivoire's own national numbers begin with 0, so stripping it
+  // unconditionally makes their own example numbers unsubmittable. The stripped form is tried
+  // first and kept whenever it validates, so nothing currently accepted changes; the raw
+  // digits are used only as a fallback for a number the stripped form rejects.
+  function phoneLocalDigits(row, raw) {
+    var digits = String(raw == null ? "" : raw);
+    var stripped = digits.replace(/^0+/, "");
+    if (phoneValidOnDial(row, stripped)) return stripped;
+    if (phoneValidOnDial(row, digits)) return digits;
+    return stripped;
+  }
+  function tzIsoOf(zone) {
+    if (!TZ_MAP) {
+      TZ_MAP = {};
+      TZ_ISO.split(";").forEach(function (p) {
+        var i = p.indexOf("~");
+        TZ_MAP[p.slice(0, i)] = p.slice(i + 1);
+      });
+    }
+    return zone ? (TZ_MAP[zone] || null) : null;
+  }
+  // The country the device implies. Falls back to Jordan for a zone the map does not know, a
+  // zone with no country (Etc/UTC, Antarctica, and a hardened browser reporting UTC), and the
+  // five territories with a zone and no dial code. That fallback is today's behaviour for
+  // everybody, so a non-answer changes nothing and is announced to nobody.
+  function phoneRowForZone(zone) {
+    phoneTable();
+    var iso = tzIsoOf(zone);
+    return (iso && PHONE_BY_ISO[iso]) || PHONE_BY_ISO.JO;
+  }
+  // ---- END SHARED phone helpers ----
+  // The country a stored number belongs to, for the flag beside an applicant. Reads the one
+  // table now, so a UAE number stops reading as Jordanian here too. waEligible still compares
+  // .dial against WA_DIAL, so the shape of what this returns is unchanged.
   function phoneCountry(phone) {
-    if (!phone) return null;
-    var p = String(phone).replace(/[^\d+]/g, "");
-    for (var i = 0; i < COUNTRIES.length; i++) { if (p.indexOf("+" + COUNTRIES[i].dial) === 0) return COUNTRIES[i]; }
-    return null;
+    var p = splitPhone(phone);
+    return p ? { dial: p.row.cc, name: p.row.name, flag: p.row.flag } : null;
   }
 
   // Admin-managed country list drives the Country field, the share picker, and canonical
@@ -5798,39 +5930,134 @@
   }
 
   // Phone editor with the full country/flag picker
-  var COUNTRIES_ED = [
-    { cc: "962", len: [9], ph: "7X XXX XXXX", flag: "jo", name: "Jordan" },
-    { cc: "961", len: [7, 8], ph: "XX XXX XXX", flag: "lb", name: "Lebanon" },
-    { cc: "963", len: [9], ph: "9XX XXX XXX", flag: "sy", name: "Syria" },
-    { cc: "964", len: [10], ph: "7XX XXX XXXX", flag: "iq", name: "Iraq" }
-  ];
   function edFlagUrl(c) { return "https://flagcdn.com/" + c + ".svg"; }
   var edPhoneReg = {};
+  // Reads a stored answer into the two halves the panel edits, and returns null when it
+  // cannot. Null is not a failure to handle politely: it is the instruction to leave the
+  // value alone. The old version answered "Jordan, and the whole string is the local part"
+  // for every value it could not read, which is how opening a UAE record and saving it wrote
+  // a Jordanian number.
   function parsePhone(value) {
-    var v = (value || "").replace(/[^\d]/g, "");
-    for (var i = 0; i < COUNTRIES_ED.length; i++) { var cc = COUNTRIES_ED[i].cc; if (v.indexOf(cc) === 0) return { idx: i, local: v.slice(cc.length) }; }
-    return { idx: 0, local: v };
+    var p = splitPhone(value);
+    return p ? { row: p.row, local: p.local } : null;
   }
   function edPhone(id, value) {
-    var p = parsePhone(value), c = COUNTRIES_ED[p.idx];
-    return '<div class="phone-row" id="' + id + '-row" data-idx="' + p.idx + '">' +
-      '<div class="cc-picker" id="' + id + '-picker"><button type="button" class="cc-btn" id="' + id + '-btn"><img class="cc-flag" id="' + id + '-flag" src="' + edFlagUrl(c.flag) + '" alt=""><span class="cc-dial" id="' + id + '-dial">+' + c.cc + '</span><span class="cc-caret">▾</span></button><ul class="cc-menu" id="' + id + '-menu" role="listbox"></ul></div>' +
-      '<input type="tel" inputmode="numeric" class="ed-in" id="' + id + '" value="' + esc(p.local) + '">' +
+    var p = parsePhone(value);
+    var raw = value == null ? "" : String(value);
+    // A blank answer offers Jordan by default, same as before this field type widened past
+    // four countries: otherwise the digit filter below never turns on (it is guarded on a
+    // country being selected) and a staff member's typed number is saved with no dial code
+    // at all. A non-blank value that fails to parse stays null, so "+ ?" keeps meaning only
+    // one thing: a value EXISTS and cannot be read, never "nothing typed yet".
+    var r = p ? p.row : (raw === "" ? phoneRow("JO") : null);
+    // data-kept carries the stored value through the panel untouched, and data-touched says
+    // whether anybody has edited it. Without the second, an unparsed value and a cleared box
+    // look identical, and one of them must be given back exactly as it arrived.
+    return '<div class="phone-row" id="' + id + '-row" data-iso="' + esc(r ? r.iso : "") + '"' +
+      ' data-kept="' + esc(raw) + '" data-touched="0">' +
+      '<div class="cc-picker" id="' + id + '-picker">' +
+      '<button type="button" class="cc-btn" id="' + id + '-btn">' +
+      (r ? '<img class="cc-flag" id="' + id + '-flag" src="' + edFlagUrl(r.flag) + '" alt="">' : '<img class="cc-flag" id="' + id + '-flag" alt="">') +
+      '<span class="cc-dial" id="' + id + '-dial">' + (r ? "+" + r.cc : "+ ?") + '</span><span class="cc-caret">▾</span></button>' +
+      '<div class="cc-menu" id="' + id + '-menu"><input type="text" class="cc-search" id="' + id + '-search" placeholder="Search country or code…" autocomplete="off">' +
+      '<ul class="cc-list" id="' + id + '-list" role="listbox"></ul><div class="cc-empty" id="' + id + '-empty" hidden>No matches</div></div>' +
+      '</div>' +
+      // Autofill fires input and change, and those are exactly the events that set
+      // data-touched. An autofilled value would then be saved over an answer nobody
+      // deliberately edited, which is the same corruption this task exists to prevent,
+      // reached through a different door.
+      '<input type="tel" inputmode="numeric" class="ed-in" id="' + id + '" value="' + esc(p ? p.local : raw) + '" autocomplete="off">' +
       "</div>";
   }
   function wireEdPhone(id) {
     var row = document.getElementById(id + "-row"); if (!row) return;
-    var state = { idx: parseInt(row.getAttribute("data-idx"), 10) || 0 };
     var btn = document.getElementById(id + "-btn"), menu = document.getElementById(id + "-menu"),
         flag = document.getElementById(id + "-flag"), dial = document.getElementById(id + "-dial"),
-        picker = document.getElementById(id + "-picker"), local = document.getElementById(id);
-    function apply(i) { state.idx = i; var c = COUNTRIES_ED[i]; flag.src = edFlagUrl(c.flag); dial.textContent = "+" + c.cc; local.placeholder = c.ph; local.maxLength = Math.max.apply(null, c.len) + 1; }
-    COUNTRIES_ED.forEach(function (c, i) { var li = document.createElement("li"); li.innerHTML = '<img src="' + edFlagUrl(c.flag) + '" alt=""> <span>' + c.name + "</span> <b>+" + c.cc + "</b>"; li.addEventListener("click", function () { apply(i); menu.classList.remove("open"); try { local.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {} }); menu.appendChild(li); });
-    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
-    document.addEventListener("click", function (e) { if (!picker.contains(e.target)) menu.classList.remove("open"); });
-    local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
-    apply(state.idx);
-    edPhoneReg[id] = function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + COUNTRIES_ED[state.idx].cc + d : null; };
+        picker = document.getElementById(id + "-picker"), local = document.getElementById(id),
+        search = document.getElementById(id + "-search"), list = document.getElementById(id + "-list"),
+        empty = document.getElementById(id + "-empty");
+    var sc = phoneRow(row.getAttribute("data-iso")) || null, shown = [], hi = -1;
+    var kept = row.getAttribute("data-kept") || "";
+    function apply(r) {
+      sc = r;
+      flag.src = edFlagUrl(r.flag); flag.alt = r.name;
+      dial.textContent = "+" + r.cc;
+      local.placeholder = r.ph;
+      local.maxLength = Math.max.apply(null, r.len) + 1;
+    }
+    function render() {
+      var q = search.value.trim().toLowerCase();
+      var m = phoneMenuRows();
+      shown = q ? m.pinned.concat(m.rest).filter(function (r) { return phoneMatch(r, q); })
+                : m.pinned.concat(m.rest);
+      var pinCount = q ? 0 : m.pinned.length;
+      empty.hidden = shown.length > 0;
+      list.innerHTML = shown.map(function (r, i) {
+        return '<li role="option" data-i="' + i + '"' +
+          (i === hi ? ' class="hi"' : (pinCount && i === pinCount - 1 ? ' class="pin-last"' : '')) +
+          '><img src="' + edFlagUrl(r.flag) + '" alt="" loading="lazy"> <span>' + esc(r.name) + "</span> <b>+" + r.cc + "</b></li>";
+      }).join("");
+    }
+    function touched() { row.setAttribute("data-touched", "1"); }
+    function closeMenu() { menu.classList.remove("open"); menu.classList.remove("up"); }
+    function openMenu() {
+      hi = -1; search.value = ""; render();
+      menu.classList.add("open");
+      // Flipped above the button when there is not enough room below, the same check the
+      // public form's picker uses: a record panel is often scrolled near the bottom of a
+      // long form. placeMenuInView is not used here: it writes viewport coordinates, which
+      // is wrong for a menu positioned absolutely inside .cc-picker.
+      var space = window.innerHeight - btn.getBoundingClientRect().bottom;
+      menu.classList.toggle("up", space < menu.offsetHeight + 12);
+      try { search.focus(); } catch (e) {}
+    }
+    function pick(r) {
+      apply(r); touched();
+      closeMenu();
+      // The panel autosaves off input and change, and settling a choice in code fires
+      // neither, so it is dispatched by hand. Same reason the date box dispatches both.
+      try { local.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {}
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (menu.classList.contains("open")) { closeMenu(); return; }
+      openMenu();
+    });
+    search.addEventListener("input", function () { hi = -1; render(); });
+    search.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { e.preventDefault(); hi = Math.min(hi + 1, shown.length - 1); render(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); hi = Math.max(hi - 1, 0); render(); }
+      else if (e.key === "Enter") { e.preventDefault(); if (shown[hi >= 0 ? hi : 0]) pick(shown[hi >= 0 ? hi : 0]); }
+      else if (e.key === "Escape") { e.preventDefault(); closeMenu(); }
+    });
+    list.addEventListener("mousedown", function (e) {
+      var li = e.target.closest ? e.target.closest("li") : null;
+      if (!li) return;
+      e.preventDefault();
+      pick(shown[+li.getAttribute("data-i")]);
+    });
+    document.addEventListener("click", function (e) { if (!picker.contains(e.target)) closeMenu(); });
+    local.addEventListener("input", function () {
+      touched();
+      // Only a parsed number is digits-only. An unparsed value is shown raw and must stay
+      // typeable, because a legacy 0-prefixed number is corrected by editing it.
+      if (sc) local.value = local.value.replace(/\D/g, "");
+    });
+    local.addEventListener("change", touched);
+    if (sc) apply(sc);
+    // What a save writes. An untouched value the panel could not parse goes back exactly as
+    // it arrived: 33,795 legacy local numbers and about 600 with a code we could not read
+    // reach this line, and rewriting them is the bug being fixed.
+    edPhoneReg[id] = function () {
+      var edited = row.getAttribute("data-touched") === "1";
+      if (!edited) return kept === "" ? null : kept;
+      var raw = local.value.replace(/\D/g, "");
+      // phoneLocalDigits only applies once a country is selected; sc null keeps the old
+      // strip-and-compose-nothing path, same as before.
+      var d = sc ? phoneLocalDigits(sc, raw) : raw.replace(/^0+/, "");
+      if (!d) return null;
+      return sc ? "+" + sc.cc + d : local.value.trim() || null;
+    };
   }
   function edExtraRows(defs, extra) {
     extra = extra || {};
@@ -8123,7 +8350,7 @@
   function countryFlag(code) {
     var c = COUNTRY_LIST.filter(function (x) { return x.code === code; })[0];
     var d = (c && c.dial) ? String(c.dial).replace(/[^0-9]/g, "") : "";
-    var m = d ? COUNTRIES.filter(function (x) { return x.dial === d; })[0] : null;
+    var m = d ? phoneByDial(d) : null;
     return m ? m.flag : null;
   }
   // A caret on a table's sidebar line, and only when something hangs under it. The Job

@@ -35,10 +35,16 @@ function grab(name) {
   if (!m) throw new Error('could not find function ' + name);
   return m[0];
 }
+// Handles both shapes a lifted var comes in: a multi-line array literal, and a single-line
+// declaration. The non-greedy "first semicolon" form used to be enough, but PHONE_ROWS is a
+// packed string full of literal ';' separators, so a single-line var must be matched greedily
+// to the end of its own line instead of stopping at the first ';' inside the string.
 function grabVar(name) {
-  const m = js.match(new RegExp('\\n  var ' + name + ' =[\\s\\S]*?;[^\\n]*\\r?\\n', ''));
-  if (!m) throw new Error('could not find var ' + name);
-  return m[0];
+  const multi = js.match(new RegExp('\\n  var ' + name + ' = \\[[\\s\\S]*?\\n  \\];'));
+  if (multi) return multi[0];
+  const one = js.match(new RegExp('\\n  var ' + name + ' = [^\\n]*;'));
+  if (!one) throw new Error('could not find var ' + name);
+  return one[0];
 }
 // The page's own markup, verbatim: the tabs, the list, the "show more" line and the empty
 // state. A hand-written pair of buttons here would keep passing after data-s was renamed.
@@ -48,9 +54,11 @@ if (!tabs) throw new Error('could not find the Job Applications tabs/list markup
 const listener = (js.match(/\n  document\.getElementById\("ja-tabs"\)\.addEventListener[\s\S]*?\n  \}\);/) || [])[0];
 if (!listener) throw new Error('could not find the ja-tabs click listener in index.html');
 
+// phoneCountry() now goes through splitPhone()/phoneTable() (the generated 245-country phone
+// table) rather than the deleted four-entry COUNTRIES global, so those two are lifted too.
 const fns = ['esc', 'jaScoped', 'loadFacets', 'loadApps', 'searchApps', 'setSection', 'filterApps',
-  'sectionCounts', 'recordNumber', 'calcAge', 'ageFlag', 'phoneCountry', 'waEligible',
-  'fmtInterview', 'renderApps'].map(grab).join('\n');
+  'sectionCounts', 'recordNumber', 'calcAge', 'ageFlag', 'phoneCountry', 'splitPhone', 'phoneTable',
+  'waEligible', 'fmtInterview', 'renderApps'].map(grab).join('\n');
 
 const page = `<!doctype html><html><head><meta charset="utf-8"><style>${style}</style></head><body>
 <span class="base-count" id="ja-count">—</span>
@@ -66,7 +74,8 @@ function ok(name, cond, extra) {
 
 ${grabVar('JA_PAGE')}
 ${grabVar('JA_RENDER_STEP')}
-${grabVar('COUNTRIES')}
+${grabVar('PHONE_ROWS')}
+${grabVar('PHONE_LIST')}
 ${grabVar('WA_DIAL')}
 var section = 'new', allApps = [], jaView = 'cards', jaRenderCap = JA_RENDER_STEP, jaServerSearch = false;
 var jaScope = { year: 2026, country: null };

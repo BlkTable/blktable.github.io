@@ -19,8 +19,8 @@ function grab(js, name, file) {
   return m[0];
 }
 // Pulled out of the page rather than restated here, so a test cannot quietly use a different
-// storage key or a different age limit than the page does. Multi-line values (COUNTRIES) end
-// at their own closing bracket, single-line ones at the newline.
+// storage key or a different age limit than the page does. Multi-line values end at their own
+// closing bracket, single-line ones at the newline.
 function grabVar(js, name, file) {
   const multi = js.match(new RegExp('\\n  var ' + name + ' = \\[\\r?\\n[\\s\\S]*?\\n  \\];'));
   if (multi) return multi[0];
@@ -52,8 +52,8 @@ function fakeStore(mode) {
 }
 function api(store) {
   return load('f/index.html',
-    ['draftKey', 'draftFresh', 'readDraft', 'writeDraft', 'clearDraft', 'draftAnswers', 'restoreAnswers', 'splitPhone', 'sweepDrafts'],
-    ['DRAFT_PREFIX', 'DRAFT_MAX_AGE_MS', 'COUNTRIES'],
+    ['draftKey', 'draftFresh', 'readDraft', 'writeDraft', 'clearDraft', 'draftAnswers', 'restoreAnswers', 'splitPhone', 'phoneTable', 'sweepDrafts'],
+    ['DRAFT_PREFIX', 'DRAFT_MAX_AGE_MS', 'PHONE_ROWS', 'PHONE_LIST'],
     { window: { localStorage: store } });
 }
 
@@ -280,30 +280,41 @@ t('no draft restores nothing', () => {
 t('a stored number splits back into the picker and the box', () => {
   const p = F.splitPhone('+962791234567');
   assert.strictEqual(p.local, '791234567');
-  assert.strictEqual(p.i, 0, 'Jordan is the first country in the list');
+  assert.strictEqual(p.iso, 'JO');
 });
 t('a number from another country restores that country, not the default', () => {
   const p = F.splitPhone('+96171234567');
   assert.ok(p, 'Lebanon should resolve');
   assert.strictEqual(p.local, '71234567');
-  assert.notStrictEqual(p.i, 0);
+  assert.strictEqual(p.iso, 'LB');
 });
-t('a number this form cannot offer is refused rather than mangled', () => {
-  // +44 is not in the picker; silently keeping the digits would submit a Jordanian number
-  assert.strictEqual(F.splitPhone('+447700900000'), null);
+t('a value with no leading plus, or none at all, is refused rather than mangled', () => {
+  // Every dial code the picker offers is now a real one of the 245, so there is no longer a
+  // "not in the picker" case to prove; what remains is that a malformed value is turned away
+  // instead of guessed at.
   assert.strictEqual(F.splitPhone('0791234567'), null);
   assert.strictEqual(F.splitPhone(''), null);
   assert.strictEqual(F.splitPhone(null), null);
 });
+t('a number this form could not offer before now resolves to its own country', () => {
+  // This is the change, in one assertion. +44 used to return null because the picker held four
+  // countries, and a page that kept the digits anyway would have filed a British number as a
+  // Jordanian one. It is now a real offered code, so it must come back as GB with the local
+  // part intact.
+  const p = F.splitPhone('+447700900000');
+  assert.ok(p, '+44 should resolve now');
+  assert.strictEqual(p.iso, 'GB');
+  assert.strictEqual(p.local, '7700900000');
+});
 t('a round trip through the draft leaves the number identical', () => {
-  // the dial codes come out of the page, so adding a country cannot pass this test by
-  // accident and cannot fail it for being newer than the test
-  const CCS = [...scripts('f/index.html').matchAll(/\{ cc: "(\d+)"/g)].map(m => m[1]);
-  assert.ok(CCS.length >= 4, 'could not read the dial codes out of the page');
+  // the dial codes come out of the page's own phone table, so adding a country cannot pass
+  // this test by accident and cannot fail it for being newer than the test
+  const rows = F.phoneTable();
+  assert.ok(rows.length >= 200, 'could not read the phone table out of the page');
   ['+962791234567', '+9617123456', '+963912345678', '+9647712345678'].forEach(v => {
     const p = F.splitPhone(v);
     assert.ok(p, v);
-    assert.strictEqual('+' + CCS[p.i] + p.local, v);
+    assert.strictEqual('+' + p.row.cc + p.local, v);
   });
 });
 

@@ -165,8 +165,17 @@ t('the page names no timezone of its own', () => {
   // is an admin edit rather than a deploy — exactly as `dial` and `aliases` already are. The
   // moment somebody writes the obvious Asia/Amman -> jo table into the page instead, that
   // property is gone and nobody notices until a country needs changing.
-  assert.ok(!/Asia\/[A-Za-z_]+/.test(SRC),
-    'f/index.html should name no specific timezone — the map belongs to countries.timezones');
+  //
+  // One deliberate exception: the generated `var TZ_ISO = "...";` line (541 zones, packed by
+  // tools/gen-phone-data.js) is a hand-written fallback for the countries countries.timezones
+  // does not carry at all, used only inside zoneCountryName's fallback path when the database
+  // rows come up empty. It is a single generated declaration, not a hand-written zone-to-country
+  // table growing in the page, so it is stripped out here before the check runs. Anything else
+  // in the page still has to name no zone: this does not reopen the door for a second,
+  // hand-maintained map to grow next to it.
+  const withoutGeneratedTzMap = SRC.replace(/\n  var TZ_ISO = "[^\n]*";/, '\n');
+  assert.ok(!/Asia\/[A-Za-z_]+/.test(withoutGeneratedTzMap),
+    'f/index.html should name no specific timezone outside the generated TZ_ISO fallback, the map belongs to countries.timezones');
   assert.ok(!/getTimezoneOffset/.test(SRC),
     'the offset cannot tell Amman from Beirut for nine months of the year; read the name');
 });
@@ -187,9 +196,12 @@ const ROWS = JSON.stringify([
   { code: 'iraq', name_en: 'Iraq', name_ar: 'العراق', timezones: ['Asia/Baghdad'] },
   { code: 'syria', name_en: 'Syria', name_ar: 'سوريا', timezones: ['Asia/Damascus'] },
 ]);
+// zoneCountryName now falls through to the embedded 541-zone map (tzIsoOf / phoneRow) for any
+// zone the four database rows do not cover, so those functions and the tables behind them have
+// to be in scope here too, or every call below throws a ReferenceError.
 const MAP = load('f/index.html',
-  ['zoneCountryName', 'countryChoiceNames', 'prefillCountryName'],
-  {}, ['COUNTRY_ROWS', 'COUNTRY_NAMES_ALL'], 'COUNTRY_ROWS = ' + ROWS + ';');
+  ['zoneCountryName', 'countryChoiceNames', 'prefillCountryName', 'tzIsoOf', 'phoneRow', 'phoneTable'],
+  {}, ['COUNTRY_ROWS', 'COUNTRY_NAMES_ALL', 'PHONE_ROWS', 'TZ_ISO', 'PHONE_LIST'], 'COUNTRY_ROWS = ' + ROWS + ';');
 
 const TWO = { type: 'country', options: { only: ['jo', 'lebanon'] } };   // Customer Complaints
 const FOUR = { type: 'country', options: { only: ['jo', 'lebanon', 'iraq', 'syria'] } };
@@ -221,15 +233,34 @@ t('no zone at all fills nothing', () => {
   assert.strictEqual(MAP.zoneCountryName('', FOUR), null);
   assert.strictEqual(MAP.zoneCountryName(undefined, FOUR), null);
 });
-t('a country with no zones on file is never matched', () => {
-  // The column defaults to '{}', so every country starts this way and a half-configured
-  // countries table must simply not pre-fill rather than match the first row.
+t('a zone outside the four in the database still names a country', () => {
+  // countries.timezones holds four zones, so before this a Berlin visitor got +49 on the phone
+  // question and nothing at all on Country, on a form offering all 197 names.
+  const f = {};                                       // no options.only: offers everything
+  assert.strictEqual(MAP.zoneCountryName('Europe/Berlin', f), 'Germany');
+  assert.strictEqual(MAP.zoneCountryName('Asia/Dubai', f), 'United Arab Emirates');
+  // The database still wins for the four it knows.
+  assert.strictEqual(MAP.zoneCountryName('Asia/Amman', f), 'Jordan');
+  // And a form scoped to two countries still fills in nothing for a visitor in a third.
+  assert.strictEqual(MAP.zoneCountryName('Europe/Berlin', TWO), null);
+});
+t('a country with no zones on file does not match the row directly, but the embedded map still names it', () => {
+  // The column defaults to '{}', so every country starts this way. An empty `timezones` array
+  // must never match on its own: indexOf on [] is always -1, so a half-configured row cannot
+  // match the first row by accident. Before this task that meant the visitor got nothing; now
+  // the embedded map answers it instead, same as it would for a country the database has never
+  // heard of at all. (Was: both asserted null, back when there was no fallback to catch them.)
   const bare = load('f/index.html',
-    ['zoneCountryName', 'countryChoiceNames', 'prefillCountryName'], {},
-    ['COUNTRY_ROWS', 'COUNTRY_NAMES_ALL'],
+    ['zoneCountryName', 'countryChoiceNames', 'prefillCountryName', 'tzIsoOf', 'phoneRow', 'phoneTable'], {},
+    ['COUNTRY_ROWS', 'COUNTRY_NAMES_ALL', 'PHONE_ROWS', 'TZ_ISO', 'PHONE_LIST'],
     'COUNTRY_ROWS = [{code:"jo",name_en:"Jordan",timezones:[]},{code:"lebanon",name_en:"Lebanon"}];');
-  assert.strictEqual(bare.zoneCountryName('Asia/Amman', TWO), null);
-  assert.strictEqual(bare.zoneCountryName('Asia/Beirut', TWO), null);
+  // This assertion alone does not prove the empty-array guard still holds: `jo` is both the
+  // first row in COUNTRY_ROWS and the correct fallback answer for Asia/Amman, so a bug that
+  // wrongly matched the first row on empty timezones would return "Jordan" here too. The
+  // Asia/Beirut assertion below is the one that discriminates: `lebanon` is the SECOND row, so
+  // a wrong first-row match would say "Jordan" while the correct answer is "Lebanon".
+  assert.strictEqual(bare.zoneCountryName('Asia/Amman', TWO), 'Jordan');
+  assert.strictEqual(bare.zoneCountryName('Asia/Beirut', TWO), 'Lebanon');
 });
 
 // ---- what actually gets pre-filled ----
