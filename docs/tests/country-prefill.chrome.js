@@ -240,10 +240,12 @@ run(build(ZONES_SWAPPED, { 'q-country': 'Jordan' }), `
 
 // ---- 4. no DB row claims the zone, but the embedded map still does ----
 // Section 6 below covers the case where nothing resolves the zone at all. This section proves
-// the other half: even with no DB row claiming this machine's own zone (Asia/Amman), the
-// embedded map still supplies Jordan, and the fallback reaches the pre-fill note and the branch
-// scope too, not only the box, in a real browser round trip.
-run(build(ZONES_UNKNOWN), `
+// the other half: even with no DB row claiming the zone (Asia/Amman), the embedded map still
+// supplies Jordan, and the fallback reaches the pre-fill note and the branch scope too, not only
+// the box, in a real browser round trip. The zone is passed explicitly rather than left to the
+// machine's own clock, so the test states its own premise instead of only passing because this
+// development machine happens to be in Asia/Amman.
+run(build(ZONES_UNKNOWN, undefined, 'Asia/Amman'), `
   t('the country still fills in, from the embedded map this time', function () {
     var v = val('${C_ID}');
     if (v !== 'Jordan') return 'country box reads ' + JSON.stringify(v) + ', expected Jordan (no DB row claims Asia/Amman here, but the embedded map does, and Jordan is offered)';

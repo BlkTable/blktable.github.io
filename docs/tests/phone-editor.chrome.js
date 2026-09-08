@@ -57,6 +57,8 @@ const FIELDS = [
   { id: 'junk', label: 'a code that is not a country', type: 'phone', stored: '+0091234' },
   { id: 'legacy', label: 'a legacy local number', type: 'phone', stored: '0791234567' },
   { id: 'blank', label: 'no answer at all', type: 'phone', stored: '' },
+  { id: 'bjstaff', label: 'a blank answer to be filed under Benin', type: 'phone', stored: '' },
+  { id: 'cistaff', label: "a blank answer to be filed under Cote d'Ivoire", type: 'phone', stored: '' },
   { id: 'nanp', label: 'a NANP number, a real code that still recomposes identically', type: 'phone', stored: '+170123' },
   // A readable number stored with formatting. splitPhone strips it to parse the digits, so
   // recomposing from the cleaned local box would silently normalise the punctuation away.
@@ -181,6 +183,42 @@ ok('editing an unparsed number writes what was typed',
   var menu = document.getElementById('ed-nanp-menu');
   ok('a picker with no room below flips above the button',
     menu.classList.contains('up'), menu.className);
+})();
+
+// 8. THE GAP FIX 1 CLOSED: a blank phone question offers a country by default, so typing a
+// number into it saves with a dial code rather than as a bare local string. Before the fix,
+// a blank answer's row had no country at all: '+ ?', maxLength -1, the digit filter never on.
+(function () {
+  ok('a blank answer offers Jordan by default, same as before this field type widened',
+    dialOf('blank') === '+962', dialOf('blank'));
+  var e = inputOf('blank');
+  e.value = '0791234567';
+  e.dispatchEvent(new Event('input', { bubbles: true }));
+  ok('typing a number into a blank answer saves it with the default dial code',
+    edValues(FIELDS).blank === '+962791234567', JSON.stringify(edValues(FIELDS).blank));
+})();
+
+// 9. FIX 3: the staff panel's composer must not mangle a country whose own numbers begin
+// with 0 (Benin, Cote d'Ivoire) by stripping it unconditionally, the same rule as the public
+// form.
+(function () {
+  function pickAndType(id, query, digits) {
+    var btn = document.getElementById('ed-' + id + '-btn');
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    var s = document.getElementById('ed-' + id + '-search');
+    s.value = query; s.dispatchEvent(new Event('input', { bubbles: true }));
+    var li = document.getElementById('ed-' + id + '-list').querySelector('li');
+    li.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    var el = inputOf(id);
+    el.value = digits;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  pickAndType('bjstaff', 'benin', '0195123456');
+  ok("Benin's own example number, which begins with 0, composes correctly from the staff panel",
+    edValues(FIELDS).bjstaff === '+2290195123456', JSON.stringify(edValues(FIELDS).bjstaff));
+  pickAndType('cistaff', 'ivoire', '0123456789');
+  ok("Cote d'Ivoire's own example number, which begins with 0, composes correctly from the staff panel",
+    edValues(FIELDS).cistaff === '+2250123456789', JSON.stringify(edValues(FIELDS).cistaff));
 })();
 
 out.push(pass + ' passed, ' + fail + ' failed (the phone round trip, in chrome.exe)');

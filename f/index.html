@@ -596,6 +596,19 @@
     for (var i = 0; i < rows.length; i++) { if (phoneValid(rows[i], digits)) return true; }
     return false;
   }
+  // Stripping a leading trunk zero is correct for most countries, and is the fix for the
+  // commonest entry mistake there is (a Jordanian number typed with its 0). But Benin, Congo
+  // (Brazzaville) and Cote d'Ivoire's own national numbers begin with 0, so stripping it
+  // unconditionally makes their own example numbers unsubmittable. The stripped form is tried
+  // first and kept whenever it validates, so nothing currently accepted changes; the raw
+  // digits are used only as a fallback for a number the stripped form rejects.
+  function phoneLocalDigits(row, raw) {
+    var digits = String(raw == null ? "" : raw);
+    var stripped = digits.replace(/^0+/, "");
+    if (phoneValidOnDial(row, stripped)) return stripped;
+    if (phoneValidOnDial(row, digits)) return digits;
+    return stripped;
+  }
   function tzIsoOf(zone) {
     if (!TZ_MAP) {
       TZ_MAP = {};
@@ -2042,7 +2055,6 @@
   }
   // Full country list for the "country" field type. Stored value is the English name, so it
   // reads the same in the grid, in show_if and in exports as any other single answer.
-  // NB: named COUNTRY_NAMES_ALL, not COUNTRIES — the phone picker already owns `COUNTRIES`.
   var COUNTRY_NAMES_ALL = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo (Brazzaville)","Congo (Kinshasa)","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czechia","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
   // What THIS country question offers. A form covering more than one country carries
   // `options.only` — the countries it was built for — and must offer those and no others:
@@ -2164,7 +2176,7 @@
   // that it guessed, and the four we serve stay pinned at the top of the picker so putting it
   // right is one tap.
   function prefillPhone() {
-    var zone = deviceZone(), filled = [];
+    var zone = deviceZone();
     controls.forEach(function (c) {
       if (!c.f || c.f.type !== "phone" || !c.ccSet) return;
       var r = prefillPhoneRow(c.f, c.value(), zone);
@@ -2176,10 +2188,8 @@
       c.ccSet(r, note);
       // The picker refuses nothing, but read it back anyway: a note over a box that did not
       // change is worse than no note at all.
-      if (c.ccIso() !== r.iso) { if (note.parentNode) note.parentNode.removeChild(note); return; }
-      filled.push(r.iso);
+      if (c.ccIso() !== r.iso && note.parentNode) note.parentNode.removeChild(note);
     });
-    return filled;
   }
 
   // ---- Which shops a branch question offers ---------------------------------------------
@@ -2478,7 +2488,7 @@
         list.innerHTML = shown.map(function (r, i) {
           return '<li role="option" data-i="' + i + '"' +
             (i === hi ? ' class="hi"' : (pinCount && i === pinCount - 1 ? ' class="pin-last"' : '')) +
-            '><img src="' + flagUrl(r.flag) + '" alt=""> <span>' + esc(r.name) + "</span> <b>+" + r.cc + "</b></li>";
+            '><img src="' + flagUrl(r.flag) + '" alt="" loading="lazy"> <span>' + esc(r.name) + "</span> <b>+" + r.cc + "</b></li>";
         }).join("");
       }
       function openMenu() {
@@ -2518,7 +2528,10 @@
       document.addEventListener("click", function (e) { if (!picker.contains(e.target)) closeMenu(); });
       local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
       apply(phoneRow("JO"));
-      function digitsOf() { return local.value.replace(/\D/g, "").replace(/^0+/, ""); }
+      // phoneLocalDigits tries the trunk-zero-stripped form first and only falls back to the
+      // raw digits when the stripped form does not validate for the chosen country: see its
+      // definition in the shared block above.
+      function digitsOf() { return phoneLocalDigits(sc, local.value.replace(/\D/g, "")); }
       controls.push({ f: f, el: local, wrap: wrap,
         validate: function () { var d = digitsOf(); return (!f.required && d === "") || phoneValidOnDial(sc, d); },
         value: function () { var d = digitsOf(); return d ? "+" + sc.cc + d : null; },

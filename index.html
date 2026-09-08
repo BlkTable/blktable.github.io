@@ -4760,6 +4760,19 @@
     for (var i = 0; i < rows.length; i++) { if (phoneValid(rows[i], digits)) return true; }
     return false;
   }
+  // Stripping a leading trunk zero is correct for most countries, and is the fix for the
+  // commonest entry mistake there is (a Jordanian number typed with its 0). But Benin, Congo
+  // (Brazzaville) and Cote d'Ivoire's own national numbers begin with 0, so stripping it
+  // unconditionally makes their own example numbers unsubmittable. The stripped form is tried
+  // first and kept whenever it validates, so nothing currently accepted changes; the raw
+  // digits are used only as a fallback for a number the stripped form rejects.
+  function phoneLocalDigits(row, raw) {
+    var digits = String(raw == null ? "" : raw);
+    var stripped = digits.replace(/^0+/, "");
+    if (phoneValidOnDial(row, stripped)) return stripped;
+    if (phoneValidOnDial(row, digits)) return digits;
+    return stripped;
+  }
   function tzIsoOf(zone) {
     if (!TZ_MAP) {
       TZ_MAP = {};
@@ -5930,8 +5943,13 @@
   }
   function edPhone(id, value) {
     var p = parsePhone(value);
-    var r = p ? p.row : null;
     var raw = value == null ? "" : String(value);
+    // A blank answer offers Jordan by default, same as before this field type widened past
+    // four countries: otherwise the digit filter below never turns on (it is guarded on a
+    // country being selected) and a staff member's typed number is saved with no dial code
+    // at all. A non-blank value that fails to parse stays null, so "+ ?" keeps meaning only
+    // one thing: a value EXISTS and cannot be read, never "nothing typed yet".
+    var r = p ? p.row : (raw === "" ? phoneRow("JO") : null);
     // data-kept carries the stored value through the panel untouched, and data-touched says
     // whether anybody has edited it. Without the second, an unparsed value and a cleared box
     // look identical, and one of them must be given back exactly as it arrived.
@@ -5977,7 +5995,7 @@
       list.innerHTML = shown.map(function (r, i) {
         return '<li role="option" data-i="' + i + '"' +
           (i === hi ? ' class="hi"' : (pinCount && i === pinCount - 1 ? ' class="pin-last"' : '')) +
-          '><img src="' + edFlagUrl(r.flag) + '" alt=""> <span>' + esc(r.name) + "</span> <b>+" + r.cc + "</b></li>";
+          '><img src="' + edFlagUrl(r.flag) + '" alt="" loading="lazy"> <span>' + esc(r.name) + "</span> <b>+" + r.cc + "</b></li>";
       }).join("");
     }
     function touched() { row.setAttribute("data-touched", "1"); }
@@ -6033,7 +6051,10 @@
     edPhoneReg[id] = function () {
       var edited = row.getAttribute("data-touched") === "1";
       if (!edited) return kept === "" ? null : kept;
-      var d = local.value.replace(/\D/g, "").replace(/^0+/, "");
+      var raw = local.value.replace(/\D/g, "");
+      // phoneLocalDigits only applies once a country is selected; sc null keeps the old
+      // strip-and-compose-nothing path, same as before.
+      var d = sc ? phoneLocalDigits(sc, raw) : raw.replace(/^0+/, "");
       if (!d) return null;
       return sc ? "+" + sc.cc + d : local.value.trim() || null;
     };

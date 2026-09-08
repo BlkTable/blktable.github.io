@@ -354,3 +354,30 @@ run(build('Europe/Berlin', undefined, [
     if (ids.indexOf('phone-guess-note-q-phone-2') === -1) return 'no note carries id phone-guess-note-q-phone-2, got ' + ids.join(', ');
   });
 `, 'two phone questions each get their own note');
+
+// ---- 6. the leading-zero strip must not refuse a country whose own numbers begin with 0 ----
+// Benin, Congo (Brazzaville) and Cote d'Ivoire's own libphonenumber example numbers all begin
+// with a 0 that is part of the national number, not a trunk prefix. digitsOf() used to strip
+// it unconditionally, making these countries' own numbers unsubmittable on a required question.
+// The fix tries the stripped form first and only falls back to the raw digits when the
+// stripped form fails to validate, so a currently-accepted number (Jordan's trunk zero) must
+// be proven unchanged in the same breath as the newly-accepted ones.
+run(build(null), `
+  t('the page did not throw', function () { if (window.__err) return window.__err; });
+  return ta("Benin and Cote d'Ivoire's own example numbers, which begin with 0, now validate and compose", async function () {
+    open(); type('benin'); pickNth(0);
+    typeNumber('0195123456');
+    var bj = await submitted();
+    if (bj !== '+2290195123456') return 'Benin composed ' + JSON.stringify(bj);
+    open(); type('ivoire'); pickNth(0);
+    typeNumber('0123456789');
+    var ci = await submitted();
+    if (ci !== '+2250123456789') return "Cote d'Ivoire composed " + JSON.stringify(ci);
+    // The trunk-zero fix this guards against regressing: a Jordanian number typed with its
+    // leading 0 must still store WITHOUT it, because the stripped form validates first.
+    open(); type('jordan'); pickNth(0);
+    typeNumber('0791234567');
+    var jo = await submitted();
+    if (jo !== '+962791234567') return 'Jordan composed ' + JSON.stringify(jo) + ', the trunk-zero strip regressed';
+  });
+`, "Benin and Cote d'Ivoire's own numbers, Jordan's trunk zero unaffected");
