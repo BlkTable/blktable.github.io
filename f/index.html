@@ -2162,8 +2162,8 @@
       var r = prefillPhoneRow(c.f, c.value(), zone);
       if (!r) return;
       var note = document.createElement("div");
-      note.className = "hint";
-      note.id = "phone-guess-note";
+      note.className = "hint phone-guess-note";
+      note.id = "phone-guess-note-" + c.f.id;
       note.textContent = "Country code set from your location, change it if your number is from somewhere else. / تم تحديد رمز الدولة من موقعك، عدّله إذا كان رقمك من مكان آخر.";
       c.ccSet(r, note);
       // The picker refuses nothing, but read it back anyway: a note over a box that did not
@@ -2746,7 +2746,7 @@
     // AFTER the draft, never before: somebody coming back to a form in which they had
     // already corrected the guess must not have it put back over their correction.
     var guessedCountry = prefillCountry();
-    var guessedDials = prefillPhone();
+    prefillPhone();
     // Restoring answers and filling one in both fire nothing, so the consequences have to be
     // applied once here: the questions an answer reveals, the score it is worth, and the
     // shops the country leaves in the branch box.

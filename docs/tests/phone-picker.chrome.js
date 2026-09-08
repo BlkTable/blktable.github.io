@@ -35,11 +35,13 @@ const COUNTRY_ROWS = [
 // a device outside Amman is to replace Intl before the page's own script runs. The stub takes
 // the CDN script tag's place, which is line 246 of the page, above everything that reads a
 // zone. Passing null leaves Intl alone, which on this machine means Asia/Amman.
-function build(zone, fieldOpts) {
+// `extraFields` appends more question rows, used by the two-phone-question fixture below
+// (three live forms carry two or three phone questions, so that shape needs its own coverage).
+function build(zone, fieldOpts, extraFields) {
   const fields = [
     { id: P_ID, position: 0, label: 'Phone Number', type: 'phone', required: true, internal: false, options: fieldOpts || {} },
     { id: 'q-what', position: 1, label: 'Your Complaint', type: 'long_text', required: false, internal: false }
-  ];
+  ].concat(extraFields || []);
   const tz = zone ? `
   (function () {
     var real = Intl.DateTimeFormat;
@@ -120,9 +122,9 @@ const DRIVER = `<pre id="out">pending</pre>
   // does not select it. A dispatched click picks nothing and reads as a broken picker.
   function pickNth(i) { rows()[i].dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); }
   function typeNumber(v) { var el = local(); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }
-  // Given an id by prefillPhone in Task 4, the way the country question's note is
-  // country-guess-note. Absent until then, which is correct: this run does not pre-fill.
-  function note() { return document.getElementById('phone-guess-note'); }
+  // Class, not a fixed id: three live forms carry two or three phone questions, so the note
+  // is per question and its id is suffixed with the field id.
+  function note() { return document.querySelector('.phone-guess-note'); }
   // Presses the real Submit button and returns what the form WOULD store, or null when the
   // number was refused and the submit never reached the RPC. Resolves either way, so a
   // refusal is an assertable outcome rather than a hang.
@@ -329,3 +331,26 @@ run(build('Europe/Berlin', { prefill: false }), `
     if (note()) return 'an opted-out question still showed a note';
   });
 `, 'opted out of the guess');
+
+// ---- 5. more than one phone question on a form ----
+// Not hypothetical: three live forms carry two or three phone questions each. A fixed note id
+// can only ever belong to one of them, so this proves every guessed question gets its own note,
+// addressable by its own id, rather than all of them fighting over one element.
+run(build('Europe/Berlin', undefined, [
+  { id: 'q-phone-2', position: 2, label: 'Second Phone', type: 'phone', required: false, internal: false, options: {} }
+]), `
+  t('the page did not throw', function () { if (window.__err) return window.__err; });
+  t('both phone questions guess Germany', function () {
+    if (dial() !== '+49') return 'the first field reads ' + dial();
+    var second = document.getElementById('fld-q-phone-2').closest('.field').querySelector('.cc-dial');
+    if (second.textContent.trim() !== '+49') return 'the second field reads ' + second.textContent.trim();
+  });
+  t('each question gets its own note, not one shared between them', function () {
+    var notes = document.querySelectorAll('.phone-guess-note');
+    if (notes.length !== 2) return 'found ' + notes.length + ' notes, expected 2';
+    var ids = [].slice.call(notes).map(function (el) { return el.id; });
+    if (ids[0] === ids[1]) return 'both notes share the id ' + ids[0];
+    if (ids.indexOf('phone-guess-note-q-phone') === -1) return 'no note carries id phone-guess-note-q-phone, got ' + ids.join(', ');
+    if (ids.indexOf('phone-guess-note-q-phone-2') === -1) return 'no note carries id phone-guess-note-q-phone-2, got ' + ids.join(', ');
+  });
+`, 'two phone questions each get their own note');
