@@ -2134,6 +2134,46 @@
     prefillNoteEl = null;
   }
 
+  // ---- The country code the device implies -----------------------------------------------
+  // The country question has been pre-filled from the timezone since PR #146; this is the
+  // same idea one field down, on the answer that actually gets dialled.
+  //
+  // Returns null for "leave it alone", which covers four cases worth separating: the question
+  // already has an answer (a restored draft, or a correction), the question opted out, the
+  // device said nothing usable, and the guess is Jordan anyway. The last one matters because
+  // Jordan is what every form shows today, so landing there is not a guess and must not be
+  // announced as one.
+  function prefillPhoneRow(f, current, zone) {
+    if (current) return null;
+    if (f && f.options && f.options.prefill === false) return null;
+    var r = phoneRowForZone(zone);
+    return (r && r.iso !== "JO") ? r : null;
+  }
+  // A pre-filled answer gets accepted by default where an empty one forces a decision, so a
+  // wrong guess here would store an unreachable number more confidently than an empty box
+  // ever could. A Jordanian in Germany gets +49, types 0791234567, and it PASSES: nine digits
+  // is inside Germany's length set and the digits match its pattern. So the page says out loud
+  // that it guessed, and the four we serve stay pinned at the top of the picker so putting it
+  // right is one tap.
+  function prefillPhone() {
+    var zone = deviceZone(), filled = [];
+    controls.forEach(function (c) {
+      if (!c.f || c.f.type !== "phone" || !c.ccSet) return;
+      var r = prefillPhoneRow(c.f, c.value(), zone);
+      if (!r) return;
+      var note = document.createElement("div");
+      note.className = "hint";
+      note.id = "phone-guess-note";
+      note.textContent = "Country code set from your location, change it if your number is from somewhere else. / تم تحديد رمز الدولة من موقعك، عدّله إذا كان رقمك من مكان آخر.";
+      c.ccSet(r, note);
+      // The picker refuses nothing, but read it back anyway: a note over a box that did not
+      // change is worse than no note at all.
+      if (c.ccIso() !== r.iso) { if (note.parentNode) note.parentNode.removeChild(note); return; }
+      filled.push(r.iso);
+    });
+    return filled;
+  }
+
   // ---- Which shops a branch question offers ---------------------------------------------
   // The question's own scope is the countries the FORM covers, written on it by the builder
   // from the country groups ticked there — never typed twice, and never worked out by reading
@@ -2706,6 +2746,7 @@
     // AFTER the draft, never before: somebody coming back to a form in which they had
     // already corrected the guess must not have it put back over their correction.
     var guessedCountry = prefillCountry();
+    var guessedDials = prefillPhone();
     // Restoring answers and filling one in both fire nothing, so the consequences have to be
     // applied once here: the questions an answer reveals, the score it is worth, and the
     // shops the country leaves in the branch box.

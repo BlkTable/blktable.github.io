@@ -275,3 +275,57 @@ run(build(null), `
     if (wrong !== null) return 'a Jordanian number was accepted as Egyptian: ' + JSON.stringify(wrong);
   });
 `, 'search and per-country validation');
+
+// ---- 2. the guess, for a device that is not in Amman ----
+// If this passes with the zone hardcoded, the test is worthless: the machine is in Amman, so
+// "+962" would be right by accident. Europe/Berlin is a zone this machine is never in.
+run(build('Europe/Berlin'), `
+  t('the page did not throw', function () { if (window.__err) return window.__err; });
+  t('the country code is the device zone, not Jordan', function () {
+    if (dial() !== '+49') return 'the button reads ' + dial() + ', expected +49 for Europe/Berlin';
+  });
+  t('the placeholder came with it', function () {
+    if (local().placeholder !== '15123456789') return 'placeholder is ' + JSON.stringify(local().placeholder);
+  });
+  t('the page says out loud that it guessed', function () {
+    // A pre-filled answer is accepted by default where an empty one forces a decision, so an
+    // unannounced guess turns a wrong code into a confidently stored unreachable number.
+    if (!note()) return 'there is no note under the field';
+    if (!/from your location/.test(note().textContent)) return 'the note reads ' + JSON.stringify(note().textContent);
+  });
+  t('correcting the guess withdraws the note', function () {
+    open(); type('jordan'); pickNth(0);
+    if (dial() !== '+962') return 'the country did not change, it reads ' + dial();
+    if (note()) return 'the note is still there after the code was corrected';
+  });
+  return ta('a corrected number stores the country the person chose', async function () {
+    typeNumber('791234567');
+    var v = await submitted();
+    if (v !== '+962791234567') return 'submitted ' + JSON.stringify(v);
+  });
+`, 'pre-filled from Europe/Berlin');
+
+// ---- 3. a guess that is indistinguishable from the default is not announced ----
+run(build('Asia/Amman'), `
+  t('a device in Amman gets Jordan, and no note', function () {
+    if (dial() !== '+962') return 'the button reads ' + dial();
+    // Jordan is what every form shows today. Announcing it as a guess would put a note under
+    // a field that did not change.
+    if (note()) return 'a note was shown for a guess that changed nothing';
+  });
+`, 'Asia/Amman needs no note');
+
+// ---- 4. a device that will not say, and a question that opted out ----
+run(build('Etc/UTC'), `
+  t('a hardened browser reporting UTC falls back to Jordan silently', function () {
+    if (dial() !== '+962') return 'the button reads ' + dial();
+    if (note()) return 'a non-answer was announced as a guess';
+  });
+`, 'UTC is a non-answer');
+
+run(build('Europe/Berlin', { prefill: false }), `
+  t('options.prefill false opts the question out', function () {
+    if (dial() !== '+962') return 'the button reads ' + dial() + ' on a question that opted out';
+    if (note()) return 'an opted-out question still showed a note';
+  });
+`, 'opted out of the guess');
