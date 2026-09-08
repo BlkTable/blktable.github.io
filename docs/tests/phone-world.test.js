@@ -5,6 +5,10 @@
 // back to Jordan for anything it could not read, so opening a UAE number and saving it wrote
 // a Jordanian one.
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
+// phoneTable() builds its arrays inside the vm context, so they carry that realm's
+// Array.prototype and deepStrictEqual fails on prototype identity with "same structure but
+// not reference-equal". Same helper, same reason, as form-country.test.js.
+const asW = o => JSON.parse(JSON.stringify(o));
 function scripts(file) {
   const src = fs.readFileSync(file, 'utf8');
   return [...src.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
@@ -67,6 +71,14 @@ t('a shared dial code resolves to its primary country', () => {
   each((API, where) => {
     assert.strictEqual(API.splitPhone('+14165551234').iso, 'US', where);
     assert.strictEqual(API.splitPhone('+447911123456').iso, 'GB', where);
+    // A value can be splittable without being valid. "+170123" is 26 rows in the live
+    // database and it is NOT junk to the parser: +1 is a real dial code, so it resolves to
+    // the United States with 70123 as the local part. phoneValid then refuses it, because
+    // NANP numbers are 10 digits. Splitting and validating are separate jobs.
+    var one = API.splitPhone('+170123');
+    assert.strictEqual(one.iso, 'US', where);
+    assert.strictEqual(one.local, '70123', where);
+    assert.strictEqual(API.phoneValid(one.row, one.local), false, where);
   });
 });
 t('an unsplittable value returns null rather than guessing at Jordan', () => {
@@ -75,7 +87,7 @@ t('an unsplittable value returns null rather than guessing at Jordan', () => {
   each((API, where) => {
     assert.strictEqual(API.splitPhone('0791234567'), null, where);      // 33,795 legacy rows
     assert.strictEqual(API.splitPhone('791234567'), null, where);
-    assert.strictEqual(API.splitPhone('+170123'), null, where);         // junk, ~100 rows
+    assert.strictEqual(API.splitPhone('+0091234'), null, where);        // no dial code begins with 0, 11 rows
     assert.strictEqual(API.splitPhone(''), null, where);
     assert.strictEqual(API.splitPhone(null), null, where);
     assert.strictEqual(API.splitPhone(undefined), null, where);
@@ -174,7 +186,7 @@ t('a real foreign zone lands on the right dial code', () => {
 t('the four house countries are pinned first, the rest sorted by name', () => {
   each((API, where) => {
     const m = API.phoneMenuRows();
-    assert.deepStrictEqual(m.pinned.map(r => r.iso), ['JO', 'LB', 'IQ', 'SY'], where);
+    assert.deepStrictEqual(asW(m.pinned.map(r => r.iso)), ['JO', 'LB', 'IQ', 'SY'], where);
     assert.strictEqual(m.pinned.length + m.rest.length, 245, where);
     assert.ok(m.rest.every(r => ['JO', 'LB', 'IQ', 'SY'].indexOf(r.iso) === -1), 'a pinned country is also in the rest, ' + where);
     const names = m.rest.map(r => r.name);
