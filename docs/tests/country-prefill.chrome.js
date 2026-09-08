@@ -48,7 +48,11 @@ const ZONES_SWAPPED = [
   { code: 'jo', name_en: 'Jordan', name_ar: 'الأردن', timezones: ['Asia/Baghdad'] },
   { code: 'lebanon', name_en: 'Lebanon', name_ar: 'لبنان', timezones: ['Asia/Amman'] },
 ];
-// Nobody claims this machine's zone, so there is nothing to guess.
+// Nobody in this fixture's DATABASE claims this machine's zone (jo has Baghdad, lebanon has
+// Damascus). Before Task 6 that meant nothing to guess. Since Task 6, Asia/Amman is also a real
+// IANA zone in the embedded worldwide map, which names it Jordan -- and Jordan is a country this
+// question offers -- so the box still fills in, this time from the embedded map rather than the
+// countries table. See the section below.
 const ZONES_UNKNOWN = [
   { code: 'jo', name_en: 'Jordan', name_ar: 'الأردن', timezones: ['Asia/Baghdad'] },
   { code: 'lebanon', name_en: 'Lebanon', name_ar: 'لبنان', timezones: ['Asia/Damascus'] },
@@ -217,19 +221,27 @@ run(build(ZONES_SWAPPED, { 'q-country': 'Jordan' }), `
   });
 `, 'draft beats the guess');
 
-// ---- 4. an unrecognised zone changes nothing at all ----
+// ---- 4. no DB row claims the zone, but the embedded map still does ----
+// This section used to prove a genuinely unrecognised zone fills in nothing. Task 6 removed
+// the possibility of testing that here: this machine's zone (Asia/Amman) is now resolvable
+// worldwide, so a DB fixture that omits it no longer leaves it unresolvable -- the embedded map
+// answers instead. What is still worth proving, and what this checks now: the fallback reaches
+// the pre-fill note and the branch scope too, not only the box, in a real browser round trip.
 run(build(ZONES_UNKNOWN), `
-  t('a zone none of our countries claims fills nothing', function () {
+  t('the country still fills in, from the embedded map this time', function () {
     var v = val('${C_ID}');
-    if (v) return 'country was pre-filled with ' + JSON.stringify(v) + ' from a zone no country claims';
+    if (v !== 'Jordan') return 'country box reads ' + JSON.stringify(v) + ', expected Jordan (no DB row claims Asia/Amman here, but the embedded map does, and Jordan is offered)';
   });
-  t('and the form behaves exactly as it does today: both countries offered', function () {
+  t('and the shop list narrows to Jordan the same as any other guess', function () {
     var s = shops('${B_ID}');
+    var leaked = s.filter(function (x) { return /Mar Mikhael|Jal El Dib/.test(x); });
+    if (leaked.length) return 'Lebanese shops still offered: ' + leaked.join(', ');
     if (!s.some(function (x) { return /7th Circle/.test(x); })) return 'Jordanian shops missing: ' + s.join(', ');
-    if (!s.some(function (x) { return /Mar Mikhael/.test(x); })) return 'Lebanese shops missing: ' + s.join(', ');
   });
-  t('and no note is shown', function () { if (note()) return 'a note with nothing guessed'; });
-`, 'unknown zone changes nothing');
+  t('and the note says the answer was guessed', function () {
+    if (!note()) return 'no note next to a country the embedded map filled in';
+  });
+`, 'DB has no row for the zone, embedded map still names it');
 
 // ---- 5. a country the question does not offer is never filled in ----
 run(build(ZONES_UNOFFERED), `

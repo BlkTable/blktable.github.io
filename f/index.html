@@ -2075,11 +2075,19 @@
     var row = COUNTRY_ROWS.filter(function (c) {
       return (c.timezones || []).indexOf(zone) !== -1;
     })[0];
-    if (!row || !row.name_en) return null;
+    var name = row && row.name_en;
+    // The database stays authoritative, so an admin can still correct or add a zone without a
+    // deploy. The embedded map only answers what those four rows do not, which is every
+    // country outside the ones we operate in.
+    if (!name) {
+      var r = phoneRow(tzIsoOf(zone));
+      name = r ? r.name : null;
+    }
+    if (!name) return null;
     // Only ever a country THIS question offers. Opening the Jordan-and-Lebanon complaints
     // form in Baghdad must fill in nothing: Iraq is not on the list, so the box could not
     // show it and the branch question could not scope to it either.
-    return countryChoiceNames(f).indexOf(row.name_en) !== -1 ? row.name_en : null;
+    return countryChoiceNames(f).indexOf(name) !== -1 ? name : null;
   }
   // Kept separate from the DOM so the rule can be tested on its own. `current` is whatever
   // the question already holds — a restored draft, or an answer somebody has just corrected.
