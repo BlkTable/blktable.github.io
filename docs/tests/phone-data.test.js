@@ -169,9 +169,9 @@ t('the generated block is marked as generated in both pages', () => {
 t('the old four-country lists are gone', () => {
   assert.ok(!/\n  var COUNTRIES = \[/.test(SRC), 'index.html still declares var COUNTRIES');
   assert.ok(!/\n  var COUNTRIES = \[/.test(FSRC), 'f/index.html still declares var COUNTRIES');
-  // Task 5 restores this: Task 1 deliberately leaves COUNTRIES_ED alive so the record editor
-  // keeps working until its replacement exists.
-  // assert.ok(!/COUNTRIES_ED/.test(SRC), 'index.html still mentions COUNTRIES_ED');
+  // Task 1 deliberately left COUNTRIES_ED alive so the record editor kept working until its
+  // replacement existed; Task 5 replaced it, so this now holds.
+  assert.ok(!/COUNTRIES_ED/.test(SRC), 'index.html still mentions COUNTRIES_ED');
 });
 
 console.log(n + ' passed');

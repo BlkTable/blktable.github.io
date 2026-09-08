@@ -864,13 +864,23 @@
   .cc-picker { position: relative; flex: 0 0 auto; }
   .cc-btn { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); cursor: pointer; font-family: inherit; }
   .cc-btn:hover { border-color: var(--silver); }
-  .cc-flag, .cc-menu li img { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(var(--wash),0.15); background: rgba(var(--wash),0.2); }
+  .cc-flag, .cc-list li img { width: 20px; height: 14px; object-fit: cover; border-radius: 2px; display: block; box-shadow: 0 0 0 1px rgba(var(--wash),0.15); background: rgba(var(--wash),0.2); }
   .cc-caret { color: var(--muted); font-size: var(--fs-1); }
-  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; margin: 0; padding: 6px; list-style: none; min-width: 190px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px;  display: none; }
+  .cc-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; padding: 6px; min-width: 220px; background: var(--bg-2); border: 1px solid var(--field-border); border-radius: 10px; display: none; }
   .cc-menu.open { display: block; }
-  .cc-menu li { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 8px; cursor: pointer; color: var(--text); font-size: var(--fs-3); }
-  .cc-menu li:hover { background: rgba(var(--wash),0.06); }
-  .cc-menu li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+  /* Flipped above the button when the field is near the bottom of a long panel, which for a
+     record scrolled deep into a form is the common case. */
+  .cc-menu.up { top: auto; bottom: calc(100% + 6px); }
+  .cc-search { width: 100%; box-sizing: border-box; margin-bottom: 6px; }
+  /* Capped, because the list is 245 long. The search box is what makes that usable, and the
+     scroll is only there for people who would rather look than type. */
+  .cc-list { margin: 0; padding: 0; list-style: none; max-height: 240px; overflow-y: auto; }
+  .cc-list li { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 8px; cursor: pointer; color: var(--text); font-size: var(--fs-3); }
+  .cc-list li:hover, .cc-list li.hi { background: rgba(var(--wash),0.06); }
+  .cc-list li b { margin-left: auto; color: var(--muted); font-weight: 600; }
+  /* The four we actually serve, held above the other 241. */
+  .cc-list li.pin-last { border-bottom: 1px solid var(--field-border); margin-bottom: 6px; padding-bottom: 11px; }
+  .cc-empty { padding: 9px; color: var(--muted); font-size: var(--fs-3); }
   .ja-bulk .btn-wa { width: auto; padding: 11px 18px; border-radius: 8px; }
   .card-when { font-size: var(--fs-2); color: var(--silver); margin-top: 8px; }
   .card-sent { font-size: var(--fs-2); color: var(--ok); margin-top: 4px; }
@@ -1922,6 +1932,9 @@
     .cc-menu, .filter-panel {
       left: 8px; right: 8px; width: auto; max-width: calc(100vw - 16px);
     }
+    /* The list still has 245 rows to scroll through inside a panel clamped to the viewport
+       width; cap its height too or it runs off the bottom of a short phone screen. */
+    .cc-list { max-height: 45vh; }
     .filter-panel.fp-cond { width: auto; max-width: calc(100vw - 16px); }
     /* .rec-actions and .at-menu are position:fixed and get an inline left/top from JS.
        Don't set left/right here or we fight the inline placement; only cap the width so
@@ -4767,11 +4780,12 @@
     return (iso && PHONE_BY_ISO[iso]) || PHONE_BY_ISO.JO;
   }
   // ---- END SHARED phone helpers ----
+  // The country a stored number belongs to, for the flag beside an applicant. Reads the one
+  // table now, so a UAE number stops reading as Jordanian here too. waEligible still compares
+  // .dial against WA_DIAL, so the shape of what this returns is unchanged.
   function phoneCountry(phone) {
-    if (!phone) return null;
-    var p = String(phone).replace(/[^\d+]/g, "");
-    for (var i = 0; i < COUNTRIES.length; i++) { if (p.indexOf("+" + COUNTRIES[i].dial) === 0) return COUNTRIES[i]; }
-    return null;
+    var p = splitPhone(phone);
+    return p ? { dial: p.row.cc, name: p.row.name, flag: p.row.flag } : null;
   }
 
   // Admin-managed country list drives the Country field, the share picker, and canonical
@@ -5903,39 +5917,122 @@
   }
 
   // Phone editor with the full country/flag picker
-  var COUNTRIES_ED = [
-    { cc: "962", len: [9], ph: "7X XXX XXXX", flag: "jo", name: "Jordan" },
-    { cc: "961", len: [7, 8], ph: "XX XXX XXX", flag: "lb", name: "Lebanon" },
-    { cc: "963", len: [9], ph: "9XX XXX XXX", flag: "sy", name: "Syria" },
-    { cc: "964", len: [10], ph: "7XX XXX XXXX", flag: "iq", name: "Iraq" }
-  ];
   function edFlagUrl(c) { return "https://flagcdn.com/" + c + ".svg"; }
   var edPhoneReg = {};
+  // Reads a stored answer into the two halves the panel edits, and returns null when it
+  // cannot. Null is not a failure to handle politely: it is the instruction to leave the
+  // value alone. The old version answered "Jordan, and the whole string is the local part"
+  // for every value it could not read, which is how opening a UAE record and saving it wrote
+  // a Jordanian number.
   function parsePhone(value) {
-    var v = (value || "").replace(/[^\d]/g, "");
-    for (var i = 0; i < COUNTRIES_ED.length; i++) { var cc = COUNTRIES_ED[i].cc; if (v.indexOf(cc) === 0) return { idx: i, local: v.slice(cc.length) }; }
-    return { idx: 0, local: v };
+    var p = splitPhone(value);
+    return p ? { row: p.row, local: p.local } : null;
   }
   function edPhone(id, value) {
-    var p = parsePhone(value), c = COUNTRIES_ED[p.idx];
-    return '<div class="phone-row" id="' + id + '-row" data-idx="' + p.idx + '">' +
-      '<div class="cc-picker" id="' + id + '-picker"><button type="button" class="cc-btn" id="' + id + '-btn"><img class="cc-flag" id="' + id + '-flag" src="' + edFlagUrl(c.flag) + '" alt=""><span class="cc-dial" id="' + id + '-dial">+' + c.cc + '</span><span class="cc-caret">▾</span></button><ul class="cc-menu" id="' + id + '-menu" role="listbox"></ul></div>' +
-      '<input type="tel" inputmode="numeric" class="ed-in" id="' + id + '" value="' + esc(p.local) + '">' +
+    var p = parsePhone(value);
+    var r = p ? p.row : null;
+    var raw = value == null ? "" : String(value);
+    // data-kept carries the stored value through the panel untouched, and data-touched says
+    // whether anybody has edited it. Without the second, an unparsed value and a cleared box
+    // look identical, and one of them must be given back exactly as it arrived.
+    return '<div class="phone-row" id="' + id + '-row" data-iso="' + esc(r ? r.iso : "") + '"' +
+      ' data-kept="' + esc(raw) + '" data-touched="0">' +
+      '<div class="cc-picker" id="' + id + '-picker">' +
+      '<button type="button" class="cc-btn" id="' + id + '-btn">' +
+      (r ? '<img class="cc-flag" id="' + id + '-flag" src="' + edFlagUrl(r.flag) + '" alt="">' : '<img class="cc-flag" id="' + id + '-flag" alt="">') +
+      '<span class="cc-dial" id="' + id + '-dial">' + (r ? "+" + r.cc : "+ ?") + '</span><span class="cc-caret">▾</span></button>' +
+      '<div class="cc-menu" id="' + id + '-menu"><input type="text" class="cc-search" id="' + id + '-search" placeholder="Search country or code…" autocomplete="off">' +
+      '<ul class="cc-list" id="' + id + '-list" role="listbox"></ul><div class="cc-empty" id="' + id + '-empty" hidden>No matches</div></div>' +
+      '</div>' +
+      '<input type="tel" inputmode="numeric" class="ed-in" id="' + id + '" value="' + esc(p ? p.local : raw) + '">' +
       "</div>";
   }
   function wireEdPhone(id) {
     var row = document.getElementById(id + "-row"); if (!row) return;
-    var state = { idx: parseInt(row.getAttribute("data-idx"), 10) || 0 };
     var btn = document.getElementById(id + "-btn"), menu = document.getElementById(id + "-menu"),
         flag = document.getElementById(id + "-flag"), dial = document.getElementById(id + "-dial"),
-        picker = document.getElementById(id + "-picker"), local = document.getElementById(id);
-    function apply(i) { state.idx = i; var c = COUNTRIES_ED[i]; flag.src = edFlagUrl(c.flag); dial.textContent = "+" + c.cc; local.placeholder = c.ph; local.maxLength = Math.max.apply(null, c.len) + 1; }
-    COUNTRIES_ED.forEach(function (c, i) { var li = document.createElement("li"); li.innerHTML = '<img src="' + edFlagUrl(c.flag) + '" alt=""> <span>' + c.name + "</span> <b>+" + c.cc + "</b>"; li.addEventListener("click", function () { apply(i); menu.classList.remove("open"); try { local.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {} }); menu.appendChild(li); });
-    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
-    document.addEventListener("click", function (e) { if (!picker.contains(e.target)) menu.classList.remove("open"); });
-    local.addEventListener("input", function () { local.value = local.value.replace(/\D/g, ""); });
-    apply(state.idx);
-    edPhoneReg[id] = function () { var d = local.value.replace(/\D/g, "").replace(/^0+/, ""); return d ? "+" + COUNTRIES_ED[state.idx].cc + d : null; };
+        picker = document.getElementById(id + "-picker"), local = document.getElementById(id),
+        search = document.getElementById(id + "-search"), list = document.getElementById(id + "-list"),
+        empty = document.getElementById(id + "-empty");
+    var sc = phoneRow(row.getAttribute("data-iso")) || null, shown = [], hi = -1;
+    var kept = row.getAttribute("data-kept") || "";
+    function apply(r) {
+      sc = r;
+      flag.src = edFlagUrl(r.flag); flag.alt = r.name;
+      dial.textContent = "+" + r.cc;
+      local.placeholder = r.ph;
+      local.maxLength = Math.max.apply(null, r.len) + 1;
+    }
+    function render() {
+      var q = search.value.trim().toLowerCase();
+      var m = phoneMenuRows();
+      shown = q ? m.pinned.concat(m.rest).filter(function (r) { return phoneMatch(r, q); })
+                : m.pinned.concat(m.rest);
+      var pinCount = q ? 0 : m.pinned.length;
+      empty.hidden = shown.length > 0;
+      list.innerHTML = shown.map(function (r, i) {
+        return '<li role="option" data-i="' + i + '"' +
+          (i === hi ? ' class="hi"' : (pinCount && i === pinCount - 1 ? ' class="pin-last"' : '')) +
+          '><img src="' + edFlagUrl(r.flag) + '" alt=""> <span>' + esc(r.name) + "</span> <b>+" + r.cc + "</b></li>";
+      }).join("");
+    }
+    function touched() { row.setAttribute("data-touched", "1"); }
+    function closeMenu() { menu.classList.remove("open"); menu.classList.remove("up"); }
+    function openMenu() {
+      hi = -1; search.value = ""; render();
+      menu.classList.add("open");
+      // Flipped above the button when there is not enough room below, the same check the
+      // public form's picker uses: a record panel is often scrolled near the bottom of a
+      // long form. placeMenuInView is not used here: it writes viewport coordinates, which
+      // is wrong for a menu positioned absolutely inside .cc-picker.
+      var space = window.innerHeight - btn.getBoundingClientRect().bottom;
+      menu.classList.toggle("up", space < menu.offsetHeight + 12);
+      try { search.focus(); } catch (e) {}
+    }
+    function pick(r) {
+      apply(r); touched();
+      closeMenu();
+      // The panel autosaves off input and change, and settling a choice in code fires
+      // neither, so it is dispatched by hand. Same reason the date box dispatches both.
+      try { local.dispatchEvent(new Event("change", { bubbles: true })); } catch (e) {}
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (menu.classList.contains("open")) { closeMenu(); return; }
+      openMenu();
+    });
+    search.addEventListener("input", function () { hi = -1; render(); });
+    search.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { e.preventDefault(); hi = Math.min(hi + 1, shown.length - 1); render(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); hi = Math.max(hi - 1, 0); render(); }
+      else if (e.key === "Enter") { e.preventDefault(); if (shown[hi >= 0 ? hi : 0]) pick(shown[hi >= 0 ? hi : 0]); }
+      else if (e.key === "Escape") { e.preventDefault(); closeMenu(); }
+    });
+    list.addEventListener("mousedown", function (e) {
+      var li = e.target.closest ? e.target.closest("li") : null;
+      if (!li) return;
+      e.preventDefault();
+      pick(shown[+li.getAttribute("data-i")]);
+    });
+    document.addEventListener("click", function (e) { if (!picker.contains(e.target)) closeMenu(); });
+    local.addEventListener("input", function () {
+      touched();
+      // Only a parsed number is digits-only. An unparsed value is shown raw and must stay
+      // typeable, because a legacy 0-prefixed number is corrected by editing it.
+      if (sc) local.value = local.value.replace(/\D/g, "");
+    });
+    local.addEventListener("change", touched);
+    if (sc) apply(sc);
+    // What a save writes. An untouched value the panel could not parse goes back exactly as
+    // it arrived: 33,795 legacy local numbers and about 600 with a code we could not read
+    // reach this line, and rewriting them is the bug being fixed.
+    edPhoneReg[id] = function () {
+      var edited = row.getAttribute("data-touched") === "1";
+      if (!edited) return kept === "" ? null : kept;
+      var d = local.value.replace(/\D/g, "").replace(/^0+/, "");
+      if (!d) return null;
+      return sc ? "+" + sc.cc + d : local.value.trim() || null;
+    };
   }
   function edExtraRows(defs, extra) {
     extra = extra || {};
@@ -8228,7 +8325,7 @@
   function countryFlag(code) {
     var c = COUNTRY_LIST.filter(function (x) { return x.code === code; })[0];
     var d = (c && c.dial) ? String(c.dial).replace(/[^0-9]/g, "") : "";
-    var m = d ? COUNTRIES.filter(function (x) { return x.dial === d; })[0] : null;
+    var m = d ? phoneByDial(d) : null;
     return m ? m.flag : null;
   }
   // A caret on a table's sidebar line, and only when something hangs under it. The Job
