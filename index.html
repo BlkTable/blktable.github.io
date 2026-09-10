@@ -2314,6 +2314,15 @@
               </button>
               <div class="cols-panel" id="card-panel"></div>
             </div>
+            <!-- What the "View" action on a record's ⋯ menu shows: a handful of chosen
+                 fields, read-only. Lives beside Customize cards for the same reason — both
+                 pick fields out of the same table for the same two views. -->
+            <div class="cols-wrap" id="view-wrap" style="display:none;">
+              <button class="tb-btn" id="view-btn" type="button" title="Choose what a record's View shows at a glance">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>Customize view
+              </button>
+              <div class="cols-panel" id="view-panel"></div>
+            </div>
             <div class="cols-wrap" id="cols-wrap" style="display:none;">
               <button class="tb-btn" id="cols-btn" type="button" title="Show or hide fields">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="2.5"></circle><path d="M4 20L20 4"></path></svg>Hide fields
@@ -6495,17 +6504,22 @@
     placeMenuInView(btn, ul, "right");
   }
   // mayDelete: pass canManage(<table key>) — admins and that table's managers get Delete.
-  function recMenuHtml(actions, mayDelete) {
+  // mayEdit: pass canEdit(<table id>) — View always opens (read-only, the Customize view
+  // fields); Edit is the full form, and only offered to someone who can actually write to it.
+  function recMenuHtml(actions, mayDelete, mayEdit) {
     var acts = (actions || []).map(function (a, i) { return '<li data-act="do" data-ai="' + i + '">' + esc(a.label || defaultActionLabel(a.type)) + "</li>"; }).join("");
-    return '<div class="rec-menu"><button type="button" class="rec-kebab" aria-label="Actions">⋯</button><ul class="rec-actions">' + acts + '<li data-act="view">View</li>' + (mayDelete ? '<li data-act="delete" class="danger">Delete</li>' : "") + "</ul></div>";
+    return '<div class="rec-menu"><button type="button" class="rec-kebab" aria-label="Actions">⋯</button><ul class="rec-actions">' + acts +
+      '<li data-act="view">View</li>' + (mayEdit ? '<li data-act="edit">Edit</li>' : "") +
+      (mayDelete ? '<li data-act="delete" class="danger">Delete</li>' : "") + "</ul></div>";
   }
-  function wireRecMenu(el, onView, onDelete, onAction, actions) {
+  function wireRecMenu(el, onView, onDelete, onAction, actions, onEdit) {
     var menu = el.querySelector(".rec-menu"); if (!menu) return;
     menu.querySelector(".rec-kebab").addEventListener("click", function (e) { e.stopPropagation(); var open = menu.classList.contains("open"); closeAllRecMenus(); if (!open) { menu.classList.add("open"); placeRecMenu(menu); } });
     [].slice.call(menu.querySelectorAll(".rec-actions li")).forEach(function (li) {
       li.addEventListener("click", function (e) {
         e.stopPropagation(); menu.classList.remove("open"); var act = li.getAttribute("data-act");
         if (act === "view" && onView) onView();
+        else if (act === "edit" && onEdit) onEdit();
         else if (act === "delete" && onDelete) onDelete();
         else if (act === "do" && onAction && actions) { var ai = +li.getAttribute("data-ai"); if (actions[ai]) onAction(actions[ai]); }
       });
@@ -8725,10 +8739,18 @@
     // shows every column and has "Hide fields" instead.
     var cardWrap = document.getElementById("card-wrap");
     if (cardWrap) cardWrap.style.display = customView === "table" ? "none" : "";
+    // Customize view belongs to the same two drawn-from-a-handful-of-fields views as
+    // Customize cards — the grid already shows every column.
+    var viewWrap = document.getElementById("view-wrap");
+    if (viewWrap) viewWrap.style.display = customView === "table" ? "none" : "";
     var rowhBtn = document.getElementById("rowh-btn");
     if (rowhBtn) rowhBtn.style.display = customView === "table" ? "" : "none"; // row height is a grid idea
     renderSortPanel(currentCustom.table, fields);
-    if (customView !== "table") { renderColorPanel(currentCustom.table, fields); renderCardPanel(currentCustom.table, fields); }
+    if (customView !== "table") {
+      renderColorPanel(currentCustom.table, fields);
+      renderCardPanel(currentCustom.table, fields);
+      renderViewPanel(currentCustom.table, fields);
+    }
     updateSortLabel();
     var expBtn = document.getElementById("custom-export");
     if (expBtn) {
@@ -8836,7 +8858,7 @@
       // kebab lands in the left slot and reads as a stray button. A row has no slots.
       var actions = '<div class="card-actions">' +
         (kcards ? '<span class="slot"></span>' + (moveHtml || "<span></span>") : moveHtml) +
-        recMenuHtml(tableActions.concat(slotActions(s, mayManageTbl), notifyActions(currentCustom.table, s)), mayManageTbl) + "</div>";
+        recMenuHtml(tableActions.concat(slotActions(s, mayManageTbl), notifyActions(currentCustom.table, s)), mayManageTbl, mayEdit) + "</div>";
       var mine = isMine(s);
       var tag = mine ? '<span class="mine-tag" title="This entry is waiting on you">For you</span>' : "";
       tag += flagTagHtml(currentCustom.table, d);
@@ -8906,7 +8928,7 @@
       wireStar(el, currentCustom.table.id, s.id);
       el.addEventListener("click", function () { openCustomDetail(s, fields); });
       var menuActions = tableActions.concat(slotActions(s, mayManageTbl), notifyActions(currentCustom.table, s));
-      wireRecMenu(el, function () { openCustomDetail(s, fields); }, function () { deleteCustomSub(s, fields); },
+      wireRecMenu(el, function () { openCustomView(s, fields); }, function () { deleteCustomSub(s, fields); },
         // A place move is not a WhatsApp/Call/Email template, so it is intercepted before the
         // template dispatcher rather than taught to it.
         function (a) {
@@ -8914,7 +8936,7 @@
           else if (a && a.type === "notify") openNotify(s, fields, a.rule);
           else doRecordAction(a, s, fields);
         },
-        menuActions);
+        menuActions, function () { openCustomDetail(s, fields); });
       [].slice.call(el.querySelectorAll("[data-move]")).forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); setSubStatus(s, b.getAttribute("data-move")); }); });
       [].slice.call(el.querySelectorAll("[data-decide]")).forEach(function (b) {
         b.addEventListener("click", function (e) {
@@ -10716,6 +10738,83 @@
       });
     });
   }
+  // The panel for Customize view. Same shape as Customize cards (tick, reorder, Reset, an
+  // admin-only "Save for everyone") but drawn from viewChoosable/viewFieldsFor instead of the
+  // card equivalents, so a file question can be picked here.
+  function renderViewPanel(t, fields) {
+    var panel = document.getElementById("view-panel");
+    if (!panel || !t) return;
+    var all = viewChoosable(fields);
+    var chosen = viewFieldsFor(t, fields).map(function (f) { return f.id; });
+    var rest = all.filter(function (f) { return chosen.indexOf(f.id) === -1; });
+    var label = function (id) {
+      var f = all.filter(function (x) { return x.id === id; })[0];
+      return f ? f.label : id;
+    };
+    panel.innerHTML =
+      '<div class="cols-head"><b>Customize view</b>' +
+      '<span><button class="linkbtn" id="view-reset" type="button">Reset</button>' +
+      (isAdmin ? '<button class="linkbtn" id="view-save" type="button">Save for everyone</button>' : "") +
+      "</span></div>" +
+      '<div class="cols-head"><b>Fields</b></div>' +
+      chosen.map(function (id, i) {
+        return '<div class="card-fld">' +
+          '<label><input type="checkbox" data-vf="' + esc(id) + '" checked><span class="cf-name">' + esc(label(id)) + "</span></label>" +
+          '<span class="card-ord">' +
+          '<button type="button" class="linkbtn" data-up="' + esc(id) + '"' + (i === 0 ? " disabled" : "") + '>&#9650;</button>' +
+          '<button type="button" class="linkbtn" data-down="' + esc(id) + '"' + (i === chosen.length - 1 ? " disabled" : "") + '>&#9660;</button>' +
+          "</span></div>";
+      }).join("") +
+      rest.map(function (f) {
+        return '<div class="card-fld"><label><input type="checkbox" data-vf="' + esc(f.id) + '"><span class="cf-name">' + esc(f.label) + "</span>" +
+          (f.internal ? '<span style="color:var(--muted);font-size:var(--fs-2);">(staff)</span>' : "") + "</label></div>";
+      }).join("");
+    var apply = function (ids) {
+      cardSave(t, { viewFields: ids });
+      renderCustom();
+    };
+    panel.querySelectorAll("input[data-vf]").forEach(function (cb) {
+      cb.addEventListener("change", function () {
+        var id = cb.getAttribute("data-vf");
+        var ids = chosen.slice();
+        if (cb.checked) { if (ids.indexOf(id) === -1) ids.push(id); }
+        else ids = ids.filter(function (x) { return x !== id; });
+        // A quick view with nothing ticked is nothing to look at, and would leave the panel
+        // with nothing left to untick — same guard as Customize cards.
+        if (!ids.length) { renderViewPanel(t, fields); return; }
+        apply(ids);
+      });
+    });
+    panel.querySelectorAll("[data-up],[data-down]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var up = b.hasAttribute("data-up");
+        var id = b.getAttribute(up ? "data-up" : "data-down");
+        var ids = chosen.slice();
+        var i = ids.indexOf(id), j = up ? i - 1 : i + 1;
+        if (i === -1 || j < 0 || j >= ids.length) return;
+        ids[i] = ids[j]; ids[j] = id;
+        apply(ids);
+      });
+    });
+    var rb = document.getElementById("view-reset");
+    if (rb) rb.addEventListener("click", function (e) {
+      e.stopPropagation();
+      viewReset(t);
+      renderCustom();
+    });
+    var sb = document.getElementById("view-save");
+    if (sb) sb.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var cfg = Object.assign({}, t.config || {}, {
+        view_fields: viewFieldsFor(t, fields).map(function (f) { return f.id; })
+      });
+      db.from("app_tables").update({ config: cfg }).eq("id", t.id).then(function (r) {
+        if (r.error) { window.alert("Could not save: " + (r.error.message || "")); return; }
+        t.config = cfg; sb.textContent = "Saved ✓";
+      });
+    });
+  }
   function renderColorPanel(t, fields) {
     var panel = document.getElementById('color-panel');
     var cols = colorableCols(fields);
@@ -10817,17 +10916,38 @@
   }
   // Reset drops YOUR choice back to the table default: clear this browser's copy, the in-memory
   // account copy, and the saved account row. It never touches the table default itself.
-  function cardReset(t) {
+  //
+  // Customize cards and Customize view share one row per user per table (same as the two
+  // share cardMine/cardLocal/cardSave) — so Reset on one must only clear ITS OWN keys, not
+  // the whole row, or resetting your card layout would silently also throw away your chosen
+  // View fields.
+  function prefsClearKeys(t, keys) {
     if (!t) return;
-    try { localStorage.removeItem(cardKey(t)); } catch (e) {}
+    var mine = cardLocal(t) || {};
+    keys.forEach(function (k) { delete mine[k]; });
+    var empty = !Object.keys(mine).length;
+    try {
+      if (empty) localStorage.removeItem(cardKey(t));
+      else localStorage.setItem(cardKey(t), JSON.stringify(mine));
+    } catch (e) {}
     if (t.id) {
-      delete cardServerPrefs[t.id];
       var uid = typeof myUserId !== "undefined" ? myUserId : null;
       if (uid && typeof db !== "undefined") {
-        db.from("user_card_prefs").delete().eq("user_id", uid).eq("table_id", t.id).then(function () {}, function () {});
+        if (empty) {
+          delete cardServerPrefs[t.id];
+          db.from("user_card_prefs").delete().eq("user_id", uid).eq("table_id", t.id).then(function () {}, function () {});
+        } else {
+          cardServerPrefs[t.id] = mine;
+          db.from("user_card_prefs")
+            .upsert({ user_id: uid, table_id: t.id, prefs: mine, updated_at: new Date().toISOString() },
+                    { onConflict: "user_id,table_id" })
+            .then(function () {}, function () {});
+        }
       }
     }
   }
+  function cardReset(t) { prefsClearKeys(t, ["fields", "cover", "fit", "labels"]); }
+  function viewReset(t) { prefsClearKeys(t, ["viewFields"]); }
   // The pseudo-fields a card may carry that are columns on the record rather than answers
   // in it. summaryFields already understands both; the panel has to offer them.
   function cardChoosable(fields) {
@@ -10843,6 +10963,37 @@
       }).filter(Boolean);
     }
     return (fields || []).filter(function (f) { return !isFileField(f); }).slice(0, 3);
+  }
+
+  // ---- Customize view: what the ⋯ menu's "View" action shows -------------------
+  // Same three-level resolution as the card fields (this browser, then config.view_fields,
+  // then a fallback), stored in the same per-user-per-table row. The one real difference:
+  // a file question IS offered here, and never dropped from the chosen list — a table like
+  // Customer Complaints exists to show the photo, not to hide it the way a card cover does.
+  function viewChoosable(fields) {
+    return (fields || []).filter(function (f) { return !isScorerField(f); }).concat(pseudoCols());
+  }
+  function viewFieldsFor(t, fields) {
+    var cfg = (t && t.config) || {};
+    var mine = cardMine(cardServerPrefs[t && t.id], cardLocal(t));
+    var ids = (mine.viewFields && mine.viewFields.length) ? mine.viewFields
+             : (cfg.view_fields && cfg.view_fields.length) ? cfg.view_fields : null;
+    var resolve = function (list) {
+      return (list || []).map(function (id) {
+        if (isPseudoCol(id)) return pseudoCols().filter(function (p) { return p.id === id; })[0];
+        return (fields || []).filter(function (f) { return f.id === id; })[0];
+      }).filter(Boolean);
+    };
+    if (ids && ids.length) return resolve(ids);
+    // Nothing chosen for View yet: the table's curated detail fields if it has any (they were
+    // already picked as "what matters"), otherwise the same handful the card summary shows —
+    // either way View is never empty just because nobody has configured it.
+    var detailIds = cfg.detail_fields;
+    if (detailIds && detailIds.length) {
+      var got = resolve(detailIds);
+      if (got.length) return got;
+    }
+    return summaryFields(t, fields);
   }
 
   // ---- Which shop a record belongs to -------------------------------------
@@ -12061,6 +12212,44 @@
     var div = roll.divisor != null ? Number(roll.divisor) : NaN;
     var possible = isFinite(div) && div > 0 ? div : roll.of.length;
     return { earned: earned, possible: possible };
+  }
+  // The record's "View" action: read-only, and drawn from only the fields Customize view
+  // chose (viewFieldsFor) — for Customer Complaints that is the photo, the name, the phone
+  // and the complaint text, not the staff follow-up fields the full form also carries.
+  // Anyone who can open the record can open this; "Edit" only shows for someone who can
+  // actually write to the table, and hands off to the real editable panel in place.
+  function openCustomView(s, fields) {
+    var d = s.data || {};
+    var body = document.getElementById("modal-body");
+    var t = currentCustom && currentCustom.table;
+    var picked = viewFieldsFor(t, fields);
+    var recTitle = "";
+    var sumF = summaryFields(t, fields);
+    if (sumF.length) recTitle = cardText(sumF[0], d, s);
+    if (!String(recTitle).trim()) recTitle = recordBranch(s, fields) || "Record";
+    var head = '<div class="rec-head"><div class="rh-main"><div class="rh-title">' + esc(recTitle) + "</div>" +
+      '<div class="rh-meta">' + esc(recordNumber(s)) + " · Submitted " + esc(fmtDate(s.created_at)) + "</div></div></div>";
+    var grid = picked.map(function (f) {
+      if (isPseudoCol(f.id)) {
+        var pv = f.id === "__branch" ? branchPillHtml(s.branch)
+               : f.id === "__country" ? esc(recordCountryText(s, fields))
+               : esc(fmtDate(s.created_at));
+        return '<div class="m-field"><div class="k">' + esc(f.label) + "</div><div class=\"v\">" + pv + "</div></div>";
+      }
+      if (isFileField(f)) {
+        var tiles = photoSectionHtml(fields, d, null, { only: f.id });
+        return tiles ? '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>" : "";
+      }
+      return '<div class="m-field' + (f.type === "long_text" ? " full" : "") + '"><div class="k">' +
+        esc(f.label) + '</div><div class="v">' + cellValueHtml(f, d, s) + "</div></div>";
+    }).join("");
+    var mayEditHere = canEdit(t ? t.id : "");
+    body.innerHTML = head + '<div class="m-grid">' + grid + "</div>" +
+      (mayEditHere ? '<div class="more-line"><button type="button" class="linkbtn" id="cd-view-edit">Edit</button></div>' : "");
+    var eb = document.getElementById("cd-view-edit");
+    if (eb) eb.addEventListener("click", function () { openCustomDetail(s, fields); });
+    document.getElementById("modal").classList.add("open");
+    wireImportedFiles();   // resolves the photo tile(s) the same way the read-only detail does
   }
   function openCustomDetail(s, fields) {
     if (detailShowAllFor !== s.id) { detailShowAll = false; detailShowAllFor = s.id; }
@@ -15265,6 +15454,10 @@
     e.stopPropagation();
     document.getElementById("card-panel").classList.toggle("open");
   });
+  document.getElementById("view-btn").addEventListener("click", function (e) {
+    e.stopPropagation();
+    document.getElementById("view-panel").classList.toggle("open");
+  });
   document.getElementById("group-btn").addEventListener("click", function (e) {
     e.stopPropagation();
     document.getElementById("group-panel").classList.toggle("open");
@@ -15288,6 +15481,10 @@
   document.addEventListener("click", function (e) {
     var cardW = document.getElementById("card-wrap");
     if (cardW && !cardW.contains(e.target)) document.getElementById("card-panel").classList.remove("open");
+  });
+  document.addEventListener("click", function (e) {
+    var viewW = document.getElementById("view-wrap");
+    if (viewW && !viewW.contains(e.target)) document.getElementById("view-panel").classList.remove("open");
   });
   document.addEventListener("click", function (e) {
     var sw = document.getElementById("sort-wrap");
