@@ -801,7 +801,7 @@
   .regen-danger { background: #c0392b !important; color: #fff !important; border-color: #c0392b !important; }
   .ed-in { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); font-family: inherit; outline: none; box-sizing: border-box; margin-top: 4px; }
   .ed-in:focus { border-color: var(--silver); }
-  textarea.ed-in { min-height: 70px; resize: vertical; }
+  textarea.ed-in { min-height: 70px; resize: none; overflow: hidden; }
   /* the same red the public form uses to point at the answer that is missing. .ed-checks is
      here too because a multi-select is a box of checkboxes, not an .ed-in. */
   .ed-in.invalid, .ed-checks.invalid { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
@@ -5862,6 +5862,15 @@
       (rowId ? ' id="' + rowId + '"' : "") +
       (hidden ? ' style="display:none;"' : "") + '><div class="k">' + esc(label) +
       (required ? '<span class="k-req">required</span>' : "") + (chip || "") + "</div>" + inner + "</div>";
+  }
+  // A long-text answer grows to fit what it holds instead of scrolling — same standard the
+  // table builder's own textareas already use (bldGrow), just wired to every .ed-in box the
+  // record panel, the new record panel and the imported-extras block draw from edText/edRow.
+  function wireEdGrow(root) {
+    [].slice.call((root || document).querySelectorAll("textarea.ed-in")).forEach(function (el) {
+      bldGrow(el);
+      el.addEventListener("input", function () { bldGrow(el); });
+    });
   }
   // One editor row for one question. Both places a record is edited — the record panel and
   // the New record panel — build their rows here, so the two cannot drift apart the way a
@@ -12309,6 +12318,7 @@
       moreLineHtml(d) +
       '<div class="m-sub" style="margin-top:14px;">Details</div><div class="m-grid">' + meta + '</div><div class="chain" id="cd-chain"></div>' +
       '<div id="cd-notify"></div>';
+    wireEdGrow(body);
     wireMoreLine(s, fields); wireLinkChips(); wireAlertBanner(s, fields); renderRecordNotify(s, fields);
     fillRecordLink(s, childT);
     if (mayAssign) {
@@ -12849,6 +12859,7 @@
       '<div class="nr-foot"><button type="button" class="btn-new" id="nr-save">Create record</button>' +
       '<span class="nr-msg" id="nr-msg"></span></div>';
 
+    wireEdGrow(body);
     asked.forEach(function (f) { if (f.type === "phone") wireEdPhone("ed-" + f.id); });
     // the free-text box behind an "other" choice, same behaviour as the record panel
     asked.forEach(function (f) {
