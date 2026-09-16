@@ -61,6 +61,11 @@ var bldAlertFields = [
   { id: 'f-branch', label: 'Branch - الفرع' },
   { id: 'f-status', label: 'Status' }
 ];
+// Single-country table by default (the shape most of this file's rules describe): no
+// countries checklist is offered, so bldAlertCountries starts empty. The country-filter
+// cases set it themselves before their own roundTrip call.
+var bldAlertCountries = [];
+function countryLabel(code) { return { jo: 'Jordan', lebanon: 'Lebanon' }[code] || code; }
 ${fns}
 var out = [], pass = 0, fail = 0;
 function ok(name, cond, extra) {
@@ -205,6 +210,93 @@ ok('the Slack one is still Slack', pair[1] && pair[1].channel === 'slack' &&
    pair[1].send && pair[1].send.slack_channel === 'C0BT4B4C2V7', JSON.stringify(pair[1]));
 ok('the email one is still email', pair[2] && pair[2].channel === 'email' &&
    pair[2].send && pair[2].send.to_emails.length === 2, JSON.stringify(pair[2]));
+
+// ---- the country filter: orthogonal to when/field/equals, only on a multi-country table ----
+bldAlertCountries = ['jo', 'lebanon'];
+
+// A rule with no "countries" key at all — every alert saved before this feature existed,
+// and the shape "All countries" writes — must hydrate with the master box checked and
+// every individual box checked-but-disabled, and must round-trip with NO countries key,
+// not with one naming every code. Writing it out anyway would be a silent behaviour change
+// for every alert on every multi-country table the day this feature ships.
+var noCountry = roundTrip({ id: 'A7-nocountry', when: 'always', label: 'Complaints', channel: 'email',
+  send: { to_emails: ['ops@blk.jo'], subject: null, params: [{ text: 'hi' }] } });
+same('an alert with no countries key reports no problems', noCountry.problems, []);
+ok('"All countries" is checked by default',
+   document.querySelector('#bld-alerts .bld-alert .al-co-all').checked, 'not checked');
+ok('every individual country box is ticked under "All countries"',
+   [].slice.call(document.querySelectorAll('#bld-alerts .al-co')).every(function (b) { return b.checked; }),
+   'a box was left unticked');
+ok('and it is not written out as a countries key at all',
+   !('countries' in (noCountry.rules[0] || {})), JSON.stringify(noCountry.rules[0]));
+
+// A rule scoped to one country, firing on every submission — the exact shape this feature
+// exists for: "email me on every submission, but only from Lebanon."
+var LEBANON_ONLY = { id: 'A8-lebanon', when: 'always', label: 'Complaints', channel: 'email',
+  countries: ['lebanon'],
+  send: { to_emails: ['a.najjar@blk.jo'], subject: null, params: [{ text: 'hi' }] } };
+var lebanon = roundTrip(LEBANON_ONLY);
+same('a Lebanon-only alert reports no problems', lebanon.problems, []);
+ok('"All countries" unticks itself for a scoped rule',
+   !document.querySelector('#bld-alerts .bld-alert .al-co-all').checked, 'still ticked');
+same('the country filter survives the round trip', (lebanon.rules[0] || {}).countries, ['lebanon']);
+ok('it still fires on every submission alongside the country filter',
+   (lebanon.rules[0] || {}).when === 'always', JSON.stringify(lebanon.rules[0]));
+
+// The other half of "orthogonal": a question/answer rule can ALSO be country-scoped —
+// "email when Status = Rejected, but only from Jordan."
+var JORDAN_REJECTED = { id: 'A9-jordan', field: 'f-status', equals: ['Rejected'], label: 'QC',
+  countries: ['jo'],
+  send: { to_emails: ['qc@blk.jo'], subject: null, params: [{ text: 'hi' }] }, channel: 'email' };
+var jordan = roundTrip(JORDAN_REJECTED);
+same('a country-scoped question/answer alert reports no problems', jordan.problems, []);
+ok('it keeps the question it watches AND the country filter',
+   (jordan.rules[0] || {}).field === 'f-status' && (jordan.rules[0] || {}).equals[0] === 'Rejected' &&
+   JSON.stringify((jordan.rules[0] || {}).countries) === JSON.stringify(['jo']),
+   JSON.stringify(jordan.rules[0]));
+
+// Ticking "All countries" back on must re-tick every box under it — narrowing and then
+// widening again must not leave a stale, unticked box that silently excludes a country the
+// person thinks they just re-included.
+document.getElementById('bld-alerts').innerHTML = '';
+addAlertRow(LEBANON_ONLY);
+var allBox = document.querySelector('#bld-alerts .bld-alert .al-co-all');
+allBox.checked = true;
+allBox.dispatchEvent(new Event('change'));
+ok('re-ticking "All countries" re-ticks every individual box',
+   [].slice.call(document.querySelectorAll('#bld-alerts .al-co')).every(function (b) { return b.checked; }),
+   'a box stayed unticked');
+var widened = serializeAlerts([]);
+ok('and the rule saves with no countries key again',
+   !('countries' in (widened[0] || {})), JSON.stringify(widened[0]));
+
+// Unticking every individual country while "All countries" is off leaves a rule that could
+// never match anything — caught here rather than shipped as a silent dead alert.
+document.getElementById('bld-alerts').innerHTML = '';
+addAlertRow(LEBANON_ONLY);
+[].slice.call(document.querySelectorAll('#bld-alerts .al-co')).forEach(function (b) { b.checked = false; });
+var emptyProblems = [];
+var emptyOut = serializeAlerts(emptyProblems);
+ok('ticking no country at all is reported as a problem',
+   emptyProblems.length === 1, JSON.stringify(emptyProblems));
+ok('and the incomplete rule is dropped rather than saved matching nothing',
+   emptyOut.length === 0, JSON.stringify(emptyOut));
+
+// A single-country table (the default bldAlertCountries from the top of this file) offers
+// no countries checklist at all, and a legacy rule with a "countries" key from a table that
+// later dropped to one country must not crash the editor — it simply has nothing to show it.
+bldAlertCountries = [];
+document.getElementById('bld-alerts').innerHTML = '';
+addAlertRow({ id: 'A10-single', when: 'always', label: 'X', channel: 'email', countries: ['lebanon'],
+  send: { to_emails: ['x@blk.jo'], subject: null, params: [{ text: 'hi' }] } });
+ok('a single-country table renders no countries checklist',
+   !document.querySelector('#bld-alerts .bld-alert .al-countries'), 'checklist rendered anyway');
+var singleProblems = [];
+var singleOut = serializeAlerts(singleProblems);
+same('and saving it reports no problems', singleProblems, []);
+ok('the stale countries key is simply dropped, not carried forward blind',
+   !('countries' in (singleOut[0] || {})), JSON.stringify(singleOut[0]));
+
 } catch (e) {
   fail++;
   out.push('FAIL the page threw -> ' + (e && e.message) + '\\n' + (e && e.stack));
