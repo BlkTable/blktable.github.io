@@ -584,6 +584,11 @@
   .bld-alert .al-sm { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
   .bld-alert .al-sm input { width: 80px; }
   .bld-alert .al-sm label { color: var(--muted); font-size: var(--fs-2); display: flex; align-items: center; gap: 6px; }
+  .bld-alert .al-countries { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--field-border); }
+  .bld-alert .al-co-all-lbl { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: var(--fs-3); cursor: pointer; margin-bottom: 6px; }
+  .bld-alert .al-co-all-lbl input { min-height: 0; }
+  .bld-alert .al-co-list { display: flex; flex-wrap: wrap; }
+  .bld-alert .al-co-list .u-co input:disabled { opacity: 0.5; }
   .bld-layer { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .bld-layer select, .bld-layer input.ly-label { min-height: 38px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--text); font-size: var(--fs-4); outline: none; box-sizing: border-box; }
   .bld-layer input.ly-label { flex: 1; min-width: 110px; }
@@ -7600,6 +7605,7 @@
   // quietly break an alert — which matters more here than anywhere else in the builder,
   // because a broken alert is silent by nature: nothing arrives, and nothing says why.
   var bldAlertFields = [];       // the saved questions, filled in when the editor loads them
+  var bldAlertCountries = [];    // the table's own country codes, [] on a single-country table
   var WA_LANGS = [["en", "English"], ["ar", "العربية"], ["en_US", "English (US)"], ["ar_JO", "العربية (الأردن)"]];
   function bldFieldOptionsHtml(selected, extra) {
     var out = extra ? '<option value="__text">— fixed text —</option>' : '<option value="">— choose a question —</option>';
@@ -7698,7 +7704,21 @@
     // since Slack arrived, so read that first; the sniff behind it is for the WhatsApp
     // rules written before the key existed, which carry no channel at all.
     var initChannel = data.channel || ((send && send.slack_channel != null) ? "slack" : "whatsapp");
+    // Only on a table that asks Country at all — a single-country table has nothing to
+    // narrow by, and no `countries` key could ever have been written for it, so nothing
+    // is rendered rather than a control that would always read "All countries".
+    var countryOpts = bldAlertCountries.length ? (
+      '<div class="al-countries">' +
+        '<label class="al-co-all-lbl"><input type="checkbox" class="al-co-all"> All countries</label>' +
+        '<div class="al-co-list">' +
+          bldAlertCountries.map(function (c) {
+            return '<label class="u-co"><input type="checkbox" class="al-co" value="' + esc(c) + '"> ' + esc(countryLabel(c)) + "</label>";
+          }).join("") +
+        "</div>" +
+      "</div>"
+    ) : "";
     row.innerHTML =
+      countryOpts +
       '<div class="al-row">' +
         '<select class="al-field">' + bldFieldOptionsHtml(data.field) + "</select>" +
         '<input class="al-values" placeholder="becomes… e.g. Rejected, مرفوض">' +
@@ -7778,6 +7798,27 @@
       alValues.style.display = hide ? "none" : "";
     }
     syncEvery(); everyChk.addEventListener("change", syncEvery);
+    // Countries: a saved rule with no `countries` key, or one that predates this feature,
+    // reads as "All countries" — the same value serializeAlerts writes for it. Individual
+    // boxes stay ticked-and-disabled under "All" so re-narrowing starts from every country
+    // rather than from whatever was last picked.
+    var coAll = row.querySelector(".al-co-all");
+    if (coAll) {
+      var coBoxes = [].slice.call(row.querySelectorAll(".al-co"));
+      var wanted = Array.isArray(data.countries) ? data.countries : null;
+      var restricted = !!(wanted && wanted.length);
+      coAll.checked = !restricted;
+      coBoxes.forEach(function (b) {
+        b.checked = restricted
+          ? wanted.some(function (w) { return String(w).trim().toLowerCase() === b.value.toLowerCase(); })
+          : true;
+      });
+      function syncCoAll() {
+        if (coAll.checked) coBoxes.forEach(function (b) { b.checked = true; });
+        coBoxes.forEach(function (b) { b.disabled = coAll.checked; });
+      }
+      syncCoAll(); coAll.addEventListener("change", syncCoAll);
+    }
     var channel = row.querySelector(".al-channel");
     var waFields = row.querySelector(".al-wa-fields");
     var slackFields = row.querySelector(".al-slack-fields");
@@ -7826,6 +7867,19 @@
         if (field || equals.length || label) problems.push("Alert " + (i + 1) + " needs both a question and the answer that trips it.");
         return null;
       }
+      // Countries: orthogonal to the question/answer test above — present only on a table
+      // that asks Country, and only ever narrows, never replaces, the when/field/equals
+      // choice already made. "All countries" is the same as no restriction at all, which is
+      // why it is left off the saved rule entirely rather than written out as every code.
+      var coHost = r.querySelector(".al-countries");
+      var countries = null;
+      if (coHost && !r.querySelector(".al-co-all").checked) {
+        countries = [].slice.call(r.querySelectorAll(".al-co:checked")).map(function (b) { return b.value; });
+        if (!countries.length) {
+          problems.push("Alert " + (i + 1) + " has no country ticked. Tick at least one, or tick “All countries”.");
+          return null;
+        }
+      }
       var contacts = parseContactLines(r.querySelector(".al-contacts").value);
       contacts.bad.forEach(function (b) { problems.push("Alert " + (i + 1) + ": “" + b + "” has no usable number."); });
       var out = {
@@ -7835,6 +7889,7 @@
         contacts: contacts.list,
       };
       if (every) { out.when = "always"; } else { out.field = field; out.equals = equals; }
+      if (countries) out.countries = countries;
       if (r.querySelector(".al-auto").checked) {
         var chSel = r.querySelector(".al-channel");
         var channel = chSel ? chSel.value : "whatsapp";
@@ -14112,7 +14167,7 @@
     // An alert names a question by id, and a form being created has no saved questions to
     // name yet — so it is offered when editing, where the ids exist.
     var alw = document.getElementById("bld-alerts-wrap"); if (alw) alw.style.display = (mode === "edit") ? "" : "none";
-    if (isCreate) { bldAlertFields = []; var ah = document.getElementById("bld-alerts"); if (ah) ah.innerHTML = ""; }
+    if (isCreate) { bldAlertFields = []; bldAlertCountries = []; var ah = document.getElementById("bld-alerts"); if (ah) ah.innerHTML = ""; }
     var del = document.getElementById("bld-delete"); if (del) del.style.display = (mode === "edit") ? "inline-block" : "none";
     var fdel = document.getElementById("fform-delete"); if (fdel) fdel.style.display = (mode === "edit") ? "inline-block" : "none";
     // Which countries the form is for is a question about a custom form, so the two
@@ -14559,6 +14614,9 @@
       // is added back here, alert-picker only. Without this its id has no matching
       // <option>, and saving the table from this editor silently drops the alert.
       bldAlertFields = cq ? [cq].concat(fields) : fields.slice();
+      // Which countries an alert can be narrowed to — empty on a single-country table,
+      // which is how the picker knows to render no "Countries" section at all.
+      bldAlertCountries = (cq && cq.options && cq.options.only) || [];
       renderAlertRows(table);
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
