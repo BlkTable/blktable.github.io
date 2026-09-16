@@ -14553,8 +14553,12 @@
       if (cq) fields = fields.filter(function (f) { return f.id !== cq.id; });
       // An alert points at a question by id, so its pickers can only be built once the
       // questions are known — which is why the rows are filled in here and not with the
-      // stages and actions above.
-      bldAlertFields = fields.slice();
+      // stages and actions above. The Country question is excluded from `fields` (it's
+      // not a designed question, see countryQuestionOf above), but an alert still needs
+      // to be able to fire on it — e.g. "email me when Country becomes Lebanon" — so it
+      // is added back here, alert-picker only. Without this its id has no matching
+      // <option>, and saving the table from this editor silently drops the alert.
+      bldAlertFields = cq ? [cq].concat(fields) : fields.slice();
       renderAlertRows(table);
       if (!fields.length) { addBuilderField(); }
       else fields.forEach(function (f) {
