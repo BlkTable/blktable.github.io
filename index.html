@@ -8307,13 +8307,22 @@
     currentCustom.fv = makeFilterView({
       key: "custom:" + t.id,
       // A date-of-birth field filters as its computed Age, the same way the built-in tables do.
+      // The Submitted stamp (created_at) is not a question, so it is offered as a date pseudo-column
+      // — every table has one, and it is the only date on a form nobody types a date into.
       getFields: function () {
-        return (currentCustom.fields || []).map(function (f) {
+        var real = (currentCustom.fields || []).map(function (f) {
           return f.type === "dob" ? { id: f.id, label: f.label + " (age)", type: "number" } : f;
         });
+        return real.concat([{ id: "__created", label: "Submitted", type: "date" }]);
       },
       records: function () { return currentCustom.subs; },
       getVal: function (rec, id) {
+        // Compare on the local calendar day the row shows as "Submitted", not the raw UTC
+        // timestamp: a date condition is YYYY-MM-DD, and 1am Amman must not count as yesterday.
+        if (id === "__created") {
+          var dt = rec.created_at ? new Date(rec.created_at) : null;
+          return dt && !isNaN(dt) ? isoOf(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()) : "";
+        }
         var f = (currentCustom.fields || []).filter(function (x) { return x.id === id; })[0];
         var v = (rec.data || {})[id];
         return (f && f.type === "dob") ? calcAge(v) : v;
