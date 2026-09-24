@@ -3012,13 +3012,13 @@
   //
   // The text is customCellText, the same rule the grid cell uses, so a locked answer and its
   // cell can never read differently.
-  function lockedAnswerHtml(f, d) {
+  function lockedAnswerHtml(f, d, why) {
     d = d || {};
     var v = d[f.id];
     var txt = Array.isArray(v) ? v.join(", ") : customCellText(f, d);
     if (txt == null || txt === "") txt = "—";
     return '<div class="m-field' + (f.type === "long_text" ? " full" : "") + ' locked">' +
-      '<div class="k">' + esc(f.label) + '<span class="k-lock" title="Only a manager can change this">locked</span></div>' +
+      '<div class="k">' + esc(f.label) + '<span class="k-lock" title="' + esc(why || "Only a manager can change this") + '">locked</span></div>' +
       '<div class="ed-locked">' + esc(txt) + "</div></div>";
   }
   function showApp(session) {
@@ -12537,12 +12537,17 @@
     var grid = detailOrder(fields).map(function (f) {
       if (!showsOn(f, d, true)) return "";      // a retired question this record never answered
       var locked = limited && !fillable[f.id];
+      // The branch a record is filed under drives access scoping, facet counts and alert
+      // routing, so once set only an admin may change it. Everyone else sees it read-only;
+      // the database rejects the change too, so this is UX for a rule enforced server-side.
+      var brLock = f.type === "branch" && !isAdmin;
       // an upload question keeps its files, and its add/remove tiles, under itself
       if (isFileField(f)) {
         var tiles = photoSectionHtml(fields, d, null, { only: f.id, edit: mayEditHere && !locked });
         return tiles ? '<div class="m-field full"><div class="k">' + esc(f.label) + "</div>" + tiles + "</div>" : "";
       }
       if (locked) return lockedAnswerHtml(f, d);
+      if (brLock) return lockedAnswerHtml(f, d, "Only an admin can change the branch");
       return edFieldRowHtml(f, d, { scored: qsMap[f.id], fields: fields });
     }).join("");
     var meta = importedBlockHtml(s.extra) + fpMeta(s);
