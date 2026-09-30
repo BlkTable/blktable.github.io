@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Store Audit · BLK Tables</title>
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --ink:#17150f;--ink2:#57534a;--ink3:#8b8679;
+  --ground:#f2f1ee;--surface:#ffffff;--line:#e0ddd6;--sunk:#e9e7e2;
+  --accent:#8a5a2b;--accent-ink:#ffffff;
+  --pass:#2f7a4a;--pass-bg:#e3f1e7;
+  --part:#a56a0c;--part-bg:#fbefd6;
+  --fail:#b3362c;--fail-bg:#f8e1de;
+  --na:#6d6a62;--na-bg:#e6e4df;
+  --sans:"IBM Plex Sans","IBM Plex Sans Arabic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --ink:#eeebe4;--ink2:#b3ada1;--ink3:#857f73;
+  --ground:#14130f;--surface:#1d1b17;--line:#34312a;--sunk:#27241f;
+  --accent:#c98f55;--accent-ink:#17150f;
+  --pass:#6cc58c;--pass-bg:#1b3325;--part:#e3a940;--part-bg:#3a2c12;--fail:#ef7b6f;--fail-bg:#3d1c19;--na:#a39e93;--na-bg:#2c2a25;
+}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;padding-inline:16px;padding-block:env(safe-area-inset-top,0px) 64px}
+.wrap{max-width:880px;margin:0 auto}
+button{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+a{color:var(--accent)}
+
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--ground);padding-block:12px 10px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:baseline;gap:8px}
+.brand b{font-weight:700;letter-spacing:.14em;font-size:15px}
+.brand span{color:var(--ink2);font-size:13px}
+.scorebox{display:flex;align-items:center;gap:10px}
+.score{font-family:var(--mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.score small{font-size:12px;color:var(--ink3)}
+.pill{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:99px;text-align:center}
+.g-green{background:var(--pass-bg);color:var(--pass)}
+.g-amber{background:var(--part-bg);color:var(--part)}
+.g-red{background:var(--fail-bg);color:var(--fail)}
+.g-none{background:var(--na-bg);color:var(--na)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:6px 10px;cursor:pointer;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
+.flags{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.flag{font-size:12px;padding:3px 8px;border-radius:4px;background:var(--sunk);color:var(--ink2)}
+.flag.bad{background:var(--fail-bg);color:var(--fail)}
+.flag.warn{background:var(--part-bg);color:var(--part)}
+
+.tabs{display:flex;gap:4px;margin-block:16px 12px;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:none;padding:8px 12px;cursor:pointer;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+
+.note{margin-block:12px;font-size:13px;color:var(--ink2);border:1px dashed var(--line);border-radius:6px;padding:8px 10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.gate{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:24px;margin-top:24px}
+.gate h2{margin:0 0 8px;font-size:18px}
+
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-block:0 12px}
+.card > header{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
+.card > header h2{font-size:15px;margin:0;font-weight:600;flex:1;text-wrap:balance}
+.card > header .w{font-family:var(--mono);font-size:12px;color:var(--ink3)}
+.card > header .dpct{font-family:var(--mono);font-size:13px;font-weight:600;min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
+.card > header .chev{color:var(--ink3);transition:transform .15s}
+.card.closed > header .chev{transform:rotate(-90deg)}
+.card.closed .body{display:none}
+.tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--sunk);color:var(--ink2)}
+.tag.gated{background:var(--fail-bg);color:var(--fail)}
+.tag.diag{background:var(--part-bg);color:var(--part)}
+.body{border-top:1px solid var(--line)}
+
+.item{padding:10px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center}
+.item:last-child{border-bottom:0}
+.lbl{display:flex;flex-direction:column;gap:2px}
+.lbl .t{font-size:14px}
+.lbl .ar{font-size:13px;color:var(--ink2)}
+.lbl .m{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--ink3);font-family:var(--mono);flex-wrap:wrap}
+.sev-critical{color:var(--fail);font-weight:600}
+.rate{display:inline-flex;gap:4px}
+.rate button{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 0;width:56px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink2)}
+.rate button[data-p="2"][aria-pressed="true"]{background:var(--pass-bg);border-color:var(--pass);color:var(--pass)}
+.rate button[data-p="1"][aria-pressed="true"]{background:var(--part-bg);border-color:var(--part);color:var(--part)}
+.rate button[data-p="0"][aria-pressed="true"]{background:var(--fail-bg);border-color:var(--fail);color:var(--fail)}
+.rate button[data-p="na"][aria-pressed="true"]{background:var(--na-bg);border-color:var(--na);color:var(--na)}
+.rate button:disabled{opacity:.45;cursor:not-allowed}
+.evid{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start}
+.photo{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);border:1px dashed var(--line);border-radius:6px;padding:8px 10px;cursor:pointer;white-space:nowrap}
+.photo.req{border-color:var(--fail);color:var(--fail)}
+.photo.ok{border-style:solid;border-color:var(--pass);color:var(--pass)}
+.photo input{display:none}
+.photos{grid-column:1/-1;font-size:12px;color:var(--ink2);display:flex;gap:8px;align-items:center}
+.linkbtn{border:0;background:none;color:var(--accent);cursor:pointer;padding:0;font-size:12px;text-decoration:underline}
+.miss{outline:2px solid var(--fail);outline-offset:-2px}
+
+.fields{padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.f{display:flex;flex-direction:column;gap:4px}
+.f > label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:500}
+.f .hint{font-size:11px;color:var(--ink3)}
+input,select,textarea{font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%}
+input[readonly]{background:var(--sunk);color:var(--ink2)}
+textarea{resize:vertical;min-height:40px}
+.full{grid-column:1/-1}
+.lock{padding:12px 14px;color:var(--ink3);font-size:13px;margin:0}
+.num{width:110px}
+
+.submit{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:8px}
+.btn{border:0;background:var(--accent);color:var(--accent-ink);padding:10px 18px;border-radius:6px;font-weight:600;cursor:pointer}
+.btn:disabled{opacity:.6;cursor:progress}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+.msg{font-size:13px}
+.msg.bad{color:var(--fail)}
+.msg.ok{color:var(--pass)}
+
+.sheet{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:24px;display:flex;flex-direction:column;gap:20px}
+.sheet .head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:14px}
+.sheet h3{margin:0;font-size:20px;text-wrap:balance}
+.sheet .sub{color:var(--ink2);font-size:13px}
+.big{display:flex;align-items:center;gap:12px}
+.big .n{font-family:var(--mono);font-size:40px;font-weight:600;line-height:1}
+.route{font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+.route dt{color:var(--ink3);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding-top:2px}
+.route dd{margin:0}
+.h4{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);font-weight:600;margin:0 0 8px}
+.dbars{display:grid;gap:6px}
+.dbar{display:grid;grid-template-columns:170px 1fr 70px;gap:10px;align-items:center;font-size:13px}
+.dbar .track{height:8px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.dbar .fill{height:100%;border-radius:4px}
+.dbar .v{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.dbar.nc{color:var(--ink3)}
+.findings{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.findings li{display:grid;grid-template-columns:68px 1fr;gap:10px;font-size:13px;align-items:start}
+.findings .nt{color:var(--ink2)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+.txt{font-size:13px;white-space:pre-wrap}
+.empty{color:var(--ink3);font-size:13px;margin:0}
+.feed{border-top:1px dashed var(--line);padding-top:16px}
+.pdfhost{position:fixed;left:-10000px;top:0;width:794px}
+.pdfhost .sheet{--ink:#17150f;--ink2:#57534a;--ink3:#8b8679;--surface:#ffffff;--line:#e0ddd6;--sunk:#e9e7e2;--pass:#2f7a4a;--pass-bg:#e3f1e7;--part:#a56a0c;--part-bg:#fbefd6;--fail:#b3362c;--fail-bg:#f8e1de;--na:#6d6a62;--na-bg:#e6e4df;border:0;border-radius:0}
+
+@media (max-width:560px){
+  .item{grid-template-columns:1fr}
+  .rate{width:100%}
+  .rate button{flex:1;width:auto}
+  .evid{grid-template-columns:1fr}
+  .dbar{grid-template-columns:110px 1fr 60px}
+  .sheet{padding:16px}
+  .big .n{font-size:32px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="brand"><b>BLK</b><span>Store Audit</span></div>
+    <div class="scorebox" id="scorebox" hidden>
+      <div class="score"><span id="score">--</span><small>/100</small></div>
+      <span id="grade" class="pill g-none">--</span>
+    </div>
+    <div class="seg" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="ar" aria-pressed="false">ع</button>
+      <button type="button" data-lang="both" aria-pressed="false">Both</button>
+    </div>
+    <div class="flags" id="flags"></div>
+  </div>
+
+  <div id="gate" class="gate"><h2>Loading</h2><p>Checking your sign-in.</p></div>
+
+  <div id="app" hidden>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="audit" aria-selected="true">Audit</button>
+      <button type="button" role="tab" data-tab="report" aria-selected="false">One-pager</button>
+      <button type="button" role="tab" data-tab="playbook" aria-selected="false">Playbook</button>
+    </div>
+    <div id="draftnote" class="note" hidden></div>
+    <div id="tab-audit"></div>
+    <div id="tab-report" hidden></div>
+    <div id="tab-playbook" hidden>
+      <div class="gate"><h2>Playbook</h2><p>The floor plan viewer and builder come after the audit ships. Plans are saved per store, shift and headcount. Shop, store and area leaders edit; auditors view only.</p></div>
+    </div>
+  </div>
+
+  <div id="done" class="gate" hidden></div>
+  <div class="pdfhost" id="pdfhost" aria-hidden="true"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
+<script>
+  var SUPABASE_URL = "https://db.blktable.blk.jo";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg0NzExNjYwLCJleHAiOjIxMDAwNzE2NjB9.jve2CB0Dt8dESno2dgVHu5kcLnmCE-fISi0TYT_prwc";
+  var DRAFT_KEY = "blk-store-audit-draft-v1";
+  var LIBS = [
+    ["https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", "sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H"],
+    ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"]
+  ];
+  var db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+  var CAT = { domains: [], items: [], byCode: {}, byDomain: {}, branches: [], profiles: {} };
+  var S = { ans: {}, notes: {}, photos: {}, autoNA: {}, closed: {}, lang: "en", uploading: 0, prior: null, busy: false };
+
+  // ---- scoring: mirror of public.audit_score (audit-03-score.sql). The DB result is what is saved. ----
+  function auditPoints(v) {
+    if (v === "Pass" || v === "Yes") return 2;
+    if (v === "Partial") return 1;
+    if (v === "Fail" || v === "No") return 0;
+    return null;
+  }
+  function auditScore(ans, domains, items) {
+    ans = ans || {};
+    var tot = 0, w = 0, dom = {}, crit = [];
+    var scored = domains.filter(function (d) { return d.scored; }).sort(function (a, b) { return a.position - b.position; });
+    scored.forEach(function (d) {
+      var pts = 0, n = 0;
+      items.forEach(function (i) {
+        if (i.domain !== d.key || (i.kind !== "rating" && i.kind !== "yesno")) return;
+        var p = auditPoints(ans[i.code]);
+        if (p === null) return;
+        pts += p; n++;
+      });
+      if (n > 0) { dom[d.key] = pts / (2 * n); tot += pts / (2 * n) * d.weight; w += d.weight; }
+      else dom[d.key] = null;
+    });
+    var pos = {};
+    domains.forEach(function (d) { pos[d.key] = d.position; });
+    items.filter(function (i) { return i.tier === "critical" && auditPoints(ans[i.code]) === 0; })
+      .sort(function (a, b) { return (pos[a.domain] - pos[b.domain]) || (a.position - b.position); })
+      .forEach(function (i) { crit.push(i.code); });
+    var sp = 0, sn = 0, spotFail = false;
+    items.forEach(function (i) {
+      if (i.domain !== "spots") return;
+      var p = auditPoints(ans[i.code]);
+      if (p === null) return;
+      sp += p; sn++;
+      if (p === 0) spotFail = true;
+    });
+    var deep = spotFail || (sn > 0 && sp / (2 * sn) < 0.75);
+    var cal = ans.c7 === "Partial" || ans.c7 === "Fail";
+    var score = null, grade = null;
+    if (w > 0) {
+      score = Math.round(tot / w * 1000 + 1e-9) / 10;
+      grade = score >= 90 ? "Green" : score >= 75 ? "Amber" : "Red";
+      if (spotFail && grade === "Green") grade = "Amber";
+      if (crit.length) grade = "Red";
+    }
+    return { score: score, grade: grade, domains: dom, critical_fails: crit, spot_pts: sp, spot_max: 2 * sn,
+             spot_fail: spotFail, deep_clean: deep, calibration: cal };
+  }
+  // Which items the auditor still owes before submit. Mirrors store_audit_submit's evidence rule
+  // (Partial = note, Fail = note + photo) and adds completeness, which only the page checks.
+  function auditMissing(ans, notes, photos, items, res, dtLocked) {
+    var out = [];
+    var req = { h_store: 1, h_market: 1, h_auditor: 1, h_date: 1, h_visit_type: 1, c7_drink: 1 };
+    var needRate = { craft: 1, station: 1, safety: 1, ops: 1, systems: 1, orchestra: 1, brand: 1, core: 1, people: 1, spots: 1, comp: 1 };
+    if (res.calibration) needRate.cal = 1;
+    if (res.deep_clean) needRate.deep = 1;
+    items.forEach(function (i) {
+      var v = ans[i.code];
+      var blank = v === undefined || v === null || String(v).trim() === "";
+      if (req[i.code] && blank) { out.push({ code: i.code, why: "answer" }); return; }
+      if (i.kind !== "rating" && i.kind !== "yesno") return;
+      if (i.code === "sup_qc") return;
+      if (!needRate[i.domain]) return;
+      if (dtLocked && i.dt) return;
+      if (blank) { out.push({ code: i.code, why: "rating" }); return; }
+      var p = auditPoints(v);
+      if ((p === 0 || p === 1) && !String(notes[i.code] || "").trim()) out.push({ code: i.code, why: "note" });
+      if (p === 0 && !(photos[i.code] || []).length) out.push({ code: i.code, why: "photo" });
+    });
+    return out;
+  }
+  // What goes to the server: stage 2 answers only while that stage is open, evidence only for
+  // items still below Pass, so a note left behind on an item later set to Pass is not stored.
+  function auditPayload(ans, notes, photos, items, res) {
+    var a = {}, n = {}, ph = {};
+    items.forEach(function (i) {
+      if (i.kind === "computed" || i.code === "h_prior") return;
+      if (i.domain === "cal" && !res.calibration) return;
+      if (i.domain === "deep" && !res.deep_clean) return;
+      if (i.code === "sup_qc_note" && ans.sup_qc !== "Yes") return;
+      var v = ans[i.code];
+      if (v === undefined || v === null || String(v).trim() === "") return;
+      a[i.code] = String(v).trim();
+      var p = auditPoints(a[i.code]);
+      if (p === 0 || p === 1) {
+        if (String(notes[i.code] || "").trim()) n[i.code] = String(notes[i.code]).trim();
+        if ((photos[i.code] || []).length) ph[i.code] = photos[i.code].slice();
+      }
+    });
+    return { answers: a, notes: n, photos: ph };
+  }
+
+  // ---- helpers ----
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function $(s) { return document.querySelector(s); }
+  function tr(en, ar) {
+    if (S.lang === "ar") return ar || en;
+    if (S.lang === "both" && ar) return en + " · " + ar;
+    return en;
+  }
+  function todayIso() {
+    var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  }
+  function gradeClass(g) { return g === "Green" ? "g-green" : g === "Amber" ? "g-amber" : g === "Red" ? "g-red" : "g-none"; }
+  function pctColor(p) { return p >= 0.9 ? "var(--pass)" : p >= 0.75 ? "var(--part)" : "var(--fail)"; }
+  function currentBranch() {
+    var name = S.ans.h_store;
+    for (var k = 0; k < CAT.branches.length; k++) if (CAT.branches[k].name === name) return CAT.branches[k];
+    return null;
+  }
+  function currentProfile() { var b = currentBranch(); return b ? (CAT.profiles[b.id] || {}) : {}; }
+  function dtLocked() { return currentProfile().drive_thru === false; }
+  function result() { return auditScore(S.ans, CAT.domains, CAT.items); }
+  function saveDraft() {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ ans: S.ans, notes: S.notes, photos: S.photos, autoNA: S.autoNA, at: new Date().toISOString() })); } catch (e) {}
+  }
+  function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+  function loadScript(src, sri) {
+    return new Promise(function (ok, bad) {
+      if (document.querySelector('script[src="' + src + '"]')) return ok();
+      var s = document.createElement("script");
+      s.src = src; s.integrity = sri; s.crossOrigin = "anonymous";
+      s.onload = function () { ok(); }; s.onerror = function () { bad(new Error("could not load " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  function storageUpload(file) {
+    var fd = new FormData();
+    fd.append("file", file);
+    return fetch(SUPABASE_URL + "/functions/v1/r2/upload", {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY },
+      body: fd
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok || !j.path) throw new Error(j.error ? j.error + (j.detail ? ": " + j.detail : "") : "upload failed (" + r.status + ")");
+        return j.path;
+      });
+    });
+  }
+
+  // ---- boot ----
+  function gate(title, body) {
+    $("#app").hidden = true;
+    var g = $("#gate"); g.hidden = false;
+    g.innerHTML = "<h2>" + esc(title) + "</h2><p>" + body + "</p>";
+  }
+  function signIn() {
+    gate("Sign in", "Use your BLK Tables email and password.");
+    $("#gate").insertAdjacentHTML("beforeend",
+      '<form id="signin" class="fields" style="padding:0;max-width:420px">' +
+      '<div class="f full"><label for="si-email">Email</label><input id="si-email" type="email" autocomplete="username" required></div>' +
+      '<div class="f full"><label for="si-pass">Password</label><input id="si-pass" type="password" autocomplete="current-password" required></div>' +
+      '<div class="submit full"><button class="btn" type="submit">Sign in</button><span class="msg bad" id="si-msg" role="status"></span></div></form>');
+    $("#signin").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var r = await db.auth.signInWithPassword({ email: $("#si-email").value.trim(), password: $("#si-pass").value });
+      if (r.error) { $("#si-msg").textContent = "Sign-in failed: " + r.error.message; return; }
+      boot();
+    });
+  }
+  async function boot() {
+    if (!db) return gate("Could not load", "The database library did not load. Check the connection and reload the page.");
+    var sess = await db.auth.getSession();
+    var user = sess.data && sess.data.session && sess.data.session.user;
+    if (!user) return signIn();
+    var ok = await db.rpc("store_audit_can_use");
+    if (ok.error || !ok.data) return gate("No access yet", "Your account does not have Store Audit access. Ask a BLK Tables admin to give you edit rights on the Store Audit table.");
+    var q = await Promise.all([
+      db.from("audit_domains").select("*").order("position"),
+      db.from("audit_items").select("*").order("position"),
+      db.from("branches").select("id,name,name_ar,list_key,position").eq("is_active", true).order("position"),
+      db.from("store_profiles").select("*"),
+      db.from("profiles").select("full_name").eq("id", user.id).maybeSingle()
+    ]);
+    var bad = q.filter(function (r) { return r.error; })[0];
+    if (bad) return gate("Could not load the audit", esc(bad.error.message));
+    CAT.domains = q[0].data; CAT.items = q[1].data; CAT.branches = q[2].data;
+    q[3].data.forEach(function (p) { CAT.profiles[p.branch_id] = p; });
+    CAT.items.forEach(function (i) {
+      CAT.byCode[i.code] = i;
+      (CAT.byDomain[i.domain] = CAT.byDomain[i.domain] || []).push(i);
+    });
+    restoreDraft(q[4].data && q[4].data.full_name);
+    $("#gate").hidden = true;
+    $("#app").hidden = false;
+    $("#scorebox").hidden = false;
+    renderAll();
+    if (S.ans.h_store) loadPrior();
+  }
+  function restoreDraft(fullName) {
+    var d = null;
+    try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch (e) {}
+    if (d && d.ans) {
+      S.ans = d.ans; S.notes = d.notes || {}; S.photos = d.photos || {}; S.autoNA = d.autoNA || {};
+      var n = $("#draftnote");
+      n.hidden = false;
+      n.innerHTML = "<span>Draft restored from " + esc(String(d.at || "").slice(0, 16).replace("T", " ")) + ".</span>" +
+        '<button type="button" class="linkbtn" id="discard">Discard draft and start over</button>';
+      return;
+    }
+    S.ans = { h_date: todayIso() };
+    var opts = (CAT.byCode.h_auditor && CAT.byCode.h_auditor.choices) || [];
+    var me = String(fullName || "").trim().toLowerCase();
+    var hit = me && opts.filter(function (o) { return o.toLowerCase() === me; })[0];
+    if (!hit && me) hit = opts.filter(function (o) { return me.indexOf(o.toLowerCase().split(" ")[0]) === 0; }).length === 1
+      ? opts.filter(function (o) { return me.indexOf(o.toLowerCase().split(" ")[0]) === 0; })[0] : null;
+    if (hit) S.ans.h_auditor = hit;
+  }
+  async function loadPrior() {
+    S.prior = null;
+    var r = await db.rpc("store_audit_prior", { p_branch: S.ans.h_store });
+    S.prior = r.error ? null : r.data;
+    var el = document.getElementById("in-h_prior");
+    if (el) el.value = priorText();
+  }
+  function priorText() {
+    if (!S.ans.h_store) return "";
+    if (!S.prior) return "No prior visit in the new audit";
+    return (S.prior.grade || "-") + " " + (S.prior.score || "") + " (" + S.prior.date + ")";
+  }
+
+  // ---- store change: prefill from the store master, lock drive-thru items on non-DT stores ----
+  function applyStore() {
+    var p = currentProfile();
+    if (p.market) S.ans.h_market = p.market;
+    if (p.area_leader_name) S.ans.h_area_leader = p.area_leader_name;
+    CAT.items.forEach(function (i) {
+      if (!i.dt) return;
+      if (p.drive_thru === false) { S.ans[i.code] = "N/A"; S.autoNA[i.code] = 1; }
+      else if (S.autoNA[i.code]) { delete S.ans[i.code]; delete S.autoNA[i.code]; }
+    });
+  }
+
+  // ---- render ----
+  function rateHtml(i, locked) {
+    var v = S.ans[i.code];
+    var opts = i.kind === "yesno"
+      ? [["Yes", "نعم", "2"], ["No", "لا", "0"]]
+      : [["Pass", "ناجح", "2"], ["Partial", "جزئي", "1"], ["Fail", "راسب", "0"], ["N/A", "لا ينطبق", "na"]];
+    return '<div class="rate" role="group" aria-label="' + esc(i.label) + '">' + opts.map(function (o) {
+      return '<button type="button" data-code="' + i.code + '" data-v="' + o[0] + '" data-p="' + o[2] + '" aria-pressed="' + (v === o[0]) + '"' +
+        (locked ? " disabled" : "") + ">" + esc(S.lang === "ar" ? o[1] : o[0]) + "</button>";
+    }).join("") + "</div>";
+  }
+  function evidenceHtml(i) {
+    if (i.code === "sup_qc") return "";
+    var p = auditPoints(S.ans[i.code]);
+    if (p !== 0 && p !== 1) return "";
+    var ph = S.photos[i.code] || [];
+    var need = p === 0;
+    return '<div class="evid"><textarea id="note-' + i.code + '" data-note="' + i.code + '" placeholder="Note (required)" aria-label="Note for ' + esc(i.label) + '">' + esc(S.notes[i.code]) + "</textarea>" +
+      '<label class="photo ' + (ph.length ? "ok" : need ? "req" : "") + '"><input type="file" accept="image/*" multiple data-photo="' + i.code + '">' +
+      (ph.length ? "Add photo" : need ? "Photo required" : "Photo optional") + "</label></div>" +
+      (ph.length ? '<div class="photos">' + ph.length + " photo" + (ph.length > 1 ? "s" : "") + ' attached <button type="button" class="linkbtn" data-unphoto="' + i.code + '">Remove last</button></div>' : "");
+  }
+  function itemHtml(i) {
+    var locked = i.dt && dtLocked();
+    var meta = '<span class="m">' + esc(i.code) + (i.tier ? ' · <span class="' + (i.tier === "critical" ? "sev-critical" : "") + '">' + i.tier + "</span>" : "") +
+      (locked ? " · no drive-thru, N/A" : "") + (i.dt && currentProfile().drive_thru == null && S.ans.h_store ? " · drive-thru not set on store master" : "") +
+      (i.hint ? " · " + esc(i.hint) : "") + "</span>";
+    var label = '<div class="lbl"><span class="t">' + esc(tr(i.label, i.label_ar)) + "</span>" + meta + "</div>";
+    if (i.kind === "rating" || i.kind === "yesno") {
+      return '<div class="item" id="row-' + i.code + '">' + label + rateHtml(i, locked) + (locked ? "" : evidenceHtml(i)) + "</div>";
+    }
+    var v = S.ans[i.code] == null ? "" : S.ans[i.code];
+    var input;
+    if (i.kind === "number") input = '<input class="num" type="number" step="0.1" inputmode="decimal" id="in-' + i.code + '" data-code="' + i.code + '" value="' + esc(v) + '">';
+    else if (i.kind === "date") input = '<input type="date" id="in-' + i.code + '" data-code="' + i.code + '" value="' + esc(v) + '">';
+    else if (i.kind === "long_text") input = '<textarea id="in-' + i.code + '" data-code="' + i.code + '">' + esc(v) + "</textarea>";
+    else if (i.kind === "select") input = '<select id="in-' + i.code + '" data-code="' + i.code + '"><option value="">Select</option>' +
+      (i.choices || []).map(function (o) { return "<option" + (o === v ? " selected" : "") + ">" + esc(o) + "</option>"; }).join("") + "</select>";
+    else input = '<input id="in-' + i.code + '" data-code="' + i.code + '" value="' + esc(v) + '">';
+    return '<div class="item" id="row-' + i.code + '">' + label + input + "</div>";
+  }
+  function headerHtml() {
+    var items = CAT.byDomain.header || [];
+    var p = currentProfile();
+    return '<div class="fields">' + items.map(function (i) {
+      var v = S.ans[i.code] == null ? "" : S.ans[i.code];
+      var lab = '<label for="in-' + i.code + '">' + esc(tr(i.label, i.label_ar)) + "</label>";
+      if (i.kind === "branch") {
+        return '<div class="f">' + lab + '<select id="in-h_store" data-code="h_store"><option value="">Pick a store</option>' +
+          CAT.branches.map(function (b) { return "<option" + (b.name === v ? " selected" : "") + ' value="' + esc(b.name) + '">' + esc(tr(b.name, b.name_ar)) + "</option>"; }).join("") +
+          '</select><span class="hint">' + (v ? esc((p.ownership || "Ownership not set") + " · " + (p.drive_thru === true ? "Drive-thru" : p.drive_thru === false ? "No drive-thru" : "Drive-thru not set")) : "From the store master") + "</span></div>";
+      }
+      if (i.code === "h_prior") return '<div class="f">' + lab + '<input id="in-h_prior" readonly value="' + esc(priorText()) + '"></div>';
+      if (i.kind === "select") {
+        return '<div class="f">' + lab + '<select id="in-' + i.code + '" data-code="' + i.code + '"><option value="">Select</option>' +
+          (i.choices || []).map(function (o) { return "<option" + (o === v ? " selected" : "") + ">" + esc(o) + "</option>"; }).join("") + "</select></div>";
+      }
+      if (i.kind === "date") return '<div class="f">' + lab + '<input type="date" id="in-' + i.code + '" data-code="' + i.code + '" value="' + esc(v) + '"></div>';
+      return '<div class="f">' + lab + '<input id="in-' + i.code + '" data-code="' + i.code + '" value="' + esc(v) + '"></div>';
+    }).join("") + "</div>";
+  }
+  function pctHtml(p) {
+    if (p === null || p === undefined) return '<span class="dpct" style="color:var(--ink3)">--</span>';
+    return '<span class="dpct" style="color:' + pctColor(p) + '">' + Math.round(p * 100) + "%</span>";
+  }
+  function cardHtml(d, res) {
+    var meta = "", inner;
+    if (d.key === "header") inner = headerHtml();
+    else {
+      var items = (CAT.byDomain[d.key] || []).filter(function (i) { return i.kind !== "computed"; });
+      if (d.key === "support") items = items.filter(function (i) { return i.code !== "sup_qc_note" || S.ans.sup_qc === "Yes"; });
+      inner = items.map(itemHtml).join("");
+      if (d.key === "cal" && !res.calibration) inner = '<p class="lock">Opens when the taste test (c7) is Partial or Fail.</p>';
+      if (d.key === "deep" && !res.deep_clean) inner = '<p class="lock">Opens when any Spot fails or the Spots score under 6 of 8.</p>';
+    }
+    if (d.scored) {
+      var hasCrit = (CAT.byDomain[d.key] || []).some(function (i) { return i.tier === "critical"; });
+      meta = (hasCrit ? '<span class="tag gated">critical items</span>' : "") + '<span class="w">w' + d.weight + "</span>" + pctHtml(res.domains[d.key]);
+    } else if (d.key === "spots") meta = '<span class="tag">not in /100</span><span class="dpct" id="spotpts">' + res.spot_pts + "/" + (res.spot_max || 8) + "</span>";
+    else if (d.key === "cal" || d.key === "deep") meta = '<span class="tag diag">diagnostic</span>';
+    else if (d.key === "comp") meta = '<span class="tag">not in /100</span>';
+    return '<section class="card' + (S.closed[d.key] ? " closed" : "") + '" data-card="' + d.key + '"><header data-toggle="' + d.key + '"><span class="chev">&#9662;</span><h2>' +
+      esc(tr(d.name, d.name_ar)) + "</h2>" + meta + '</header><div class="body">' + inner + "</div></section>";
+  }
+  function renderAudit() {
+    var res = result();
+    var h = CAT.domains.filter(function (d) { return d.key !== "result"; }).map(function (d) { return cardHtml(d, res); }).join("");
+    h += '<div class="submit"><button type="button" class="btn" id="submit">Submit visit</button>' +
+      '<button type="button" class="btn ghost" id="toReport">Preview one-pager</button><span class="msg" id="msg" role="status"></span></div>';
+    $("#tab-audit").innerHTML = h;
+  }
+  function renderBar() {
+    var res = result();
+    $("#score").textContent = res.score === null ? "--" : res.score.toFixed(1);
+    var g = $("#grade"); g.className = "pill " + gradeClass(res.grade); g.textContent = res.grade || "--";
+    var f = [];
+    if (res.critical_fails.length) f.push('<span class="flag bad">Critical fail: ' + esc(res.critical_fails.join(", ")) + ", grade Red</span>");
+    if (res.spot_fail) f.push('<span class="flag warn">Spot fail: capped at Amber</span>');
+    if (res.calibration) f.push('<span class="flag warn">Calibration open</span>');
+    if (res.deep_clean) f.push('<span class="flag warn">Deep clean open (Spots ' + res.spot_pts + "/" + res.spot_max + ")</span>");
+    $("#flags").innerHTML = f.join("");
+  }
+  function refreshScores() {
+    renderBar();
+    var res = result();
+    document.querySelectorAll(".card").forEach(function (c) {
+      var k = c.getAttribute("data-card");
+      if (k in res.domains) { var el = c.querySelector(".dpct"); if (el) el.outerHTML = pctHtml(res.domains[k]); }
+    });
+    var sp = document.getElementById("spotpts");
+    if (sp) sp.textContent = res.spot_pts + "/" + (res.spot_max || 8);
+  }
+  function renderAll() { renderAudit(); renderBar(); if (!$("#tab-report").hidden) renderReport(); }
+  function rerenderRow(code) {
+    var row = document.getElementById("row-" + code);
+    if (!row) return;
+    var t = document.createElement("div");
+    t.innerHTML = itemHtml(CAT.byCode[code]);
+    row.replaceWith(t.firstElementChild);
+  }
+
+  // ---- one-pager: built only from what was entered; an unrated domain says "not covered" ----
+  function reportHtml(res, ans, notes, prof) {
+    var own = prof.ownership;
+    var to = own === "Franchise"
+      ? (prof.partner_name || "Franchisee") + (prof.partner_email ? " <" + prof.partner_email + ">" : " (no email on store master)")
+      : own === "Company"
+        ? [prof.store_leader_name || "Store leader", prof.area_leader_name || "Area leader"].join(" · ")
+        : "Ownership not set on store master";
+    var bars = CAT.domains.filter(function (d) { return d.scored; }).map(function (d) {
+      var p = res.domains[d.key];
+      if (p === null || p === undefined) return '<div class="dbar nc"><span>' + esc(tr(d.name, d.name_ar)) + '</span><div class="track"></div><span class="v">not covered</span></div>';
+      return '<div class="dbar"><span>' + esc(tr(d.name, d.name_ar)) + '</span><div class="track"><div class="fill" style="width:' + (p * 100) + "%;background:" + pctColor(p) + '"></div></div><span class="v">' + Math.round(p * 100) + "%</span></div>";
+    }).join("");
+    var pos = {};
+    CAT.domains.forEach(function (d) { pos[d.key] = d.position; });
+    var below = CAT.items.filter(function (i) {
+      if ((i.kind !== "rating" && i.kind !== "yesno") || i.code === "sup_qc") return false;
+      var p = auditPoints(ans[i.code]);
+      return p === 0 || p === 1;
+    }).sort(function (a, b) { return (auditPoints(ans[a.code]) - auditPoints(ans[b.code])) || (pos[a.domain] - pos[b.domain]) || (a.position - b.position); });
+    function li(i) {
+      var v = ans[i.code], fail = auditPoints(v) === 0;
+      return '<li><span class="pill ' + (fail ? "g-red" : "g-amber") + '">' + esc(v) + "</span><div><div>" + esc(tr(i.label, i.label_ar)) +
+        (i.tier === "critical" ? ' <span class="sev-critical">critical</span>' : "") + "</div>" + (notes[i.code] ? '<div class="nt">' + esc(notes[i.code]) + "</div>" : "") + "</div></li>";
+    }
+    var find = below.length ? '<ul class="findings">' + below.map(li).join("") + "</ul>" : '<p class="empty">No Partial or Fail items.</p>';
+    function tx(k) { return String(ans[k] || "").trim() ? '<div class="txt">' + esc(ans[k]) + "</div>" : '<p class="empty">Not filled in.</p>'; }
+    var train = below.filter(function (i) { return i.domain === "craft" || i.domain === "orchestra"; });
+    var flags = [];
+    if (res.critical_fails.length) flags.push("Critical fail: " + res.critical_fails.join(", "));
+    if (res.spot_fail) flags.push("Spot fail: capped at Amber");
+    if (res.calibration) flags.push("Calibration opened");
+    if (res.deep_clean) flags.push("Deep clean opened (Spots " + res.spot_pts + "/" + res.spot_max + ")");
+    return '<div class="sheet">' +
+      '<div class="head"><div><h3>' + esc(ans.h_store || "No store picked") + '</h3><div class="sub">' +
+        esc([ans.h_market, own, ans.h_visit_type, ans.h_date, ans.h_auditor ? "Auditor " + ans.h_auditor : ""].filter(Boolean).join(" · ")) + "</div></div>" +
+        '<div class="big"><span class="n">' + (res.score === null ? "--" : Number(res.score).toFixed(1)) + '</span><span class="pill ' + gradeClass(res.grade) + '">' + esc(res.grade || "--") + "</span></div></div>" +
+      '<dl class="route"><dt>Report to</dt><dd>' + esc(to) + "</dd>" +
+        (ans.c7_drink ? "<dt>Taste test</dt><dd>" + esc(ans.c7_drink) + "</dd>" : "") +
+        (flags.length ? "<dt>Caps</dt><dd>" + esc(flags.join(" · ")) + "</dd>" : "") +
+        (ans.sup_qc === "Yes" ? "<dt>QC issue</dt><dd>" + esc(ans.sup_qc_note || "(no note)") + "</dd>" : "") + "</dl>" +
+      '<div><p class="h4">Domains</p><div class="dbars">' + bars + "</div></div>" +
+      '<div><p class="h4">Findings</p>' + find + "</div>" +
+      '<div class="two"><div><p class="h4">What we fixed</p>' + tx("sup_fixed") + '</div><div><p class="h4">What needs focus</p>' + tx("sup_focus") + "</div>" +
+        '<div><p class="h4">Who we coached</p>' + tx("sup_coached") + '</div><div><p class="h4">Compliance</p><div class="txt">' +
+        esc("Fire extinguisher expiry: " + (ans.comp_fire || "not recorded") + "\nPest control last visit: " + (ans.comp_pest || "not recorded")) + "</div></div></div>" +
+      '<div class="feed"><p class="h4">Training feed</p>' + tx("sup_trainings") +
+        (train.length ? '<ul class="findings" style="margin-top:8px">' + train.map(li).join("") + "</ul>" : "") + "</div>" +
+      "</div>";
+  }
+  function renderReport() {
+    $("#tab-report").innerHTML = reportHtml(result(), S.ans, S.notes, currentProfile());
+  }
+
+  // ---- PDF: the one-pager rendered to an image, so Arabic shapes correctly without PDF fonts ----
+  async function buildPdf(res, ans, notes, prof) {
+    for (var k = 0; k < LIBS.length; k++) await loadScript(LIBS[k][0], LIBS[k][1]);
+    var host = $("#pdfhost");
+    host.innerHTML = reportHtml(res, ans, notes, prof);
+    try {
+      var canvas = await window.html2canvas(host.firstElementChild, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+      var pdf = new window.jspdf.jsPDF({ unit: "pt", format: "a4" });
+      var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      var sliceH = Math.floor(canvas.width * ph / pw);
+      for (var y = 0, page = 0; y < canvas.height; y += sliceH, page++) {
+        var part = document.createElement("canvas");
+        part.width = canvas.width; part.height = Math.min(sliceH, canvas.height - y);
+        part.getContext("2d").drawImage(canvas, 0, y, canvas.width, part.height, 0, 0, canvas.width, part.height);
+        if (page) pdf.addPage();
+        pdf.addImage(part.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, pw, part.height * pw / canvas.width);
+      }
+      return pdf.output("blob");
+    } finally { host.innerHTML = ""; }
+  }
+
+  // ---- submit ----
+  function setMsg(text, cls) { var m = $("#msg"); if (m) { m.className = "msg " + (cls || ""); m.textContent = text; } }
+  async function submit() {
+    if (S.busy) return;
+    document.querySelectorAll(".miss").forEach(function (x) { x.classList.remove("miss"); });
+    var res = result();
+    var miss = auditMissing(S.ans, S.notes, S.photos, CAT.items, res, dtLocked());
+    if (miss.length) {
+      miss.forEach(function (m) { var r = document.getElementById("row-" + m.code) || (document.getElementById("in-" + m.code) || {}).parentElement; if (r) r.classList.add("miss"); });
+      var c = function (w) { return miss.filter(function (m) { return m.why === w; }).length; };
+      var parts = [];
+      if (c("answer")) parts.push(c("answer") + " header answer" + (c("answer") > 1 ? "s" : ""));
+      if (c("rating")) parts.push(c("rating") + " not rated");
+      if (c("note")) parts.push(c("note") + " missing a note");
+      if (c("photo")) parts.push(c("photo") + " Fail" + (c("photo") > 1 ? "s" : "") + " missing a photo");
+      setMsg("Not sent yet: " + parts.join(", ") + ". Marked in red.", "bad");
+      var first = document.getElementById("row-" + miss[0].code) || document.getElementById("in-" + miss[0].code);
+      if (first) {
+        var card = first.closest(".card");
+        if (card && card.classList.contains("closed")) { card.classList.remove("closed"); S.closed[card.getAttribute("data-card")] = false; }
+        first.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
+    if (S.uploading > 0) return setMsg("Photos are still uploading. Submit again in a moment.", "bad");
+    S.busy = true;
+    var btn = $("#submit"); btn.disabled = true;
+    setMsg("Saving the visit");
+    var pl = auditPayload(S.ans, S.notes, S.photos, CAT.items, res);
+    var r = await db.rpc("store_audit_submit", { p_answers: pl.answers, p_notes: pl.notes, p_photos: pl.photos });
+    if (r.error) {
+      S.busy = false; btn.disabled = false;
+      return setMsg("Not saved: " + r.error.message + ". Your answers are kept on this device; try again.", "bad");
+    }
+    clearDraft();
+    var id = r.data.id, sres = r.data.result || res, prof = currentProfile();
+    setMsg("Visit saved. Building the report card");
+    var path = null, pdfErr = null;
+    try {
+      var blob = await buildPdf(sres, pl.answers, pl.notes, prof);
+      var name = ("store-audit-" + pl.answers.h_store + "-" + pl.answers.h_date).replace(/[^a-zA-Z0-9._-]+/g, "-") + ".pdf";
+      path = await storageUpload(new File([blob], name, { type: "application/pdf" }));
+    } catch (e) { pdfErr = e.message || String(e); }
+    await sendVisit(id, path, pdfErr, sres, pl.answers);
+    S.busy = false;
+  }
+  async function sendVisit(id, path, pdfErr, sres, ans) {
+    var s = await db.rpc("store_audit_send", { p_id: id, p_pdf_path: path });
+    showDone(id, path, pdfErr, sres, ans, s.error ? s.error.message : null, s.data || {});
+  }
+  function showDone(id, path, pdfErr, sres, ans, sendErr, sent) {
+    $("#app").hidden = true;
+    var d = $("#done"); d.hidden = false;
+    d.innerHTML = "<h2>Visit saved: " + esc(ans.h_store) + "</h2>" +
+      '<p class="big"><span class="n">' + (sres.score == null ? "--" : Number(sres.score).toFixed(1)) + '</span><span class="pill ' + gradeClass(sres.grade) + '">' + esc(sres.grade || "--") + "</span></p>" +
+      (sendErr
+        ? '<p class="msg bad">Emails were not queued: ' + esc(sendErr) + '</p><p><button type="button" class="btn" id="resend">Queue the emails again</button></p>'
+        : "<p>" + (sent.already ? "Emails were already queued for this visit." : (sent.queued || 0) + " email" + (sent.queued === 1 ? "" : "s") + " queued" +
+            (sent.live ? "." : " in review mode: they go to the review inbox, not the store.")) + "</p>") +
+      (pdfErr ? '<p class="msg bad">The PDF could not be built (' + esc(pdfErr) + "). The email carries the text summary instead.</p>" : "") +
+      '<p><button type="button" class="btn ghost" id="another">Start another visit</button></p>';
+    var rs = document.getElementById("resend");
+    if (rs) rs.onclick = function () { rs.disabled = true; sendVisit(id, path, pdfErr, sres, ans); };
+    document.getElementById("another").onclick = function () {
+      S.ans = { h_date: todayIso(), h_auditor: ans.h_auditor }; S.notes = {}; S.photos = {}; S.autoNA = {}; S.prior = null;
+      d.hidden = true; $("#app").hidden = false; $("#draftnote").hidden = true; showTab("audit"); renderAll();
+    };
+  }
+
+  // ---- events ----
+  function showTab(k) {
+    document.querySelectorAll("[data-tab]").forEach(function (x) { x.setAttribute("aria-selected", String(x.getAttribute("data-tab") === k)); });
+    ["audit", "report", "playbook"].forEach(function (n) { $("#tab-" + n).hidden = n !== k; });
+    if (k === "report") renderReport();
+    window.scrollTo({ top: 0 });
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest(".rate button");
+    if (b && !b.disabled) {
+      var code = b.getAttribute("data-code"), v = b.getAttribute("data-v");
+      var before = result();
+      if (S.ans[code] === v) delete S.ans[code]; else S.ans[code] = v;
+      delete S.autoNA[code];
+      saveDraft();
+      var after = result();
+      if (before.calibration !== after.calibration || before.deep_clean !== after.deep_clean || code === "sup_qc") {
+        var y = window.scrollY; renderAll(); window.scrollTo({ top: y }); return;
+      }
+      rerenderRow(code); refreshScores(); return;
+    }
+    var up = e.target.closest("[data-unphoto]");
+    if (up) { var c = up.getAttribute("data-unphoto"); (S.photos[c] || []).pop(); saveDraft(); rerenderRow(c); return; }
+    var tg = e.target.closest("[data-toggle]");
+    if (tg) { var k = tg.getAttribute("data-toggle"); S.closed[k] = !S.closed[k]; tg.parentElement.classList.toggle("closed"); return; }
+    var tab = e.target.closest("[data-tab]");
+    if (tab) return showTab(tab.getAttribute("data-tab"));
+    var lb = e.target.closest("[data-lang]");
+    if (lb) {
+      S.lang = lb.getAttribute("data-lang");
+      document.querySelectorAll("[data-lang]").forEach(function (x) { x.setAttribute("aria-pressed", String(x === lb)); });
+      if (CAT.items.length) renderAll();
+      return;
+    }
+    if (e.target.id === "toReport") return showTab("report");
+    if (e.target.id === "submit") return submit();
+    if (e.target.id === "discard") {
+      clearDraft(); S.ans = { h_date: todayIso() }; S.notes = {}; S.photos = {}; S.autoNA = {}; S.prior = null;
+      $("#draftnote").hidden = true; renderAll();
+    }
+  });
+  document.addEventListener("input", function (e) {
+    var el = e.target;
+    if (el.hasAttribute("data-note")) { S.notes[el.getAttribute("data-note")] = el.value; saveDraft(); return; }
+    if (el.hasAttribute("data-code") && el.tagName !== "SELECT") { S.ans[el.getAttribute("data-code")] = el.value; saveDraft(); }
+  });
+  document.addEventListener("change", function (e) {
+    var el = e.target;
+    if (el.hasAttribute("data-photo")) {
+      var code = el.getAttribute("data-photo"), files = Array.prototype.slice.call(el.files || []);
+      if (!files.length) return;
+      var lab = el.parentElement; lab.lastChild.textContent = "Uploading " + files.length;
+      S.uploading += files.length;
+      files.forEach(function (f) {
+        storageUpload(f).then(function (p) {
+          (S.photos[code] = S.photos[code] || []).push(p); saveDraft();
+        }).catch(function (err) {
+          setMsg("A photo did not upload for " + code + ": " + err.message + ". Add it again.", "bad");
+        }).then(function () { S.uploading--; rerenderRow(code); });
+      });
+      return;
+    }
+    if (el.hasAttribute("data-code") && (el.tagName === "SELECT" || el.type === "date")) {
+      var c = el.getAttribute("data-code");
+      if (el.value) S.ans[c] = el.value; else delete S.ans[c];
+      if (c === "h_store") { applyStore(); saveDraft(); var y = window.scrollY; renderAll(); window.scrollTo({ top: y }); loadPrior(); return; }
+      saveDraft();
+    }
+  });
+  boot();
+</script>
+</body>
+</html>
