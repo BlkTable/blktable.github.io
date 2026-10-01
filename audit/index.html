@@ -166,6 +166,7 @@ textarea{resize:vertical;min-height:40px}
 .tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
 .tbl th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600;background:var(--sunk)}
 .tbl tr:last-child td{border-bottom:0}
+.tbl tr.off td{color:var(--ink3);background:var(--sunk)}
 .tbl td input,.tbl td select{padding:5px 7px;font-size:13px;min-width:130px}
 td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .chips{display:flex;flex-wrap:wrap;gap:4px}
@@ -272,7 +273,7 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
   ];
   var db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
-  var CAT = { domains: [], items: [], byCode: {}, byDomain: {}, branches: [], profiles: {}, areas: [], plans: [], users: [] };
+  var CAT = { domains: [], items: [], byCode: {}, byDomain: {}, branches: [], allBranches: [], profiles: {}, areas: [], plans: [], users: [] };
   var S = { ans: {}, notes: {}, photos: {}, autoNA: {}, closed: {}, lang: "en", uploading: 0, prior: null, busy: false, role: null };
 
   // ---- scoring: mirror of public.audit_score (audit-03-score.sql). The DB result is what is saved. ----
@@ -457,8 +458,9 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
     ]);
     var bad = q.filter(function (r) { return r.error; })[0];
     if (bad) return gate("Could not load the audit", esc(bad.error.message));
-    CAT.domains = q[0].data; CAT.items = q[1].data; CAT.branches = q[2].data;
+    CAT.domains = q[0].data; CAT.items = q[1].data; CAT.allBranches = q[2].data;
     q[3].data.forEach(function (p) { CAT.profiles[p.branch_id] = p; });
+    refilterBranches();
     CAT.areas = q[5].data; CAT.plans = q[6].data; CAT.users = q[7].data;
     CAT.items.forEach(function (i) {
       CAT.byCode[i.code] = i;
@@ -813,6 +815,10 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
   var PB = { sel: null, draft: null, mode: null, start: null, selSt: null, placing: null, undo: [], kept: [] };
   var SET = { tab: "stores", cfg: null, mail: [] };
 
+  // Kitchen, Other and duplicate branches stay in BLK Tables for other forms but are not audited.
+  function refilterBranches() {
+    CAT.branches = (CAT.allBranches || []).filter(function (b) { return (CAT.profiles[b.id] || {}).in_audit !== false; });
+  }
   function toast(t) { var e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(e._t); e._t = setTimeout(function () { e.classList.remove("on"); }, 2200); }
   function branchById(id) { for (var k = 0; k < CAT.branches.length; k++) if (CAT.branches[k].id === id) return CAT.branches[k]; return null; }
   function areaById(id) { for (var k = 0; k < CAT.areas.length; k++) if (CAT.areas[k].id === id) return CAT.areas[k]; return null; }
@@ -1085,13 +1091,14 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
     var body = "";
     if (SET.tab === "stores") {
       var pulled = Object.keys(CAT.profiles).map(function (k) { return CAT.profiles[k].tvcl_pulled_at; }).filter(Boolean).sort().pop();
-      body = '<div class="panel"><h2>Stores</h2><p class="hint" style="margin:0">The store list is BLK Tables branches (' + CAT.branches.length + " active). These details drive report routing and drive-thru N/A. " +
+      body = '<div class="panel"><h2>Stores</h2><p class="hint" style="margin:0">The store list is BLK Tables branches: ' + CAT.branches.length + " in the audit, " + (CAT.allBranches.length - CAT.branches.length) + " left out (In audit = No; they stay in BLK Tables for other forms). These details drive report routing and drive-thru N/A. " +
         "Shop leader names and phones come from TVCL fleet: " + (pulled ? "last pulled " + esc(String(pulled).slice(0, 10)) : "not pulled yet") + ". A pull only fills blanks, so edits here are kept.</p></div>" +
-        '<div class="tbl"><table><thead><tr><th>Store</th><th>Market</th><th>Ownership</th><th>Drive-thru</th><th>Store leader</th><th>Phone</th><th>Leader email</th><th>Leader login</th><th>Franchisee</th><th>Franchisee email</th><th>Area leader</th></tr></thead><tbody>' +
-        CAT.branches.map(function (b) {
+        '<div class="tbl"><table><thead><tr><th>Store</th><th>In audit</th><th>Market</th><th>Ownership</th><th>Drive-thru</th><th>Store leader</th><th>Phone</th><th>Leader email</th><th>Leader login</th><th>Franchisee</th><th>Franchisee email</th><th>Area leader</th></tr></thead><tbody>' +
+        CAT.allBranches.map(function (b) {
           var p = CAT.profiles[b.id] || {}, fr = p.ownership === "Franchise", co = p.ownership === "Company";
           function inp(k, ph, off) { return '<input data-sp="' + b.id + '" data-k="' + k + '" value="' + esc(p[k]) + '"' + (ph ? ' placeholder="' + ph + '"' : "") + (off ? " disabled" : "") + ">"; }
-          return "<tr><td><b>" + esc(b.name) + "</b></td>" +
+          return "<tr" + (p.in_audit === false ? ' class="off"' : "") + "><td><b>" + esc(b.name) + "</b></td>" +
+            '<td><select data-sp="' + b.id + '" data-k="in_audit"><option value="true"' + (p.in_audit !== false ? " selected" : "") + '>Yes</option><option value="false"' + (p.in_audit === false ? " selected" : "") + ">No</option></select></td>" +
             '<td><select data-sp="' + b.id + '" data-k="market"><option value="">-</option>' + MARKETS.map(function (m) { return "<option" + (m === p.market ? " selected" : "") + ">" + m + "</option>"; }).join("") + "</select></td>" +
             '<td><select data-sp="' + b.id + '" data-k="ownership"><option value="">-</option>' + ["Company", "Franchise"].map(function (m) { return "<option" + (m === p.ownership ? " selected" : "") + ">" + m + "</option>"; }).join("") + "</select></td>" +
             '<td><select data-sp="' + b.id + '" data-k="drive_thru"><option value="">Not set</option><option value="true"' + (p.drive_thru === true ? " selected" : "") + '>Yes</option><option value="false"' + (p.drive_thru === false ? " selected" : "") + ">No</option></select></td>" +
@@ -1221,9 +1228,11 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
     if (el.hasAttribute("data-sp")) {
       var k = el.getAttribute("data-k"), v = el.value === "" ? null : el.value;
       if (k === "drive_thru") v = v === null ? null : v === "true";
+      if (k === "in_audit") v = v === "true";
       var patch = {}; patch[k] = typeof v === "string" ? v.trim() || null : v;
       await saveProfile(el.getAttribute("data-sp"), patch);
-      if (k === "ownership") renderSettings();
+      if (k === "in_audit") refilterBranches();
+      if (k === "ownership" || k === "in_audit") renderSettings();
       return;
     }
     if (el.hasAttribute("data-al")) {
