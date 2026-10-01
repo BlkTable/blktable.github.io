@@ -56,7 +56,7 @@ a{color:var(--accent)}
 .flag.bad{background:var(--fail-bg);color:var(--fail)}
 .flag.warn{background:var(--part-bg);color:var(--part)}
 
-.tabs{display:flex;gap:4px;margin-block:16px 12px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:4px;overflow-x:auto;margin-block:16px 12px;border-bottom:1px solid var(--line)}
 .tabs button{border:0;background:none;padding:8px 12px;cursor:pointer;color:var(--ink2);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
 
@@ -145,7 +145,71 @@ textarea{resize:vertical;min-height:40px}
 .pdfhost{position:fixed;left:-10000px;top:0;width:794px}
 .pdfhost .sheet{--ink:#17150f;--ink2:#57534a;--ink3:#8b8679;--surface:#ffffff;--line:#e0ddd6;--sunk:#e9e7e2;--pass:#2f7a4a;--pass-bg:#e3f1e7;--part:#a56a0c;--part-bg:#fbefd6;--fail:#b3362c;--fail-bg:#f8e1de;--na:#6d6a62;--na-bg:#e6e4df;border:0;border-radius:0}
 
+/* round 2 */
+:root{--s1:#3b6fb6;--s2:#2f7a4a;--s3:#a5562c;--s4:#7a4fa6;--s5:#b0367a;--s6:#2c8a8a;--cell:#f7f6f3;--station:#efe6da;--accent-bg:#f3e8dc}
+@media (prefers-color-scheme:dark){:root{--s1:#7aa6e6;--s2:#6cc58c;--s3:#e09468;--s4:#b691e0;--s5:#e57ab4;--s6:#6cc8c8;--cell:#211f1a;--station:#3a3125;--accent-bg:#33271b}}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+.hint{font-size:13px;color:var(--ink2)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-block:0 12px}
+.panel h2{font-size:16px;margin:0 0 4px}
+.ctx{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+.ctx.col{flex-direction:column;align-items:stretch}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.danger{background:none;color:var(--fail);border:1px solid var(--line)}
+.sub{display:flex;gap:6px;flex-wrap:wrap;margin-block:0 14px}
+.chipbtn{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:5px 12px;cursor:pointer;font-size:13px;color:var(--ink2)}
+.chipbtn[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.tag.bad{background:var(--fail-bg);color:var(--fail)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.tbl table{border-collapse:collapse;width:100%;font-size:13px}
+.tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+.tbl th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);font-weight:600;background:var(--sunk)}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td input,.tbl td select{padding:5px 7px;font-size:13px;min-width:130px}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border-radius:99px;background:var(--sunk)}
+.chip button{border:0;background:none;cursor:pointer;color:var(--ink3);padding:0 0 0 2px;font-size:14px;line-height:1}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--ground);padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30;max-width:calc(100% - 32px)}
+.toast.on{opacity:1}
+.scrim{position:fixed;inset:0;background:rgba(10,9,7,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal{background:var(--surface);border-radius:10px;max-width:460px;width:100%;padding:20px;display:grid;gap:14px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.modal h3{margin:0;font-size:17px;text-wrap:balance}
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.opts button{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:10px 4px;cursor:pointer;font-weight:600;font-size:13px}
+.opts button[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.opts.n{grid-template-columns:repeat(5,1fr)}
+.found{font-size:13px;padding:10px;border-radius:6px}
+.found.ok{background:var(--pass-bg);color:var(--pass)}
+.found.none{background:var(--part-bg);color:var(--part)}
+.pbwrap{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.pbside{flex:1 1 240px;max-width:300px}
+.pbmain{flex:3 1 520px;min-width:0}
+.plist{display:grid;gap:6px}
+.pitem{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);cursor:pointer}
+.pitem[aria-current="true"]{border-color:var(--accent);background:var(--accent-bg)}
+.pitem .m{font-size:12px;color:var(--ink2)}
+.pbhead{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.mode{font-size:13px;padding:8px 10px;border-radius:6px;background:var(--accent-bg);color:var(--accent);margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.canvaswrap{overflow-x:auto}
+.grid{display:grid;grid-template-columns:repeat(14,40px);grid-template-rows:repeat(9,40px);gap:2px;background:var(--line);border:2px solid var(--line);border-radius:6px;width:max-content;user-select:none}
+.cell{background:var(--cell);cursor:pointer}
+.cell:hover{background:var(--sunk)}
+.cell.start{outline:2px solid var(--accent);outline-offset:-2px}
+.st{background:var(--station);border:2px solid var(--ink3);border-radius:4px;padding:3px 5px;font-size:11px;font-weight:600;color:var(--ink2);z-index:1;cursor:pointer;overflow:hidden}
+.st.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
+.who{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;z-index:2;align-self:center;justify-self:center;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.staff{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:14px}
+.scard{border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:8px}
+.scard .top{display:flex;gap:8px;align-items:center}
+.scard .two{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dot{width:26px;height:26px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
+.spark{display:inline-block;vertical-align:middle}
+
 @media (max-width:560px){
+  .grid{grid-template-columns:repeat(14,30px);grid-template-rows:repeat(9,30px)}
+  .who{width:24px;height:24px;font-size:11px}
   .item{grid-template-columns:1fr}
   .rate{width:100%}
   .rate button{flex:1;width:auto}
@@ -180,17 +244,21 @@ textarea{resize:vertical;min-height:40px}
       <button type="button" role="tab" data-tab="audit" aria-selected="true">Audit</button>
       <button type="button" role="tab" data-tab="report" aria-selected="false">One-pager</button>
       <button type="button" role="tab" data-tab="playbook" aria-selected="false">Playbook</button>
+      <button type="button" role="tab" data-tab="history" aria-selected="false">History</button>
+      <button type="button" role="tab" data-tab="settings" aria-selected="false" hidden>Settings</button>
     </div>
     <div id="draftnote" class="note" hidden></div>
     <div id="tab-audit"></div>
     <div id="tab-report" hidden></div>
-    <div id="tab-playbook" hidden>
-      <div class="gate"><h2>Playbook</h2><p>The floor plan viewer and builder come after the audit ships. Plans are saved per store, shift and headcount. Shop, store and area leaders edit; auditors view only.</p></div>
-    </div>
+    <div id="tab-playbook" hidden></div>
+    <div id="tab-history" hidden></div>
+    <div id="tab-settings" hidden></div>
   </div>
 
   <div id="done" class="gate" hidden></div>
   <div class="pdfhost" id="pdfhost" aria-hidden="true"></div>
+  <div class="toast" id="toast" role="status"></div>
+  <div id="modal"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
@@ -204,8 +272,8 @@ textarea{resize:vertical;min-height:40px}
   ];
   var db = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
-  var CAT = { domains: [], items: [], byCode: {}, byDomain: {}, branches: [], profiles: {} };
-  var S = { ans: {}, notes: {}, photos: {}, autoNA: {}, closed: {}, lang: "en", uploading: 0, prior: null, busy: false };
+  var CAT = { domains: [], items: [], byCode: {}, byDomain: {}, branches: [], profiles: {}, areas: [], plans: [], users: [] };
+  var S = { ans: {}, notes: {}, photos: {}, autoNA: {}, closed: {}, lang: "en", uploading: 0, prior: null, busy: false, role: null };
 
   // ---- scoring: mirror of public.audit_score (audit-03-score.sql). The DB result is what is saved. ----
   function auditPoints(v) {
@@ -373,19 +441,25 @@ textarea{resize:vertical;min-height:40px}
     var sess = await db.auth.getSession();
     var user = sess.data && sess.data.session && sess.data.session.user;
     if (!user) return signIn();
-    var ok = await db.rpc("store_audit_can_use");
-    if (ok.error || !ok.data) return gate("No access yet", "Your account does not have Store Audit access. Ask a BLK Tables admin to give you edit rights on the Store Audit table.");
+    var ro = await db.rpc("store_audit_role");
+    S.role = ro.data || {};
+    var leader = (S.role.edit_branches || []).length > 0;
+    if (ro.error || !(S.role.audit || S.role.admin || leader)) return gate("No access yet", "Your account does not have Store Audit or Playbook access. Ask a BLK Tables admin to give you edit rights on the Store Audit table, or to link your login to your store in Store Audit settings.");
     var q = await Promise.all([
       db.from("audit_domains").select("*").order("position"),
       db.from("audit_items").select("*").order("position"),
       db.from("branches").select("id,name,name_ar,list_key,position").eq("is_active", true).order("position"),
       db.from("store_profiles").select("*"),
-      db.from("profiles").select("full_name").eq("id", user.id).maybeSingle()
+      db.from("profiles").select("full_name").eq("id", user.id).maybeSingle(),
+      db.from("area_leaders").select("*").order("name"),
+      db.from("playbook_plans").select("*"),
+      S.role.admin ? db.from("profiles").select("id,full_name,email").order("full_name") : Promise.resolve({ data: [] })
     ]);
     var bad = q.filter(function (r) { return r.error; })[0];
     if (bad) return gate("Could not load the audit", esc(bad.error.message));
     CAT.domains = q[0].data; CAT.items = q[1].data; CAT.branches = q[2].data;
     q[3].data.forEach(function (p) { CAT.profiles[p.branch_id] = p; });
+    CAT.areas = q[5].data; CAT.plans = q[6].data; CAT.users = q[7].data;
     CAT.items.forEach(function (i) {
       CAT.byCode[i.code] = i;
       (CAT.byDomain[i.domain] = CAT.byDomain[i.domain] || []).push(i);
@@ -394,6 +468,12 @@ textarea{resize:vertical;min-height:40px}
     $("#gate").hidden = true;
     $("#app").hidden = false;
     $("#scorebox").hidden = false;
+    document.querySelector('[data-tab="settings"]').hidden = !S.role.admin;
+    if (!S.role.audit && !S.role.admin) {
+      ["audit", "report", "history"].forEach(function (k) { document.querySelector('[data-tab="' + k + '"]').hidden = true; });
+      $("#scorebox").hidden = true; $("#draftnote").hidden = true;
+      return showTab("playbook");
+    }
     renderAll();
     if (S.ans.h_store) loadPrior();
   }
@@ -422,6 +502,7 @@ textarea{resize:vertical;min-height:40px}
     S.prior = r.error ? null : r.data;
     var el = document.getElementById("in-h_prior");
     if (el) el.value = priorText();
+    if (S.prior && S.prior.findings && S.prior.findings.length && !$("#tab-audit").hidden) { var y = window.scrollY; renderAudit(); window.scrollTo({ top: y }); }
   }
   function priorText() {
     if (!S.ans.h_store) return "";
@@ -433,7 +514,9 @@ textarea{resize:vertical;min-height:40px}
   function applyStore() {
     var p = currentProfile();
     if (p.market) S.ans.h_market = p.market;
-    if (p.area_leader_name) S.ans.h_area_leader = p.area_leader_name;
+    var al = areaById(p.area_leader_id);
+    if (al) S.ans.h_area_leader = al.name;
+    delete S.ans.h_shift; delete S.ans.h_headcount;
     CAT.items.forEach(function (i) {
       if (!i.dt) return;
       if (p.drive_thru === false) { S.ans[i.code] = "N/A"; S.autoNA[i.code] = 1; }
@@ -508,7 +591,7 @@ textarea{resize:vertical;min-height:40px}
   }
   function cardHtml(d, res) {
     var meta = "", inner;
-    if (d.key === "header") inner = headerHtml();
+    if (d.key === "header") inner = headerHtml() + visitContextHtml();
     else {
       var items = (CAT.byDomain[d.key] || []).filter(function (i) { return i.kind !== "computed"; });
       if (d.key === "support") items = items.filter(function (i) { return i.code !== "sup_qc_note" || S.ans.sup_qc === "Yes"; });
@@ -721,14 +804,470 @@ textarea{resize:vertical;min-height:40px}
     };
   }
 
+  // ======== round 2: shift picker, Playbook, History, Settings ========
+  var SHIFTS = ["A", "B", "C", "Weekend A", "Weekend B", "Weekend C"];
+  var MARKETS = ["Amman", "Zarqa", "Petra", "Irbid", "Lebanon", "Iraq", "Syria"];
+  var PB_COLORS = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s6)"];
+  var PB_LETTERS = ["A", "B", "C", "D", "E", "F"];
+  var PB_COLS = 14, PB_ROWS = 9;
+  var PB = { sel: null, draft: null, mode: null, start: null, selSt: null, placing: null, undo: [], kept: [] };
+  var SET = { tab: "stores", cfg: null, mail: [] };
+
+  function toast(t) { var e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(e._t); e._t = setTimeout(function () { e.classList.remove("on"); }, 2200); }
+  function branchById(id) { for (var k = 0; k < CAT.branches.length; k++) if (CAT.branches[k].id === id) return CAT.branches[k]; return null; }
+  function areaById(id) { for (var k = 0; k < CAT.areas.length; k++) if (CAT.areas[k].id === id) return CAT.areas[k]; return null; }
+  function canEditBranch(id) { return !!(S.role && (S.role.admin || (S.role.edit_branches || []).indexOf(id) >= 0)); }
+  function findPlan(branchId, shift, n) {
+    return CAT.plans.filter(function (p) { return p.branch_id === branchId && p.shift === shift && p.headcount === n; })[0] || null;
+  }
+  function emptySeat() { return { name: "", x: null, y: null, mode: "Planted", p: "", s: "" }; }
+  function closeModal() { $("#modal").innerHTML = ""; }
+
+  // ---- shift + headcount popup, opened when the auditor picks a store ----
+  function shiftModal() {
+    var b = currentBranch(); if (!b) return;
+    var shift = S.ans.h_shift || null, n = S.ans.h_headcount ? +S.ans.h_headcount : null;
+    function draw() {
+      var plan = shift && n ? findPlan(b.id, shift, n) : null;
+      var others = CAT.plans.filter(function (p) { return p.branch_id === b.id; });
+      $("#modal").innerHTML = '<div class="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mh">' +
+        '<h3 id="mh">' + esc(b.name) + ": which shift are you watching?</h3>" +
+        '<div><p class="h4">Shift</p><div class="opts">' + SHIFTS.map(function (x) { return '<button type="button" data-ms="' + x + '" aria-pressed="' + (shift === x) + '">' + x + "</button>"; }).join("") + "</div></div>" +
+        '<div><p class="h4">Baristas on shift</p><div class="opts n">' + [2, 3, 4, 5, 6].map(function (x) { return '<button type="button" data-mn="' + x + '" aria-pressed="' + (n === x) + '">' + x + "</button>"; }).join("") + "</div></div>" +
+        (shift && n ? (plan ? '<div class="found ok">Playbook found: ' + esc(plan.name) + "</div>"
+          : '<div class="found none">No playbook for ' + esc(shift) + " with " + n + " staff. " +
+            (others.length ? "This store has: " + others.map(function (p) { return esc(p.shift) + " · " + p.headcount; }).join(", ") + "." : "This store has no plans yet.") + "</div>") : "") +
+        '<div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" id="m-skip">Skip</button>' +
+        '<button type="button" class="btn" id="m-ok"' + (shift && n ? "" : " disabled") + ">Start the visit</button></div></div></div>";
+      $("#modal").querySelectorAll("[data-ms]").forEach(function (x) { x.onclick = function () { shift = x.getAttribute("data-ms"); draw(); }; });
+      $("#modal").querySelectorAll("[data-mn]").forEach(function (x) { x.onclick = function () { n = +x.getAttribute("data-mn"); draw(); }; });
+      $("#m-skip").onclick = closeModal;
+      $("#m-ok").onclick = function () {
+        S.ans.h_shift = shift; S.ans.h_headcount = String(n); saveDraft(); closeModal();
+        var y = window.scrollY; renderAll(); window.scrollTo({ top: y });
+      };
+    }
+    draw();
+  }
+  function visitContextHtml() {
+    var b = currentBranch(); if (!b) return "";
+    var h = "";
+    if (S.ans.h_shift && S.ans.h_headcount) {
+      var plan = findPlan(b.id, S.ans.h_shift, +S.ans.h_headcount);
+      h += '<div class="ctx"><div class="grow"><p class="h4">Playbook for this shift</p>' +
+        (plan ? "<div><b>" + esc(plan.name) + '</b> <span class="tag">' + esc(plan.shift) + '</span> <span class="tag">' + plan.headcount + " staff</span></div>"
+              : '<div class="hint">No plan saved for ' + esc(b.name) + " · " + esc(S.ans.h_shift) + " · " + esc(S.ans.h_headcount) + " staff. Note it under What needs focus.</div>") +
+        "</div>" + (plan ? '<button type="button" class="btn ghost" data-openplan="' + plan.id + '">Open playbook</button>' : "") +
+        '<button type="button" class="linkbtn" id="reshift">Change shift</button></div>';
+    } else {
+      h += '<div class="ctx"><span class="grow hint">Shift not set.</span><button type="button" class="btn ghost" id="reshift">Pick shift and baristas</button></div>';
+    }
+    var f = S.prior && S.prior.findings;
+    if (f && f.length) {
+      h += '<div class="ctx col"><p class="h4">Open findings from the last visit (' + esc(S.prior.date) + ')</p><p class="hint" style="margin:0 0 6px">Check o7 "Prior audit findings closed" against these.</p><ul class="findings">' +
+        f.map(function (x) { return '<li><span class="pill ' + (auditPoints(x.value) === 0 ? "g-red" : "g-amber") + '">' + esc(x.value) + "</span><div><div>" + esc(x.code + " " + x.label) + "</div>" + (x.note ? '<div class="nt">' + esc(x.note) + "</div>" : "") + "</div></li>"; }).join("") + "</ul></div>";
+    }
+    return h;
+  }
+
+  // ---- Playbook ----
+  function renderPlaybook() {
+    var list = CAT.plans.slice().sort(function (a, b) {
+      var ba = branchById(a.branch_id), bb = branchById(b.branch_id);
+      return ((ba && ba.position) - (bb && bb.position)) || SHIFTS.indexOf(a.shift) - SHIFTS.indexOf(b.shift) || a.headcount - b.headcount;
+    });
+    var canNew = S.role.admin || (S.role.edit_branches || []).length > 0;
+    var p = PB.draft;
+    $("#tab-playbook").innerHTML = '<div class="pbwrap"><div class="pbside">' +
+      '<div class="row" style="margin-bottom:8px"><p class="h4 grow" style="margin:0">Saved plans</p>' + (canNew ? '<button type="button" class="btn sm" id="pb-new">New plan</button>' : "") + "</div>" +
+      '<div class="plist">' + (list.length ? list.map(function (x) {
+        var b = branchById(x.branch_id);
+        return '<div class="pitem" data-sel="' + x.id + '" aria-current="' + (p && x.id === p.id) + '"><div><div>' + esc(x.name) + '</div><div class="m">' + esc(b ? b.name : "?") + " · " + esc(x.shift) + " · " + x.headcount + ' staff</div></div><span class="tag">' + x.headcount + "</span></div>";
+      }).join("") : '<p class="hint">No plans yet.</p>') + "</div></div>" +
+      '<div class="pbmain">' + (p ? pbEditorHtml(p) : '<div class="gate" style="margin:0">Pick a plan on the left' + (canNew ? " or start a new one" : "") + ".</div>") + "</div></div>";
+    if (p) pbWire(p);
+  }
+  function pbEditorHtml(p) {
+    var edit = canEditBranch(p.branch_id);
+    var stores = CAT.branches.filter(function (b) { return S.role.admin || canEditBranch(b.id) || b.id === p.branch_id; });
+    var banner = PB.mode === "station" ? "Click the first corner of the station, then the opposite corner." + (PB.start ? " First corner set." : "")
+      : PB.mode === "place" ? "Click a cell to place <b>" + PB_LETTERS[PB.placing] + "</b>." : "";
+    var dis = edit ? "" : " disabled";
+    var st = PB.selSt != null ? p.stations.filter(function (s) { return s.id === PB.selSt; })[0] : null;
+    return '<div class="panel">' +
+      (edit ? "" : '<div class="mode" style="background:var(--sunk);color:var(--ink2)">View only. Leaders of this store, its area leader and admins edit it.</div>') +
+      '<div class="pbhead">' +
+        '<div class="f"><label for="pb-name">Plan name</label><input id="pb-name" value="' + esc(p.name) + '"' + dis + "></div>" +
+        '<div class="f"><label for="pb-store">Store</label><select id="pb-store"' + dis + ">" + stores.map(function (b) { return '<option value="' + b.id + '"' + (b.id === p.branch_id ? " selected" : "") + ">" + esc(b.name) + "</option>"; }).join("") + "</select></div>" +
+        '<div class="f"><label for="pb-shift">Shift (category)</label><select id="pb-shift"' + dis + ">" + SHIFTS.map(function (s) { return "<option" + (s === p.shift ? " selected" : "") + ">" + s + "</option>"; }).join("") + "</select></div>" +
+        '<div class="f"><label for="pb-n">Staff on shift</label><select id="pb-n"' + dis + ">" + [2, 3, 4, 5, 6].map(function (n) { return "<option" + (n === p.headcount ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select></div>" +
+      "</div>" +
+      (edit ? '<div class="row" style="margin-bottom:10px">' +
+        '<button type="button" class="btn ghost sm" id="pb-addst">+ Add station</button>' +
+        '<button type="button" class="btn ghost sm" id="pb-undo"' + (PB.undo.length ? "" : " disabled") + ">Undo</button>" +
+        (st ? '<input id="pb-stname" value="' + esc(st.name) + '" style="width:150px" aria-label="Station name"><button type="button" class="btn danger sm" id="pb-delst">Delete station</button>' : "") +
+        '<span class="grow"></span>' +
+        (p.id ? '<button type="button" class="btn danger sm" id="pb-del">Delete plan</button><button type="button" class="btn ghost sm" id="pb-dup">Duplicate</button>' : "") +
+        '<button type="button" class="btn sm" id="pb-save">Save</button></div>' : "") +
+      (banner ? '<div class="mode"><span class="grow">' + banner + '</span><button type="button" class="btn ghost sm" id="pb-cancel">Cancel</button></div>' : "") +
+      '<div class="canvaswrap"><div class="grid" id="pbgrid"></div></div>' +
+      '<div class="staff">' + p.staff.map(function (s, i) {
+        return '<div class="scard"><div class="top"><span class="dot" style="background:' + PB_COLORS[i] + '">' + PB_LETTERS[i] + "</span>" +
+          '<input data-sf="name" data-i="' + i + '" value="' + esc(s.name) + '" placeholder="Name" aria-label="Name for ' + PB_LETTERS[i] + '"' + dis + ">" +
+          (edit ? '<button type="button" class="btn ghost sm" data-place="' + i + '">' + (s.x == null ? "Place" : "Move") + "</button>" : "") + "</div>" +
+          '<div class="seg" role="group" aria-label="Planted or flex">' + ["Planted", "Flex"].map(function (m) { return '<button type="button" data-pmode="' + m + '" data-i="' + i + '" aria-pressed="' + (s.mode === m) + '"' + dis + ">" + m + "</button>"; }).join("") + "</div>" +
+          '<div class="two"><input data-sf="p" data-i="' + i + '" value="' + esc(s.p) + '" placeholder="Primary"' + dis + '><input data-sf="s" data-i="' + i + '" value="' + esc(s.s) + '" placeholder="Secondary"' + dis + "></div></div>";
+      }).join("") + "</div>" +
+      '<p class="hint" style="margin:12px 0 0">Saved per store + shift + staff count. Saving over a combination another plan uses replaces that plan.' +
+        (p.updated_at ? " Last saved " + esc(String(p.updated_at).slice(0, 10)) + "." : "") + "</p></div>";
+  }
+  function pbWire(p) {
+    var edit = canEditBranch(p.branch_id);
+    var g = $("#pbgrid"), h = "";
+    for (var r = 1; r <= PB_ROWS; r++) for (var c = 1; c <= PB_COLS; c++)
+      h += '<div class="cell' + (PB.start && PB.start.c === c && PB.start.r === r ? " start" : "") + '" data-c="' + c + '" data-r="' + r + '" style="grid-column:' + c + ";grid-row:" + r + '"></div>';
+    h += p.stations.map(function (s) {
+      return '<div class="st' + (PB.selSt === s.id ? " sel" : "") + '" data-st="' + s.id + '" style="grid-column:' + Math.min(s.c1, s.c2) + "/" + (Math.max(s.c1, s.c2) + 1) + ";grid-row:" + Math.min(s.r1, s.r2) + "/" + (Math.max(s.r1, s.r2) + 1) + '">' + esc(s.name) + "</div>";
+    }).join("");
+    h += p.staff.map(function (s, i) { return s.x == null ? "" : '<div class="who" style="grid-column:' + s.x + ";grid-row:" + s.y + ";background:" + PB_COLORS[i] + '">' + PB_LETTERS[i] + "</div>"; }).join("");
+    g.innerHTML = h;
+    if (!edit) return;
+    g.onclick = function (e) {
+      var stEl = e.target.closest("[data-st]"), cell = e.target.closest(".cell");
+      if (PB.mode === "station") {
+        if (!cell) return;
+        var cc = +cell.getAttribute("data-c"), rr = +cell.getAttribute("data-r");
+        if (!PB.start) { PB.start = { c: cc, r: rr }; return renderPlaybook(); }
+        PB.undo.push(["stations", JSON.stringify(p.stations)]);
+        var id = p.stations.reduce(function (m, s) { return Math.max(m, s.id); }, 0) + 1;
+        p.stations.push({ id: id, name: "Station " + id, c1: PB.start.c, r1: PB.start.r, c2: cc, r2: rr });
+        PB.mode = null; PB.start = null; PB.selSt = id; renderPlaybook();
+        var sn = $("#pb-stname"); if (sn) sn.select();
+        return;
+      }
+      if (PB.mode === "place" && cell) {
+        PB.undo.push(["staff", JSON.stringify(p.staff)]);
+        p.staff[PB.placing].x = +cell.getAttribute("data-c"); p.staff[PB.placing].y = +cell.getAttribute("data-r");
+        PB.mode = null; PB.placing = null; return renderPlaybook();
+      }
+      if (stEl) { PB.selSt = +stEl.getAttribute("data-st"); return renderPlaybook(); }
+      if (cell) {
+        var x = +cell.getAttribute("data-c"), y = +cell.getAttribute("data-r");
+        var hit = p.stations.filter(function (s) { return x >= Math.min(s.c1, s.c2) && x <= Math.max(s.c1, s.c2) && y >= Math.min(s.r1, s.r2) && y <= Math.max(s.r1, s.r2); })[0];
+        PB.selSt = hit ? hit.id : null; renderPlaybook();
+      }
+    };
+    $("#pb-addst").onclick = function () { PB.mode = "station"; PB.start = null; renderPlaybook(); };
+    var cn = $("#pb-cancel"); if (cn) cn.onclick = function () { PB.mode = null; PB.start = null; PB.placing = null; renderPlaybook(); };
+    $("#pb-undo").onclick = function () { var l = PB.undo.pop(); if (!l) return; p[l[0]] = JSON.parse(l[1]); PB.selSt = null; renderPlaybook(); };
+    var sn = $("#pb-stname");
+    if (sn) sn.oninput = function () { var s = p.stations.filter(function (x) { return x.id === PB.selSt; })[0]; s.name = sn.value; var el = g.querySelector('[data-st="' + s.id + '"]'); if (el) el.textContent = sn.value; };
+    var ds = $("#pb-delst"); if (ds) ds.onclick = function () { PB.undo.push(["stations", JSON.stringify(p.stations)]); p.stations = p.stations.filter(function (x) { return x.id !== PB.selSt; }); PB.selSt = null; renderPlaybook(); };
+    document.querySelectorAll("[data-place]").forEach(function (b) { b.onclick = function () { PB.mode = "place"; PB.placing = +b.getAttribute("data-place"); renderPlaybook(); }; });
+    document.querySelectorAll("[data-pmode]").forEach(function (b) { b.onclick = function () { p.staff[+b.getAttribute("data-i")].mode = b.getAttribute("data-pmode"); renderPlaybook(); }; });
+    document.querySelectorAll("[data-sf]").forEach(function (inp) { inp.oninput = function () { p.staff[+inp.getAttribute("data-i")][inp.getAttribute("data-sf")] = inp.value; }; });
+    $("#pb-name").oninput = function (e) { p.name = e.target.value; };
+    $("#pb-store").onchange = function (e) { p.branch_id = e.target.value; };
+    $("#pb-shift").onchange = function (e) { p.shift = e.target.value; };
+    $("#pb-n").onchange = function (e) {
+      var n = +e.target.value;
+      while (p.staff.length < n) p.staff.push(PB.kept.shift() || emptySeat());
+      if (p.staff.length > n) PB.kept = p.staff.splice(n).concat(PB.kept);
+      p.headcount = n; renderPlaybook();
+    };
+    $("#pb-save").onclick = function () { pbSave(p); };
+    var dup = $("#pb-dup"); if (dup) dup.onclick = function () { pbDupModal(p); };
+    var del = $("#pb-del"); if (del) del.onclick = function () { pbDeleteModal(p); };
+  }
+  async function pbSave(p, quiet) {
+    var r = await db.rpc("playbook_save", { p_id: p.id || null, p_branch: p.branch_id, p_shift: p.shift, p_headcount: p.headcount,
+      p_name: p.name, p_stations: p.stations, p_staff: p.staff });
+    if (r.error) { toast("Not saved: " + r.error.message); return null; }
+    await loadPlans();
+    PB.draft = clonePlan(CAT.plans.filter(function (x) { return x.id === r.data.id; })[0]);
+    PB.undo = []; PB.kept = [];
+    renderPlaybook();
+    if (!quiet) toast(r.data.replaced ? "Saved. It replaced the older plan for that shift and staff count." : "Saved");
+    return r.data;
+  }
+  function pbDupModal(p) {
+    var stores = CAT.branches.filter(function (b) { return canEditBranch(b.id); });
+    $("#modal").innerHTML = '<div class="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="dh">' +
+      '<h3 id="dh">Duplicate "' + esc(p.name) + '"</h3>' +
+      '<div class="f"><label for="d-name">New name</label><input id="d-name" value="' + esc(p.name) + ' (copy)"></div>' +
+      '<div class="row"><div class="f grow"><label for="d-store">Store</label><select id="d-store">' + stores.map(function (b) { return '<option value="' + b.id + '"' + (b.id === p.branch_id ? " selected" : "") + ">" + esc(b.name) + "</option>"; }).join("") + "</select></div>" +
+      '<div class="f grow"><label for="d-shift">Shift (category)</label><select id="d-shift">' + SHIFTS.map(function (s) { return "<option" + (s === p.shift ? " selected" : "") + ">" + s + "</option>"; }).join("") + "</select></div>" +
+      '<div class="f"><label for="d-n">Staff</label><select id="d-n">' + [2, 3, 4, 5, 6].map(function (n) { return "<option" + (n === p.headcount ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select></div></div>" +
+      '<div id="d-warn"></div><div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" id="d-cancel">Cancel</button><button type="button" class="btn" id="d-ok">Duplicate</button></div></div></div>';
+    function warn() {
+      var c = findPlan($("#d-store").value, $("#d-shift").value, +$("#d-n").value);
+      $("#d-warn").innerHTML = c ? '<div class="found none">"' + esc(c.name) + '" already uses that store, shift and staff count. Duplicating replaces it.</div>' : "";
+    }
+    ["#d-store", "#d-shift", "#d-n"].forEach(function (s) { $(s).onchange = warn; }); warn();
+    $("#d-cancel").onclick = closeModal;
+    $("#d-ok").onclick = async function () {
+      var n = +$("#d-n").value, copy = clonePlan(p);
+      copy.id = null; copy.name = $("#d-name").value; copy.branch_id = $("#d-store").value; copy.shift = $("#d-shift").value;
+      while (copy.staff.length < n) copy.staff.push(emptySeat());
+      copy.staff = copy.staff.slice(0, n); copy.headcount = n;
+      closeModal();
+      var res = await pbSave(copy, true);
+      if (res) toast(res.replaced ? "Duplicated. It replaced the older plan there." : "Duplicated");
+    };
+  }
+  function pbDeleteModal(p) {
+    $("#modal").innerHTML = '<div class="scrim"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="xh">' +
+      '<h3 id="xh">Delete "' + esc(p.name) + '"?</h3><p class="hint" style="margin:0">The plan is removed for everyone. This cannot be undone.</p>' +
+      '<div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" id="x-cancel">Keep it</button><button type="button" class="btn danger" id="x-ok">Delete plan</button></div></div></div>';
+    $("#x-cancel").onclick = closeModal;
+    $("#x-ok").onclick = async function () {
+      closeModal();
+      var r = await db.rpc("playbook_delete", { p_id: p.id });
+      if (r.error) return toast("Not deleted: " + r.error.message);
+      PB.draft = null; await loadPlans(); renderPlaybook(); toast("Deleted");
+    };
+  }
+  function clonePlan(p) { return p ? JSON.parse(JSON.stringify(p)) : null; }
+  async function loadPlans() {
+    var r = await db.from("playbook_plans").select("*");
+    CAT.plans = r.error ? [] : r.data;
+  }
+
+  // ---- History ----
+  async function renderHistory() {
+    var el = $("#tab-history");
+    el.innerHTML = '<div class="gate" style="margin:0">Loading visits</div>';
+    var r = await db.rpc("store_audit_history");
+    if (r.error) { el.innerHTML = '<div class="gate" style="margin:0">Could not load visits: ' + esc(r.error.message) + "</div>"; return; }
+    var by = {};
+    (r.data || []).forEach(function (v) { (by[v.branch] = by[v.branch] || []).push(v); });
+    var today = new Date(todayIso());
+    var rows = CAT.branches.map(function (b) {
+      var v = by[b.name] || [], last = v[v.length - 1];
+      return { b: b, v: v, last: last, days: last ? Math.round((today - new Date(last.date)) / 864e5) : null };
+    }).sort(function (a, b) { return (b.days == null ? 1e6 : b.days) - (a.days == null ? 1e6 : a.days); });
+    var over = rows.filter(function (x) { return x.days == null || x.days > 30; }).length;
+    el.innerHTML = '<div class="panel"><h2>Visit history</h2><p class="hint">' + over + " of " + rows.length + " stores have no visit in the last 30 days. Longest gap first.</p>" +
+      '<div class="tbl"><table><thead><tr><th>Store</th><th>Market</th><th>Last visit</th><th>Days since</th><th>Last grade</th><th>Trend</th><th>Visits</th></tr></thead><tbody>' +
+      rows.map(function (x) {
+        var p = CAT.profiles[x.b.id] || {};
+        return "<tr><td>" + esc(x.b.name) + "</td><td>" + esc(p.market || "") + '</td><td class="num">' + (x.last ? esc(x.last.date) : "never") + "</td>" +
+          '<td class="num">' + (x.days == null ? "--" : x.days) + (x.days == null || x.days > 30 ? ' <span class="tag bad">overdue</span>' : "") + "</td>" +
+          "<td>" + (x.last && x.last.grade ? '<span class="pill ' + gradeClass(x.last.grade) + '">' + esc(x.last.grade) + '</span> <span class="num">' + Number(x.last.score).toFixed(1) + "</span>" : "") + "</td>" +
+          "<td>" + sparkSvg(x.v.map(function (v) { return Number(v.score); }).filter(function (n) { return !isNaN(n); })) + '</td><td class="num">' + x.v.length + "</td></tr>";
+      }).join("") + "</tbody></table></div></div>";
+  }
+  function sparkSvg(vals) {
+    if (vals.length < 2) return "";
+    var w = 80, h = 22, lo = 60, hi = 100;
+    function x(i) { return 2 + i * (w - 4) / (vals.length - 1); }
+    function y(v) { return h - 2 - (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * (h - 4); }
+    return '<svg class="spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '" aria-hidden="true"><line x1="0" x2="' + w + '" y1="' + y(90) + '" y2="' + y(90) + '" stroke="var(--line)" stroke-dasharray="2 2"/>' +
+      '<polyline fill="none" stroke="var(--accent)" stroke-width="1.6" points="' + vals.map(function (v, i) { return x(i) + "," + y(v); }).join(" ") + '"/>' +
+      '<circle cx="' + x(vals.length - 1) + '" cy="' + y(vals[vals.length - 1]) + '" r="2.5" fill="var(--accent)"/></svg>';
+  }
+
+  // ---- Settings (admin) ----
+  function userOptions(sel) {
+    return '<option value="">No login</option>' + CAT.users.map(function (u) {
+      return '<option value="' + u.id + '"' + (u.id === sel ? " selected" : "") + ">" + esc((u.full_name || "") + (u.email ? " · " + u.email : "")) + "</option>";
+    }).join("");
+  }
+  async function saveProfile(branchId, patch) {
+    patch.updated_at = new Date().toISOString();
+    var r = await db.from("store_profiles").update(patch).eq("branch_id", branchId).select().maybeSingle();
+    if (r.error) return toast("Not saved: " + r.error.message);
+    if (r.data) CAT.profiles[branchId] = r.data;
+    toast("Saved");
+  }
+  async function renderSettings() {
+    var tabs = [["stores", "Stores"], ["areas", "Area leaders"], ["mail", "Report emails"], ["auditors", "Auditors"], ["labels", "Labels"], ["live", "Sending"]];
+    var body = "";
+    if (SET.tab === "stores") {
+      var pulled = Object.keys(CAT.profiles).map(function (k) { return CAT.profiles[k].tvcl_pulled_at; }).filter(Boolean).sort().pop();
+      body = '<div class="panel"><h2>Stores</h2><p class="hint" style="margin:0">The store list is BLK Tables branches (' + CAT.branches.length + " active). These details drive report routing and drive-thru N/A. " +
+        "Shop leader names and phones come from TVCL fleet: " + (pulled ? "last pulled " + esc(String(pulled).slice(0, 10)) : "not pulled yet") + ". A pull only fills blanks, so edits here are kept.</p></div>" +
+        '<div class="tbl"><table><thead><tr><th>Store</th><th>Market</th><th>Ownership</th><th>Drive-thru</th><th>Store leader</th><th>Phone</th><th>Leader email</th><th>Leader login</th><th>Franchisee</th><th>Franchisee email</th><th>Area leader</th></tr></thead><tbody>' +
+        CAT.branches.map(function (b) {
+          var p = CAT.profiles[b.id] || {}, fr = p.ownership === "Franchise", co = p.ownership === "Company";
+          function inp(k, ph, off) { return '<input data-sp="' + b.id + '" data-k="' + k + '" value="' + esc(p[k]) + '"' + (ph ? ' placeholder="' + ph + '"' : "") + (off ? " disabled" : "") + ">"; }
+          return "<tr><td><b>" + esc(b.name) + "</b></td>" +
+            '<td><select data-sp="' + b.id + '" data-k="market"><option value="">-</option>' + MARKETS.map(function (m) { return "<option" + (m === p.market ? " selected" : "") + ">" + m + "</option>"; }).join("") + "</select></td>" +
+            '<td><select data-sp="' + b.id + '" data-k="ownership"><option value="">-</option>' + ["Company", "Franchise"].map(function (m) { return "<option" + (m === p.ownership ? " selected" : "") + ">" + m + "</option>"; }).join("") + "</select></td>" +
+            '<td><select data-sp="' + b.id + '" data-k="drive_thru"><option value="">Not set</option><option value="true"' + (p.drive_thru === true ? " selected" : "") + '>Yes</option><option value="false"' + (p.drive_thru === false ? " selected" : "") + ">No</option></select></td>" +
+            "<td>" + inp("store_leader_name") + "</td><td>" + inp("store_leader_phone") + "</td><td>" + inp("store_leader_email", co ? "needed for reports" : "") + "</td>" +
+            '<td><select data-sp="' + b.id + '" data-k="store_leader_user_id">' + userOptions(p.store_leader_user_id) + "</select></td>" +
+            "<td>" + inp("partner_name", "", co) + "</td><td>" + inp("partner_email", fr ? "needed for reports" : "", co) + "</td>" +
+            '<td><select data-sp="' + b.id + '" data-k="area_leader_id"><option value="">None</option>' + CAT.areas.map(function (a) { return '<option value="' + a.id + '"' + (a.id === p.area_leader_id ? " selected" : "") + ">" + esc(a.name) + "</option>"; }).join("") + "</select></td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    if (SET.tab === "areas") {
+      body = '<div class="panel"><div class="row"><div class="grow"><h2>Area leaders</h2><p class="hint" style="margin:0">Company stores report to the area leader assigned here. A store has one area leader. Link a login so they can edit Playbooks for their branches.</p></div><button type="button" class="btn" id="add-area">Add area leader</button></div></div>' +
+        CAT.areas.map(function (a) {
+          var mine = CAT.branches.filter(function (b) { return (CAT.profiles[b.id] || {}).area_leader_id === a.id; });
+          var free = CAT.branches.filter(function (b) { return (CAT.profiles[b.id] || {}).area_leader_id !== a.id && (CAT.profiles[b.id] || {}).ownership !== "Franchise"; });
+          return '<div class="panel"><div class="fields" style="padding:0">' +
+            '<div class="f"><label for="al-n-' + a.id + '">Name</label><input id="al-n-' + a.id + '" data-al="' + a.id + '" data-k="name" value="' + esc(a.name) + '"></div>' +
+            '<div class="f"><label for="al-e-' + a.id + '">Email</label><input id="al-e-' + a.id + '" data-al="' + a.id + '" data-k="email" value="' + esc(a.email) + '"></div>' +
+            '<div class="f"><label for="al-p-' + a.id + '">Phone</label><input id="al-p-' + a.id + '" data-al="' + a.id + '" data-k="phone" value="' + esc(a.phone) + '"></div>' +
+            '<div class="f"><label for="al-u-' + a.id + '">Login</label><select id="al-u-' + a.id + '" data-al="' + a.id + '" data-k="user_id">' + userOptions(a.user_id) + "</select></div></div>" +
+            '<p class="h4" style="margin-top:12px">Branches (' + mine.length + ')</p><div class="chips">' +
+            (mine.map(function (b) { return '<span class="chip">' + esc(b.name) + '<button type="button" data-unassign="' + b.id + '" aria-label="Remove ' + esc(b.name) + '">&times;</button></span>'; }).join("") || '<span class="hint">No branches yet.</span>') + "</div>" +
+            '<div class="row" style="margin-top:10px"><select id="assign-' + a.id + '" aria-label="Branch to add"><option value="">Add a branch</option>' +
+            free.map(function (b) { var cur = areaById((CAT.profiles[b.id] || {}).area_leader_id); return '<option value="' + b.id + '">' + esc(b.name) + (cur ? " (now " + esc(cur.name) + ")" : "") + "</option>"; }).join("") +
+            '</select><button type="button" class="btn ghost sm" data-assign="' + a.id + '">Add</button><span class="grow"></span><button type="button" class="btn danger sm" data-delarea="' + a.id + '">Remove leader</button></div></div>';
+        }).join("");
+    }
+    if (SET.tab === "mail") {
+      var mr = await db.from("audit_market_recipients").select("*").order("email");
+      SET.mail = mr.error ? [] : mr.data;
+      body = '<div class="panel"><h2>Report emails per market</h2><p class="hint">Every one-pager for a store in this market also goes to these addresses, on top of the store leader and area leader (or the franchisee). Training and QC emails are not copied.</p>' +
+        '<div class="tbl"><table><thead><tr><th>Market</th><th>Also send to</th><th>Add</th></tr></thead><tbody>' +
+        MARKETS.map(function (m) {
+          var list = SET.mail.filter(function (x) { return x.market === m; });
+          return "<tr><td><b>" + m + '</b></td><td><div class="chips">' + (list.map(function (x) { return '<span class="chip">' + esc(x.email) + '<button type="button" data-unmail="' + esc(m) + "|" + esc(x.email) + '" aria-label="Remove ' + esc(x.email) + '">&times;</button></span>'; }).join("") || '<span class="hint">Nobody extra</span>') + "</div></td>" +
+            '<td><div class="row" style="flex-wrap:nowrap"><input id="mail-' + m + '" type="email" placeholder="name@blk.jo" aria-label="Email for ' + m + '" style="min-width:180px"><button type="button" class="btn ghost sm" data-addmail="' + m + '">Add</button></div></td></tr>';
+        }).join("") + "</tbody></table></div></div>";
+    }
+    if (SET.tab === "auditors") {
+      var aud = (CAT.byCode.h_auditor && CAT.byCode.h_auditor.choices) || [];
+      body = '<div class="panel"><h2>Auditors</h2><p class="hint">The names offered in the Auditor box. To submit visits an auditor also needs a BLK Tables login with edit rights on the Store Audit table.</p>' +
+        '<div class="chips" style="margin-bottom:12px">' + aud.map(function (a, i) { return '<span class="chip">' + esc(a) + '<button type="button" data-unaud="' + i + '" aria-label="Remove ' + esc(a) + '">&times;</button></span>'; }).join("") + "</div>" +
+        '<div class="row"><input id="aud-new" placeholder="Name" aria-label="New auditor name"><button type="button" class="btn ghost" id="aud-add">Add auditor</button></div></div>';
+    }
+    if (SET.tab === "labels") {
+      var q = (SET.labelQ || "").toLowerCase();
+      var items = CAT.items.filter(function (i) { return i.kind !== "computed" && (!q || (i.code + " " + i.label + " " + (i.label_ar || "")).toLowerCase().indexOf(q) >= 0); });
+      body = '<div class="panel"><h2>Item labels</h2><p class="hint">English and Arabic wording for every audit item. Codes and scoring do not change here. Where Arabic is empty the form shows English.</p>' +
+        '<input id="lab-q" placeholder="Search ' + CAT.items.length + ' items" value="' + esc(SET.labelQ || "") + '" style="width:100%;margin-bottom:10px" aria-label="Search items">' +
+        '<div class="tbl"><table><thead><tr><th>Code</th><th>English</th><th>Arabic</th></tr></thead><tbody>' +
+        items.map(function (i) { return '<tr><td class="num">' + esc(i.code) + '</td><td><input data-lab="' + i.code + '" data-k="label" value="' + esc(i.label) + '" style="min-width:300px" aria-label="English for ' + i.code + '"></td><td><input dir="rtl" data-lab="' + i.code + '" data-k="label_ar" value="' + esc(i.label_ar || "") + '" style="min-width:240px" aria-label="Arabic for ' + i.code + '"></td></tr>'; }).join("") +
+        "</tbody></table></div></div>";
+    }
+    if (SET.tab === "live") {
+      var c = await db.rpc("store_audit_get_config");
+      SET.cfg = c.data || {};
+      var live = SET.cfg.send_live === true;
+      var noLeader = CAT.branches.filter(function (b) { var p = CAT.profiles[b.id] || {}; return p.ownership === "Company" && !p.store_leader_email; }).length;
+      var noPartner = CAT.branches.filter(function (b) { var p = CAT.profiles[b.id] || {}; return p.ownership === "Franchise" && !p.partner_email; }).length;
+      var noOwn = CAT.branches.filter(function (b) { return !(CAT.profiles[b.id] || {}).ownership; }).length;
+      body = '<div class="panel"><h2>Sending</h2><p class="hint">In review mode every report, Training feed and QC email goes to the review inbox, with a first line saying who it would have gone to.</p>' +
+        '<div class="row" style="margin-bottom:12px"><span class="pill ' + (live ? "g-green" : "g-amber") + '">' + (live ? "Live: sending to stores" : "Review mode") + '</span><span class="grow"></span>' +
+        '<button type="button" class="btn' + (live ? " danger" : "") + '" id="flip">' + (live ? "Back to review mode" : "Go live") + "</button></div>" +
+        (live ? "" : '<p class="hint">Before going live: ' + noOwn + " stores have no ownership set, " + noLeader + " company stores have no store leader email, " + noPartner + " franchise stores have no franchisee email.</p>") +
+        '<div class="fields" style="padding:0;max-width:640px"><div class="f"><label for="cfg-review">Review inbox</label><input id="cfg-review" type="email" value="' + esc(SET.cfg.review_to || "") + '"></div>' +
+        '<div class="f"><label for="cfg-training">Training feed goes to</label><input id="cfg-training" type="email" value="' + esc(SET.cfg.training_email || "") + '"></div></div>' +
+        '<div class="row" style="margin-top:10px"><button type="button" class="btn ghost" id="cfg-save">Save addresses</button></div></div>';
+    }
+    $("#tab-settings").innerHTML = '<div class="sub">' + tabs.map(function (t) { return '<button type="button" class="chipbtn" data-set="' + t[0] + '" aria-pressed="' + (SET.tab === t[0]) + '">' + t[1] + "</button>"; }).join("") + "</div>" + body;
+    var lq = $("#lab-q");
+    if (lq) { lq.oninput = function () { SET.labelQ = lq.value; var pos = lq.selectionStart; renderSettings().then(function () { var n = $("#lab-q"); n.focus(); n.setSelectionRange(pos, pos); }); }; }
+  }
+  async function setConfig(live) {
+    var r = await db.rpc("store_audit_set_config", { p_live: live, p_review: $("#cfg-review").value.trim(), p_training: $("#cfg-training").value.trim() });
+    if (r.error) return toast("Not saved: " + r.error.message);
+    toast(live ? "Live: reports now go to stores" : "Saved");
+    renderSettings();
+  }
+  async function settingsClick(e) {
+    var t = e.target;
+    var st = t.closest("[data-set]"); if (st) { SET.tab = st.getAttribute("data-set"); return renderSettings(); }
+    if (t.id === "add-area") {
+      var r = await db.from("area_leaders").insert({ name: "New area leader" }).select().single();
+      if (r.error) return toast("Not added: " + r.error.message);
+      CAT.areas.push(r.data); return renderSettings();
+    }
+    var as = t.closest("[data-assign]");
+    if (as) { var v = $("#assign-" + as.getAttribute("data-assign")).value; if (!v) return; await saveProfile(v, { area_leader_id: as.getAttribute("data-assign") }); return renderSettings(); }
+    var un = t.closest("[data-unassign]"); if (un) { await saveProfile(un.getAttribute("data-unassign"), { area_leader_id: null }); return renderSettings(); }
+    var da = t.closest("[data-delarea]");
+    if (da) {
+      var id = da.getAttribute("data-delarea");
+      var d = await db.from("area_leaders").delete().eq("id", id);
+      if (d.error) return toast("Not removed: " + d.error.message);
+      CAT.areas = CAT.areas.filter(function (a) { return a.id !== id; });
+      Object.keys(CAT.profiles).forEach(function (k) { if (CAT.profiles[k].area_leader_id === id) CAT.profiles[k].area_leader_id = null; });
+      toast("Removed. Its branches now have no area leader"); return renderSettings();
+    }
+    var am = t.closest("[data-addmail]");
+    if (am) {
+      var m = am.getAttribute("data-addmail"), em = $("#mail-" + m).value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return toast("Enter a full email address");
+      var ins = await db.from("audit_market_recipients").insert({ market: m, email: em });
+      if (ins.error) return toast("Not added: " + ins.error.message);
+      return renderSettings();
+    }
+    var umm = t.closest("[data-unmail]");
+    if (umm) {
+      var parts = umm.getAttribute("data-unmail").split("|");
+      var dm = await db.from("audit_market_recipients").delete().eq("market", parts[0]).eq("email", parts[1]);
+      if (dm.error) return toast("Not removed: " + dm.error.message);
+      return renderSettings();
+    }
+    var ua = t.closest("[data-unaud]");
+    if (ua || t.id === "aud-add") {
+      var list = ((CAT.byCode.h_auditor && CAT.byCode.h_auditor.choices) || []).slice();
+      if (ua) list.splice(+ua.getAttribute("data-unaud"), 1);
+      else { var nm = $("#aud-new").value.trim(); if (!nm || list.indexOf(nm) >= 0) return; list.push(nm); }
+      var up = await db.from("audit_items").update({ choices: list }).eq("code", "h_auditor");
+      if (up.error) return toast("Not saved: " + up.error.message);
+      CAT.byCode.h_auditor.choices = list; toast("Saved"); return renderSettings();
+    }
+    if (t.id === "flip") return setConfig(!(SET.cfg && SET.cfg.send_live === true));
+    if (t.id === "cfg-save") return setConfig(SET.cfg && SET.cfg.send_live === true);
+  }
+  async function settingsChange(e) {
+    var el = e.target;
+    if (el.hasAttribute("data-sp")) {
+      var k = el.getAttribute("data-k"), v = el.value === "" ? null : el.value;
+      if (k === "drive_thru") v = v === null ? null : v === "true";
+      var patch = {}; patch[k] = typeof v === "string" ? v.trim() || null : v;
+      await saveProfile(el.getAttribute("data-sp"), patch);
+      if (k === "ownership") renderSettings();
+      return;
+    }
+    if (el.hasAttribute("data-al")) {
+      var id = el.getAttribute("data-al"), key = el.getAttribute("data-k"), p2 = {};
+      p2[key] = el.value.trim() || null;
+      if (key === "name" && !p2.name) return toast("An area leader needs a name");
+      var r = await db.from("area_leaders").update(p2).eq("id", id).select().single();
+      if (r.error) return toast("Not saved: " + r.error.message);
+      CAT.areas = CAT.areas.map(function (a) { return a.id === id ? r.data : a; }); toast("Saved");
+      return;
+    }
+    if (el.hasAttribute("data-lab")) {
+      var code = el.getAttribute("data-lab"), lk = el.getAttribute("data-k"), p3 = {};
+      p3[lk] = el.value.trim() || (lk === "label" ? CAT.byCode[code].label : null);
+      var u = await db.from("audit_items").update(p3).eq("code", code);
+      if (u.error) return toast("Not saved: " + u.error.message);
+      CAT.byCode[code][lk] = p3[lk]; toast("Saved");
+    }
+  }
+
   // ---- events ----
   function showTab(k) {
     document.querySelectorAll("[data-tab]").forEach(function (x) { x.setAttribute("aria-selected", String(x.getAttribute("data-tab") === k)); });
-    ["audit", "report", "playbook"].forEach(function (n) { $("#tab-" + n).hidden = n !== k; });
+    ["audit", "report", "playbook", "history", "settings"].forEach(function (n) { $("#tab-" + n).hidden = n !== k; });
+    $("#draftnote").hidden = k !== "audit" || !$("#draftnote").innerHTML;
     if (k === "report") renderReport();
+    if (k === "playbook") renderPlaybook();
+    if (k === "history") renderHistory();
+    if (k === "settings") renderSettings();
     window.scrollTo({ top: 0 });
   }
   document.addEventListener("click", function (e) {
+    if (e.target.closest("#tab-settings")) { settingsClick(e); return; }
+    var op = e.target.closest("[data-openplan]");
+    if (op) { PB.draft = clonePlan(CAT.plans.filter(function (x) { return x.id === op.getAttribute("data-openplan"); })[0]); PB.undo = []; PB.kept = []; return showTab("playbook"); }
+    if (e.target.id === "reshift") return shiftModal();
+    var ps = e.target.closest("[data-sel]");
+    if (ps) { PB.draft = clonePlan(CAT.plans.filter(function (x) { return x.id === ps.getAttribute("data-sel"); })[0]); PB.mode = null; PB.selSt = null; PB.undo = []; PB.kept = []; return renderPlaybook(); }
+    if (e.target.id === "pb-new") {
+      var first = CAT.branches.filter(function (b) { return canEditBranch(b.id); })[0];
+      if (!first) return;
+      PB.draft = { id: null, branch_id: first.id, name: "New plan", shift: "A", headcount: 3, stations: [], staff: [emptySeat(), emptySeat(), emptySeat()] };
+      PB.mode = null; PB.selSt = null; PB.undo = []; PB.kept = []; return renderPlaybook();
+    }
     var b = e.target.closest(".rate button");
     if (b && !b.disabled) {
       var code = b.getAttribute("data-code"), v = b.getAttribute("data-v");
@@ -764,11 +1303,14 @@ textarea{resize:vertical;min-height:40px}
   });
   document.addEventListener("input", function (e) {
     var el = e.target;
+    if (el.closest("#tab-settings") || el.closest("#tab-playbook")) return;
     if (el.hasAttribute("data-note")) { S.notes[el.getAttribute("data-note")] = el.value; saveDraft(); return; }
     if (el.hasAttribute("data-code") && el.tagName !== "SELECT") { S.ans[el.getAttribute("data-code")] = el.value; saveDraft(); }
   });
   document.addEventListener("change", function (e) {
     var el = e.target;
+    if (el.closest("#tab-settings")) { settingsChange(e); return; }
+    if (el.closest("#tab-playbook")) return;
     if (el.hasAttribute("data-photo")) {
       var code = el.getAttribute("data-photo"), files = Array.prototype.slice.call(el.files || []);
       if (!files.length) return;
@@ -786,7 +1328,7 @@ textarea{resize:vertical;min-height:40px}
     if (el.hasAttribute("data-code") && (el.tagName === "SELECT" || el.type === "date")) {
       var c = el.getAttribute("data-code");
       if (el.value) S.ans[c] = el.value; else delete S.ans[c];
-      if (c === "h_store") { applyStore(); saveDraft(); var y = window.scrollY; renderAll(); window.scrollTo({ top: y }); loadPrior(); return; }
+      if (c === "h_store") { applyStore(); saveDraft(); var y = window.scrollY; renderAll(); window.scrollTo({ top: y }); loadPrior(); if (S.ans.h_store) shiftModal(); return; }
       saveDraft();
     }
   });
