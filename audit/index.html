@@ -674,20 +674,35 @@ textarea{resize:vertical;min-height:40px}
     clearDraft();
     var id = r.data.id, sres = r.data.result || res, prof = currentProfile();
     setMsg("Visit saved. Building the report card");
-    var path = null, pdfErr = null;
+    var path = null, url = null, pdfErr = null;
     try {
       var blob = await buildPdf(sres, pl.answers, pl.notes, prof);
       var name = ("store-audit-" + pl.answers.h_store + "-" + pl.answers.h_date).replace(/[^a-zA-Z0-9._-]+/g, "-") + ".pdf";
       path = await storageUpload(new File([blob], name, { type: "application/pdf" }));
+      url = await signForEmail(path);
     } catch (e) { pdfErr = e.message || String(e); }
-    await sendVisit(id, path, pdfErr, sres, pl.answers);
+    await sendVisit(id, path, url, pdfErr, sres, pl.answers);
     S.busy = false;
   }
-  async function sendVisit(id, path, pdfErr, sres, ans) {
-    var s = await db.rpc("store_audit_send", { p_id: id, p_pdf_path: path });
-    showDone(id, path, pdfErr, sres, ans, s.error ? s.error.message : null, s.data || {});
+  // The drain sends with no user session and R2 only presigns for a signed-in user, so the link
+  // Resend fetches the PDF from is signed here, for the 24h maximum the r2 function allows.
+  async function signForEmail(path) {
+    var sess = await db.auth.getSession();
+    var tok = sess.data && sess.data.session && sess.data.session.access_token;
+    var r = await fetch(SUPABASE_URL + "/functions/v1/r2/sign", {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + tok, "Content-Type": "application/json" },
+      body: JSON.stringify({ path: path, ttl: 86400 })
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok || !j.url) throw new Error("could not sign the PDF link (" + (j.error || r.status) + ")");
+    return j.url;
   }
-  function showDone(id, path, pdfErr, sres, ans, sendErr, sent) {
+  async function sendVisit(id, path, url, pdfErr, sres, ans) {
+    var s = await db.rpc("store_audit_send", { p_id: id, p_pdf_path: path, p_pdf_url: url });
+    showDone(id, path, url, pdfErr, sres, ans, s.error ? s.error.message : null, s.data || {});
+  }
+  function showDone(id, path, url, pdfErr, sres, ans, sendErr, sent) {
     $("#app").hidden = true;
     var d = $("#done"); d.hidden = false;
     d.innerHTML = "<h2>Visit saved: " + esc(ans.h_store) + "</h2>" +
@@ -699,7 +714,7 @@ textarea{resize:vertical;min-height:40px}
       (pdfErr ? '<p class="msg bad">The PDF could not be built (' + esc(pdfErr) + "). The email carries the text summary instead.</p>" : "") +
       '<p><button type="button" class="btn ghost" id="another">Start another visit</button></p>';
     var rs = document.getElementById("resend");
-    if (rs) rs.onclick = function () { rs.disabled = true; sendVisit(id, path, pdfErr, sres, ans); };
+    if (rs) rs.onclick = function () { rs.disabled = true; sendVisit(id, path, url, pdfErr, sres, ans); };
     document.getElementById("another").onclick = function () {
       S.ans = { h_date: todayIso(), h_auditor: ans.h_auditor }; S.notes = {}; S.photos = {}; S.autoNA = {}; S.prior = null;
       d.hidden = true; $("#app").hidden = false; $("#draftnote").hidden = true; showTab("audit"); renderAll();
