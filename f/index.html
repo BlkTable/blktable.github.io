@@ -633,6 +633,59 @@
   function esc(s) { return (s == null ? "" : String(s)).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function getParam(n) { var m = new RegExp("[?&]" + n + "=([^&]+)").exec(location.search); return m ? decodeURIComponent(m[1]) : ""; }
 
+  // ---- Answers that travel with a hand-off link ------------------------------------
+  // A link question sends the person to ANOTHER form (Contact Us -> Complaints, Franchise,
+  // the job application), and that page is a new page: the name, number and email they had
+  // just typed were gone and they started over. So the link carries who they are as three
+  // plain parameters, and the page it opens reads them back the way it reads a draft.
+  //   pf_name, pf_phone, pf_email — the only things two different forms ask the same way.
+  // They go ONLY to a BLK address: a link to anywhere else would be handing a customer's
+  // phone number to a stranger by URL. Pure functions, so the rules are testable.
+  var CARRY_NAME_RE = /\bname\b|الاسم|اسمك/i;
+  function carryAnswers(ctls) {
+    var out = {};
+    (ctls || []).forEach(function (c) {
+      if (!c || !c.f || !c.value || c.f.type === "link") return;
+      var kind = c.f.type === "phone" ? "phone" : c.f.type === "email" ? "email"
+        : (c.f.type === "short_text" && CARRY_NAME_RE.test(c.f.label || "")) ? "name" : "";
+      if (!kind || out[kind]) return;
+      var v = c.value();
+      if (v != null && String(v).trim() !== "") out[kind] = String(v).trim();
+    });
+    return out;
+  }
+  function carryTrusted(url, here) {
+    try {
+      var h = new URL(url, here).hostname.toLowerCase();
+      var mine = new URL(here).hostname.toLowerCase();
+      return h === mine || h === "blk.jo" || /\.blk\.jo$/.test(h) || /^blktable\.github\.io$/.test(h);
+    } catch (e) { return false; }
+  }
+  function linkWithCarry(url, carry, here) {
+    if (!url || !carry || !carryTrusted(url, here)) return url;
+    var add = ["name", "phone", "email"].filter(function (k) { return carry[k]; })
+      .map(function (k) { return "pf_" + k + "=" + encodeURIComponent(carry[k]); });
+    if (!add.length) return url;
+    var hash = "", i = url.indexOf("#");
+    if (i >= 0) { hash = url.slice(i); url = url.slice(0, i); }
+    return url + (url.indexOf("?") >= 0 ? "&" : "?") + add.join("&") + hash;
+  }
+  // The receiving end. Fills a question only if it is still EMPTY, so a restored draft or
+  // something already typed is never overwritten by a link, and returns how many it filled.
+  function applyCarried(ctls, params) {
+    var n = 0, used = {};
+    (ctls || []).forEach(function (c) {
+      if (!c || !c.f || !c.setDraft || !c.value || c.f.type === "link") return;
+      var kind = c.f.type === "phone" ? "phone" : c.f.type === "email" ? "email"
+        : (c.f.type === "short_text" && CARRY_NAME_RE.test(c.f.label || "")) ? "name" : "";
+      if (!kind || used[kind] || !params[kind]) return;
+      used[kind] = true;
+      if (c.value()) return;
+      try { c.setDraft(params[kind]); n++; } catch (e) {}
+    });
+    return n;
+  }
+
   var slug = getParam("t");
   // A parent-scoped form is opened from a link that names one record of another table —
   // /f/?t=event-signup&e=<token> is the signup form for ONE event. The token is the whole
@@ -2707,6 +2760,13 @@
       a.appendChild(document.createTextNode(lo.text || lo.url || "Open link"));
       if (lo.text_ar) { var s = document.createElement("span"); s.className = "ar"; s.dir = "rtl"; s.textContent = " / " + lo.text_ar; a.appendChild(s); }
       wrap.appendChild(a);
+      // The answers already given ride along, so the form it opens does not start from nothing.
+      // Re-read on every way a link can be followed (click, tap, keyboard, right-click, hover),
+      // because the href must be current at the moment it is used, not when it was drawn.
+      if (lo.url) {
+        var carryHref = function () { a.href = linkWithCarry(lo.url, carryAnswers(controls), location.href); };
+        ["mouseenter", "focus", "touchstart", "pointerdown", "click", "contextmenu"].forEach(function (ev) { a.addEventListener(ev, carryHref); });
+      }
       controls.push({ f: f, el: a, validate: function () { return true; }, value: function () { return null; } });
     } else {
       var inp2 = document.createElement("textarea"); inp2.id = id; inp2.rows = 1; growTextarea(inp2, true); wrap.appendChild(inp2);
@@ -2766,12 +2826,20 @@
     if (keptAnswers) showDraftNote(hasFileQ, 0);
     // AFTER the draft, never before: somebody coming back to a form in which they had
     // already corrected the guess must not have it put back over their correction.
+    // The hand-off from another form fills what is still empty, then the address is cleaned:
+    // the draft saved below keeps the answers across a refresh, and a phone number should
+    // not stay in a URL that gets copied or shared.
+    var carriedN = applyCarried(controls, { name: getParam("pf_name"), phone: getParam("pf_phone"), email: getParam("pf_email") });
+    if (carriedN) {
+      try { history.replaceState(null, "", location.pathname + location.search.replace(/([?&])pf_(name|phone|email)=[^&]*/g, "$1").replace(/[?&]+$/, "").replace(/\?&/, "?").replace(/&&+/g, "&") + location.hash); } catch (e) {}
+      queueDraftSave();
+    }
     var guessedCountry = prefillCountry();
     prefillPhone();
     // Restoring answers and filling one in both fire nothing, so the consequences have to be
     // applied once here: the questions an answer reveals, the score it is worth, and the
     // shops the country leaves in the branch box.
-    if (keptAnswers || guessedCountry) answerChanged();
+    if (keptAnswers || guessedCountry || carriedN) answerChanged();
     // The files come a moment behind the answers, because IndexedDB is asynchronous. So the
     // note is written twice where there are both: once for the answers, so the page is not
     // silent while the photos are being read, and again when they arrive. Somebody who only
