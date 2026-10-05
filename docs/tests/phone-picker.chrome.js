@@ -289,16 +289,12 @@ run(build('Europe/Berlin'), `
   t('the placeholder came with it', function () {
     if (local().placeholder !== '15123456789') return 'placeholder is ' + JSON.stringify(local().placeholder);
   });
-  t('the page says out loud that it guessed', function () {
-    // A pre-filled answer is accepted by default where an empty one forces a decision, so an
-    // unannounced guess turns a wrong code into a confidently stored unreachable number.
-    if (!note()) return 'there is no note under the field';
-    if (!/from your location/.test(note().textContent)) return 'the note reads ' + JSON.stringify(note().textContent);
+  t('the guess is silent: no note under the field', function () {
+    if (note()) return 'a note is showing: ' + JSON.stringify(note().textContent);
   });
-  t('correcting the guess withdraws the note', function () {
+  t('and the guess can still be corrected', function () {
     open(); type('jordan'); pickNth(0);
     if (dial() !== '+962') return 'the country did not change, it reads ' + dial();
-    if (note()) return 'the note is still there after the code was corrected';
   });
   return ta('a corrected number stores the country the person chose', async function () {
     typeNumber('791234567');
@@ -345,15 +341,11 @@ run(build('Europe/Berlin', undefined, [
     var second = document.getElementById('fld-q-phone-2').closest('.field').querySelector('.cc-dial');
     if (second.textContent.trim() !== '+49') return 'the second field reads ' + second.textContent.trim();
   });
-  t('each question gets its own note, not one shared between them', function () {
+  t('and neither shows a note', function () {
     var notes = document.querySelectorAll('.phone-guess-note');
-    if (notes.length !== 2) return 'found ' + notes.length + ' notes, expected 2';
-    var ids = [].slice.call(notes).map(function (el) { return el.id; });
-    if (ids[0] === ids[1]) return 'both notes share the id ' + ids[0];
-    if (ids.indexOf('phone-guess-note-q-phone') === -1) return 'no note carries id phone-guess-note-q-phone, got ' + ids.join(', ');
-    if (ids.indexOf('phone-guess-note-q-phone-2') === -1) return 'no note carries id phone-guess-note-q-phone-2, got ' + ids.join(', ');
+    if (notes.length) return 'found ' + notes.length + ' notes, expected none';
   });
-`, 'two phone questions each get their own note');
+`, 'two phone questions both guess, silently');
 
 // ---- 6. the leading-zero strip must not refuse a country whose own numbers begin with 0 ----
 // Benin, Congo (Brazzaville) and Cote d'Ivoire's own libphonenumber example numbers all begin
