@@ -602,8 +602,30 @@
   // Read back before anything is typed, so the page somebody comes back to is the page they
   // left. Called again once the admin-defined questions arrive, because they are not on the
   // page yet the first time round.
+  // A link from another form brings who the person is (pf_name, pf_phone as +<code><digits>)
+  // so they do not start over. Fills only what the draft leaves empty; same rule as /f/.
+  function carriedAnswers() {
+    var out = {}, nm = getParam("pf_name"), m = /^\+(\d+)$/.exec(getParam("pf_phone"));
+    if (nm) out.full_name = nm;
+    if (m) {
+      for (var i = 0; i < COUNTRIES.length; i++) {
+        var cc = COUNTRIES[i].cc;
+        if (m[1].indexOf(cc) === 0 && m[1].length > cc.length) { out._cc = cc; out.phone_local = m[1].slice(cc.length); break; }
+      }
+    }
+    return out;
+  }
+  var carriedUsed = false;
   function loadDraft() {
     var answers = readDraft(draftK, Date.now());
+    if (!carriedUsed) {
+      var carried = carriedAnswers();
+      if (Object.keys(carried).length) {
+        carriedUsed = true;
+        answers = Object.assign({}, carried, answers || {});
+        try { var qs = new URLSearchParams(location.search); ["pf_name", "pf_phone", "pf_email"].forEach(function (k) { qs.delete(k); }); history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "") + location.hash); } catch (e) {}
+      }
+    }
     if (!answers) return;
     draftHadAnswers = true;
     restoreFormAnswers(formEl, answers);
@@ -634,7 +656,8 @@
     clearDraftFiles(k).then(reload, reload);
     function reload() { location.reload(); }
   });
-  selectCountry(0);
+  // not after a restore: a draft or a link that chose Lebanon must not be put back to Jordan
+  if (selCountry === COUNTRIES[0]) selectCountry(0);
 
   // Photo
   var fileInput = document.getElementById("photo");
