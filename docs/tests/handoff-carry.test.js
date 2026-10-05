@@ -102,7 +102,7 @@ t('the form reads the link back before it guesses the country', () => {
 });
 t('the link button never shows the address, and following it saves the draft first', () => {
   assert.ok(!/createTextNode\(lo\.text \|\| lo\.url/.test(js), 'the URL must not be a fallback label');
-  assert.ok(/"Click here"/.test(js), 'no usable text means a Click here button');
+  assert.ok(/"Next"/.test(js), 'no usable text means a Next button');
   assert.ok(/var carryHref = function \(\) \{ saveDraftNow\(\);/.test(js), 'draft is flushed on every way of following the link');
 });
 
