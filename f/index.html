@@ -647,7 +647,7 @@
   // can ask for one in a plain text box that carries no email type.
   function carryKind(f) {
     var short = f.type === "short_text", label = f.label || "";
-    return f.type === "phone" ? "phone"
+    return f.type === "country" ? "country" : f.type === "phone" ? "phone"
       : (f.type === "email" || (short && CARRY_EMAIL_RE.test(label))) ? "email"
       : (short && CARRY_NAME_RE.test(label)) ? "name" : "";
   }
@@ -671,7 +671,7 @@
   }
   function linkWithCarry(url, carry, here) {
     if (!url || !carry || !carryTrusted(url, here)) return url;
-    var add = ["name", "phone", "email"].filter(function (k) { return carry[k]; })
+    var add = ["name", "phone", "email", "country"].filter(function (k) { return carry[k]; })
       .map(function (k) { return "pf_" + k + "=" + encodeURIComponent(carry[k]); });
     if (!add.length) return url;
     var hash = "", i = url.indexOf("#");
@@ -688,7 +688,11 @@
       var kind = carryKind(c.f);
       if (!kind || used[kind] || !params[kind]) return;
       used[kind] = true;
-      try { c.setDraft(params[kind]); n++; } catch (e) {}
+      // A country the next form does not offer is not shown by the box, which still keeps the
+      // name as its hidden value: so check what is DISPLAYED, and put back what was there:
+      // never submit a country nobody can see.
+      var was = c.value();
+      try { c.setDraft(params[kind]); if (kind === "country" && (c.value() !== params[kind] || (c.el && c.el.value === ""))) { c.setDraft(was || ""); } else n++; } catch (e) {}
     });
     return n;
   }
@@ -2831,9 +2835,9 @@
     // The hand-off from another form fills what is still empty, then the address is cleaned:
     // the draft saved below keeps the answers across a refresh, and a phone number should
     // not stay in a URL that gets copied or shared.
-    var carriedN = applyCarried(controls, { name: getParam("pf_name"), phone: getParam("pf_phone"), email: getParam("pf_email") });
+    var carriedN = applyCarried(controls, { name: getParam("pf_name"), phone: getParam("pf_phone"), email: getParam("pf_email"), country: getParam("pf_country") });
     if (carriedN) {
-      try { var qs = new URLSearchParams(location.search); ["pf_name", "pf_phone", "pf_email"].forEach(function (k) { qs.delete(k); }); history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "") + location.hash); } catch (e) {}
+      try { var qs = new URLSearchParams(location.search); ["pf_name", "pf_phone", "pf_email", "pf_country"].forEach(function (k) { qs.delete(k); }); history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "") + location.hash); } catch (e) {}
       queueDraftSave();
     }
     var guessedCountry = prefillCountry();
