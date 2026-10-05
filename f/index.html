@@ -2760,7 +2760,7 @@
       a.className = "form-link";
       // Never the address itself: a customer is shown a button, not a URL. Text that is just
       // the URL (what an import leaves behind) counts as no text.
-      var shown = lo.text && !/^\s*(https?:)?\/\//i.test(lo.text) ? lo.text : "Click here";
+      var shown = lo.text && !/^\s*(https?:)?\/\//i.test(lo.text) ? lo.text : "Next";
       a.appendChild(document.createTextNode(shown));
       if (lo.text_ar) { var s = document.createElement("span"); s.className = "ar"; s.dir = "rtl"; s.textContent = " / " + lo.text_ar; a.appendChild(s); }
       wrap.appendChild(a);

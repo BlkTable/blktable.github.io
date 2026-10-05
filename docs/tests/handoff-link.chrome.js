@@ -214,7 +214,7 @@ const DRIVER = `
         nm.value = 'Sara';
         lk.dispatchEvent(new Event('mouseenter'));
         ok('an edited answer is what travels, not the first one', lk.getAttribute('href').indexOf('pf_name=Sara') >= 0, lk.getAttribute('href'));
-        ok('the customer sees a button, not the address', lk.textContent.trim() === 'Click here' && lk.textContent.indexOf('blk.jo') < 0, lk.textContent);
+        ok('the customer sees a button, not the address', lk.textContent.trim() === 'Next' && lk.textContent.indexOf('blk.jo') < 0, lk.textContent);
         // Pressing it saves NOW: no waiting for the 400 ms debounce, no tab-hidden event.
         nm.value = 'Mona';
         lk.dispatchEvent(new Event('pointerdown', { bubbles: true }));
