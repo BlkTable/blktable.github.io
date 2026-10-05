@@ -2757,14 +2757,19 @@
       var a = document.createElement("a");
       a.href = lo.url || "#"; a.target = "_blank"; a.rel = "noopener";
       a.className = "form-link";
-      a.appendChild(document.createTextNode(lo.text || lo.url || "Open link"));
+      // Never the address itself: a customer is shown a button, not a URL. Text that is just
+      // the URL (what an import leaves behind) counts as no text.
+      var shown = lo.text && !/^\s*(https?:)?\/\//i.test(lo.text) ? lo.text : "Click here";
+      a.appendChild(document.createTextNode(shown));
       if (lo.text_ar) { var s = document.createElement("span"); s.className = "ar"; s.dir = "rtl"; s.textContent = " / " + lo.text_ar; a.appendChild(s); }
       wrap.appendChild(a);
       // The answers already given ride along, so the form it opens does not start from nothing.
       // Re-read on every way a link can be followed (click, tap, keyboard, right-click, hover),
       // because the href must be current at the moment it is used, not when it was drawn.
       if (lo.url) {
-        var carryHref = function () { a.href = linkWithCarry(lo.url, carryAnswers(controls), location.href); };
+        // Following the link also saves the draft now: the new tab can hide this one before the
+        // 400 ms debounce or visibilitychange has run, and the customer comes back to it.
+        var carryHref = function () { saveDraftNow(); a.href = linkWithCarry(lo.url, carryAnswers(controls), location.href); };
         ["mouseenter", "focus", "touchstart", "pointerdown", "click", "contextmenu"].forEach(function (ev) { a.addEventListener(ev, carryHref); });
       }
       controls.push({ f: f, el: a, validate: function () { return true; }, value: function () { return null; } });
@@ -2831,7 +2836,7 @@
     // not stay in a URL that gets copied or shared.
     var carriedN = applyCarried(controls, { name: getParam("pf_name"), phone: getParam("pf_phone"), email: getParam("pf_email") });
     if (carriedN) {
-      try { history.replaceState(null, "", location.pathname + location.search.replace(/([?&])pf_(name|phone|email)=[^&]*/g, "$1").replace(/[?&]+$/, "").replace(/\?&/, "?").replace(/&&+/g, "&") + location.hash); } catch (e) {}
+      try { var qs = new URLSearchParams(location.search); ["pf_name", "pf_phone", "pf_email"].forEach(function (k) { qs.delete(k); }); history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "") + location.hash); } catch (e) {}
       queueDraftSave();
     }
     var guessedCountry = prefillCountry();
