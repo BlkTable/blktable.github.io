@@ -642,12 +642,20 @@
   // They go ONLY to a BLK address: a link to anywhere else would be handing a customer's
   // phone number to a stranger by URL. Pure functions, so the rules are testable.
   var CARRY_NAME_RE = /\bname\b|الاسم|اسمك/i;
+  var CARRY_EMAIL_RE = /e-?mail|ايميل|إيميل|البريد|بريد/i;
+  // What a question is asking for. An email counts by its label too, because an imported form
+  // can ask for one in a plain text box that carries no email type.
+  function carryKind(f) {
+    var short = f.type === "short_text", label = f.label || "";
+    return f.type === "phone" ? "phone"
+      : (f.type === "email" || (short && CARRY_EMAIL_RE.test(label))) ? "email"
+      : (short && CARRY_NAME_RE.test(label)) ? "name" : "";
+  }
   function carryAnswers(ctls) {
     var out = {};
     (ctls || []).forEach(function (c) {
       if (!c || !c.f || !c.value || c.f.type === "link") return;
-      var kind = c.f.type === "phone" ? "phone" : c.f.type === "email" ? "email"
-        : (c.f.type === "short_text" && CARRY_NAME_RE.test(c.f.label || "")) ? "name" : "";
+      var kind = carryKind(c.f);
       if (!kind || out[kind]) return;
       var v = c.value();
       if (v != null && String(v).trim() !== "") out[kind] = String(v).trim();
@@ -676,8 +684,7 @@
     var n = 0, used = {};
     (ctls || []).forEach(function (c) {
       if (!c || !c.f || !c.setDraft || !c.value || c.f.type === "link") return;
-      var kind = c.f.type === "phone" ? "phone" : c.f.type === "email" ? "email"
-        : (c.f.type === "short_text" && CARRY_NAME_RE.test(c.f.label || "")) ? "name" : "";
+      var kind = carryKind(c.f);
       if (!kind || used[kind] || !params[kind]) return;
       used[kind] = true;
       if (c.value()) return;
@@ -2188,13 +2195,8 @@
     // decision, so the page has to say out loud that this was guessed. Without it a wrong
     // guess stops being a visible dead end and becomes a record labelled with a country
     // nobody actually confirmed.
-    if (ctl.wrap) {
-      prefillNoteEl = document.createElement("div");
-      prefillNoteEl.className = "hint";
-      prefillNoteEl.id = "country-guess-note";
-      prefillNoteEl.textContent = "Filled in from your location — change it if that is not right. / تم تحديدها من موقعك، عدّلها إذا كانت غير صحيحة.";
-      ctl.wrap.appendChild(prefillNoteEl);
-    }
+    // No note under the box any more: the country is still pre-filled and can be changed, but
+    // the customer is not told so in words. (prefillNoteEl stays null; syncPrefillNote skips it.)
     return name;
   }
   // Once the answer is no longer the guess, the note is simply untrue. Called from
@@ -2314,7 +2316,8 @@
     wrap.className = "field";
     var lab = document.createElement("label");
     lab.innerHTML = labelHtml(f);
-    wrap.appendChild(lab);
+    // A link question is just its button: the label over it ("please follow the link") is noise.
+    if (f.type !== "link") wrap.appendChild(lab);
     var id = "fld-" + f.id;
 
     if (f.type === "long_text" || f.type === "short_text") {

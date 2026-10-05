@@ -16,12 +16,12 @@ const grab = name => {
   if (!m) throw new Error('could not find function ' + name);
   return m[0];
 };
-const re = js.match(/\n  var CARRY_NAME_RE = .*;/);
-if (!re) throw new Error('could not find CARRY_NAME_RE');
-const names = ['carryAnswers', 'carryTrusted', 'linkWithCarry', 'applyCarried'];
+const re = js.match(/\n  var CARRY_(?:NAME|EMAIL)_RE = .*;/g);
+if (!re || re.length !== 2) throw new Error('could not find CARRY_NAME_RE and CARRY_EMAIL_RE');
+const names = ['carryKind', 'carryAnswers', 'carryTrusted', 'linkWithCarry', 'applyCarried'];
 const ctx = { console, URL };
 vm.createContext(ctx);
-new vm.Script('(function(){' + re[0] + names.map(grab).join('\n') + '\n this.API={' + names.join(',') + '};}).call(this)').runInContext(ctx);
+new vm.Script('(function(){' + re.join('') + names.map(grab).join('\n') + '\n this.API={' + names.join(',') + '};}).call(this)').runInContext(ctx);
 const { carryAnswers, carryTrusted, linkWithCarry, applyCarried } = ctx.API;
 
 let n = 0;
@@ -83,5 +83,16 @@ t('the link button never shows the address, and following it saves the draft fir
   assert.ok(/"Click here"/.test(js), 'no usable text means a Click here button');
   assert.ok(/var carryHref = function \(\) \{ saveDraftNow\(\);/.test(js), 'draft is flushed on every way of following the link');
 });
+
+t('an email asked in a plain text box is still an email', () => {
+  const box = ctl('short_text', 'E-mail *'); box.v = 'a@b.jo';
+  const ar = ctl('short_text', 'البريد الإلكتروني'); ar.v = 'x@y.jo';
+  assert.strictEqual(carryAnswers([box]).email, 'a@b.jo');
+  assert.strictEqual(carryAnswers([ar]).email, 'x@y.jo');
+  const empty = ctl('short_text', 'E-mail'); const filled = applyCarried([empty], { email: 'n@b.jo' });
+  assert.strictEqual(filled, 1); assert.strictEqual(empty.v, 'n@b.jo');
+});
+t('the link question draws no label over its button', () =>
+  assert.ok(/if \(f\.type !== "link"\) wrap\.appendChild\(lab\);/.test(js)));
 
 console.log(n + ' tests passed');
