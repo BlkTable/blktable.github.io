@@ -1274,7 +1274,7 @@
   // those native events, so typing a number coloured its question and picking from a
   // dropdown did not -- which is 63 of QC's 70 scored questions, i.e. very nearly all of
   // them. Any future control with its own callback calls this and is covered.
-  function answerChanged() { applyConditions(); paintScores(); applyBranchScope(); syncPrefillNote(); }
+  function answerChanged() { applyConditions(); paintScores(); applyBranchScope(); syncPrefillNote(); syncDialToCountry(); }
 
   function labelHtml(f) {
     var ar = f.label_ar ? ' <span class="ar">/ ' + esc(f.label_ar) + '</span>' : "";
@@ -2213,6 +2213,33 @@
     prefillNoteEl = null;
   }
 
+  // The dial code follows the Country question. Choosing Jordan over a Lebanon guess left the
+  // phone on +961, and the number then travelled (and was stored) with the wrong code.
+  // It only moves a code that is still unchosen and empty: a number already being typed, or a
+  // code the person picked themselves, is theirs. A country question that asks something other
+  // than where the person is (Franchise: where to open) opts out with options.prefill = false,
+  // the same flag the guesses use.
+  function phoneRowForCountryName(name) {
+    var n = String(name || "").trim().toLowerCase();
+    if (!n) return null;
+    var rows = phoneTable();
+    for (var i = 0; i < rows.length; i++) if (rows[i].name.toLowerCase() === n) return rows[i];
+    return null;
+  }
+  var lastDialCountry = null;
+  function syncDialToCountry() {
+    var cq = controls.filter(function (c) { return c.f && c.f.type === "country"; })[0];
+    if (!cq) return;
+    var name = cq.value();
+    if (!name || name === lastDialCountry) return;
+    lastDialCountry = name;
+    if (cq.f.options && cq.f.options.prefill === false) return;
+    var r = phoneRowForCountryName(name);
+    if (!r) return;
+    controls.forEach(function (c) {
+      if (c.f && c.f.type === "phone" && c.ccSet && !c.ccPicked() && c.ccEmpty()) c.ccSet(r);
+    });
+  }
   // ---- The country code the device implies -----------------------------------------------
   // The country question has been pre-filled from the timezone since PR #146; this is the
   // same idea one field down, on the answer that actually gets dialled.
@@ -2558,7 +2585,8 @@
       // A guess is withdrawn the moment the person makes a choice of their own, because the
       // note under the field is then simply untrue.
       function dropNote() { if (noteEl && noteEl.parentNode) noteEl.parentNode.removeChild(noteEl); noteEl = null; }
-      function pick(r) { apply(r); dropNote(); closeMenu(); try { local.focus(); } catch (e) {} }
+      var userPickedDial = false;
+      function pick(r) { userPickedDial = true; apply(r); dropNote(); closeMenu(); try { local.focus(); } catch (e) {} }
       btn.addEventListener("click", function (e) {
         e.stopPropagation();
         if (menu.classList.contains("open")) closeMenu(); else openMenu();
@@ -2593,7 +2621,11 @@
         // The pre-fill reaches the picker through these rather than through the DOM, because
         // settling a choice here fires no event a listener could hear.
         ccSet: function (r, note) { apply(r); if (note) { noteEl = note; wrap.appendChild(note); } },
-        ccIso: function () { return sc.iso; } });
+        ccIso: function () { return sc.iso; },
+        // For the Country question: follow it only while the person has not chosen a code
+        // of their own and has not started typing a number.
+        ccPicked: function () { return userPickedDial; },
+        ccEmpty: function () { return local.value.replace(/\D/g, "") === ""; } });
     } else if (f.type === "photo" || f.type === "media" || f.type === "file") {
       // One branch, not three. A media question is a photo question with a wider accept and a
       // bigger ceiling; a file question is a media question with any accept at all. Splitting
