@@ -65,12 +65,21 @@ t('BLK addresses are trusted, lookalikes are not', () => {
 t('nothing to carry leaves the link alone', () =>
   assert.strictEqual(linkWithCarry('https://blktable.blk.jo/apply/', {}, HERE), 'https://blktable.blk.jo/apply/'));
 
-t('the receiving form fills empty questions only', () => {
-  const nm = ctl('short_text', 'Name'), ph = ctl('phone', 'Phone'), em = ctl('email', 'Email', 'kept@x.jo');
+t('what the link carries beats an older restored draft', () => {
+  const nm = ctl('short_text', 'Name', 'Old Name'), ph = ctl('phone', 'Phone'), em = ctl('email', 'Email', 'stale@x.jo');
   const filled = applyCarried([nm, ph, em], { name: 'Ali', phone: '+962791234567', email: 'new@x.jo' });
-  assert.strictEqual(filled, 2);
+  assert.strictEqual(filled, 3);
   assert.strictEqual(nm.v, 'Ali'); assert.strictEqual(ph.v, '+962791234567');
-  assert.strictEqual(em.v, 'kept@x.jo', 'a restored or typed answer is never overwritten');
+  assert.strictEqual(em.v, 'new@x.jo', 'a corrected email must not lose to the stale draft');
+});
+t('a part the link does not carry leaves the draft alone', () => {
+  const nm = ctl('short_text', 'Name', 'Kept'), em = ctl('email', 'Email', 'kept@x.jo');
+  applyCarried([nm, em], { email: 'new@x.jo' });
+  assert.strictEqual(nm.v, 'Kept'); assert.strictEqual(em.v, 'new@x.jo');
+});
+t('/apply/ and /cast/ also let the link beat the draft', () => {
+  for (const page of ['apply', 'cast'])
+    assert.ok(/Object\.assign\(\{\}, answers \|\| \{\}, carried\)/.test(require('fs').readFileSync(page + '/index.html', 'utf8')), page);
 });
 t('a form with no such question simply ignores the link', () =>
   assert.strictEqual(applyCarried([ctl('dropdown', 'Topic')], { name: 'Ali', phone: '+962791', email: 'a@b' }), 0));
