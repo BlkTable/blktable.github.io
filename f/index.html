@@ -678,8 +678,9 @@
     if (i >= 0) { hash = url.slice(i); url = url.slice(0, i); }
     return url + (url.indexOf("?") >= 0 ? "&" : "?") + add.join("&") + hash;
   }
-  // The receiving end. Fills a question only if it is still EMPTY, so a restored draft or
-  // something already typed is never overwritten by a link, and returns how many it filled.
+  // The receiving end. What the link carries was typed moments ago on the previous form, so it
+  // beats an older saved draft of this form (a corrected email must not lose to a stale one).
+  // It runs once at load, before anything is typed here. Returns how many it filled.
   function applyCarried(ctls, params) {
     var n = 0, used = {};
     (ctls || []).forEach(function (c) {
@@ -687,7 +688,6 @@
       var kind = carryKind(c.f);
       if (!kind || used[kind] || !params[kind]) return;
       used[kind] = true;
-      if (c.value()) return;
       try { c.setDraft(params[kind]); n++; } catch (e) {}
     });
     return n;

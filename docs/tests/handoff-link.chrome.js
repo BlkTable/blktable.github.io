@@ -224,6 +224,17 @@ const DRIVER = `
       return finish();
     }
 
+    if (mode === 'stale') {
+      // ---- a customer who clicked through once already, then corrected their email ----
+      // This form holds a saved draft from the first click; the link brings the corrected
+      // values. The fresher ones must win, and what the link does not carry must stay.
+      var nm2 = document.getElementById('fld-f-name'), em2 = document.getElementById('fld-f-email');
+      ok('the corrected email beat the stale draft', em2 && em2.value === 'fixed@b.jo', em2 && em2.value);
+      ok('the corrected name beat the stale draft', nm2 && nm2.value === 'New Name', nm2 && nm2.value);
+      ok('the topic from the draft is still there', (document.getElementById('fld-${TOPIC}') || {}).value === '${T_JOB}');
+      return finish();
+    }
+
     if (mode === 'footnote') {
       // ---- the form that must NOT lose its button ----
       ok('an always-shown link is on screen', visibleLinks().length >= 1,
@@ -342,3 +353,4 @@ runPage(stubbed(FIELDS), 'Contact Us, topic by topic', 'contact', FIELDS.length)
 runPage(stubbed(FIELDS, { [TOPIC]: T_JOB }), 'a kept draft comes back handed off', 'draft', FIELDS.length);
 runPage(stubbed(FIELDS), 'a link carries who the customer is', 'carry', FIELDS.length, '&pf_name=Ali%20N&pf_email=a%40b.jo');
 runPage(stubbed(FOOTNOTE_FIELDS), 'a form with an always-shown link keeps Submit', 'footnote', FOOTNOTE_FIELDS.length);
+runPage(stubbed(FIELDS, { 'f-name': 'Old Name', 'f-email': 'stale@b.jo', [TOPIC]: T_JOB }), 'a corrected email beats the stale draft', 'stale', FIELDS.length, '&pf_name=New%20Name&pf_email=fixed%40b.jo');
