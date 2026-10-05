@@ -753,8 +753,32 @@
   // Read back before anything is typed, so the page somebody comes back to is the page they
   // left. Called again once the admin-defined questions arrive, because they are not on the
   // page yet the first time round.
+  // The Contact Us form hands a person on to this page with who they are in the address
+  // (pf_name, pf_phone as +<code><digits>) so they do not start over. Only fills what the
+  // draft leaves empty, and the country follows the dial code the phone arrived with.
+  function carriedAnswers() {
+    var out = {}, nm = getParam("pf_name"), ph = getParam("pf_phone");
+    if (nm) out.full_name = nm;
+    var m = /^\+(\d+)$/.exec(ph);
+    if (m) {
+      for (var i = 0; i < COUNTRIES.length; i++) {
+        var cc = COUNTRIES[i].cc;
+        if (m[1].indexOf(cc) === 0 && m[1].length > cc.length) { out.country = COUNTRIES[i].name; out.phone_local = m[1].slice(cc.length); break; }
+      }
+    }
+    return out;
+  }
+  var carriedUsed = false;
   function loadDraft() {
     var answers = readDraft(draftK, Date.now());
+    if (!carriedUsed) {
+      var carried = carriedAnswers();
+      if (Object.keys(carried).length) {
+        carriedUsed = true;
+        answers = Object.assign({}, carried, answers || {});
+        try { history.replaceState(null, "", location.pathname + location.search.replace(/([?&])pf_(name|phone|email)=[^&]*/g, "$1").replace(/[?&]+$/, "").replace(/\?&/, "?").replace(/&&+/g, "&") + location.hash); } catch (e) {}
+      }
+    }
     if (!answers) return;
     draftHadAnswers = true;
     restoreFormAnswers(formEl, answers);

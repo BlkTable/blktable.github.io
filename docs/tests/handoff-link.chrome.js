@@ -192,6 +192,32 @@ const DRIVER = `
       return finish();
     }
 
+    if (mode === 'carry') {
+      // ---- the customer who is not made to start over ----
+      // Opened from another form's link with who they are in the address: the empty Name and
+      // Email questions fill themselves in, and the address is cleaned afterwards. Then the
+      // Complaint link must carry what is in the boxes NOW, to the BLK form only.
+      var nm = document.getElementById('fld-f-name'), em = document.getElementById('fld-f-email');
+      ok('the name came across the link', nm && nm.value === 'Ali N', nm && nm.value);
+      ok('the email came across the link', em && em.value === 'a@b.jo', em && em.value);
+      ok('the address no longer carries the answers', location.search.indexOf('pf_') < 0, location.search);
+      var e0 = chooseTopic('${T_COMPLAINT}');
+      ok('Complaint can be chosen', !e0, e0);
+      var lk = visibleLinks()[0];
+      ok('the complaint link is showing', !!lk);
+      if (lk) {
+        lk.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+        var h = lk.getAttribute('href');
+        ok('the link carries the name', h.indexOf('pf_name=Ali%20N') >= 0, h);
+        ok('and the email', h.indexOf('pf_email=a%40b.jo') >= 0, h);
+        ok('and still points at the complaints form', h.indexOf('t=customer-complaints') >= 0, h);
+        nm.value = 'Sara';
+        lk.dispatchEvent(new Event('mouseenter'));
+        ok('an edited answer is what travels, not the first one', lk.getAttribute('href').indexOf('pf_name=Sara') >= 0, lk.getAttribute('href'));
+      }
+      return finish();
+    }
+
     if (mode === 'footnote') {
       // ---- the form that must NOT lose its button ----
       ok('an always-shown link is on screen', visibleLinks().length >= 1,
@@ -277,7 +303,7 @@ const DRIVER = `
 <\/script>
 `;
 
-function runPage(html, name, mode, questions) {
+function runPage(html, name, mode, questions, query) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blk-handoff-'));
   // The page asks for ../assets/favicon.svg; give it somewhere to look so the console stays
   // readable and nothing depends on a failed request.
@@ -287,7 +313,7 @@ function runPage(html, name, mode, questions) {
   const file = path.join(dir, 'f', 'index.html');
   fs.writeFileSync(file, html.replace('<body>',
     '<body data-mode="' + mode + '" data-questions="' + questions + '">'));
-  const url = 'file:///' + file.replace(/\\/g, '/') + '?t=contact-us';
+  const url = 'file:///' + file.replace(/\\/g, '/') + '?t=contact-us' + (query || '');
   const run = cp.spawnSync(chrome, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files',
     '--virtual-time-budget=8000', '--dump-dom', url], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const block = ((run.stdout || '').match(/<pre id="out">([\s\S]*?)<\/pre>/) || [])[1];
@@ -308,4 +334,5 @@ function runPage(html, name, mode, questions) {
 
 runPage(stubbed(FIELDS), 'Contact Us, topic by topic', 'contact', FIELDS.length);
 runPage(stubbed(FIELDS, { [TOPIC]: T_JOB }), 'a kept draft comes back handed off', 'draft', FIELDS.length);
+runPage(stubbed(FIELDS), 'a link carries who the customer is', 'carry', FIELDS.length, '&pf_name=Ali%20N&pf_email=a%40b.jo');
 runPage(stubbed(FOOTNOTE_FIELDS), 'a form with an always-shown link keeps Submit', 'footnote', FOOTNOTE_FIELDS.length);
