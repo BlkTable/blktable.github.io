@@ -159,7 +159,7 @@ const DRIVER = `<pre id="out">pending</pre>
   })();
 <\/script>`;
 
-function run(html, checks, name) {
+function run(html, checks, name, query) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blk-pf-'));
   const file = path.join(dir, 'index.html');
   const page = html.replace('</body>',
@@ -168,7 +168,7 @@ function run(html, checks, name) {
   fs.writeFileSync(file, page);
   const r = cp.spawnSync(chrome, ['--headless=new', '--disable-gpu', '--allow-file-access-from-files',
     '--virtual-time-budget=9000', '--dump-dom',
-    'file:///' + file.replace(/\\/g, '/') + '?t=prefill-test'],
+    'file:///' + file.replace(/\\/g, '/') + '?t=prefill-test' + (query || '')],
     { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const block = ((r.stdout || '').match(/<pre id="out">([\s\S]*?)<\/pre>/) || [])[1];
   if (block === undefined) {
@@ -291,3 +291,25 @@ run(build(ZONES_UNKNOWN, undefined, 'Etc/UTC'), `
   });
   t('and no note is shown', function () { if (note()) return 'a note with nothing guessed'; });
 `, 'unresolvable zone changes nothing');
+
+// ---- 7. the country a hand-off link carries beats the device guess ----
+// Contact Us -> Complaints: the customer set Jordan and a +962 number there; this form's own
+// guess (Asia/Amman is Lebanon in this fixture) must not put Lebanon back over them.
+run(build(ZONES_SWAPPED, undefined, 'Asia/Amman'), `
+  t('the carried country wins over the guess', function () {
+    var v = val('${C_ID}');
+    if (v !== 'Jordan') return 'country reads ' + JSON.stringify(v) + ', expected Jordan from the link';
+  });
+  t('and the shop list follows it', function () {
+    var s = shops('${B_ID}');
+    if (s.some(function (x) { return /Mar Mikhael|Jal El Dib/.test(x); })) return 'Lebanese shops still offered: ' + s.join(', ');
+    if (!s.some(function (x) { return /7th Circle/.test(x); })) return 'Jordanian shops missing: ' + s.join(', ');
+  });
+`, 'a carried country beats the guess', '&pf_country=Jordan');
+// A country this form does not offer must leave the box as it was, not empty.
+run(build(ZONES_SWAPPED, undefined, 'Asia/Amman'), `
+  t('a carried country the form does not offer changes nothing', function () {
+    var v = val('${C_ID}');
+    if (v !== 'Lebanon') return 'country reads ' + JSON.stringify(v) + ', expected the guess (Lebanon) to survive';
+  });
+`, 'an unoffered carried country is ignored', '&pf_country=Narnia');

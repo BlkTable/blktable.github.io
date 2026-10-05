@@ -72,6 +72,19 @@ t('what the link carries beats an older restored draft', () => {
   assert.strictEqual(nm.v, 'Ali'); assert.strictEqual(ph.v, '+962791234567');
   assert.strictEqual(em.v, 'new@x.jo', 'a corrected email must not lose to the stale draft');
 });
+t('the country travels with the link, and a country the next form refuses changes nothing', () => {
+  const here = ctl('country', 'Country', 'Jordan');
+  assert.strictEqual(carryAnswers([here]).country, 'Jordan');
+  assert.ok(linkWithCarry('https://blktable.blk.jo/f/?t=x', { country: 'Jordan' }, HERE).indexOf('pf_country=Jordan') > 0);
+  const there = ctl('country', 'Country', 'Lebanon');
+  assert.strictEqual(applyCarried([there], { country: 'Jordan' }), 1);
+  assert.strictEqual(there.v, 'Jordan');
+  // the real box keeps an unknown name as its value but SHOWS nothing; it must be put back
+  const strict = ctl('country', 'Country', 'Lebanon'); strict.el = { value: 'Lebanon' };
+  strict.setDraft = x => { strict.v = x; strict.el.value = x === 'Jordan' ? 'Jordan' : x === 'Lebanon' ? 'Lebanon' : ''; };
+  assert.strictEqual(applyCarried([strict], { country: 'Narnia' }), 0);
+  assert.strictEqual(strict.v, 'Lebanon'); assert.strictEqual(strict.el.value, 'Lebanon');
+});
 t('a part the link does not carry leaves the draft alone', () => {
   const nm = ctl('short_text', 'Name', 'Kept'), em = ctl('email', 'Email', 'kept@x.jo');
   applyCarried([nm, em], { email: 'new@x.jo' });

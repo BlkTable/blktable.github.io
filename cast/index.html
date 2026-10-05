@@ -623,7 +623,7 @@
       if (Object.keys(carried).length) {
         carriedUsed = true;
         answers = Object.assign({}, answers || {}, carried);
-        try { var qs = new URLSearchParams(location.search); ["pf_name", "pf_phone", "pf_email"].forEach(function (k) { qs.delete(k); }); history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "") + location.hash); } catch (e) {}
+        try { var qs = new URLSearchParams(location.search); ["pf_name", "pf_phone", "pf_email", "pf_country"].forEach(function (k) { qs.delete(k); }); history.replaceState(null, "", location.pathname + (qs.toString() ? "?" + qs.toString() : "") + location.hash); } catch (e) {}
       }
     }
     if (!answers) return;
