@@ -199,11 +199,8 @@ run(build(ZONES_SWAPPED), `
     if (leaked.length) return 'Jordanian shops still offered: ' + leaked.join(', ');
     if (!s.some(function (x) { return /Mar Mikhael/.test(x); })) return 'Lebanese shops missing: ' + s.join(', ');
   });
-  t('the box says the answer was guessed and can be changed', function () {
-    var n = note();
-    if (!n) return 'no note next to the pre-filled country';
-    if (!n.offsetParent) return 'the note is in the DOM but not visible';
-    if (!/change it/i.test(n.textContent)) return 'the note does not say it can be changed: ' + n.textContent;
+  t('the guess is filled in silently: no "filled in from your location" note under it', function () {
+    if (note()) return 'a note is showing under the pre-filled country';
   });
 `, 'guess lands, shops follow');
 
@@ -256,8 +253,8 @@ run(build(ZONES_UNKNOWN, undefined, 'Asia/Amman'), `
     if (leaked.length) return 'Lebanese shops still offered: ' + leaked.join(', ');
     if (!s.some(function (x) { return /7th Circle/.test(x); })) return 'Jordanian shops missing: ' + s.join(', ');
   });
-  t('and the note says the answer was guessed', function () {
-    if (!note()) return 'no note next to a country the embedded map filled in';
+  t('and still no note under it', function () {
+    if (note()) return 'a note is showing under the pre-filled country';
   });
 `, 'DB has no row for the zone, embedded map still names it');
 
