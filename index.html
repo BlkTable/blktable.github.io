@@ -81,23 +81,23 @@
        device decides, which is resolved in <head> so the first paint is already right. */
     --wash: 255,255,255;    /* lift a surface with white, on this near-black ground */
 
-    --bg: #000000;          /* page ground */
-    --bg-2: #0d0d0f;        /* sidebar and popovers */
-    --bg-top: #1a1a1a;      /* header, sticky rows, raised strips */
-    --card: #141416;
-    --text: #f2f3f5;
-    --muted: #8b9198;
-    --silver: #d6dade;
+    --bg: #08090c;          /* page ground */
+    --bg-2: #0d0e12;        /* sidebar and popovers */
+    --bg-top: #121318;      /* header, sticky rows, raised strips */
+    --card: #111218;
+    --text: #eceef2;
+    --muted: #858b97;
+    --silver: #d3d7de;
     --silver-hi: #eef0f2;
     --silver-lo: #b4b9c0;
-    --line: rgba(var(--wash),0.07);
-    --line-2: rgba(var(--wash),0.14);
-    --field-bg: #0d0d0f;
-    --field-border: #2a2a2d;
+    --line: rgba(var(--wash),0.06);
+    --line-2: rgba(var(--wash),0.11);
+    --field-bg: #0b0c10;
+    --field-border: #23262d;
     /* Two accents, each with one job. Blue = the primary action on the screen.
        Pink = sharing, and the underline under whichever tab you are on. */
-    --accent: #2d7ff9;
-    --accent-hi: #4f97ff;
+    --accent: #3b82f6;
+    --accent-hi: #6ba3ff;
     --accent-ink: #ffffff;
     --pink: #f82b60;
     /* state colours, named where they used to be raw hex */
@@ -105,19 +105,19 @@
     --gold: #eab308;
     --ok: #7ed08a;
     --wa: #25d366;
-    --bg-3: #232326;
+    --bg-3: #1b1d24;
     --pink-hi: #ff5177;
     --pink-soft: rgba(248,43,96,0.14);
     /* Colours that only exist because a ground exists: a placeholder is quieter than muted
        text, an unlit star is barely there, a sunken panel goes the other way from a raised
        one, and an ink laid over a translucent accent wash has to belong to that wash rather
        than to the page. Each was a hand-written hex that read correctly on black only. */
-    --placeholder: #5f656d;
-    --star-off: #3a3f47;
-    --sunken: #0f1418;              /* the message thread, which recedes rather than lifts */
+    --placeholder: #596070;
+    --star-off: #343944;
+    --sunken: #0b0f14;              /* the message thread, which recedes rather than lifts */
     --gold-ink: #ffe9a6;            /* on the gold wash of an active toolbar button */
     --accent-soft-ink: #cfe4ff;     /* on the blue wash of a glowing button or a link chip */
-    --row-hover-solid: #202024;     /* a sticky cell cannot show the row's translucent hover */
+    --row-hover-solid: #181a21;     /* a sticky cell cannot show the row's translucent hover */
     /* The accent a card is edged with, one per tag tint and in the same order, so a card
        coloured by Branch carries the colour of the branch pill printed on it. It lived in
        JS as a second `var TINTS`, at the same scope as the table-mark palette and after it
@@ -129,6 +129,20 @@
     --tint-8: #c4a9f5; --tint-9: #b0b0f7; --tint-10: #93d8e8; --tint-11: #9dc9ea;
     --tint-12: #96e0bd; --tint-13: #d3dd8e; --tint-14: #eec38c; --tint-15: #efae90;
     --tint-16: #f2a5b6; --tint-17: #e3a8ef; --tint-18: #a9b6f2; --tint-19: #b6c3d1;
+    /* ---------- Finish ----------
+       What makes a surface read as made rather than drawn. Not colours of things but
+       properties of depth, so the light theme redefines them rather than inheriting.
+       --hl    a lit top edge on a raised surface
+       --ring  the one focus ring every control shares
+       the pop shadow is for what FLOATS (a menu, a calendar, a dialog) and nothing else */
+    --r-s: 8px; --r-m: 12px;
+    --hl: inset 0 1px 0 rgba(var(--wash),0.045);
+    --hl-btn: inset 0 1px 0 #ffffff2e;
+    --ring: 0 0 0 3px rgba(59,130,246,0.30);
+    --shadow-pop: 0 0 0 1px rgba(var(--wash),0.07), 0 18px 40px -10px rgba(0,0,0,0.65), 0 4px 10px rgba(0,0,0,0.35);
+    --accent-grad: linear-gradient(180deg, #4a8ff8 0%, #3b82f6 55%, #3374e0 100%);
+    --scrim: rgba(3,4,6,0.66);
+    --selection: rgba(59,130,246,0.38);
 
     /* ---------- Type ----------
        The app had 33 different font sizes — 0.6, 0.62, 0.64, 0.65, 0.66, 0.68, 0.7,
@@ -207,6 +221,13 @@
     --tint-8: #3a2360; --tint-9: #2b2470; --tint-10: #0f3f4a; --tint-11: #16344d;
     --tint-12: #14432f; --tint-13: #3c4218; --tint-14: #4a3618; --tint-15: #4d2a1c;
     --tint-16: #4a1f2c; --tint-17: #431f47; --tint-18: #232c63; --tint-19: #2b3440;
+    --hl: inset 0 1px 0 #ffffff;
+    --hl-btn: inset 0 1px 0 #ffffff40;
+    --ring: 0 0 0 3px rgba(22,104,220,0.25);
+    --shadow-pop: 0 0 0 1px rgba(var(--wash),0.08), 0 18px 40px -10px rgba(16,24,40,0.22), 0 4px 10px rgba(16,24,40,0.10);
+    --accent-grad: linear-gradient(180deg, #2377ea 0%, #1668dc 60%, #135ec7 100%);
+    --scrim: rgba(20,24,32,0.38);
+    --selection: rgba(22,104,220,0.25);
   }
 
   * { box-sizing: border-box; }
@@ -2000,6 +2021,62 @@
        scrolls (overflow:auto), so ONLY it scrolls, never the page. Cap its width to the
        viewport so the wide table is contained rather than widening the layout. */
     .grid-wrap { max-width: 100%; -webkit-overflow-scrolling: touch; }
+  }
+
+  /* ---------- Premium layer ----------
+     Last in the sheet on purpose: it only refines. Everything above still says what a thing
+     IS; this says how it is finished -- a lit top edge on a raised surface, one focus ring
+     for every control, shadow only on what floats, and motion that is felt rather than seen.
+     No colour is written here: it all comes from the tokens, so the light theme inherits the
+     same finish with its own values. */
+  html { font-feature-settings: "cv11", "ss03", "calt"; text-rendering: optimizeLegibility; }
+  ::selection { background: var(--selection); }
+  * { scrollbar-width: thin; scrollbar-color: rgba(var(--wash),0.16) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(var(--wash),0.14); border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(var(--wash),0.26); background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* Raised surfaces: a hairline, a lit top edge, a larger radius. */
+  .login-card, .card, .modal { border-radius: var(--r-m); box-shadow: var(--hl); border-color: var(--line); }
+  .modal { box-shadow: var(--shadow-pop), var(--hl); }
+  .cal { box-shadow: var(--shadow-pop), var(--hl); border-radius: var(--r-m); }
+  .modal-overlay { background: var(--scrim); backdrop-filter: blur(6px) saturate(1.1); }
+  .modal-overlay.open .modal, .cal { animation: blk-rise 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @keyframes blk-rise { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+  /* One focus ring for every control, so keyboard users always know where they are. */
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: var(--ring); }
+  button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: none; box-shadow: var(--ring); }
+  input, select, textarea { border-radius: var(--r-s); }
+
+  /* The primary action: the one lit thing on the screen. */
+  button.primary, .btn-new, .side-create {
+    background: var(--accent-grad); box-shadow: var(--hl-btn), 0 1px 2px rgba(0,0,0,0.35);
+    transition: filter 0.12s ease, transform 0.06s ease, box-shadow 0.12s ease;
+  }
+  button.primary:hover, .btn-new:hover, .side-create:hover { background: var(--accent-grad); filter: brightness(1.1); }
+  button.primary:active, .btn-new:active, .side-create:active { transform: translateY(1px); filter: brightness(0.96); }
+  button.primary, .side-create { border-radius: var(--r-s); }
+  .btn-new, .btn-share { border-radius: var(--r-s); padding: 7px 14px; }
+  .btn-share { box-shadow: var(--hl-btn); transition: filter 0.12s ease, transform 0.06s ease; }
+  .btn-share:hover { filter: brightness(1.1); }
+  .btn-share:active { transform: translateY(1px); }
+
+  /* Navigation and rows: quieter at rest, clearer on the one that is current. */
+  .side-item { border-radius: var(--r-s); transition: background 0.12s ease, color 0.12s ease; }
+  .side-item.active { background: rgba(var(--wash),0.07); box-shadow: inset 2px 0 0 var(--accent); }
+  table.grid thead th { font-weight: 500; letter-spacing: 0.02em; color: var(--muted); }
+  table.grid thead th:hover { color: var(--silver-hi); }
+  table.grid tbody tr td { transition: background 0.1s ease; }
+  .home-list .home-card.row { border-radius: var(--r-s); transition: background 0.12s ease; }
+
+  /* Headings: weight 800 reads loud on a dark ground; 650 reads confident. */
+  .ja-title, h1, h2 { font-weight: 650; letter-spacing: -0.025em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .modal-overlay.open .modal, .cal { animation: none; }
+    button, .side-item, table.grid td { transition: none !important; }
   }
 </style>
 </head>
