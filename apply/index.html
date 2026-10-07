@@ -5,30 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Job Application — طلب توظيف | BLK</title>
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
   :root {
-    --bg: #000000;
-    --bg-2: #0d0d0f;
-    --bg-top: #1a1a1a;
-    --card: #141416;
-    --text: #f2f3f5;
-    --muted: #8b9198;
-    --silver: #d6dade;
+    --bg: #08090c;
+    --bg-2: #0d0e12;
+    --bg-top: #121318;
+    --card: #111218;
+    --text: #eceef2;
+    --muted: #858b97;
+    --silver: #d3d7de;
     --silver-hi: #eef0f2;
     --silver-lo: #b4b9c0;
-    --line: rgba(255,255,255,0.07);
-    --line-2: rgba(255,255,255,0.14);
-    --field-bg: #0d0d0f;
-    --field-border: #2a2a2d;
-    --accent: #2d7ff9;
-    --accent-hi: #4f97ff;
+    --line: rgba(255,255,255,0.06);
+    --line-2: rgba(255,255,255,0.11);
+    --field-bg: #0b0c10;
+    --field-border: #23262d;
+    --accent: #3b82f6;
+    --accent-hi: #6ba3ff;
     --pink: #f82b60;
     /* state colours, named where they used to be raw hex */
     --danger: #ff6b6b;
     --gold: #eab308;
     --ok: #7ed08a;
     --wa: #25d366;
-    --bg-3: #232326;
+    --bg-3: #1b1d24;
+    /* Finish: depth, not colour. A lit top edge on a raised surface, one focus ring. */
+    --r-s: 8px; --r-m: 12px;
+    --hl: inset 0 1px 0 rgba(255,255,255,0.045);
+    --ring: 0 0 0 3px rgba(59,130,246,0.30);
+    --shadow-pop: 0 0 0 1px rgba(255,255,255,0.07), 0 18px 40px -10px rgba(0,0,0,0.65), 0 4px 10px rgba(0,0,0,0.35);
+    --accent-grad: linear-gradient(180deg, #4a8ff8 0%, #3b82f6 55%, #3374e0 100%);
   }
   * { box-sizing: border-box; }
   html, body {
@@ -37,7 +46,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  ::placeholder { color: #5f656d; }
+  ::placeholder { color: #596070; }
   .wrap {
     min-height: 100vh; padding: 32px 20px 60px;
     background: var(--bg);
@@ -130,6 +139,28 @@
   }
   .success h2 { margin: 0 0 8px; font-size: 1.2rem; }
   .success p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+
+  /* ---------- Premium layer ----------
+     Last in the sheet; it only refines. Same finish as the staff app so a form and the
+     records it fills read as one product. */
+  html, body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-feature-settings: "cv11", "ss03", "calt"; text-rendering: optimizeLegibility; }
+  ::selection { background: rgba(59,130,246,0.38); }
+  .card, .pcard, .intro { border-radius: var(--r-m); box-shadow: var(--hl); }
+  .card { border-color: var(--line); padding: 28px 24px; }
+  .head h1 { font-weight: 650; letter-spacing: -0.02em; }
+  input, select, textarea { border-radius: var(--r-s); }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: var(--ring); }
+  button:focus-visible, a:focus-visible { outline: none; box-shadow: var(--ring); }
+  .submit, .form-link { background: var(--accent-grad); border-radius: var(--r-s);
+    box-shadow: inset 0 1px 0 #ffffff2e, 0 1px 2px rgba(0,0,0,0.35);
+    transition: filter 0.12s ease, transform 0.06s ease; }
+  .submit:hover, .form-link:hover { background: var(--accent-grad); filter: brightness(1.1); }
+  .submit:disabled { background: var(--accent-grad); }
+  .cal { box-shadow: var(--shadow-pop), var(--hl); animation: blk-rise 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @keyframes blk-rise { from { opacity: 0; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+  * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.16) transparent; }
+  @media (prefers-reduced-motion: reduce) { .cal { animation: none; } .submit, .form-link { transition: none; } }
 </style>
 </head>
 <body>
