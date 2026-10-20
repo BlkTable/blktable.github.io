@@ -281,6 +281,7 @@
       </div>
       <div class="card success" id="success"><div class="check">✓</div><h2>Received</h2><p>Thank you! Your submission has been recorded.</p></div>
       <div class="card notfound" id="notfound"><h2>Form not found</h2><p>This form link is invalid or no longer active.</p></div>
+      <div class="card notfound" id="loadfail"><h2>Couldn’t load this form</h2><p>Your connection may have dropped. Please try again.</p><button type="button" class="submit" id="loadfail-retry">Try again</button></div>
       <div class="card notfound" id="closed"><h2 id="closed-h">No places left</h2><p id="closed-p">Every place has been taken.</p></div>
     </div>
   </div>
@@ -323,7 +324,10 @@
     var z = deviceZone();
     return z ? { "x-blk-tz": z } : {};
   }
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { global: { headers: tzHeaders() } });
+  // No session: this page never signs anyone in, and the app on this same origin leaves a staff
+  // session in localStorage. supabase-js would send that token instead of the public key, and a
+  // stale one is a 401 on every read, which used to surface as "Form not found".
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { global: { headers: tzHeaders() }, auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 
   // ---- File storage: Supabase Storage now, Cloudflare R2 after cutover ----
   // Flip STORAGE_MODE to "r2" at cutover (with SUPABASE_URL/KEY above). Uploads
@@ -3074,7 +3078,22 @@
         location.replace("/f/?t=" + encodeURIComponent(to) + (parentToken ? "&e=" + encodeURIComponent(parentToken) : ""));
       } else { notFound(); }
     }
+    // "Not found" is for a form that is not there. A request that failed (offline, a blocked host,
+    // a rejected token) says nothing about the form, so it is offered a retry. supabase-js has already retried the read itself by now.
+    function loadFailed(err) {
+      try { console.error("form load failed", err); } catch (e) {}
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("loadfail").style.display = "block";
+    }
+    document.getElementById("loadfail-retry").addEventListener("click", function () {
+      document.getElementById("loadfail").style.display = "none";
+      document.getElementById("loading").style.display = "";
+      loadForm();
+    });
+    function loadForm() {
     db.from("app_tables").select("id,name,name_ar,slug,is_active,kind,config_public").eq("slug", slug).eq("is_active", true).single().then(function (tRes) {
+      // PGRST116: no row matched. Any other error is the request failing, not the form missing.
+      if (tRes.error && tRes.error.code !== "PGRST116") { loadFailed(tRes.error); return; }
       if (tRes.error || !tRes.data) { resolveAliasOrNotFound(); return; }
       var table = tRes.data;
       table.config = table.config_public || {};
@@ -3153,7 +3172,7 @@
           .catch(function () { BALLOT = []; });
         Promise.all([fieldsReady, branchesReady, countriesReady, ballotReady]).then(function (results) {
           var fRes = results[0];
-          if (fRes.error) { notFound(); return; }
+          if (fRes.error) { loadFailed(fRes.error); return; }
           var st = slotsText(slots);
           if (st && st.blocked) {
             // The details still show: somebody who arrives late should see WHICH event they
@@ -3172,6 +3191,8 @@
         });
       });
     });
+    }
+    loadForm();
   }
 </script>
 </body>
