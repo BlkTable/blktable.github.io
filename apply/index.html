@@ -309,7 +309,9 @@
 <script>
   var SUPABASE_URL = "https://db.blktable.blk.jo";
   var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg0NzExNjYwLCJleHAiOjIxMDAwNzE2NjB9.jve2CB0Dt8dESno2dgVHu5kcLnmCE-fISi0TYT_prwc";
-  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  // Session-less: this page never signs anyone in, and a staff session left in localStorage by the app on this origin
+  // would be sent instead of the public key; a stale one rejects the submit and the file upload.
+  var db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 
   // ---- Photo storage: Supabase Storage now, Cloudflare R2 after cutover ----
   // Flip STORAGE_MODE to "r2" at cutover (with SUPABASE_URL/KEY above). Uploads
