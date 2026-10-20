@@ -19,5 +19,10 @@ check('the load-failure card has its own element and a retry button',
   /id="loadfail"/.test(page) && /id="loadfail-retry"/.test(page));
 check('the form load is a function the retry button can call again', /function loadForm\(\)/.test(page) && /loadForm\(\);\s*\}\s*<\/script>/.test(page));
 
+['apply', 'cast'].forEach(function (d) {
+  check(d + '/ (public, no sign-in) never persists or reuses a session',
+    /createClient\(SUPABASE_URL, SUPABASE_KEY,[^;]*auth:\s*\{[^}]*persistSession:\s*false/.test(fs.readFileSync(d + '/index.html', 'utf8')));
+});
+
 console.log(fails ? fails + ' failed' : 'all form-load-errors tests passed');
 process.exit(fails ? 1 : 0);
