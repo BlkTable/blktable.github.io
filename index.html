@@ -2738,6 +2738,8 @@
             <textarea id="bld-intro" rows="2" placeholder="Intro (English)"></textarea>
             <textarea id="bld-intro-ar" rows="2" placeholder="مقدمة (عربي)" dir="rtl"></textarea>
           </div>
+          <label class="fp-label" style="display:flex;gap:8px;align-items:center;margin:10px 0 6px;"><input type="checkbox" id="bld-rtl"> Right-to-left, Arabic layout <span style="color:var(--muted);font-weight:400;">— the public form reads right to left and says Submit in Arabic.</span></label>
+          <textarea id="bld-thanks" rows="2" placeholder="Thank-you message shown after submitting (optional) / رسالة الشكر بعد الإرسال" style="width:100%;"></textarea>
           <!-- Job Applications only, because it is the only form with an interview to invite
                anybody to. The wording is HR's, so it is edited here rather than being a code
                change every time a sentence in it should read differently. -->
@@ -6963,7 +6965,7 @@
   // ---- Custom tables: admin builder + dynamic views ----
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
-    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "datetime", label: "Date and time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "yesno", label: "Yes / No" },
+    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "datetime", label: "Date and time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "rating", label: "Rating (1 to 5, 0 to 10…)" }, { v: "yesno", label: "Yes / No" },
     { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "file", label: "File" }, { v: "email", label: "Email" }, { v: "country", label: "Country" }, { v: "link", label: "Link (button)" }, { v: "branch", label: "Branch" }
   ];
   // Which field types use the free-text "options" box, and what it should say when they do.
@@ -6974,12 +6976,13 @@
   // ticked once at the top. Two places to say which countries a form is for is one place to
   // get them out of step, and the symptom is a form asking for Iraq's shops on a table
   // nobody ever ticked Iraq on.
-  function typeUsesOpts(v) { return v === "dropdown" || v === "multi_select" || v === "link"; }
+  function typeUsesOpts(v) { return v === "dropdown" || v === "multi_select" || v === "link" || v === "rating"; }
   // Of those, the ones whose "options" are ANSWERS a person picks from. They get the answers
   // editor — a line per answer — instead of the free-text box, which stays for the link field
   // because its options are a URL and a button label, not a list of answers.
   function typeUsesAnswers(v) { return v === "dropdown" || v === "multi_select"; }
   function optsPlaceholder(v) {
+    if (v === "rating") return "Range | low label | high label, e.g. 1-5 | لا أوافق بشدة | أوافق بشدة";
     if (v === "link") return "URL | Button text (English) | نص الزر (عربي), e.g. https://airtable.com/… | Apply now | قدّم الآن";
     return "Options, one per line (or comma-separated): English|عربي, add |other to a choice to open a free-text box";
   }
@@ -13710,7 +13713,13 @@
   function serializeIntro() {
     var en = (document.getElementById("bld-intro").value || "").trim();
     var ar = (document.getElementById("bld-intro-ar").value || "").trim();
-    return (en || ar) ? { en: en, ar: ar } : null;
+    var rtl = !!(document.getElementById("bld-rtl") || {}).checked;
+    var thanks = ((document.getElementById("bld-thanks") || {}).value || "").trim();
+    if (!(en || ar || rtl || thanks)) return null;
+    var o = { en: en, ar: ar };
+    if (rtl) o.rtl = true;
+    if (thanks) o.thanks = thanks;
+    return o;
   }
   // ---- Builder: Approve / Reject -------------------------------------------------------
   // Switched OFF is written as {on:false} rather than as nothing, so a table that had the
@@ -13770,6 +13779,8 @@
   function setIntroInputs(intro) {
     document.getElementById("bld-intro").value = (intro && intro.en) || "";
     document.getElementById("bld-intro-ar").value = (intro && intro.ar) || "";
+    document.getElementById("bld-rtl").checked = !!(intro && intro.rtl);
+    document.getElementById("bld-thanks").value = (intro && intro.thanks) || "";
   }
   // config.interviewMsg — the WhatsApp invite for Job Applications. Blank is a real answer
   // and means "use the wording the app ships with", so it is stored as null rather than as
@@ -13934,6 +13945,13 @@
       var url = (kv[0] || "").trim();
       if (!/^https?:\/\//i.test(url)) return { error: "A link field needs a URL starting with http:// or https://" };
       return { options: mergeKept(row, { url: url, text: (kv[1] || "").trim() || url, text_ar: (kv[2] || "").trim() || "" }) };
+    }
+    if (type === "rating") {
+      // "1-5 | label for the low end | label for the high end"
+      var rk = row.querySelector(".opts").value.trim().split("|");
+      var rm = /^s*(d+)s*-s*(d+)s*$/.exec(rk[0] || "");
+      if (!rm || +rm[1] >= +rm[2] || +rm[2] - +rm[1] > 10) return { error: "A rating needs a range such as 1-5 or 0-10." };
+      return { options: mergeKept(row, { min: +rm[1], max: +rm[2], low: (rk[1] || "").trim(), high: (rk[2] || "").trim() }) };
     }
     if (type === "branch") {
       // The shops a branch question offers are the shops of the countries THIS FORM covers —
@@ -14645,6 +14663,9 @@
     var lr = linkRecordOptions(options);
     if (lr) return "Linked records → " + (lr.links_to_name || "another table");
     // A link field's options is an object, not a choice list: rebuild "url | text | text_ar".
+    if (!Array.isArray(options) && typeof options.min === "number" && typeof options.max === "number") {
+      return options.min + "-" + options.max + (options.low || options.high ? " | " + (options.low || "") + " | " + (options.high || "") : "");
+    }
     if (!Array.isArray(options) && options.url) {
       return options.url + (options.text ? " | " + options.text : "") + (options.text_ar ? " | " + options.text_ar : "");
     }
