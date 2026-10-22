@@ -56,6 +56,12 @@
   .card { background: var(--card); border: 1px solid var(--line-2);
     border-radius: 10px; padding: 24px 22px; }
   .field { margin-bottom: 16px; }
+  .rate { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rate button { flex: 1 1 0; min-width: 40px; padding: 11px 0; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--silver); font: inherit; font-weight: 600; cursor: pointer; }
+  .rate button.on { background: var(--silver); color: #000; border-color: var(--silver); }
+  .rate.invalid { border-radius: 8px; box-shadow: 0 0 0 2px rgba(255,107,107,0.3); }
+  .rate-ends { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; color: var(--muted); font-size: 0.82rem; }
+  html[dir="rtl"] .card, html[dir="rtl"] .intro, html[dir="rtl"] .head { text-align: right; }
   /* The mark on a question, while it is being answered. Same four colours and the same
      meanings as the review panel in index.html -- green earned the point, yellow earned
      part of it, red lost it, a penalty its own stronger red -- because the person filling
@@ -1321,8 +1327,16 @@
   }
 
   // Optional bilingual intro shown under the title, from app_tables.config.intro = {en, ar}.
+  // intro.rtl turns the whole page right to left with the Submit button in Arabic;
+  // intro.thanks replaces the stock "Thank you" screen.
+  var submitLabel = "Submit", thanksText = "";
   function renderIntro(intro) {
     var box = document.getElementById("form-intro"); if (!box) return;
+    if (intro && intro.rtl) {
+      document.documentElement.dir = "rtl"; document.documentElement.lang = "ar";
+      submitLabel = "إرسال"; document.getElementById("submit-btn").textContent = submitLabel;
+    }
+    thanksText = (intro && intro.thanks || "").trim();
     var en = (intro && intro.en || "").trim(), ar = (intro && intro.ar || "").trim();
     if (!en && !ar) { box.style.display = "none"; return; }
     box.innerHTML = (en ? "<p>" + esc(en) + "</p>" : "") + (ar ? '<p class="ar" dir="rtl">' + esc(ar) + "</p>" : "");
@@ -2531,6 +2545,26 @@
         // the swap to itself, so the caller does not have to know a branch box is a combo.
         rescope: function (answer) { combo.setOptions(branchOptionsFor(f, answer)); }
       });
+    } else if (f.type === "rating") {
+      // A row of numbered buttons, min..max, with a word under each end. The answer is the
+      // number as text, the same shape a number question stores.
+      var ro = f.options || {}, rmin = typeof ro.min === "number" ? ro.min : 1, rmax = typeof ro.max === "number" ? ro.max : 5;
+      var rrow = document.createElement("div"); rrow.className = "rate"; rrow.id = id; rrow.setAttribute("role", "radiogroup");
+      var rval = null;
+      var rpaint = function () { [].slice.call(rrow.children).forEach(function (b) { b.classList.toggle("on", b.value === rval); b.setAttribute("aria-checked", b.value === rval ? "true" : "false"); }); };
+      for (var rn = rmin; rn <= rmax; rn++) {
+        var rb = document.createElement("button"); rb.type = "button"; rb.value = String(rn); rb.textContent = String(rn); rb.setAttribute("role", "radio");
+        rb.addEventListener("click", function () { rval = this.value; rrow.classList.remove("invalid"); rpaint(); answerChanged(); });
+        rrow.appendChild(rb);
+      }
+      wrap.appendChild(rrow);
+      if (ro.low || ro.high) {
+        var rends = document.createElement("div"); rends.className = "rate-ends";
+        rends.innerHTML = "<span>" + esc(ro.low || "") + "</span><span>" + esc(ro.high || "") + "</span>";
+        wrap.appendChild(rends);
+      }
+      controls.push({ f: f, el: rrow, validate: function () { return !f.required || rval !== null; }, value: function () { return rval; },
+                      setDraft: function (v) { rval = v == null ? null : String(v); rpaint(); } });
     } else if (f.type === "yesno") {
       var sel = document.createElement("select"); sel.id = id;
       var opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Select… / اختر"; sel.appendChild(opt0);
@@ -3018,13 +3052,17 @@
           ? "Your place is confirmed. The details are in the message above — please keep this link."
           : "Every place is taken, so you are on the backup list. If someone drops out you take their place, and you will be told.";
       }
+      if (thanksText && !already) {
+        box.querySelector("h2").textContent = document.documentElement.dir === "rtl" ? "تم الاستلام" : "Received";
+        box.querySelector("p").textContent = thanksText;
+      }
       document.getElementById("card").style.display = "none";
       document.getElementById("head").style.display = "none";
       document.getElementById("form-intro").style.display = "none";
       document.getElementById("success").style.display = "block";
       window.scrollTo({ top: 0, behavior: "smooth" });
     }).catch(function (err) {
-      btn.disabled = false; btn.textContent = "Submit";
+      btn.disabled = false; btn.textContent = submitLabel;
       // Never surface the raw database error here — it leaks table names to the public and means nothing to an applicant. Detail goes to the console below.
       // The two exceptions are the ones the person can act on: the last place went while they
       // were filling the form in, or signups closed. Anything else stays generic.
