@@ -1082,6 +1082,11 @@ td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
   async function saveProfile(branchId, patch) {
     patch.updated_at = new Date().toISOString();
     var r = await db.from("store_profiles").update(patch).eq("branch_id", branchId).select().maybeSingle();
+    if (!r.error && !r.data) {
+      // a new store has no profile row yet: the update matched nothing, so create it
+      var base = { branch_id: branchId }; Object.keys(patch).forEach(function (k) { base[k] = patch[k]; });
+      r = await db.from("store_profiles").insert(base).select().maybeSingle();
+    }
     if (r.error) return toast("Not saved: " + r.error.message);
     if (r.data) CAT.profiles[branchId] = r.data;
     toast("Saved");
