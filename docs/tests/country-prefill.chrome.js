@@ -71,7 +71,7 @@ const ZONES_UNOFFERED = [
 // variable and always reports the OS zone, measured, so this is the only way to test a zone
 // other than this machine's own -- the same technique phone-picker.chrome.js uses. Omit it (the
 // existing call sites all do) and Intl is left alone, which on this machine means Asia/Amman.
-function build(countries, draftAnswers, zone) {
+function build(countries, draftAnswers, zone, extraFields) {
   const tz = zone ? `
   (function () {
     var real = Intl.DateTimeFormat;
@@ -95,7 +95,7 @@ function build(countries, draftAnswers, zone) {
                 is_active: true, kind: 'form', config_public: {} };
   function rowsFor(t) {
     if (t === 'app_tables') return TABLE;
-    if (t === 'app_fields') return ${JSON.stringify(FIELDS)};
+    if (t === 'app_fields') return ${JSON.stringify(FIELDS.filter(function (f) { return !(extraFields || []).some(function (e) { return e.id === f.id; }); }).concat(extraFields || []))};
     if (t === 'branches') return ${JSON.stringify(BRANCHES)};
     if (t === 'countries') return ${JSON.stringify(countries)};
     return [];
@@ -313,3 +313,53 @@ run(build(ZONES_SWAPPED, undefined, 'Asia/Amman'), `
     if (v !== 'Lebanon') return 'country reads ' + JSON.stringify(v) + ', expected the guess (Lebanon) to survive';
   });
 `, 'an unoffered carried country is ignored', '&pf_country=Narnia');
+
+// ---- 8. the dial code follows the Country question ----
+// Choosing Jordan over a Lebanon guess used to leave the phone on +961, and the number was
+// stored with the wrong code. It follows only while the code is unchosen and the number empty.
+const PHONE_Q = [{ id: 'q-phone', position: 3, label: 'Phone Number', type: 'phone', required: false, internal: false, options: {} }];
+const DIAL = `
+  function dial() { return document.querySelector('.cc-dial').textContent.trim(); }
+  function typeNum(v) { var el = document.getElementById('fld-q-phone'); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }
+  function pickDial(q) {
+    document.querySelector('.cc-btn').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    var s = document.querySelector('.cc-search'); s.value = q; s.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('.cc-list li').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  }
+`;
+run(build(ZONES_SWAPPED, undefined, 'Asia/Amman', PHONE_Q), DIAL + `
+  t('the guess puts the dial code on the guessed country', function () {
+    if (dial() !== '+961') return 'dial reads ' + dial() + ' for a Lebanon guess';
+  });
+  t('choosing Jordan moves the dial code with it', function () {
+    if (!pickCountry('Jordan')) return 'could not pick Jordan';
+    if (dial() !== '+962') return 'dial reads ' + dial() + ' after Jordan was chosen';
+  });
+  t('and back again', function () {
+    if (!pickCountry('Lebanon')) return 'could not pick Lebanon';
+    if (dial() !== '+961') return 'dial reads ' + dial() + ' after Lebanon was chosen';
+  });
+`, 'the dial code follows the country');
+run(build(ZONES_SWAPPED, undefined, 'Asia/Amman', PHONE_Q), DIAL + `
+  t('a number already being typed keeps its code', function () {
+    typeNum('71123456');
+    if (!pickCountry('Jordan')) return 'could not pick Jordan';
+    if (dial() !== '+961') return 'dial moved to ' + dial() + ' under a number the person had started';
+  });
+`, 'a typed number keeps its code');
+run(build(ZONES_SWAPPED, undefined, 'Asia/Amman', PHONE_Q), DIAL + `
+  t('a code the person picked is theirs', function () {
+    pickDial('Iraq');
+    if (dial() !== '+964') return 'setup failed, dial reads ' + dial();
+    if (!pickCountry('Jordan')) return 'could not pick Jordan';
+    if (dial() !== '+964') return 'dial moved to ' + dial() + ' over the code the person picked';
+  });
+`, 'a picked code is left alone');
+const COUNTRY_NO_FOLLOW = Object.assign({}, FIELDS[0], { options: { only: ['jo', 'lebanon'], prefill: false } });
+run(build(ZONES_SWAPPED, undefined, 'Asia/Amman', PHONE_Q.concat([COUNTRY_NO_FOLLOW])), DIAL + `
+  t('a country question that opts out of following leaves the code alone', function () {
+    var before = dial();
+    if (!pickCountry('Lebanon')) return 'could not pick Lebanon';
+    if (dial() !== before) return 'dial moved from ' + before + ' to ' + dial();
+  });
+`, 'prefill:false opts out');
