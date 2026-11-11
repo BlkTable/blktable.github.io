@@ -20,6 +20,9 @@ t('builder saves a rating range as {min,max,low,high} and refuses a bad range', 
   assert(/if \(type === "rating"\)/.test(APP));
   assert(/min: \+rm\[1\], max: \+rm\[2\]/.test(APP));
   assert(/A rating needs a range/.test(APP));
+  // Run the real range regex: it once shipped with its backslashes stripped and refused every range.
+  const re = eval(/var rm = (\/.+\/)\.exec/.exec(APP)[1]);
+  assert(re.exec('1-5') && re.exec(' 0 - 10 ') && !re.exec('5') && !re.exec('a-b'));
 });
 
 t('builder writes rtl and thanks into config.intro, and reads them back', () => {
