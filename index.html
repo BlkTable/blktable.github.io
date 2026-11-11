@@ -3107,7 +3107,7 @@
     document.getElementById("pf-name").textContent = session.user.email;
     loadRole(session.user.id);
     loadApps();
-    loadBranchTints();
+    loadBranchTints(); loadStaff();
     loadCountries();
     // keep the promise so a pending deeplink can fire once tables are ready
     var tablesP = loadCustomTables();
@@ -6013,6 +6013,11 @@
       if (v && brOpts.indexOf(v) < 0) brOpts.push(v);
       inner = edSelect(id, v, [""].concat(brOpts));
     }
+    else if (f.type === "staff") {
+      // a name stored before its owner left stays on the list, so editing the record keeps it
+      var stOpts = allStaff.slice(); if (v && stOpts.indexOf(v) < 0) stOpts.push(v);
+      inner = edSelect(id, v, [""].concat(stOpts));
+    }
     else if (f.type === "link") { var lo = f.options || {}; inner = lo.url ? '<a href="' + esc(lo.url) + '" target="_blank" rel="noopener">' + esc(lo.text || lo.url) + "</a>" : '<span style="color:var(--silver);">No link set</span>'; }
     else inner = edText(id, v, false);
     // Only the create panel marks what must be answered; the record panel is autosave and
@@ -6966,7 +6971,7 @@
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
     { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "datetime", label: "Date and time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "rating", label: "Rating (1 to 5, 0 to 10…)" }, { v: "yesno", label: "Yes / No" },
-    { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "file", label: "File" }, { v: "email", label: "Email" }, { v: "country", label: "Country" }, { v: "link", label: "Link (button)" }, { v: "branch", label: "Branch" }
+    { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "file", label: "File" }, { v: "email", label: "Email" }, { v: "country", label: "Country" }, { v: "link", label: "Link (button)" }, { v: "branch", label: "Branch" }, { v: "staff", label: "Name (internal)" }
   ];
   // Which field types use the free-text "options" box, and what it should say when they do.
   // Choice fields list their choices there; a link field puts its URL and button text there.
@@ -9122,6 +9127,13 @@
   var TINT_N = 20;
   var branchTint = {};       // canonical branch name (lowercased) -> tint, from `branches`
   var allBranches = [];
+  // Active employees' English names, copied from BlkHR by the server (staff-sync.sh); a terminated one drops off.
+  var allStaff = [];
+  function loadStaff() {
+    db.from("staff_names").select("name").order("name", { ascending: true })
+      .then(function (r) { if (r && !r.error && r.data) allStaff = r.data.map(function (x) { return x.name; }); })
+      .catch(function () {});
+  }
   function hashTint(s) {
     var h = 0;
     for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -11601,7 +11613,7 @@
   function fvFields(fv) { return (fv && fv.getFields ? fv.getFields() : []).filter(function (f) { return !isFileField(f); }); }
   function fvFieldById(fv, id) { return fvFields(fv).filter(function (f) { return f.id === id; })[0] || null; }
   // A branch or country answer is picked from a list, so it filters like a dropdown; a rating is a number.
-  function filterType(type) { return type === "branch" || type === "country" ? "dropdown" : type === "rating" ? "number" : type; }
+  function filterType(type) { return type === "branch" || type === "country" || type === "staff" ? "dropdown" : type === "rating" ? "number" : type; }
   function opsFor(type) {
     type = filterType(type);
     if (type === "number") return [["eq", "="], ["neq", "≠"], ["lt", "<"], ["lte", "≤"], ["gt", ">"], ["gte", "≥"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
@@ -11630,6 +11642,7 @@
       opts = allBranches.filter(function (b) { return b && b.name && keys.indexOf(String(b.list_key || "jo").toLowerCase()) !== -1; })
         .map(function (b) { return b.name; });
     }
+    if (fld.type === "staff") opts = allStaff;
     opts.forEach(function (o) { var v = o && o.en != null ? o.en : o; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
     (fv.records() || []).forEach(function (rec) { var v = fv.getVal(rec, fld.id); if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
     return vals;

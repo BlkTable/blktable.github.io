@@ -10,6 +10,7 @@ function grab(name) {
 const src = ['filterType', 'opsFor', 'valueKind', 'fvDropdownValues', 'branchListKeys', 'valControlHtml']
   .map(n => n === 'filterType' ? APP.slice(APP.indexOf('  function filterType('), APP.indexOf('\n', APP.indexOf('  function filterType('))) : grab(n)).join('\n');
 const allBranches = [{ name: 'Abdoun', list_key: 'jo' }, { name: 'Mar Mikhael', list_key: 'lebanon' }, { name: 'Sweifieh', list_key: 'jo' }];
+const allStaff = ['Ali Najjar', 'Sara Haddad'];
 const esc = s => String(s), dateFieldHtml = () => '';
 const fns = eval(src + '\n;({ opsFor, valueKind, fvDropdownValues, valControlHtml })');
 const fv = { records: () => [{ data: { b: 'Abdoun' } }], getVal: (r, id) => r.data[id] };
@@ -33,5 +34,18 @@ t('a rating filters with number operators and offers its own range', () => {
 });
 t('a yes/no question still gets Yes / No', () => {
   assert(/Yes.*No/.test(fns.valControlHtml(fv, { op: 'is', val: '' }, { id: 'y', type: 'yesno' })));
+});
+t('a Name (internal) question filters as a list of staff, keeping names already answered', () => {
+  const f = { id: 'b', type: 'staff' };
+  assert.strictEqual(fns.valueKind('staff', 'is'), 'select');
+  // 'Abdoun' stands in for a name stored before its owner left: still filterable
+  assert.deepStrictEqual(fns.fvDropdownValues(fv, f), ['Ali Najjar', 'Sara Haddad', 'Abdoun']);
+});
+t('builder, editor and public form all know the staff type', () => {
+  const PUB = fs.readFileSync('f/index.html', 'utf8');
+  assert(APP.includes('{ v: "staff", label: "Name (internal)" }'));
+  assert(/f\.type === "staff"[\s\S]{0,200}stOpts\.push\(v\)/.test(APP));
+  assert(/f\.type === "staff"[\s\S]{0,300}buildCombo\(f, STAFF\.map/.test(PUB));
+  assert(PUB.includes('from("staff_names")') && APP.includes('from("staff_names")'));
 });
 console.log(n + ' passed');
