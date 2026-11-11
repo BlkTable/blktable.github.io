@@ -13949,7 +13949,7 @@
     if (type === "rating") {
       // "1-5 | label for the low end | label for the high end"
       var rk = row.querySelector(".opts").value.trim().split("|");
-      var rm = /^s*(d+)s*-s*(d+)s*$/.exec(rk[0] || "");
+      var rm = /^\s*(\d+)\s*-\s*(\d+)\s*$/.exec(rk[0] || "");
       if (!rm || +rm[1] >= +rm[2] || +rm[2] - +rm[1] > 10) return { error: "A rating needs a range such as 1-5 or 0-10." };
       return { options: mergeKept(row, { min: +rm[1], max: +rm[2], low: (rk[1] || "").trim(), high: (rk[2] || "").trim() }) };
     }
