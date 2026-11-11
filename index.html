@@ -11600,7 +11600,10 @@
   // so "contains .mp4" would be filtering on a filename, not on anything a person answered.
   function fvFields(fv) { return (fv && fv.getFields ? fv.getFields() : []).filter(function (f) { return !isFileField(f); }); }
   function fvFieldById(fv, id) { return fvFields(fv).filter(function (f) { return f.id === id; })[0] || null; }
+  // A branch or country answer is picked from a list, so it filters like a dropdown; a rating is a number.
+  function filterType(type) { return type === "branch" || type === "country" ? "dropdown" : type === "rating" ? "number" : type; }
   function opsFor(type) {
+    type = filterType(type);
     if (type === "number") return [["eq", "="], ["neq", "≠"], ["lt", "<"], ["lte", "≤"], ["gt", ">"], ["gte", "≥"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
     if (type === "date") return [["is", "is"], ["before", "is before"], ["after", "is after"], ["onBefore", "is on or before"], ["onAfter", "is on or after"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
     if (type === "yesno") return [["is", "is"], ["empty", "is empty"], ["notEmpty", "is not empty"]];
@@ -11609,6 +11612,7 @@
   }
   function valueKind(type, op) {
     if (op === "empty" || op === "notEmpty") return "none";
+    type = filterType(type);
     if (type === "dropdown" || type === "multi_select") return (op === "anyOf" || op === "noneOf") ? "multi" : "select";
     if (type === "yesno") return "yesno";
     if (type === "number") return "number";
@@ -11619,7 +11623,14 @@
   function fvDropdownValues(fv, fld) {
     if (!fld) return [];
     var vals = [], seen = {};
-    (fld.options || []).forEach(function (o) { var v = o && o.en != null ? o.en : o; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
+    // Only a dropdown keeps an array of options; a branch question offers its countries' shops.
+    var opts = Array.isArray(fld.options) ? fld.options : [];
+    if (fld.type === "branch") {
+      var keys = branchListKeys(fld);
+      opts = allBranches.filter(function (b) { return b && b.name && keys.indexOf(String(b.list_key || "jo").toLowerCase()) !== -1; })
+        .map(function (b) { return b.name; });
+    }
+    opts.forEach(function (o) { var v = o && o.en != null ? o.en : o; if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
     (fv.records() || []).forEach(function (rec) { var v = fv.getVal(rec, fld.id); if (v != null && v !== "" && !seen[v]) { seen[v] = 1; vals.push(String(v)); } });
     return vals;
   }
@@ -11704,6 +11715,11 @@
       return '<select class="fc-input"><option value="">Select…</option>' + vs.map(function (v) {
         return '<option value="' + esc(v) + '"' + (String(c.val) === v ? " selected" : "") + ">" + esc(v) + "</option>";
       }).join("") + "</select>";
+    }
+    if (kind === "number" && fld && fld.type === "rating") {
+      var ro = fld.options || {}, rmin = typeof ro.min === "number" ? ro.min : 1, rmax = typeof ro.max === "number" ? ro.max : 5, rs = "";
+      for (var rn = rmin; rn <= rmax; rn++) rs += '<option value="' + rn + '"' + (String(c.val) === String(rn) ? " selected" : "") + ">" + rn + "</option>";
+      return '<select class="fc-input"><option value="">Select…</option>' + rs + "</select>";
     }
     if (kind === "number") return '<input class="fc-input" type="number" inputmode="numeric" placeholder="Value" value="' + esc(c.val == null ? "" : c.val) + '">';
     // Read back by `.fc-val .fc-input`, which still finds it inside the wrapper the calendar
