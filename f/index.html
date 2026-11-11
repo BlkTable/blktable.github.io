@@ -1081,6 +1081,7 @@
   var controls = []; // {f, wrap, validate(), value(), setDraft(), isPhoto, files()}
   var currentTable = null;
   var BRANCHES = [];
+  var STAFF = [];   // active employees' English names (staff_names, synced from BlkHR)
   // The choices for a `record_multi` question, fetched at boot. Empty is a normal
   // state: no events open, or a database that does not have ballot_options yet.
   var BALLOT = [];
@@ -2531,6 +2532,16 @@
           if (ov && otherInp) { otherInp.value = ov; autoGrow(otherInp); }
         }
       });
+    } else if (f.type === "staff") {
+      // Name (internal): a type-to-search list of the company's active employees.
+      var combo = buildCombo(f, STAFF.map(function (n) { return { value: n, label: n }; }), function () { answerChanged(); });
+      wrap.appendChild(combo.wrap);
+      controls.push({
+        f: f, el: combo.input,
+        validate: function () { return !f.required || !!combo.getValue(); },
+        value: function () { return combo.getValue(); },
+        setDraft: function (v) { combo.setValue(v); }
+      });
     } else if (f.type === "branch") {
       var combo = buildCombo(f, branchOptionsFor(f, null), function (v) { answerChanged(); });
       wrap.appendChild(combo.wrap);
@@ -3208,7 +3219,9 @@
         var ballotReady = db.rpc("ballot_options", ballotPayload)
           .then(function (r) { BALLOT = (r && !r.error && Array.isArray(r.data)) ? r.data : []; })
           .catch(function () { BALLOT = []; });
-        Promise.all([fieldsReady, branchesReady, countriesReady, ballotReady]).then(function (results) {
+        // Never blocks the form: no list just means an empty Name (internal) box.
+        var staffReady = db.from("staff_names").select("name").order("name", { ascending: true }).then(function (r) { STAFF = (r && !r.error && r.data) ? r.data.map(function (x) { return x.name; }) : []; }).catch(function () { return null; });
+        Promise.all([fieldsReady, branchesReady, countriesReady, ballotReady, staffReady]).then(function (results) {
           var fRes = results[0];
           if (fRes.error) { loadFailed(fRes.error); return; }
           var st = slotsText(slots);

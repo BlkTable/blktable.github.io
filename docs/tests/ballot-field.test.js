@@ -146,7 +146,7 @@ t('the ballot fetch tolerates a missing function instead of killing the page', (
   assert.ok(m, 'ballotReady must catch — a database without ballot_options must still render the form');
 });
 t('the ballot is fetched alongside the branches, not in a second round trip', () => {
-  assert.ok(/Promise\.all\(\[fieldsReady, branchesReady, countriesReady, ballotReady\]\)/.test(SRC),
+  assert.ok(/Promise\.all\(\[fieldsReady, branchesReady, countriesReady, ballotReady[,\]]/.test(SRC),
     'ballotReady must join the existing Promise.all');
 });
 t('record_multi is rendered by buildField', () => {
