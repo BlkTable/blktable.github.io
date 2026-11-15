@@ -4344,6 +4344,7 @@
     long_text: '<path d="M4 6h16M4 10h16M4 14h16M4 18h10"/>',
     number: '<path d="M6 4l-1 16M14 4l-1 16M4 9h16M3 15h16"/>',
     date: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+    since: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
     dob: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="M12 13v3l2 1"/>',
     dropdown: '<path d="M5 9l7 7 7-7"/>',
     multi_select: '<path d="M4 7h9M4 12h9M4 17h9"/><path d="M17 6l2 2 3-3"/><path d="M17 16l2 2 3-3"/>',
@@ -5336,7 +5337,18 @@
     var w = input.closest ? input.closest(".dt-wrap") : null;
     if (!w) return;
     var r = w.querySelector(".dt-read");
-    if (r) r.textContent = fmtDateLong(input.value);
+    if (r) r.textContent = fmtDateLong(input.value) + (input.hasAttribute("data-since") && sinceText(input.value) ? " · " + sinceText(input.value) : "");
+  }
+  // A "since" field stores a start date and reads as the time from it to today.
+  function sinceText(iso) {
+    var p = dateParts(iso);
+    if (!p) return "";
+    var t = new Date(), y = t.getFullYear() - p.y, m = t.getMonth() + 1 - p.m, d = t.getDate() - p.d;
+    if (d < 0) { m--; d += new Date(t.getFullYear(), t.getMonth(), 0).getDate(); }
+    if (m < 0) { y--; m += 12; }
+    if (y < 0) return "";
+    function n(k, w) { return k + " " + w + (k === 1 ? "" : "s"); }
+    return n(y, "year") + ", " + n(m, "month") + ", " + n(d, "day");
   }
 
   var calNow = null, calFor = null;
@@ -5997,6 +6009,7 @@
       }
     }
     else if (f.type === "dob") { inner = edDate(id, v); if (v) label += " · " + ageText(v); }
+    else if (f.type === "since") { inner = edDate(id, v); if (v) label += " · " + sinceText(v); }
     else if (f.type === "date") inner = edDate(id, v);
     else if (f.type === "time") inner = edTime(id, v);
     else if (f.type === "datetime") inner = edDateTime(id, v);
@@ -6970,7 +6983,7 @@
   // ---- Custom tables: admin builder + dynamic views ----
   var FIELD_TYPES = [
     { v: "short_text", label: "Short text" }, { v: "long_text", label: "Long text" },
-    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "datetime", label: "Date and time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "rating", label: "Rating (1 to 5, 0 to 10…)" }, { v: "yesno", label: "Yes / No" },
+    { v: "number", label: "Number" }, { v: "date", label: "Date" }, { v: "time", label: "Time" }, { v: "datetime", label: "Date and time" }, { v: "dob", label: "Date of birth (shows age)" }, { v: "since", label: "Start date (shows time since)" }, { v: "rating", label: "Rating (1 to 5, 0 to 10…)" }, { v: "yesno", label: "Yes / No" },
     { v: "dropdown", label: "Dropdown" }, { v: "multi_select", label: "Multi-select" }, { v: "phone", label: "Phone" }, { v: "photo", label: "Photo" }, { v: "media", label: "Photo or video" }, { v: "file", label: "File" }, { v: "email", label: "Email" }, { v: "country", label: "Country" }, { v: "link", label: "Link (button)" }, { v: "branch", label: "Branch" }, { v: "staff", label: "Name (internal)" }
   ];
   // Which field types use the free-text "options" box, and what it should say when they do.
@@ -7600,6 +7613,7 @@
     d = d || {};
     var v = d[f.id];
     if (f.type === "dob") return v ? (ageText(v) + (long ? " · " + v : "")) : "—";
+    if (f.type === "since") return v ? ((sinceText(v) || v) + (long ? " · " + v : "")) : "—";
     if (isOtherChoice(f, v) && d[otherKeyFor(f)]) return v + " — " + d[otherKeyFor(f)];
     // An upload reads as its own filename, not as the object key. A CSV column of
     // "a3f1c2de-…-9b_IMG_4021.mp4" tells a reader nothing, and the uuid is ours, not theirs.
@@ -11250,7 +11264,7 @@
   // away, and a live form embedded in the dashboard invites accidental submissions.
   var PV_PLACEHOLDER = {
     short_text: "Short answer", long_text: "Longer answer", number: "Number",
-    date: "dd / mm / yyyy", dob: "dd / mm / yyyy", yesno: "Yes  /  No",
+    date: "dd / mm / yyyy", dob: "dd / mm / yyyy", since: "dd / mm / yyyy", yesno: "Yes  /  No",
     dropdown: "Choose one", multi_select: "Tick all that apply",
     phone: "+962 7X XXX XXXX", email: "name@example.com", photo: "Choose photo",
     media: "Choose photo or video", time: "hh : mm",
@@ -11613,7 +11627,7 @@
   function fvFields(fv) { return (fv && fv.getFields ? fv.getFields() : []).filter(function (f) { return !isFileField(f); }); }
   function fvFieldById(fv, id) { return fvFields(fv).filter(function (f) { return f.id === id; })[0] || null; }
   // A branch or country answer is picked from a list, so it filters like a dropdown; a rating is a number.
-  function filterType(type) { return type === "branch" || type === "country" || type === "staff" ? "dropdown" : type === "rating" ? "number" : type; }
+  function filterType(type) { return type === "since" ? "date" : type === "branch" || type === "country" || type === "staff" ? "dropdown" : type === "rating" ? "number" : type; }
   function opsFor(type) {
     type = filterType(type);
     if (type === "number") return [["eq", "="], ["neq", "≠"], ["lt", "<"], ["lte", "≤"], ["gt", ">"], ["gte", "≥"], ["empty", "is empty"], ["notEmpty", "is not empty"]];

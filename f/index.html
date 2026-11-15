@@ -1505,7 +1505,18 @@
     var w = input.closest ? input.closest(".dt-wrap") : null;
     if (!w) return;
     var r = w.querySelector(".dt-read");
-    if (r) r.textContent = fmtDateLong(input.value);
+    if (r) r.textContent = fmtDateLong(input.value) + (input.hasAttribute("data-since") && sinceText(input.value) ? " · " + sinceText(input.value) : "");
+  }
+  // A "since" field stores a start date and reads as the time from it to today.
+  function sinceText(iso) {
+    var p = dateParts(iso);
+    if (!p) return "";
+    var t = new Date(), y = t.getFullYear() - p.y, m = t.getMonth() + 1 - p.m, d = t.getDate() - p.d;
+    if (d < 0) { m--; d += new Date(t.getFullYear(), t.getMonth(), 0).getDate(); }
+    if (m < 0) { y--; m += 12; }
+    if (y < 0) return "";
+    function n(k, w) { return k + " " + w + (k === 1 ? "" : "s"); }
+    return n(y, "year") + ", " + n(m, "month") + ", " + n(d, "day");
   }
 
   var calNow = null, calFor = null;
@@ -2372,8 +2383,8 @@
       var ta = document.createElement("textarea"); ta.id = id; ta.rows = 1; growTextarea(ta, f.type === "short_text"); wrap.appendChild(ta);
       controls.push({ f: f, el: ta, validate: function () { return !f.required || ta.value.trim() !== ""; }, value: function () { return ta.value.trim() || null; },
                       setDraft: function (v) { ta.value = v; autoGrow(ta); } });
-    } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "time" || f.type === "datetime") {
-      var isDate = f.type === "date" || f.type === "dob";
+    } else if (f.type === "number" || f.type === "email" || f.type === "date" || f.type === "dob" || f.type === "since" || f.type === "time" || f.type === "datetime") {
+      var isDate = f.type === "date" || f.type === "dob" || f.type === "since";
       var inp;
       if (f.type === "datetime") {
         // One control in two steps, the same one the dashboard draws: the calendar button
@@ -2401,7 +2412,8 @@
         holder.innerHTML = dateFieldHtml(id, "", "");
         var dtWrap = holder.firstChild;
         inp = dtWrap.querySelector(".dt-in");
-        if (f.type === "dob") inp.max = todayIso();   // a birth date can't be in the future
+        if (f.type === "dob" || f.type === "since") inp.max = todayIso();   // a birth or start date can't be in the future
+        if (f.type === "since") inp.setAttribute("data-since", "1");
         wrap.appendChild(dtWrap);
       } else {
         inp = document.createElement("input");
