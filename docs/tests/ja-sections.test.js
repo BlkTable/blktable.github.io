@@ -78,7 +78,8 @@ function makeDb(rows, log) {
         lt: function (c, v) { this._tests.push(r => String(r[c]) < String(v)); return this; },
         is: function (c, v) { this._tests.push(r => r[c] === v); return this; },
         or: function (s) { this._or = s; this._tests.push(r => orMatch(r, s)); return this; },
-        order: function (c, o) { this._order = [c, o]; return this; },
+        order: function (c, o) { if (!this._order) this._order = [c, o]; return this; }, // tie-breakers ignored
+        range: function (a, b) { this._from = a; this._limit = b - a + 1; return this; },
         limit: function (n) { this._limit = n; return this; },
         then: function (res, rej) {
           if (this._upd || this._del) {
@@ -91,7 +92,7 @@ function makeDb(rows, log) {
             out = out.slice().sort((a, b) => (a[this._order[0]] < b[this._order[0]] ? -1 : 1) * (asc ? 1 : -1));
           }
           log.push({ op: 'select', table: this._t, status: this._eq.status, search: this._or, limit: this._limit, got: Math.min(out.length, this._limit || out.length) });
-          if (this._limit) out = out.slice(0, this._limit);
+          if (this._limit) out = out.slice(this._from || 0, (this._from || 0) + this._limit);
           return Promise.resolve({ data: out }).then(res, rej);
         },
         catch: function (f) { return this.then(x => x).catch(f); }
@@ -128,6 +129,7 @@ function rig(opts) {
     renderApps() { log.push({ op: 'render' }); },
     renderScopeBar() {},
     buildFilterPanel() {},
+    jaFetching: false,
     passesFilters: () => true,          // the shared filter engine has its own tests
     alert() {},
     document: { getElementById: id => (nodes[id] || (nodes[id] = el())) },
@@ -137,7 +139,7 @@ function rig(opts) {
   ctx.db = makeDb(rows, log);
   if (opts.search) ctx.document.getElementById('ja-search').value = opts.search;
   vm.createContext(ctx);
-  const names = ['jaScoped', 'loadFacets', 'loadApps', 'searchApps', 'setSection', 'filterApps', 'sectionCounts', 'setStatus'];
+  const names = ['jaScoped', 'loadFacets', 'loadApps', 'loadMoreApps', 'searchApps', 'setSection', 'filterApps', 'sectionCounts', 'setStatus'];
   new vm.Script('(function(){' + names.map(n => grab(SRC, n, 'index.html')).join('\n') +
     '\n' + names.map(n => 'this.' + n + ' = ' + n + ';').join('\n') + '}).call(this)').runInContext(ctx);
   return { ctx, log, rows, settle: () => new Promise(r => setTimeout(r, 20)) };
@@ -182,6 +184,17 @@ t('New still loads a page of the unreviewed, newest first', async () => {
   assert.strictEqual(r.ctx.allApps.length, JA_PAGE, 'New should still be capped at one page');
   assert.ok(r.ctx.allApps.every(a => a.status === 'new'));
   assert.ok(r.ctx.allApps[0].created_at > r.ctx.allApps[1].created_at, 'newest first');
+});
+
+t('Show more fetches the next pages until every New applicant is loaded', async () => {
+  const r = rig({ section: 'new' });
+  await r.ctx.loadApps();
+  await r.settle();
+  await r.ctx.loadMoreApps();
+  await r.settle();
+  assert.strictEqual(r.ctx.allApps.length, JA_PAGE + 20, 'the 20 past the first page should load');
+  assert.strictEqual(new Set(r.ctx.allApps.map(a => a.id)).size, JA_PAGE + 20, 'no row twice');
+  assert.ok(r.ctx.allApps.every(a => a.status === 'new'));
 });
 
 // ---- the query itself ----

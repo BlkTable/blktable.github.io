@@ -4723,7 +4723,7 @@
     jaRenderCap = JA_RENDER_STEP;
     jaServerSearch = false;
     var q = jaScoped(db.from("job_applications").select("*")).eq("status", section)
-      .order("created_at", { ascending: false }).limit(JA_PAGE);
+      .order("created_at", { ascending: false }).order("id").limit(JA_PAGE);
     return Promise.all([q, loadFacets()]).then(function (out) {
       var res = out[0];
       if (res.error) {
@@ -4736,6 +4736,26 @@
       buildFilterPanel(jobFV);
       renderApps();
     });
+  }
+  // The next page of the open tab, appended, so "Show more" (and scrolling to it) reaches
+  // every applicant in the scope instead of stopping at the newest JA_PAGE.
+  var jaFetching = false;
+  function loadMoreApps() {
+    if (jaFetching) return Promise.resolve();
+    jaFetching = true;
+    var from = allApps.length, list = allApps;
+    var q = jaScoped(db.from("job_applications").select("*")).eq("status", section)
+      .order("created_at", { ascending: false }).order("id").range(from, from + JA_PAGE - 1);
+    return q.then(function (res) {
+      jaFetching = false;
+      if (res.error) { if (window.console) console.error(res.error); return; }
+      if (list !== allApps || jaServerSearch) return; // tab, scope or search changed meanwhile
+      var seen = {};
+      allApps.forEach(function (a) { seen[a.id] = true; });
+      (res.data || []).forEach(function (a) { if (!seen[a.id]) allApps.push(a); });
+      jaRenderCap += JA_RENDER_STEP;
+      renderApps();
+    }, function () { jaFetching = false; });
   }
   // Search the whole scope in the database, not just the loaded slice — otherwise a
   // 2024 applicant would be unfindable while appearing to be "in the system".
@@ -5109,11 +5129,8 @@
       var hiddenLocally = rows.length - shown.length;
       if (hiddenLocally > 0 || partial) {
         more.style.display = "block";
-        document.getElementById("ja-more-btn").style.display = hiddenLocally > 0 ? "" : "none";
-        document.getElementById("ja-more-note").textContent =
-          hiddenLocally > 0 ? (hiddenLocally + " more loaded — showing " + shown.length)
-                            : "Only the newest " + rows.length + " of " + scopeTotal +
-                              " are loaded. Narrow by year or country, or search to reach the rest.";
+        document.getElementById("ja-more-btn").style.display = "";
+        document.getElementById("ja-more-note").textContent = "Showing " + shown.length + " of " + scopeTotal;
       } else {
         more.style.display = "none";
       }
@@ -6498,10 +6515,15 @@
     toggleJaKids();
   });
   applyJaKids();
-  document.getElementById("ja-more-btn").addEventListener("click", function () {
-    jaRenderCap += JA_RENDER_STEP;
-    renderApps();
-  });
+  function jaShowMore() {
+    if (jaRenderCap < filterApps().length) { jaRenderCap += JA_RENDER_STEP; renderApps(); }
+    else if (!jaServerSearch && allApps.length < (sectionCounts()[section] || 0)) loadMoreApps();
+  }
+  document.getElementById("ja-more-btn").addEventListener("click", jaShowMore);
+  // Scrolling to the bottom loads the next batch, so the whole list is reachable by scrolling.
+  if ("IntersectionObserver" in window) new IntersectionObserver(function (en) {
+    if (en[0].isIntersecting && document.getElementById("ja-more").style.display !== "none") jaShowMore();
+  }, { rootMargin: "600px" }).observe(document.getElementById("ja-more"));
   document.getElementById("ja-refresh").addEventListener("click", loadApps);
   document.getElementById("send-all").addEventListener("click", sendAll);
   document.getElementById("ja-tabs").addEventListener("click", function (e) {

@@ -165,7 +165,7 @@ function settle() { return new Promise(function (r) { setTimeout(r, 40); }); }
      cards() === JA_RENDER_STEP && allApps.length === JA_PAGE, cards() + ' cards, ' + allApps.length + ' loaded');
   ok('and offers the rest of the page it already holds',
      document.getElementById('ja-more').style.display === 'block' &&
-     /200 more loaded/.test(document.getElementById('ja-more-note').textContent),
+     /Showing 300 of 520/.test(document.getElementById('ja-more-note').textContent),
      JSON.stringify(document.getElementById('ja-more-note').textContent));
 
   // ---- the bug, through the button ----
